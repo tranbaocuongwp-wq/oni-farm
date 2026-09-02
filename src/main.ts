@@ -39,6 +39,7 @@ import { createRenderer, type Cursor } from "./render/draw.ts";
 import { createHud } from "./ui/hud.ts";
 import { createMenus } from "./ui/menus.ts";
 import { createToasts } from "./ui/toast.ts";
+import { createMinimap } from "./ui/minimap.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { interactAt } from "./game/actions.ts";
@@ -189,6 +190,15 @@ async function boot() {
   }
 
   hud.onSelect((slot) => store.dispatch({ t: "SELECT", slot }));
+
+  // Bản đồ nhỏ: vừa để nhìn tổng thể nông trại, vừa để ĐI XA — bấm-để-đi trên
+  // khung chính chỉ tới được chỗ đang nhìn thấy, còn ở đây bấm đâu cũng đi được.
+  const minimap = createMinimap($("#minimap"));
+  minimap.onPick((tx, ty) => {
+    if (menus.isOpen()) return;
+    // act: false — đi thuần tuý. Không thì đang cầm cuốc mà bấm bản đồ là tự cày.
+    nav.goTo(store.getState(), content, tx, ty, { act: false });
+  });
 
   /* ---- 5. input ---- */
   const stickZone = document.querySelector<HTMLElement>("#stick");
@@ -352,6 +362,11 @@ async function boot() {
     return false;
   }
 
+  const vpTiles = () => ({
+    w: camera.viewport.viewW / TILE,
+    h: camera.viewport.viewH / TILE,
+  });
+
   /* ---- 10. vòng lặp ---- */
   let elapsed = 0;
   const loop = createLoop((dt) => {
@@ -366,10 +381,10 @@ async function boot() {
         // Người chơi tự điều khiển thì huỷ đường đi tự động ngay — không giành
         // tay lái với nhau.
         nav.cancel();
-        store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt });
+        store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
       } else {
         const step = nav.update(store.getState(), content, dt);
-        if (step) store.dispatch({ t: "MOVE", dx: step.dx, dy: step.dy, dt });
+        if (step) store.dispatch({ t: "MOVE", dx: step.dx, dy: step.dy, dt, run: step.run });
         else if (store.getState().player.moving)
           store.dispatch({ t: "MOVE", dx: 0, dy: 0, dt });
       }
@@ -377,7 +392,8 @@ async function boot() {
 
       // Vừa tới nơi thì làm luôn việc mà cú bấm lúc nãy đã hẹn.
       const arrived = nav.takeArrival();
-      if (arrived && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
+      // act=false là đích do bấm trên BẢN ĐỒ NHỎ — chỉ đi tới, không cày cuốc gì.
+      if (arrived?.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
     }
 
     for (const it of input.drain()) {
@@ -392,6 +408,9 @@ async function boot() {
           break;
         case "inventory":
           if (!modal) menus.openHelp();
+          break;
+        case "map":
+          minimap.toggle();
           break;
         case "select":
           store.dispatch({ t: "SELECT", slot: it.slot });
@@ -416,7 +435,10 @@ async function boot() {
           nav.cancel();
           // Đủ gần thì làm ngay; còn xa thì đặt đích, đi tới rồi mới làm.
           if (actOnTile(s, tx, ty)) break;
-          if (!tileActionable(s, tx, ty) || !nav.goTo(s, content, tx, ty, holdingSolidBuilding(s)))
+          if (
+            !tileActionable(s, tx, ty) ||
+            !nav.goTo(s, content, tx, ty, { avoidStandingOn: holdingSolidBuilding(s) })
+          )
             play("deny");
           break;
         }
@@ -450,6 +472,8 @@ async function boot() {
         : targetTile(s);
     renderer.draw(s, content, cursor, elapsed);
     hud.update(s, content);
+    minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
+    minimap.update(s, content);
   });
 
   /** Tương tác nhận cả ô kề bên ô đang nhắm — đứng chệch một chút vẫn bấm được,

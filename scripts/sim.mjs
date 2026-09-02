@@ -105,8 +105,21 @@ function selectItem(store, id) {
   store.dispatch({ t: "SELECT", slot });
 }
 
+/** Thao tác rồi CHỜ HẾT KHOÁ. Từ core 1.1 mỗi thao tác khoá `balance.actionSeconds`
+ *  để việc diễn ra tuần tự, nên muốn làm việc kế tiếp thì phải để thời gian trôi —
+ *  y như người chơi thật phải chờ vung xong nhát cuốc. */
 function use(store, x, y) {
   store.dispatch({ t: "USE", x, y });
+  clearBusy(store);
+}
+
+/** Thao tác THÔ, không chờ — dùng riêng cho test kiểm luật tuần tự. */
+function useRaw(store, x, y) {
+  store.dispatch({ t: "USE", x, y });
+}
+
+function clearBusy(store) {
+  if (store.getState().busy > 0) store.dispatch({ t: "TICK", dt: BAL.actionSeconds + 0.01 });
 }
 function sleep(store) {
   store.dispatch({ t: "SLEEP" });
@@ -455,31 +468,49 @@ test("8. save round-trip: JSON.parse(JSON.stringify(snapshot)) → replace() kh�
 const SCRIPT = [
   { t: "SELECT", slot: 0 },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 2 },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 1 },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "TICK", dt: 12 },
   { t: "MOVE", dx: 1, dy: 0, dt: 0.25 },
   { t: "MOVE", dx: 0, dy: 1, dt: 0.25 },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "USE", x: 15, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
+  { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
+  { t: "TICK", dt: 0.4 },
   { t: "SELL_ALL" },
 ];
 
@@ -718,6 +749,86 @@ test("15. INTERACT ở cửa nhà = ngủ; ở cửa hàng/quầy thì state kh�
   eq(store.getState().day, day0 + 1, "INTERACT cửa nhà = ngủ");
 });
 
+
+/* ========================================================================== */
+/* 17. Thao tác TUẦN TỰ — bấm loạn không làm được nhanh hơn                    */
+/* ========================================================================== */
+
+test("17. thao tác tuần tự: đang bận thì không làm việc khác, không đi được", () => {
+  const store = mkStore();
+  walkTo(store, HOME.x, HOME.y);
+  selectItem(store, "tool:hoe");
+  const w = store.getState().w;
+  // HOME là ô LỐI ĐI (không cày được) — dùng các ô cỏ hai bên.
+  const A = PLOTS[1];
+  const B = PLOTS[4];
+
+  useRaw(store, A.x, A.y);
+  const first = store.getState();
+  ok(first.tiles[A.y * w + A.x].tilled, "nhát cuốc đầu ăn");
+  eq(first.busy, BAL.actionSeconds, "khoá đúng bằng balance.actionSeconds");
+
+  // Bấm loạn khi còn khoá: không nhát nào được ăn.
+  const before = store.getState();
+  useRaw(store, B.x, B.y);
+  useRaw(store, PLOTS[0].x, PLOTS[0].y);
+  ok(store.getState() === before, "USE lúc đang bận phải trả về ĐÚNG state cũ");
+  ok(!store.getState().tiles[B.y * w + B.x].tilled, "ô kế bên không bị cày khi đang bận");
+
+  // Đang bận thì chân đứng yên.
+  const px = store.getState().player.x;
+  store.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 0.1 });
+  eq(store.getState().player.x, px, "đang bận thì không di chuyển được");
+
+  // Hết khoá thì làm tiếp bình thường.
+  store.dispatch({ t: "TICK", dt: BAL.actionSeconds + 0.01 });
+  eq(store.getState().busy, 0, "hết giờ thì busy về 0");
+  useRaw(store, B.x, B.y);
+  ok(store.getState().tiles[B.y * w + B.x].tilled, "hết khoá thì cày được tiếp");
+
+  // Thao tác HỤT không bị phạt khoá.
+  store.dispatch({ t: "TICK", dt: BAL.actionSeconds + 0.01 });
+  useRaw(store, B.x, B.y); // đã cày rồi → hụt
+  eq(store.getState().busy, 0, "thao tác hụt thì không bị khoá");
+
+  // Ngủ dậy là hết bận.
+  useRaw(store, PLOTS[0].x, PLOTS[0].y);
+  ok(store.getState().busy > 0, "đang bận trước khi ngủ");
+  sleep(store);
+  eq(store.getState().busy, 0, "ngủ dậy thì busy được xoá");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến vẫn xanh");
+});
+
+/* ========================================================================== */
+/* 18. Tốc độ đi/chạy lấy từ content                                          */
+/* ========================================================================== */
+
+test("18. chạy nhanh hơn đi; độ dài vector điều tiết tốc độ", () => {
+  const move = (opts) => {
+    const st = mkStore();
+    walkTo(st, HOME.x, HOME.y + 3);
+    const p0 = { ...st.getState().player };
+    st.dispatch({ t: "MOVE", dt: 0.4, ...opts });
+    const p1 = st.getState().player;
+    return Math.hypot(p1.x - p0.x, p1.y - p0.y);
+  };
+
+  const walked = move({ dx: 0, dy: 1 });
+  const ran = move({ dx: 0, dy: 1, run: true });
+  const nudged = move({ dx: 0, dy: 0.4 });
+  const diag = move({ dx: 1, dy: 1 });
+
+  ok(walked > 0, `đi bộ phải nhích được, nhận ${walked}`);
+  eq(Math.round(walked), Math.round(BAL.moveSpeed * 0.4), "đi bộ đúng balance.moveSpeed");
+  eq(Math.round(ran), Math.round(BAL.runSpeed * 0.4), "chạy đúng balance.runSpeed");
+  ok(ran > walked * 1.3, `chạy phải nhanh hơn hẳn: ${walked.toFixed(1)} → ${ran.toFixed(1)}`);
+  ok(
+    nudged > 0 && nudged < walked * 0.6,
+    `joystick đẩy nhẹ phải đi chậm: ${nudged.toFixed(1)} vs ${walked.toFixed(1)}`,
+  );
+  ok(diag <= walked + 0.5, `đi chéo (${diag.toFixed(1)}) không được xa hơn đi thẳng (${walked.toFixed(1)})`);
+});
 
 test("16. reduce THUẦN: không action nào sửa state cũ tại chỗ", () => {
   const store = mkStore(808);

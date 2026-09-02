@@ -173,6 +173,42 @@ canvas#game {
   background: linear-gradient(#f07070, #b02828);
 }
 
+/* Cột trái của HUD: khung thông số + bản đồ nhỏ xếp dọc. */
+.hud-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------- bản đồ nhỏ */
+#minimap {
+  pointer-events: auto;
+  padding: 3px;
+  background: rgba(43, 33, 24, 0.92);
+  border: 2px solid var(--edge);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  line-height: 0;
+  width: clamp(84px, 17vw, 148px);
+  touch-action: none;
+}
+
+#minimap.hidden {
+  display: none;
+}
+
+#minimap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 1 pixel = 1 ô, phóng to bằng CSS — phải giữ nét, không nội suy. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: pointer;
+}
+
 #goal-box {
   max-width: 44%;
 }
@@ -648,6 +684,9 @@ body.touch[data-orientation="landscape"] #hotbar {
     width: 92px;
     height: 92px;
     margin: -46px 0 0 -46px;
+  }
+  #minimap {
+    width: clamp(72px, 15vw, 110px);
   }
 }
 

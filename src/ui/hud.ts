@@ -42,12 +42,15 @@ export function itemLabel(id: string, content: Content): string {
 export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   root.innerHTML = `
     <div class="hud-row">
+      <div class="hud-col">
       <div class="hud-box">
         <div class="hud-line"><span>Tiền</span><b id="hud-money">0</b></div>
         <div class="hud-line"><span>Ngày</span><span><span id="hud-day">1</span> · <span class="clock" id="hud-clock">6:00</span></span></div>
         <div class="hud-line"><span>Năng lượng</span><span id="hud-energy">100</span></div>
         <div class="bar" id="hud-bar"><i style="width:100%"></i></div>
         <div class="hud-line" id="hud-power-line"><span>Điện</span><span id="hud-power">0</span></div>
+      </div>
+      <div id="minimap"><canvas></canvas></div>
       </div>
       <div class="hud-box" id="goal-box">
         <div class="hud-line"><span>Mục tiêu</span></div>

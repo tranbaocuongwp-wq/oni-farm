@@ -40,6 +40,8 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   s0.day = s0.day + 1;
   s0.minutes = bal.dayStartMinutes;
   s0.sleeping = false;
+  // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
+  s0.busy = 0;
 
   // ---- 2. thu nhập + điện ----------------------------------------------
   let income = 0;

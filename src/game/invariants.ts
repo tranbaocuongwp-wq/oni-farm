@@ -29,6 +29,8 @@ export function checkInvariants(state: GameState, content: Content): string[] {
   if (!Number.isFinite(state.money)) e.push(`money không hữu hạn: ${state.money}`);
   else if (state.money < 0) e.push(`money âm: ${state.money}`);
 
+  if (!Number.isFinite(state.busy) || state.busy < 0)
+    e.push(`busy phải là số >= 0, nhận: ${state.busy}`);
   if (!Number.isFinite(state.energy)) e.push(`energy không hữu hạn: ${state.energy}`);
   else if (state.energy < 0 || state.energy > bal.energyMax)
     e.push(`energy ${state.energy} ngoài [0, ${bal.energyMax}]`);
@@ -238,6 +240,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       log: [...state.log],
       logSeq: Number.isInteger(state.logSeq) ? state.logSeq : 0,
       sleeping: false,
+      busy: 0,
     };
 
     // ---- người chơi không được kẹt trong tường ---------------------------

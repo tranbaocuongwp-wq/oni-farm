@@ -249,6 +249,17 @@ export function validateBalance(raw: unknown): string[] {
   const cost = c.obj(raw, "energyCost");
   if (cost) c.merge(numsIn(cost, ["till", "water", "plant", "harvest", "build"], "energyCost"));
 
+  // Ba trường dưới đây được thêm ở core 1.1: cho phép THIẾU để pack cũ đã cache
+  // vẫn dùng được (loader sẽ điền giá trị mặc định), nhưng có thì phải hợp lệ.
+  for (const [k, min, max] of [
+    ["moveSpeed", 8, 400],
+    ["runSpeed", 8, 600],
+    ["actionSeconds", 0, 5],
+  ] as [string, number, number][])
+    if (raw[k] !== undefined) c.num(raw, k, min, max);
+  if (isNum(raw["moveSpeed"]) && isNum(raw["runSpeed"]) && raw["runSpeed"] < raw["moveSpeed"])
+    c.fail("runSpeed", "không được nhỏ hơn moveSpeed");
+
   const seeds = c.obj(raw, "startSeeds");
   if (seeds)
     for (const [k, v] of Object.entries(seeds))

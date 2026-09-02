@@ -22,6 +22,7 @@ export type Intent =
   | { t: "menu" }
   | { t: "shop" }
   | { t: "inventory" }
+  | { t: "map" }
   /** bấm/chạm vào thế giới — toạ độ WORLD px */
   | { t: "pointer"; wx: number; wy: number };
 
@@ -37,8 +38,13 @@ export interface Input {
   pointer(): { x: number; y: number } | null;
   /** joystick đang được giữ — dùng để ẩn con trỏ ô cho đỡ rối */
   stickActive(): boolean;
+  /** Đang muốn CHẠY: giữ Shift, hoặc đẩy joystick gần hết cỡ. Analog nên người
+   *  chơi không phải học thêm nút nào — đẩy mạnh là chạy, đúng trực giác. */
+  running(): boolean;
   detach(): void;
 }
+
+const RUN_KEYS = new Set(["ShiftLeft", "ShiftRight"]);
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   KeyW: [0, -1], ArrowUp: [0, -1],
@@ -91,9 +97,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     }
     if (modal) return;
 
-    if (MOVE_KEYS[e.code]) {
+    if (MOVE_KEYS[e.code] || RUN_KEYS.has(e.code)) {
       held.add(e.code);
-      e.preventDefault();
+      if (MOVE_KEYS[e.code]) e.preventDefault();
       return;
     }
     switch (e.code) {
@@ -110,6 +116,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         break;
       case "KeyI":
         push({ t: "inventory" });
+        break;
+      case "KeyM":
+        push({ t: "map" });
         break;
       case "Tab":
         push({ t: "selectDelta", d: e.shiftKey ? -1 : 1 });
@@ -165,6 +174,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const radius = js?.radius ?? 46;
   /** Dưới ngưỡng này coi như không đẩy — ngón tay đặt hờ không làm nhân vật trôi. */
   const STICK_DEAD = 0.24;
+  /** Đẩy quá ngưỡng này thì chuyển sang chạy. */
+  const STICK_RUN = 0.86;
 
   const stickReset = () => {
     stickId = null;
@@ -264,6 +275,10 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     },
     pointer: () => (ptr && performance.now() - ptrAt < POINTER_STALE_MS ? ptr : null),
     stickActive: () => stickId !== null,
+    running: () =>
+      held.has("ShiftLeft") ||
+      held.has("ShiftRight") ||
+      Math.hypot(stick.x, stick.y) >= STICK_RUN,
     detach() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

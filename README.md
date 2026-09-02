@@ -151,6 +151,45 @@ quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn
 resize (xoay máy, có đo lại sau một nhịp vì mobile hay báo chậm), và matchMedia resolution
 (đổi màn hình / đổi mức zoom làm devicePixelRatio đổi).
 
+### Làm việc TUẦN TỰ
+
+Mỗi thao tác thành công khoá nhân vật `balance.actionSeconds` (0,34s): trong lúc đó không
+thao tác tiếp và **không bước đi**. Đây là lý do bấm loạn không làm được nhanh hơn — và nó
+làm cho việc cày cuốc có sức nặng thay vì cả ruộng xong trong một giây.
+
+Ba chi tiết khiến nó không phiền:
+
+- **Thao tác HỤT không bị phạt.** Bấm nhầm vào tảng đá thì không bị đứng hình. Không thể
+  dùng `d.changed` để nhận biết vì toast báo lỗi cũng là thay đổi state — phải so **bộ đếm
+  thống kê** trước/sau (`tilled/planted/watered/harvested/built`).
+- **Nhân vật xoay mặt về ô đang làm**, và có khung hình vung tay riêng. Nhìn là biết đang
+  bận chứ không phải game đơ. Chỉ xoay khi ô trong tầm với — nếu không thì `USE` ra ngoài
+  tầm sẽ không còn là không-làm-gì tuyệt đối nữa.
+- **Ngủ dậy là hết bận**, không mang thao tác dở dang sang ngày mới.
+
+`state.busy` nằm trong game state nên `SAVE_VERSION` lên **2**, kèm bước migrate điền
+`busy: 0` cho save cũ — thiếu bước này thì mọi phép tính với nó ra `NaN` và bất biến vỡ ngay.
+
+### Đi lại
+
+- **Đi bộ 78, chạy 132 world px/giây** (`balance.moveSpeed` / `runSpeed`, chỉnh qua OTA).
+  Chạy = giữ `Shift`, hoặc đẩy joystick gần hết cỡ — analog nên không phải học thêm nút.
+- **Độ dài vector có ý nghĩa**: joystick đẩy nhẹ thì đi chậm. Đi chéo không nhanh hơn đi thẳng.
+- **Bấm-để-đi tự chuyển sang chạy** khi còn cách trên 2,5 ô, bước cuối vẫn đi bộ nên không
+  trượt quá đích.
+
+### Bản đồ nhỏ
+
+`src/ui/minimap.ts` — 1 pixel = 1 ô (40×30), phóng to bằng CSS `image-rendering: pixelated`.
+Vừa để nhìn tổng thể nông trại (camera bám sát nên bình thường chỉ thấy ~10 ô quanh mình),
+vừa là bàn đạp **đi xa**: bấm-để-đi trên khung chính chỉ tới được chỗ đang nhìn thấy, còn
+bấm trên bản đồ nhỏ thì tới đâu cũng được. Đi kiểu này là **đi thuần tuý, không thao tác** —
+nếu không thì đang cầm cuốc mà bấm bản đồ là tự cày.
+
+Lớp địa hình được cache và chỉ vẽ lại khi mảng ô thật sự đổi. Reducer dùng copy-on-write nên
+chỉ cần so **tham chiếu mảng**, không phải quét 1200 ô mỗi khung hình để phát hiện không có
+gì đổi. Ô vàng = cây đã chín, khung trắng = khung nhìn hiện tại, chấm trắng = nhân vật.
+
 ### Bấm-để-đi
 
 Bấm (hoặc chạm) vào một ô ở xa thì nhân vật **tự đi tới rồi mới làm việc** — cày, gieo, tưới,

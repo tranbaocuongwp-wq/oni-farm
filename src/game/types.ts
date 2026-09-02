@@ -104,6 +104,14 @@ export interface Balance {
   passOutEnergy: number;
   inventorySlots: number;
   hotbarSlots: number;
+
+  /** Tốc độ đi bộ, world px mỗi giây (1 ô = 16 px). */
+  moveSpeed: number;
+  /** Tốc độ chạy — giữ Shift, hoặc đẩy joystick hết cỡ. */
+  runSpeed: number;
+  /** Thời gian KHOÁ sau mỗi thao tác. Đây là thứ bắt việc diễn ra TUẦN TỰ:
+   *  đang vung cuốc thì chưa gieo hạt được, và bấm loạn cũng không nhanh hơn. */
+  actionSeconds: number;
 }
 
 export type GroundKind = "grass" | "path" | "water";
@@ -283,6 +291,10 @@ export interface GameState {
 
   /** true trong lúc chuyển ngày — UI vẽ màn hình mờ dần */
   sleeping: boolean;
+
+  /** Số giây còn lại của thao tác đang làm. > 0 nghĩa là đang bận: không thao
+   *  tác tiếp và không di chuyển được. Đây là cơ chế bắt buộc làm việc tuần tự. */
+  busy: number;
 }
 
 /* ---------------------------------------------------------------------------
@@ -291,8 +303,9 @@ export interface GameState {
 --------------------------------------------------------------------------- */
 
 export type Action =
-  /** di chuyển: dx,dy là vector đơn vị đã chuẩn hoá; dt tính bằng giây */
-  | { t: "MOVE"; dx: number; dy: number; dt: number }
+  /** Di chuyển. dx,dy là vector hướng; ĐỘ DÀI có ý nghĩa (0..1) để joystick
+   *  đẩy nhẹ thì đi chậm. run = chạy (Shift, hoặc joystick đẩy hết cỡ). */
+  | { t: "MOVE"; dx: number; dy: number; dt: number; run?: boolean }
   /** trôi thời gian: đồng hồ, animation, ngất khi quá giờ */
   | { t: "TICK"; dt: number }
   /** dùng vật phẩm đang chọn lên ô (x,y).

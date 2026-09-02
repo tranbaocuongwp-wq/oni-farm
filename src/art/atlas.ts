@@ -520,9 +520,15 @@ export type PlayerDir = (typeof DIRS)[number];
 
 function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  // frame 0 = đứng, 1 và 2 = hai nhịp bước
-  const step = frame === 0 ? 0 : frame === 1 ? 1 : -1;
-  const bob = frame === 0 ? 0 : 1; // nhún nhẹ khi đi cho có sức sống
+  // frame 0 = đứng, 1 và 2 = hai nhịp bước, 3 = ĐANG THAO TÁC (vung tay).
+  // Khung 3 là phản hồi hình ảnh cho cơ chế khoá tuần tự: nhìn là biết nhân vật
+  // đang bận, chứ không phải game bị đơ.
+  const act = frame === 3;
+  const step = frame === 0 || act ? 0 : frame === 1 ? 1 : -1;
+  const bob = frame === 0 || act ? 0 : 1; // nhún nhẹ khi đi cho có sức sống
+  // nghiêng người về hướng đang làm
+  const lx = act ? (dir === "left" ? -1 : dir === "right" ? 1 : 0) : 0;
+  const ly = act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : 0;
 
   s.g.fillStyle = P.shadow;
   s.g.beginPath();
@@ -545,7 +551,9 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
     s.rect(9, 15 - bob, 3, 1, P.boot);
   }
 
-  // thân — áo + yếm quần bò
+  // thân — áo + yếm quần bò (nghiêng nhẹ về hướng đang thao tác)
+  s.g.save();
+  s.g.translate(lx, ly);
   s.rect(5, top + 6, 7, 6, P.shirt);
   s.rect(5, top + 8, 7, 4, P.denim);
   s.vline(7, top + 6, 3, P.denim); // dây yếm
@@ -555,7 +563,24 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
 
   // tay
   const armY = top + 7;
-  if (dir === "left") {
+  if (act) {
+    // Hai tay vươn về phía trước + một vệt kim loại làm đầu công cụ.
+    if (dir === "left") {
+      s.rect(1, armY + 2, 5, 2, P.skin);
+      s.rect(0, armY + 1, 2, 2, P.metal);
+    } else if (dir === "right") {
+      s.rect(10, armY + 2, 5, 2, P.skin);
+      s.rect(14, armY + 1, 2, 2, P.metal);
+    } else if (dir === "up") {
+      s.rect(4, top + 1, 2, 5, P.skin);
+      s.rect(10, top + 1, 2, 5, P.skin);
+      s.rect(7, top - 1, 2, 2, P.metal);
+    } else {
+      s.rect(3, armY + 3, 2, 4, P.skin);
+      s.rect(12, armY + 3, 2, 4, P.skin);
+      s.rect(6, armY + 6, 4, 2, P.metal);
+    }
+  } else if (dir === "left") {
     s.rect(4, armY + (step > 0 ? -1 : 0), 2, 4, P.skin);
   } else if (dir === "right") {
     s.rect(11, armY + (step > 0 ? -1 : 0), 2, 4, P.skin);
@@ -590,6 +615,7 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
     s.px(10, top + 4, "#2b2b2b");
     s.rect(5, top + 3, 3, 3, P.hair);
   }
+  s.g.restore();
   return s.c;
 }
 
@@ -724,7 +750,8 @@ export function buildAtlas(content: Content): Atlas {
   }
 
   const player = {} as Record<PlayerDir, HTMLCanvasElement[]>;
-  for (const d of DIRS) player[d] = [0, 1, 2].map((f) => makePlayer(d, f));
+  // 4 khung: đứng, bước 1, bước 2, đang thao tác
+  for (const d of DIRS) player[d] = [0, 1, 2, 3].map((f) => makePlayer(d, f));
 
   const crops: Record<string, HTMLCanvasElement[]> = {};
   for (const id of content.cropOrder) {

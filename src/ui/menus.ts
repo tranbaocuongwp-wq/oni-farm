@@ -338,6 +338,13 @@ export function createMenus(
         cầm bình tưới → về nhà bấm <kbd>E</kbd> ở cửa để ngủ. Cây chỉ lớn nếu ô ĐƯỢC TƯỚI
         trong đêm đó. Chín thì bấm <kbd>Space</kbd> để thu, mang ra quầy bán.
         <br><br>
+        <b style="color:var(--gold)">Đi lại cho nhanh:</b> bấm vào ô nào thì nhân vật tự đi tới
+        đó rồi làm việc — đi xa thì tự chạy. Muốn tới chỗ ngoài tầm nhìn thì bấm thẳng lên
+        <b>bản đồ nhỏ</b> góc trên-trái.
+        <br><br>
+        <b style="color:var(--gold)">Làm từng việc một:</b> mỗi thao tác mất một nhịp mới xong,
+        nên bấm loạn không nhanh hơn được. Đang vung tay thì chưa đi và chưa làm việc khác.
+        <br><br>
         <b style="color:var(--gold)">Nông trại hiện đại:</b> đủ tiền sẽ mở vòi tưới tự động
         (khỏi tưới tay), sàn nhà kính (ô luôn ẩm), pin mặt trời (ra tiền + ra ĐIỆN) và
         drone thu hoạch (cần điện từ pin mặt trời).

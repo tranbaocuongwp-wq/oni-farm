@@ -247,8 +247,10 @@ export function createRenderer(
   function drawPlayer(s: GameState, items: Item[]) {
     const p = s.player;
     const frames = atlas.player[p.dir as PlayerDir];
-    // 6 khung/giây khi đi; đứng yên thì về khung 0
-    const f = p.moving ? 1 + (Math.floor(p.anim * 6) % 2) : 0;
+    // Đang bận thao tác thì dùng khung vung tay — phản hồi cho cơ chế khoá
+    // tuần tự, để người chơi biết nhân vật đang làm chứ không phải game đơ.
+    // Còn lại: 6 khung/giây khi đi, đứng yên thì về khung 0.
+    const f = s.busy > 0 ? 3 : p.moving ? 1 + (Math.floor(p.anim * 6) % 2) : 0;
     const img = frames[f] ?? frames[0]!;
     // player.x/y là TÂM hitbox 10×10 (world.ts: PLAYER_W/H), không phải góc ô.
     // Sprite 16×16 có bàn chân ở hàng ~15 → canh đáy sprite trùng đáy hitbox:

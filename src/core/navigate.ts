@@ -45,16 +45,26 @@ const MAX_NODES = 4000;
 export interface NavTarget {
   tx: number;
   ty: number;
+  /** Tới nơi thì có làm việc gì không. Bấm lên bản đồ nhỏ = ĐI THUẦN TUÝ, không
+   *  cày cuốc gì cả — nếu không thì đang cầm cuốc mà bấm minimap là tự cày. */
+  act: boolean;
+}
+
+export interface NavOptions {
+  /** Cầm công trình đặc thì phải đứng CẠNH ô, không đứng lên nó. */
+  avoidStandingOn?: boolean;
+  /** false = chỉ đi tới, không thao tác. */
+  act?: boolean;
 }
 
 export interface Navigator {
   /** Đặt đích mới. Trả về false nếu không có đường đi (đích bị vây kín). */
-  goTo(state: GameState, content: Content, tx: number, ty: number, avoidStandingOn: boolean): boolean;
+  goTo(state: GameState, content: Content, tx: number, ty: number, opts?: NavOptions): boolean;
   cancel(): void;
   isActive(): boolean;
   target(): NavTarget | null;
   /** Gọi mỗi khung hình. Trả vector đi, hoặc null khi không có đích. */
-  update(state: GameState, content: Content, dt: number): { dx: number; dy: number } | null;
+  update(state: GameState, content: Content, dt: number): { dx: number; dy: number; run: boolean } | null;
   /** true đúng MỘT lần, ngay khung hình nhân vật vào đủ gần đích. */
   takeArrival(): NavTarget | null;
 }
@@ -137,7 +147,7 @@ function findPath(
       const path: NavTarget[] = [];
       let node: number | undefined = cur;
       while (node !== undefined && node !== start) {
-        path.push({ tx: node % w, ty: (node / w) | 0 });
+        path.push({ tx: node % w, ty: (node / w) | 0, act: false });
         node = cameFrom.get(node);
       }
       path.reverse();
@@ -202,7 +212,9 @@ export function createNavigator(): Navigator {
   };
 
   return {
-    goTo(state, content, tx, ty, avoidStandingOn) {
+    goTo(state, content, tx, ty, opts = {}) {
+      const avoidStandingOn = opts.avoidStandingOn === true;
+      const act = opts.act !== false;
       clear();
       if (tx < 0 || ty < 0 || tx >= state.w || ty >= state.h) return false;
 
@@ -227,7 +239,7 @@ export function createNavigator(): Navigator {
       if (!found) return false;
 
       path = found;
-      goal = { tx, ty };
+      goal = { tx, ty, act };
       lastX = state.player.x;
       lastY = state.player.y;
       stuckTime = 0;
@@ -284,7 +296,7 @@ export function createNavigator(): Navigator {
           finishOrGiveUp(state);
           return null;
         }
-        return { dx: 0, dy: 0 };
+        return { dx: 0, dy: 0, run: false };
       }
 
       // Kẹt: đi mãi mà không nhích được thì bỏ cuộc, còn hơn dí vào tường mãi.
@@ -301,7 +313,11 @@ export function createNavigator(): Navigator {
         lastY = py;
       }
 
-      return { dx: dx / len, dy: dy / len };
+      // Còn xa thì CHẠY. Đi bộ hết chiều dài bản đồ là cực hình; chạy khi còn
+      // trên hai ô làm quãng đường dài ngắn lại hẳn mà bước cuối vẫn đi bộ nên
+      // không bị trượt quá đích.
+      const remain = distToTile(state, goal.tx, goal.ty);
+      return { dx: dx / len, dy: dy / len, run: remain > 2.5 };
     },
   };
 }

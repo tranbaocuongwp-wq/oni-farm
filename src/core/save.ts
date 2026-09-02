@@ -116,11 +116,13 @@ export function migrateSave(data: SaveData): GameState | null {
   const v = data.state.save;
   if (v > SAVE_VERSION) return null; // save từ bản MỚI hơn — không đọc ngược được
   if (v === SAVE_VERSION) return data.state;
-  // Chưa có bước migrate nào (đang ở v1). Ví dụ cho lần sau:
-  //   let s = data.state;
-  //   if (s.save === 1) { s = { ...s, thuộcTínhMới: giáTrịMặcĐịnh, save: 2 }; }
-  //   return s;
-  return null;
+
+  let s = data.state;
+  // v1 → v2: thêm `busy` (đồng hồ khoá thao tác). Save cũ không có trường này;
+  // để nguyên thì mọi phép tính với nó ra NaN và bất biến vỡ ngay.
+  if (s.save === 1) s = { ...s, busy: 0, save: 2 };
+
+  return s.save === SAVE_VERSION ? s : null;
 }
 
 /* ---------------------------------------------------------------------------

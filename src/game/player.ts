@@ -2,7 +2,11 @@
    PLAYER — di chuyển + va chạm AABB, trượt dọc tường.
 
    Thử trục X rồi trục Y RIÊNG BIỆT: chạm tường chéo thì vẫn trượt được thay vì
-   dính cứng ở góc. Tốc độ lấy từ world.PLAYER_SPEED (60 px/s).
+   dính cứng ở góc.
+
+   Tốc độ lấy từ content (balance.moveSpeed / runSpeed) nên chỉnh được qua OTA.
+   ĐỘ DÀI của vector đầu vào có ý nghĩa: joystick đẩy nhẹ thì đi chậm, đẩy hết
+   cỡ thì đi nhanh — bàn phím luôn cho vector độ dài 1 nên không ảnh hưởng.
 ============================================================================ */
 
 import type { Content, Dir } from "./types.ts";
@@ -23,10 +27,16 @@ export function movePlayer(
   dx: number,
   dy: number,
   dt: number,
+  run = false,
 ): boolean {
   const p = d.base.player;
-  const step = Number.isFinite(dt) ? Math.max(0, dt) * PLAYER_SPEED : 0;
   const len = Math.sqrt(dx * dx + dy * dy);
+  const base = run
+    ? (content.balance.runSpeed ?? PLAYER_SPEED)
+    : (content.balance.moveSpeed ?? PLAYER_SPEED);
+  // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
+  const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
+  const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;
 
   if (!Number.isFinite(len) || len <= 1e-9) {
     if (!p.moving) return false;

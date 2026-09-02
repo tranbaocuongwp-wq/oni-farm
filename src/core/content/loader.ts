@@ -136,6 +136,15 @@ export function validatePack(raw: RawPack): string[] {
   return errors;
 }
 
+/** Giá trị mặc định cho các trường cân bằng được thêm sau. Nhờ chúng, một content
+ *  pack cũ đã cache (tải về trước khi core nâng cấp) vẫn chạy được thay vì bị từ
+ *  chối — người chơi không mất gì, chỉ là chưa có số liệu mới. */
+const BALANCE_DEFAULTS = {
+  moveSpeed: 78,
+  runSpeed: 132,
+  actionSeconds: 0.34,
+} as const;
+
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */
 export function buildContent(raw: RawPack): Content {
   const problems = validatePack(raw);
@@ -159,7 +168,7 @@ export function buildContent(raw: RawPack): Content {
     buildingOrder: buildingList.map((b) => b.id),
     tools: byId(toolList),
     toolOrder: toolList.map((t) => t.id),
-    balance: raw.balance as Balance,
+    balance: { ...BALANCE_DEFAULTS, ...(raw.balance as Balance) } as Balance,
     tiles: raw.tiles as TilesDef,
     map: raw.map as MapData,
     stages: prog.stages,
