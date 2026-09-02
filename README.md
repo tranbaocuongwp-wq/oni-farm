@@ -134,9 +134,15 @@ quá nhỏ để chứa nổi một bội nguyên nào mới dùng hệ số l�
 thì mỗi khung hình các hàng pixel rơi vào ô màn hình khác nhau và cả cảnh trông như lăn tăn.
 Đo thực tế khi đi bộ: bước nhảy camera tối đa **1 world px/khung**, không có lần nào giật ngược.
 
-**Bám nhân vật** có vùng chết (1,6 × 1,1 ô) + làm mượt theo hàm mũ không phụ thuộc tốc độ
-khung hình, và **kẹp vào biên bản đồ**. Thế giới nhỏ hơn khung nhìn thì căn giữa + letterbox
-chứ không kéo lố ra ngoài bản đồ.
+**Bám nhân vật: LUÔN ở chính giữa khung nhìn** (không vùng chết, bám tức thì). Với lối chơi
+bấm-để-đi thì tâm màn hình chính là thứ người chơi ngắm vào, nên nhân vật lệch tâm sẽ làm
+việc ước lượng khoảng cách bị sai. Đo thực tế ở giữa bản đồ: lệch **0,5 world px**.
+
+**Bản đồ CỐ ĐỊNH 40×30 ô, chỉ khung nhìn co giãn.** Sát mép bản đồ thì camera dừng lại nên
+nhân vật rời khỏi tâm — thà vậy còn hơn lộ vùng trống ngoài bản đồ. Lưu ý thật: trên điện
+thoại dọc khung nhìn cao tới 24 ô mà bản đồ chỉ 30 hàng, nên camera chỉ có 6 ô để chạy theo
+chiều dọc và nhân vật thường không nằm giữa theo trục đó. Muốn thoáng hơn thì **mở rộng bản
+đồ trong `farm.ascii`** — đó là thay đổi thuộc làn nhanh, không cần build lại core.
 
 `MAX_TILES_LONG = 24` là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn ultrawide):
 quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn thấy cả bản đồ.
@@ -144,6 +150,30 @@ quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn
 `src/core/screen.ts` nghe ba nguồn — ResizeObserver (khung chứa), orientationchange +
 resize (xoay máy, có đo lại sau một nhịp vì mobile hay báo chậm), và matchMedia resolution
 (đổi màn hình / đổi mức zoom làm devicePixelRatio đổi).
+
+### Bấm-để-đi
+
+Bấm (hoặc chạm) vào một ô ở xa thì nhân vật **tự đi tới rồi mới làm việc** — cày, gieo, tưới,
+mở cửa hàng, ngủ. Đủ gần sẵn thì làm ngay, không đi đâu cả.
+
+`src/core/navigate.ts` là một **cách nhập liệu**, không phải luật chơi: nó chỉ sinh vector
+di chuyển từng khung hình y như bàn phím hay joystick, còn mọi thay đổi state vẫn đi qua
+action `MOVE`/`USE`. Nhờ vậy `src/game/` không phải biết gì về nó và **định dạng save không
+đổi** — đích đến là ý định nhất thời, không đáng lưu vào file.
+
+- **Tìm đường A\*** 8 hướng trên lưới ô, cấm cắt góc (thân nhân vật rộng hơn một điểm).
+  Đi thẳng sẽ kẹt cứng ở góc nhà; bản đồ 1200 ô nên A\* rẻ như không.
+- **Kéo dây**: mỗi khung bỏ qua các điểm mốc còn nhìn thẳng tới được, nên nhân vật cắt chéo
+  tự nhiên thay vì đi zigzag theo tâm từng ô. Kiểm tầm nhìn bằng chính hộp va chạm của nhân
+  vật chứ không phải một điểm, để đường đi không "lách" qua khe mà thân không lọt.
+- **Dừng khi đủ gần** (ô kề bên) rồi mới xử lý — bấm vào ô đất là muốn cày nó, không phải
+  muốn đứng lên nó. Ô đích đặc (cửa hàng, quầy, cửa nhà) thì đích thật sự là các ô kề.
+- Cầm công trình ĐẶC thì dừng **cạnh** ô đích, không đứng lên, nếu không sẽ tự nhốt mình.
+- Bấm phím di chuyển hoặc kéo joystick là **huỷ** đường đi ngay — không giành tay lái.
+- Bỏ cuộc nếu kẹt sau vật cản quá 0,6 giây.
+
+Con trỏ ô cũng đổi nghĩa theo: **trắng** = có việc làm được ở đây (đi tới nếu cần),
+**đỏ** = ô vô nghĩa (nước, gốc cây, tảng đá, tường nhà).
 
 ### Điều khiển cảm ứng
 

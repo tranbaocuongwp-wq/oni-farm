@@ -16,6 +16,7 @@ import "./style.css";
 import { buildAtlas, TILE } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
+import { createNavigator } from "./core/navigate.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -294,21 +295,89 @@ async function boot() {
       ty = Math.floor(s.player.y / TILE) + oy;
     }
     if (tx < 0 || ty < 0 || tx >= s.w || ty >= s.h) return null;
-    const dist = Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y);
-    return { x: tx, y: ty, ok: dist <= REACH };
+    // Từ khi có bấm-để-đi, "ở xa" không còn là lỗi nữa — nhân vật sẽ tự đi tới.
+    // Nên con trỏ đổi nghĩa: TRẮNG = có việc làm được ở đây, ĐỎ = ô vô nghĩa
+    // (nước, gốc cây, tảng đá, tường nhà).
+    return { x: tx, y: ty, ok: tileActionable(s, tx, ty) };
   }
 
-  /* ---- 9. vòng lặp ---- */
+  function inReachOf(s: GameState, tx: number, ty: number): boolean {
+    return Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y) <= REACH;
+  }
+
+  /* ---- 9. bấm-để-đi ------------------------------------------------------
+     Bấm vào ô ở xa: nhân vật TỰ ĐI tới rồi mới xử lý. Đây chỉ là một cách nhập
+     liệu — nó sinh ra action MOVE từng khung hình y như bàn phím, nên game
+     state và định dạng save không đổi gì. */
+  const nav = createNavigator();
+
+  /** Ô này có gì để làm không (dùng cho màu con trỏ). Nước, cây, đá, tường nhà
+   *  thì đứng sát tận nơi cũng chẳng làm được gì — báo đỏ luôn cho khỏi mất công đi. */
+  function tileActionable(s: GameState, tx: number, ty: number): boolean {
+    const t = s.tiles[ty * s.w + tx];
+    if (!t) return false;
+    if (t.g === "water") return false;
+    return t.prop !== "tree" && t.prop !== "rock" && t.prop !== "bush" && t.prop !== "house";
+  }
+
+  /** Đang cầm công trình ĐẶC? Vậy phải đứng CẠNH ô đích chứ không đứng lên nó,
+   *  nếu không sẽ tự nhốt mình và việc đặt bị từ chối. */
+  function holdingSolidBuilding(s: GameState): boolean {
+    const held = s.inv[s.sel];
+    if (!held?.id.startsWith("build:")) return false;
+    const def = content.buildings[held.id.slice(6)];
+    return !!def && def.kind === "object" && def.solid;
+  }
+
+  /** Làm việc trên ô. Trả false nếu còn ở xa quá, chưa làm được gì. */
+  function actOnTile(s: GameState, tx: number, ty: number): boolean {
+    const kind = nearbyInteract(s, tx, ty);
+    if (kind === "SHOP") {
+      menus.openShop();
+      return true;
+    }
+    if (kind === "SELL") {
+      menus.openSell();
+      return true;
+    }
+    if (kind === "SLEEP") {
+      store.dispatch({ t: "SLEEP" });
+      return true;
+    }
+    const dist = Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y);
+    if (dist <= REACH) {
+      store.dispatch({ t: "USE", x: tx, y: ty });
+      return true;
+    }
+    return false;
+  }
+
+  /* ---- 10. vòng lặp ---- */
   let elapsed = 0;
   const loop = createLoop((dt) => {
     elapsed += dt;
     const modal = menus.isOpen();
 
+    if (modal) nav.cancel();
+
     if (!modal) {
       const ax = input.axis();
-      if (ax.x !== 0 || ax.y !== 0) store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt });
-      else if (store.getState().player.moving) store.dispatch({ t: "MOVE", dx: 0, dy: 0, dt });
+      if (ax.x !== 0 || ax.y !== 0) {
+        // Người chơi tự điều khiển thì huỷ đường đi tự động ngay — không giành
+        // tay lái với nhau.
+        nav.cancel();
+        store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt });
+      } else {
+        const step = nav.update(store.getState(), content, dt);
+        if (step) store.dispatch({ t: "MOVE", dx: step.dx, dy: step.dy, dt });
+        else if (store.getState().player.moving)
+          store.dispatch({ t: "MOVE", dx: 0, dy: 0, dt });
+      }
       store.dispatch({ t: "TICK", dt });
+
+      // Vừa tới nơi thì làm luôn việc mà cú bấm lúc nãy đã hẹn.
+      const arrived = nav.takeArrival();
+      if (arrived && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
     }
 
     for (const it of input.drain()) {
@@ -333,34 +402,29 @@ async function boot() {
           break;
         }
         case "use": {
-          const c = targetTile(s);
-          if (c?.ok) store.dispatch({ t: "USE", x: c.x, y: c.y });
-          else if (c) play("deny");
+          // Ngắm bằng chuột chỉ có giá trị khi ô đó trong tầm với; xa quá thì
+          // Space quay về ô TRƯỚC MẶT thay vì bấm hụt vào chỗ con trỏ.
+          let c = targetTile(s);
+          if (c && !inReachOf(s, c.x, c.y)) c = targetTile(s, true);
+          if (c && inReachOf(s, c.x, c.y)) store.dispatch({ t: "USE", x: c.x, y: c.y });
+          else play("deny");
           break;
         }
-        case "interact":
         case "pointer": {
-          const c =
-            it.t === "pointer"
-              ? ((): Cursor | null => {
-                  const tx = Math.max(0, Math.min(s.w - 1, Math.floor(it.wx / TILE)));
-                  const ty = Math.max(0, Math.min(s.h - 1, Math.floor(it.wy / TILE)));
-                  const dist = Math.hypot(
-                    tx * TILE + TILE / 2 - s.player.x,
-                    ty * TILE + TILE / 2 - s.player.y,
-                  );
-                  return { x: tx, y: ty, ok: dist <= REACH };
-                })()
-              : // phím E luôn nhắm ô TRƯỚC MẶT, không bao giờ theo con trỏ chuột
-                targetTile(s, true);
+          const tx = Math.max(0, Math.min(s.w - 1, Math.floor(it.wx / TILE)));
+          const ty = Math.max(0, Math.min(s.h - 1, Math.floor(it.wy / TILE)));
+          nav.cancel();
+          // Đủ gần thì làm ngay; còn xa thì đặt đích, đi tới rồi mới làm.
+          if (actOnTile(s, tx, ty)) break;
+          if (!tileActionable(s, tx, ty) || !nav.goTo(s, content, tx, ty, holdingSolidBuilding(s)))
+            play("deny");
+          break;
+        }
+        case "interact": {
+          // Phím E luôn nhắm ô TRƯỚC MẶT, không theo con trỏ và không tự đi.
+          const c = targetTile(s, true);
           if (!c) break;
-          // ưu tiên tương tác (cửa/máy/quầy), không thì dùng vật phẩm
-          const kind = nearbyInteract(s, c.x, c.y);
-          if (kind === "SHOP") menus.openShop();
-          else if (kind === "SELL") menus.openSell();
-          else if (kind === "SLEEP") store.dispatch({ t: "SLEEP" });
-          else if (it.t === "pointer" && c.ok) store.dispatch({ t: "USE", x: c.x, y: c.y });
-          else if (it.t === "interact") play("deny");
+          if (!actOnTile(s, c.x, c.y)) play("deny");
           break;
         }
       }
@@ -376,7 +440,15 @@ async function boot() {
     // Camera bám nhân vật SAU khi state đã cập nhật và TRƯỚC khi vẽ, để khung
     // hình nào cũng thấy camera khớp với vị trí thật của nhân vật khung đó.
     camera.follow(s.player.x, s.player.y, dt);
-    renderer.draw(s, content, modal ? null : targetTile(s), elapsed);
+    // Đang trên đường đi thì con trỏ chỉ vào ĐÍCH, để người chơi thấy rõ mình
+    // vừa hẹn làm gì ở đâu.
+    const navT = nav.target();
+    const cursor: Cursor | null = modal
+      ? null
+      : navT
+        ? { x: navT.tx, y: navT.ty, ok: true }
+        : targetTile(s);
+    renderer.draw(s, content, cursor, elapsed);
     hud.update(s, content);
   });
 

@@ -18,7 +18,10 @@
    3. **Snap camera về world px nguyên.** Đây là thứ chống rung (shimmer): camera
       trôi ở toạ độ thực nhưng luôn VẼ ở toạ độ nguyên, nên các hàng pixel không
       nhảy qua nhảy lại giữa hai cột màn hình.
-   4. **Bám nhân vật có vùng chết + làm mượt, và kẹp vào biên bản đồ.**
+   4. **Bám nhân vật (mặc định: luôn ở chính giữa) và kẹp vào biên bản đồ.**
+      Bản đồ có kích thước CỐ ĐỊNH (40×30 ô); chỉ khung nhìn mới co giãn theo
+      màn hình. Sát mép bản đồ thì camera dừng lại nên nhân vật rời khỏi tâm —
+      đó là chủ ý, thà vậy còn hơn lộ vùng trống ngoài bản đồ.
 ============================================================================ */
 
 /* ---------------------------------------------------------------------------
@@ -59,11 +62,14 @@ export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   minTilesShort: MIN_TILES_SHORT,
   maxTilesShort: MAX_TILES_SHORT,
   maxTilesLong: MAX_TILES_LONG,
-  // Vùng chết hẹp theo trục dọc hơn trục ngang: người chơi đi ngang nhiều hơn,
-  // và khung nhìn cũng thường rộng hơn cao.
-  deadZoneTilesX: 1.6,
-  deadZoneTilesY: 1.1,
-  followLambda: 9,
+  // Không vùng chết: nhân vật LUÔN nằm giữa khung nhìn. Đây là lựa chọn có chủ
+  // ý — với lối chơi bấm-để-đi, tâm màn hình chính là thứ người chơi ngắm vào,
+  // nên nhân vật lệch tâm sẽ làm việc ước lượng khoảng cách bị sai.
+  deadZoneTilesX: 0,
+  deadZoneTilesY: 0,
+  // 0 = bám tức thì. Vì camera vẫn snap về pixel nguyên nên thế giới trôi đều
+  // từng pixel một, không giật.
+  followLambda: 0,
   maxDpr: 2,
 };
 

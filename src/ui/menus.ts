@@ -331,7 +331,7 @@ export function createMenus(
         <span class="k"><kbd>1</kbd>–<kbd>9</kbd></span><span>Chọn ô trong hotbar (hoặc lăn chuột)</span>
         <span class="k"><kbd>B</kbd></span><span>Mở cửa hàng nhanh</span>
         <span class="k"><kbd>Esc</kbd></span><span>Menu: lưu, tải, xuất/nhập file save</span>
-        <span class="k">Chuột</span><span>Bấm vào ô để làm việc ở đó</span>
+        <span class="k">Chuột/chạm</span><span>Bấm ô nào thì nhân vật <b>tự đi tới</b> rồi làm việc ở đó</span>
       </div>
       <div class="sub" style="margin-top:10px;line-height:1.7">
         <b style="color:var(--gold)">Vòng lặp:</b> cầm cuốc cày ô cỏ → chọn hạt gieo xuống →
