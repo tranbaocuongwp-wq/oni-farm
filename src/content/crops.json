@@ -1,0 +1,88 @@
+{
+  "$comment": "LÀN NHANH — đẩy OTA được. growthDays = số ngày cho MỖI lần chuyển giai đoạn; số giai đoạn hiển thị = growthDays.length + 1. Cây chín khi stage === growthDays.length. art.* là tham số để src/art/atlas.ts VẼ cây bằng code — thêm cây mới chỉ cần thêm một object ở đây, không phải vẽ tay.",
+  "crops": [
+    {
+      "id": "lettuce",
+      "name": "Xà lách",
+      "seedName": "Hạt xà lách",
+      "seedPrice": 12,
+      "sellPrice": 32,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "stem": "#4a7c2a",
+        "leaf": "#6cc94f",
+        "leafDark": "#3f8f33",
+        "fruit": "#9be86b",
+        "fruitDark": "#63b23f",
+        "height": 8,
+        "leaves": 6,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "tomato",
+      "name": "Cà chua",
+      "seedName": "Hạt cà chua",
+      "seedPrice": 30,
+      "sellPrice": 75,
+      "growthDays": [
+        1,
+        1,
+        1,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "stem": "#3f7a2c",
+        "leaf": "#57b342",
+        "leafDark": "#2f6d26",
+        "fruit": "#e8452f",
+        "fruitDark": "#a82a1c",
+        "height": 12,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "pumpkin",
+      "name": "Bí đỏ",
+      "seedName": "Hạt bí đỏ",
+      "seedPrice": 70,
+      "sellPrice": 220,
+      "growthDays": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "stem": "#4d7a24",
+        "leaf": "#68a83a",
+        "leafDark": "#3d6b22",
+        "fruit": "#f08a1d",
+        "fruitDark": "#b35c0d",
+        "height": 7,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    }
+  ]
+}

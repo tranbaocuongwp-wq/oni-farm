@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="OniFarm không thu thập dữ liệu. Toàn bộ tiến trình lưu trên máy người chơi." />
+    <title>Quyền riêng tư — OniFarm</title>
+    <link rel="stylesheet" href="/site/site.css" />
+  </head>
+  <body>
+    <nav>
+      <div class="wrap">
+        <a class="brand" href="/">ONIFARM</a>
+        <a href="/tinh-nang/">Tính năng</a>
+        <a href="/huong-dan/">Hướng dẫn</a>
+        <a href="/tai-ve/">Cài về máy</a>
+        <a class="play" href="/farm/">Chơi ngay</a>
+      </div>
+    </nav>
+    <header class="hero">
+      <div class="wrap"><h1>QUYỀN RIÊNG TƯ</h1>
+        <p class="tag">Ngắn thôi, vì thật sự không có gì để nói dài.</p></div>
+    </header>
+
+    <section>
+      <div class="wrap">
+        <h2>Không thu thập gì cả</h2>
+        <p>
+          OniFarm không có tài khoản, không có analytics, không có quảng cáo, không có
+          máy chủ nào nhận dữ liệu của bạn. Game chạy hoàn toàn trong trình duyệt hoặc
+          trong app trên máy bạn.
+        </p>
+
+        <h2 style="margin-top:28px">Dữ liệu được lưu ở đâu</h2>
+        <p>
+          Tiến trình chơi nằm trong <b>IndexedDB</b> của trình duyệt (hoặc localStorage nếu
+          IndexedDB bị chặn), gắn với chính máy và trình duyệt bạn đang dùng. Xoá dữ liệu
+          site là mất save. Muốn sao lưu thì vào <kbd>Esc</kbd> → <b>Xuất file save</b> để
+          lấy một file JSON mang đi.
+        </p>
+
+        <h2 style="margin-top:28px">Kết nối mạng duy nhất</h2>
+        <p>
+          Nếu bản triển khai có bật cập nhật nội dung OTA, game sẽ hỏi máy chủ nội dung xem
+          có bản cây trồng/công trình mới không. Đó là một yêu cầu đọc file JSON — không
+          kèm dữ liệu người chơi, không định danh. Mặc định trong mã nguồn, tính năng này
+          <b>tắt</b>, và game chạy không cần mạng.
+        </p>
+      </div>
+    </section>
+    <footer>
+      <div class="wrap">
+        OniFarm · game offline, save nằm trên máy bạn ·
+        <a href="/privacy/">Quyền riêng tư</a>
+      </div>
+    </footer>
+  </body>
+</html>

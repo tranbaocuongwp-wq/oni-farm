@@ -1,0 +1,7 @@
+{
+  "$comment": "Chỉ khai báo CÔNG CỤ và vật phẩm rời. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) được sinh tự động từ crops.json — không khai báo lại ở đây.",
+  "tools": [
+    { "id": "hoe", "name": "Cuốc", "action": "TILL", "energy": 2 },
+    { "id": "can", "name": "Bình tưới", "action": "WATER", "energy": 2 }
+  ]
+}

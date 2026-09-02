@@ -1,0 +1,15 @@
+{
+  "$comment": "LÀN NHANH — mọi con số cân bằng nằm ở đây để chỉnh nhịp game qua OTA, không cần build lại.",
+  "startMoney": 150,
+  "startSeeds": { "seed:lettuce": 8 },
+  "energyMax": 100,
+  "energyCost": { "till": 2, "water": 2, "plant": 1, "harvest": 1, "build": 5 },
+  "dayStartMinutes": 360,
+  "dayEndMinutes": 1560,
+  "realSecondsPerGameTenMinutes": 5,
+  "sleepRestore": 1.0,
+  "lateSleepPenalty": 0.35,
+  "passOutEnergy": 0.5,
+  "inventorySlots": 24,
+  "hotbarSlots": 9
+}

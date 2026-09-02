@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#14100c" />
+    <meta name="description" content="OniFarm — game nông trại hiện đại pixel art, chơi offline hoàn toàn." />
+    <title>OniFarm — Chơi</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage">
+        <canvas id="game" width="320" height="180"></canvas>
+
+        <!-- HUD và modal là DOM, không vẽ lên canvas: chữ sắc nét ở mọi cỡ màn hình -->
+        <div id="hud"></div>
+        <div id="toasts"></div>
+        <div id="modal-root"></div>
+
+        <!-- điều khiển cảm ứng, chỉ hiện trên thiết bị pointer thô -->
+        <div id="touch">
+          <div id="dpad">
+            <button class="up" aria-label="Lên">▲</button>
+            <button class="left" aria-label="Trái">◀</button>
+            <button class="right" aria-label="Phải">▶</button>
+            <button class="down" aria-label="Xuống">▼</button>
+          </div>
+          <div id="abtn">
+            <button class="a" aria-label="Dùng">DÙNG</button>
+            <button class="b" aria-label="Tương tác">E</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="boot">
+        <div class="inner">
+          <h1>ONIFARM</h1>
+          <p>Đang dựng nông trại…</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="../main.ts"></script>
+  </body>
+</html>

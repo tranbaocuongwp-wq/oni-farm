@@ -1,0 +1,525 @@
+/* ============================================================================
+   Vỏ giao diện game. Thế giới vẽ trên canvas; HUD và modal là DOM.
+
+   Vì sao tách như vậy: chữ DOM luôn sắc nét ở mọi độ phân giải và mọi cỡ màn
+   hình, trong khi chữ vẽ lên canvas 320×180 sẽ bé xíu hoặc mờ. Menu bằng DOM
+   cũng dễ mở rộng và dùng được bàn phím/đọc màn hình.
+============================================================================ */
+
+:root {
+  --bg: #14100c;
+  --panel: #2b2118;
+  --panel-2: #3a2c20;
+  --edge: #6b4f37;
+  --edge-hi: #a37850;
+  --ink: #f4e9d8;
+  --ink-dim: #b9a68d;
+  --gold: #f5c542;
+  --green: #6cc94f;
+  --red: #e05d5d;
+  --blue: #5aa9e6;
+  --shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 14px;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: none;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+canvas#game {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #14100c;
+}
+
+/* ---------------------------------------------------------------- khung gỗ */
+.panel {
+  background: var(--panel);
+  border: 3px solid var(--edge);
+  border-radius: 4px;
+  box-shadow: var(--shadow), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+/* ------------------------------------------------------------------- HUD */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+  gap: 8px;
+}
+
+.hud-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.hud-box {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  padding: 6px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+  line-height: 1.35;
+}
+
+.hud-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.hud-line b {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.hud-line .clock {
+  color: var(--blue);
+}
+
+.bar {
+  position: relative;
+  height: 9px;
+  background: #1b140e;
+  border: 1px solid #000;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(#8ede6a, #4c9c36);
+  transition: width 0.18s linear;
+}
+
+.bar.low > i {
+  background: linear-gradient(#f0a35c, #d05a2a);
+}
+
+.bar.crit > i {
+  background: linear-gradient(#f07070, #b02828);
+}
+
+#goal {
+  color: var(--ink-dim);
+  font-size: 12px;
+  max-width: 240px;
+  white-space: normal;
+}
+
+#goal b {
+  color: var(--green);
+}
+
+/* --------------------------------------------------------------- hotbar */
+#hotbar {
+  pointer-events: auto;
+  display: flex;
+  gap: 4px;
+  align-self: center;
+  padding: 5px;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+}
+
+.slot {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.slot.sel {
+  border-color: var(--gold);
+  background: #4a3826;
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.slot canvas {
+  image-rendering: pixelated;
+  width: 32px;
+  height: 32px;
+}
+
+.slot .n {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: 11px;
+  color: var(--ink);
+  text-shadow: 1px 1px 0 #000, -1px 1px 0 #000;
+}
+
+.slot .k {
+  position: absolute;
+  left: 2px;
+  top: 0;
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+
+/* --------------------------------------------------------------- toast */
+#toasts {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.toast {
+  background: rgba(20, 15, 10, 0.94);
+  border: 2px solid var(--edge);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 13px;
+  animation: toast-in 0.18s ease-out;
+  max-width: 70vw;
+  text-align: center;
+}
+
+.toast.good {
+  border-color: var(--green);
+  color: #d8f5c8;
+}
+.toast.bad {
+  border-color: var(--red);
+  color: #f8d2d2;
+}
+
+.toast.fade {
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+
+/* --------------------------------------------------------------- modal */
+#modal-root {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 4, 0.72);
+  z-index: 40;
+  padding: 16px;
+}
+
+#modal-root.open {
+  display: flex;
+}
+
+.modal {
+  background: var(--panel);
+  border: 3px solid var(--edge-hi);
+  border-radius: 5px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+  width: min(560px, 100%);
+  max-height: min(78vh, 620px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal header {
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--edge);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+}
+
+.modal .sub {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.modal .body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modal footer {
+  padding: 9px 12px;
+  border-top: 2px solid var(--edge);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* ----------------------------------------------------------- hàng trong shop */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: 3px;
+}
+
+.row.locked {
+  opacity: 0.5;
+}
+
+.row canvas {
+  image-rendering: pixelated;
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.row .info {
+  flex: 1;
+  min-width: 0;
+}
+
+.row .info .name {
+  font-size: 13px;
+}
+
+.row .info .desc {
+  font-size: 11px;
+  color: var(--ink-dim);
+  white-space: normal;
+}
+
+.row .price {
+  color: var(--gold);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 2px solid var(--edge);
+  border-bottom-width: 4px;
+  border-radius: 3px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #4a3826;
+  border-color: var(--edge-hi);
+}
+
+button:active:not(:disabled) {
+  border-bottom-width: 2px;
+  transform: translateY(2px);
+}
+
+button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: #3d6b2a;
+  border-color: #5c9b40;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #4c8535;
+}
+
+button.danger {
+  background: #6b2a2a;
+  border-color: #9b4040;
+}
+
+kbd {
+  display: inline-block;
+  background: #1b140e;
+  border: 1px solid var(--edge);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.help-grid .k {
+  text-align: right;
+}
+
+/* --------------------------------------------------- nút cảm ứng (mobile) */
+#touch {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 20;
+}
+
+body.touch #touch {
+  display: block;
+}
+
+#dpad {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: 132px;
+  height: 132px;
+  pointer-events: auto;
+}
+
+#dpad button {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+  padding: 0;
+  opacity: 0.82;
+}
+
+#dpad .up { left: 44px; top: 0; }
+#dpad .down { left: 44px; top: 88px; }
+#dpad .left { left: 0; top: 44px; }
+#dpad .right { left: 88px; top: 44px; }
+
+#abtn {
+  position: absolute;
+  right: 14px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+#abtn button {
+  width: 60px;
+  height: 46px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+/* ------------------------------------------------------------- màn hình chờ */
+#boot {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  z-index: 60;
+  text-align: center;
+  gap: 10px;
+}
+
+#boot .inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+#boot h1 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+
+#boot p {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 12px;
+  max-width: 360px;
+  line-height: 1.6;
+}
+
+#boot .err {
+  color: var(--red);
+  white-space: pre-wrap;
+  text-align: left;
+  font-size: 11px;
+  max-width: 90vw;
+  max-height: 40vh;
+  overflow: auto;
+}

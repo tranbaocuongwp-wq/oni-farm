@@ -1,0 +1,25 @@
+{
+  "name": "oni-farm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OniFarm — game nông trại hiện đại pixel art, static site chạy hoàn toàn client-side + offline. Core/content tách bạch để cập nhật OTA.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run content:build && vite build",
+    "preview": "vite preview --port 1421 --strictPort",
+    "content:build": "node scripts/build-content.mjs",
+    "content:publish": "node scripts/publish-content.mjs dist",
+    "icons": "node scripts/make-icons.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:sim": "node scripts/sim.mjs",
+    "test:ota": "node scripts/ota-test.mjs",
+    "test:all": "npm run typecheck && npm run test:sim && npm run test:ota",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name oni-farm --branch main --commit-dirty=true",
+    "deploy:content": "npm run content:publish && wrangler pages deploy dist --project-name oni-farm --branch main --commit-dirty=true"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

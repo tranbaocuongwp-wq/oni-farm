@@ -1,0 +1,16 @@
+{
+  "$comment": "requiresCore là CỔNG TƯƠNG THÍCH: core chỉ nhận content pack khi coreVersion của nó khớp dải semver này. Đây là chốt chặn quan trọng nhất của cơ chế OTA — ngăn content mới làm chết core cũ.",
+  "contentVersion": "1.0.0",
+  "requiresCore": "^1.0.0",
+  "name": "OniFarm — nội dung gốc",
+  "files": [
+    "tiles.json",
+    "crops.json",
+    "buildings.json",
+    "items.json",
+    "balance.json",
+    "progression.json",
+    "strings.vi.json",
+    "maps/farm.json"
+  ]
+}

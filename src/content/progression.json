@@ -1,0 +1,135 @@
+{
+  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>. Mốc mở khoá chặn thứ được bán ở cửa hàng; mục tiêu chỉ dẫn dắt, không chặn gì.",
+  "stages": [
+    {
+      "id": "start",
+      "name": "Bắt đầu",
+      "require": {},
+      "unlocks": [
+        "seed:lettuce"
+      ],
+      "toast": "Nông trại là của bạn rồi. Cày một ô và gieo hạt đi!"
+    },
+    {
+      "id": "pro",
+      "name": "Vào nghề",
+      "require": {
+        "harvested": 5
+      },
+      "unlocks": [
+        "seed:tomato"
+      ],
+      "toast": "Vào nghề rồi! Cửa hàng mở bán hạt cà chua."
+    },
+    {
+      "id": "mech",
+      "name": "Cơ giới hoá",
+      "require": {
+        "money": 800
+      },
+      "unlocks": [
+        "sprinkler",
+        "greenhouse"
+      ],
+      "toast": "Cơ giới hoá: đã mở vòi tưới tự động và sàn nhà kính."
+    },
+    {
+      "id": "modern",
+      "name": "Hiện đại hoá",
+      "require": {
+        "day": 8
+      },
+      "unlocks": [
+        "solar"
+      ],
+      "toast": "Hiện đại hoá: pin mặt trời đã có bán."
+    },
+    {
+      "id": "auto",
+      "name": "Tự động hoá",
+      "require": {
+        "built.solar": 1
+      },
+      "unlocks": [
+        "drone"
+      ],
+      "toast": "Có điện rồi! Drone thu hoạch đã mở khoá."
+    },
+    {
+      "id": "scale",
+      "name": "Mở rộng",
+      "require": {
+        "money": 3000
+      },
+      "unlocks": [
+        "seed:pumpkin"
+      ],
+      "toast": "Nông trại lớn mạnh: hạt bí đỏ đã có bán."
+    }
+  ],
+  "goals": [
+    {
+      "id": "g_till",
+      "text": "Cày ô đất đầu tiên",
+      "require": {
+        "tilled": 1
+      }
+    },
+    {
+      "id": "g_plant",
+      "text": "Gieo hạt xuống đất",
+      "require": {
+        "planted": 1
+      }
+    },
+    {
+      "id": "g_water",
+      "text": "Tưới cây rồi đi ngủ",
+      "require": {
+        "watered": 1
+      }
+    },
+    {
+      "id": "g_harvest",
+      "text": "Thu hoạch cây đầu tiên",
+      "require": {
+        "harvested": 1
+      }
+    },
+    {
+      "id": "g_sell",
+      "text": "Bán nông sản ở quầy thu mua",
+      "require": {
+        "sold": 1
+      }
+    },
+    {
+      "id": "g_sprinkler",
+      "text": "Lắp vòi tưới tự động đầu tiên",
+      "require": {
+        "built.sprinkler": 1
+      }
+    },
+    {
+      "id": "g_solar",
+      "text": "Dựng pin mặt trời để có điện",
+      "require": {
+        "built.solar": 1
+      }
+    },
+    {
+      "id": "g_drone",
+      "text": "Cho drone thu hoạch thay bạn",
+      "require": {
+        "built.drone": 1
+      }
+    },
+    {
+      "id": "g_rich",
+      "text": "Tích luỹ 3.000đ",
+      "require": {
+        "money": 3000
+      }
+    }
+  ]
+}

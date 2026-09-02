@@ -1,0 +1,17 @@
+{
+  "$comment": "LÀN NHANH — bảng chú giải cho bản đồ ASCII. Thêm loại ô mới = thêm một ký tự ở đây (miễn là 'prop'/'ground' đã có cách vẽ trong art/atlas.ts). Ô cày được = ground 'grass', không prop, không building.",
+  "legend": {
+    ".": { "ground": "grass" },
+    ",": { "ground": "grass", "decor": "tuft" },
+    ":": { "ground": "path" },
+    "~": { "ground": "water", "solid": true },
+    "T": { "ground": "grass", "prop": "tree", "solid": true },
+    "o": { "ground": "grass", "prop": "rock", "solid": true },
+    "b": { "ground": "grass", "prop": "bush", "solid": true },
+    "H": { "ground": "path", "prop": "house", "solid": true },
+    "D": { "ground": "path", "prop": "door", "solid": true, "interact": "SLEEP" },
+    "S": { "ground": "path", "prop": "shop", "solid": true, "interact": "SHOP" },
+    "B": { "ground": "path", "prop": "counter", "solid": true, "interact": "SELL" }
+  },
+  "spawn": { "x": 16, "y": 5 }
+}

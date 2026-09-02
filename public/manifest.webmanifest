@@ -1,0 +1,16 @@
+{
+  "name": "OniFarm — Nông trại hiện đại",
+  "short_name": "OniFarm",
+  "description": "Game nông trại hiện đại phong cách pixel, chơi offline hoàn toàn.",
+  "start_url": "/farm/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#14100c",
+  "theme_color": "#14100c",
+  "lang": "vi",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Chơi OniFarm ngay trong trình duyệt, hoặc cài về màn hình chính để chơi offline như một app." />
+    <title>Cài về máy — OniFarm</title>
+    <link rel="stylesheet" href="/site/site.css" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <nav>
+      <div class="wrap">
+        <a class="brand" href="/">ONIFARM</a>
+        <a href="/tinh-nang/">Tính năng</a>
+        <a href="/huong-dan/">Hướng dẫn</a>
+        <a href="/tai-ve/">Cài về máy</a>
+        <a class="play" href="/farm/">Chơi ngay</a>
+      </div>
+    </nav>
+    <header class="hero">
+      <div class="wrap"><h1>CÀI VỀ MÁY</h1>
+        <p class="tag">Không có bản cài đặt nào để tải. Mở là chơi, và cài về màn hình chính nếu muốn.</p>
+        <div class="cta-row"><a class="cta" href="/farm/">Chơi ngay</a></div>
+      </div>
+    </header>
+
+    <section>
+      <div class="wrap">
+        <h2>Chơi thẳng trên web</h2>
+        <p>
+          Mở <a href="/farm/">/farm/</a> là chơi được, không cần tài khoản. Lần đầu vào xong
+          thì service worker đã lưu toàn bộ game lại — sau đó <b>rút mạng vẫn chơi bình thường</b>.
+          Tiến trình nằm trong IndexedDB của trình duyệt, không gửi đi đâu cả.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Cài về màn hình chính (PWA)</h2>
+        <div class="grid">
+          <div class="card"><h3>iPhone / iPad</h3>
+            <p>Safari → nút Chia sẻ → <b>Thêm vào MH chính</b>. Game mở toàn màn hình, không thanh địa chỉ.</p></div>
+          <div class="card"><h3>Android</h3>
+            <p>Chrome → menu ⋮ → <b>Cài đặt ứng dụng</b> (hoặc Thêm vào màn hình chính).</p></div>
+          <div class="card"><h3>Máy tính</h3>
+            <p>Chrome/Edge → biểu tượng cài đặt ở thanh địa chỉ → <b>Cài đặt OniFarm</b>.</p></div>
+          <div class="card"><h3>Mang save đi máy khác</h3>
+            <p>Trong game bấm <kbd>Esc</kbd> → <b>Xuất file save</b>, rồi <b>Nhập file save</b> ở máy kia.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Tự chạy từ mã nguồn</h2>
+        <pre><code>git clone &lt;repo&gt; oni-farm
+cd oni-farm
+npm install
+npm run dev      # http://localhost:1420
+npm run build    # xuất static site vào dist/</code></pre>
+        <p class="note">
+          <code>dist/</code> là static site thuần — thả lên Cloudflare Pages, Netlify, GitHub Pages
+          hay bất kỳ web server tĩnh nào cũng chạy.
+        </p>
+      </div>
+    </section>
+    <footer>
+      <div class="wrap">
+        OniFarm · game offline, save nằm trên máy bạn ·
+        <a href="/privacy/">Quyền riêng tư</a>
+      </div>
+    </footer>
+  </body>
+</html>

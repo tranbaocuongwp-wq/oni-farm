@@ -1,0 +1,361 @@
+/* ============================================================================
+   SCHEMA — kiểm tra content pack TRƯỚC khi cho nó chạm vào game.
+
+   Vì content đến từ OTA (có thể là file lạ, file hỏng, file của phiên bản khác),
+   đây là biên giới không tin cậy. Mọi thứ đi qua đây đều bị soi. Hàm trả về
+   DANH SÁCH lỗi thay vì ném ngoại lệ ở lỗi đầu tiên — để báo cáo một lần đủ ý.
+
+   Không dùng thư viện ngoài: giữ core không phụ thuộc, chạy được cả trong Node.
+============================================================================ */
+
+type Any = Record<string, unknown>;
+
+const isObj = (v: unknown): v is Any =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+const isNum = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+const isStr = (v: unknown): v is string => typeof v === "string";
+
+class Check {
+  errors: string[] = [];
+  path: string;
+  constructor(path: string) {
+    this.path = path;
+  }
+
+  private at(k: string) {
+    return this.path ? `${this.path}.${k}` : k;
+  }
+
+  fail(k: string, why: string) {
+    this.errors.push(`${this.at(k)}: ${why}`);
+  }
+
+  obj(src: Any, k: string): Any | null {
+    const v = src[k];
+    if (!isObj(v)) {
+      this.fail(k, "phải là object");
+      return null;
+    }
+    return v;
+  }
+
+  arr(src: Any, k: string): unknown[] | null {
+    const v = src[k];
+    if (!Array.isArray(v)) {
+      this.fail(k, "phải là mảng");
+      return null;
+    }
+    return v;
+  }
+
+  str(src: Any, k: string): string | null {
+    const v = src[k];
+    if (!isStr(v) || v.length === 0) {
+      this.fail(k, "phải là chuỗi khác rỗng");
+      return null;
+    }
+    return v;
+  }
+
+  num(src: Any, k: string, min = -Infinity, max = Infinity): number | null {
+    const v = src[k];
+    if (!isNum(v)) {
+      this.fail(k, "phải là số");
+      return null;
+    }
+    if (v < min || v > max) {
+      this.fail(k, `phải nằm trong [${min}, ${max}], nhận ${v}`);
+      return null;
+    }
+    return v;
+  }
+
+  enumStr<T extends string>(src: Any, k: string, allowed: readonly T[]): T | null {
+    const v = src[k];
+    if (!isStr(v) || !(allowed as readonly string[]).includes(v)) {
+      this.fail(k, `phải là một trong [${allowed.join(", ")}]`);
+      return null;
+    }
+    return v as T;
+  }
+
+  child(k: string): Check {
+    const c = new Check(this.at(k));
+    // gom lỗi con vào cha khi kết thúc — gọi merge() sau khi dùng xong
+    return c;
+  }
+
+  merge(c: Check) {
+    this.errors.push(...c.errors);
+  }
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+function colors(c: Check, src: Any, keys: string[], where: string) {
+  for (const k of keys) {
+    const v = src[k];
+    if (!isStr(v) || !HEX.test(v)) c.fail(`${where}.${k}`, "phải là màu hex dạng #rrggbb");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+export function validateCrops(raw: unknown): string[] {
+  const c = new Check("crops.json");
+  if (!isObj(raw)) return ["crops.json: phải là object"];
+  const list = c.arr(raw, "crops");
+  if (!list) return c.errors;
+  if (list.length === 0) c.fail("crops", "phải có ít nhất một cây");
+
+  const seen = new Set<string>();
+  list.forEach((item, i) => {
+    const k = new Check(`crops[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`crops[${i}]`, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    k.str(item, "seedName");
+    k.num(item, "seedPrice", 0);
+    k.num(item, "sellPrice", 0);
+    const gd = k.arr(item, "growthDays");
+    if (gd) {
+      if (gd.length === 0) k.fail("growthDays", "phải có ít nhất một giai đoạn");
+      gd.forEach((d, j) => {
+        if (!isNum(d) || d < 1 || !Number.isInteger(d))
+          k.fail(`growthDays[${j}]`, "phải là số nguyên >= 1");
+      });
+    }
+    const rg = item["regrowDays"];
+    if (rg !== null && (!isNum(rg) || rg < 1))
+      k.fail("regrowDays", "phải là null hoặc số >= 1");
+    const ymin = k.num(item, "yieldMin", 1);
+    const ymax = k.num(item, "yieldMax", 1);
+    if (ymin !== null && ymax !== null && ymax < ymin)
+      k.fail("yieldMax", "phải >= yieldMin");
+    const art = k.obj(item, "art");
+    if (art) {
+      colors(k, art, ["stem", "leaf", "leafDark", "fruit", "fruitDark"], "art");
+      for (const n of ["height", "leaves", "spread", "fruitCount", "fruitSize"])
+        if (!isNum(art[n]) || (art[n] as number) < 0) k.fail(`art.${n}`, "phải là số >= 0");
+    }
+    c.merge(k);
+  });
+  return c.errors;
+}
+
+export function validateBuildings(raw: unknown): string[] {
+  const c = new Check("buildings.json");
+  if (!isObj(raw)) return ["buildings.json: phải là object"];
+  const list = c.arr(raw, "buildings");
+  if (!list) return c.errors;
+
+  const seen = new Set<string>();
+  list.forEach((item, i) => {
+    const k = new Check(`buildings[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`buildings[${i}]`, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    k.str(item, "desc");
+    k.num(item, "price", 0);
+    k.enumStr(item, "kind", ["floor", "object"] as const);
+    if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
+
+    const eff = k.obj(item, "effects");
+    if (eff) {
+      const allowed = ["waterRadius", "autoWet", "income", "harvestRadius"];
+      for (const key of Object.keys(eff))
+        if (!allowed.includes(key))
+          k.fail(`effects.${key}`, `hiệu ứng không được core hỗ trợ (core biết: ${allowed.join(", ")})`);
+      for (const n of ["waterRadius", "income", "harvestRadius"])
+        if (eff[n] !== undefined && (!isNum(eff[n]) || (eff[n] as number) < 0))
+          k.fail(`effects.${n}`, "phải là số >= 0");
+      if (eff["autoWet"] !== undefined && typeof eff["autoWet"] !== "boolean")
+        k.fail("effects.autoWet", "phải là boolean");
+    }
+
+    const pw = k.obj(item, "power");
+    if (pw) {
+      k.merge(numsIn(pw, ["produce", "consume"], `buildings[${i}].power`));
+    }
+    const art = k.obj(item, "art");
+    if (art) colors(k, art, ["body", "dark", "accent"], "art");
+    c.merge(k);
+  });
+  return c.errors;
+}
+
+function numsIn(src: Any, keys: string[], path: string): Check {
+  const c = new Check(path);
+  for (const k of keys)
+    if (!isNum(src[k]) || (src[k] as number) < 0) c.fail(k, "phải là số >= 0");
+  return c;
+}
+
+export function validateItems(raw: unknown): string[] {
+  const c = new Check("items.json");
+  if (!isObj(raw)) return ["items.json: phải là object"];
+  const list = c.arr(raw, "tools");
+  if (!list) return c.errors;
+  list.forEach((item, i) => {
+    const k = new Check(`tools[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`tools[${i}]`, "phải là object");
+      return;
+    }
+    k.str(item, "id");
+    k.str(item, "name");
+    k.enumStr(item, "action", ["TILL", "WATER"] as const);
+    k.num(item, "energy", 0);
+    c.merge(k);
+  });
+  return c.errors;
+}
+
+export function validateBalance(raw: unknown): string[] {
+  const c = new Check("balance.json");
+  if (!isObj(raw)) return ["balance.json: phải là object"];
+  c.num(raw, "startMoney", 0);
+  c.num(raw, "energyMax", 1);
+  c.num(raw, "dayStartMinutes", 0, 1440);
+  const end = c.num(raw, "dayEndMinutes", 0, 2880);
+  const start = raw["dayStartMinutes"];
+  if (isNum(start) && end !== null && end <= start)
+    c.fail("dayEndMinutes", "phải lớn hơn dayStartMinutes");
+  c.num(raw, "realSecondsPerGameTenMinutes", 0.01);
+  c.num(raw, "sleepRestore", 0, 1);
+  c.num(raw, "lateSleepPenalty", 0, 1);
+  c.num(raw, "passOutEnergy", 0, 1);
+  c.num(raw, "inventorySlots", 1, 200);
+  const hb = c.num(raw, "hotbarSlots", 1, 20);
+  const inv = raw["inventorySlots"];
+  if (hb !== null && isNum(inv) && hb > inv)
+    c.fail("hotbarSlots", "không được lớn hơn inventorySlots");
+
+  const cost = c.obj(raw, "energyCost");
+  if (cost) c.merge(numsIn(cost, ["till", "water", "plant", "harvest", "build"], "energyCost"));
+
+  const seeds = c.obj(raw, "startSeeds");
+  if (seeds)
+    for (const [k, v] of Object.entries(seeds))
+      if (!isNum(v) || v < 0) c.fail(`startSeeds.${k}`, "phải là số >= 0");
+  return c.errors;
+}
+
+export function validateTiles(raw: unknown): string[] {
+  const c = new Check("tiles.json");
+  if (!isObj(raw)) return ["tiles.json: phải là object"];
+  const legend = c.obj(raw, "legend");
+  if (legend) {
+    for (const [ch, v] of Object.entries(legend)) {
+      if (ch.length !== 1) c.fail(`legend.${ch}`, "khoá phải đúng MỘT ký tự");
+      if (!isObj(v)) {
+        c.fail(`legend.${ch}`, "phải là object");
+        continue;
+      }
+      const k = new Check(`legend.${ch}`);
+      k.enumStr(v, "ground", ["grass", "path", "water"] as const);
+      if (v["solid"] !== undefined && typeof v["solid"] !== "boolean")
+        k.fail("solid", "phải là boolean");
+      if (v["interact"] !== undefined)
+        k.enumStr(v, "interact", ["SLEEP", "SHOP", "SELL"] as const);
+      c.merge(k);
+    }
+  }
+  const spawn = c.obj(raw, "spawn");
+  if (spawn) c.merge(numsIn(spawn, ["x", "y"], "spawn"));
+  return c.errors;
+}
+
+export function validateMap(raw: unknown, legendChars: Set<string>): string[] {
+  const c = new Check("maps/farm.json");
+  if (!isObj(raw)) return ["maps/farm.json: phải là object"];
+  const w = c.num(raw, "w", 1, 1000);
+  const h = c.num(raw, "h", 1, 1000);
+  const rows = c.arr(raw, "rows");
+  if (!rows || w === null || h === null) return c.errors;
+  if (rows.length !== h) c.fail("rows", `phải có đúng ${h} hàng, nhận ${rows.length}`);
+
+  const unknown = new Set<string>();
+  rows.forEach((r, y) => {
+    if (!isStr(r)) {
+      c.fail(`rows[${y}]`, "phải là chuỗi");
+      return;
+    }
+    if (r.length !== w) c.fail(`rows[${y}]`, `phải dài ${w} ký tự, nhận ${r.length}`);
+    for (const ch of r) if (!legendChars.has(ch)) unknown.add(ch);
+  });
+  if (unknown.size)
+    c.fail("rows", `dùng ký tự không có trong tiles.json legend: ${[...unknown].join(" ")}`);
+  return c.errors;
+}
+
+export function validateProgression(raw: unknown): string[] {
+  const c = new Check("progression.json");
+  if (!isObj(raw)) return ["progression.json: phải là object"];
+  for (const key of ["stages", "goals"]) {
+    const list = c.arr(raw, key);
+    if (!list) continue;
+    const seen = new Set<string>();
+    list.forEach((item, i) => {
+      const k = new Check(`${key}[${i}]`);
+      if (!isObj(item)) {
+        c.fail(`${key}[${i}]`, "phải là object");
+        return;
+      }
+      const id = k.str(item, "id");
+      if (id) {
+        if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+        seen.add(id);
+      }
+      if (key === "stages") {
+        k.str(item, "name");
+        const un = k.arr(item, "unlocks");
+        if (un) un.forEach((u, j) => { if (!isStr(u)) k.fail(`unlocks[${j}]`, "phải là chuỗi"); });
+      } else {
+        k.str(item, "text");
+      }
+      const req = k.obj(item, "require");
+      if (req)
+        for (const [rk, rv] of Object.entries(req))
+          if (!isNum(rv)) k.fail(`require.${rk}`, "phải là số");
+      c.merge(k);
+    });
+  }
+  return c.errors;
+}
+
+export function validateStrings(raw: unknown): string[] {
+  const c = new Check("strings.json");
+  if (!isObj(raw)) return ["strings.json: phải là object"];
+  c.str(raw, "lang");
+  c.obj(raw, "ui");
+  c.obj(raw, "msg");
+  return c.errors;
+}
+
+export function validateManifest(raw: unknown): string[] {
+  const c = new Check("manifest.json");
+  if (!isObj(raw)) return ["manifest.json: phải là object"];
+  const v = c.str(raw, "contentVersion");
+  if (v && !/^\d+\.\d+\.\d+$/.test(v))
+    c.fail("contentVersion", "phải đúng dạng semver x.y.z");
+  const rc = c.str(raw, "requiresCore");
+  if (rc && !/^[\^~]?\d+\.\d+\.\d+$/.test(rc))
+    c.fail("requiresCore", "phải là dải semver dạng ^1.0.0 / ~1.2.0 / 1.0.0");
+  return c.errors;
+}
