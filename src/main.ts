@@ -15,6 +15,7 @@ import "./style.css";
 
 import { buildAtlas, TILE } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
+import { observeScreen } from "./core/screen.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -32,6 +33,7 @@ import {
   revertToBundled,
 } from "./core/content/ota.ts";
 import { initAudio, isMuted, play, setMuted } from "./core/sfx.ts";
+import { createCamera } from "./render/camera.ts";
 import { createRenderer, type Cursor } from "./render/draw.ts";
 import { createHud } from "./ui/hud.ts";
 import { createMenus } from "./ui/menus.ts";
@@ -115,7 +117,20 @@ async function boot() {
 
   /* ---- 4. hệ thống hiển thị ---- */
   const canvas = $<HTMLCanvasElement>("#game");
-  const renderer = createRenderer(canvas, atlas);
+  const stage = $("#stage");
+
+  // Camera là chỗ DUY NHẤT biết màn hình to nhỏ ra sao. Mọi thứ khác tính bằng
+  // world px, nên đổi khổ màn hình không đụng tới một dòng logic nào.
+  const camera = createCamera({ tile: TILE });
+  camera.setWorld(initial.w * TILE, initial.h * TILE);
+  const renderer = createRenderer(canvas, atlas, camera);
+
+  observeScreen(stage, (info) => {
+    if (camera.setSize(info.cssW, info.cssH, info.dpr)) renderer.applyViewport();
+    // Bố cục nút bấm/HUD đổi theo hướng màn — CSS đọc thuộc tính này.
+    document.body.dataset["orientation"] = info.orientation;
+  });
+  camera.jumpTo(initial.player.x, initial.player.y);
   const hud = createHud($("#hud"), atlas);
   const toasts = createToasts($("#toasts"));
 
@@ -131,7 +146,7 @@ async function boot() {
       const d = await loadGame();
       const st = d ? migrateSave(d) : null;
       if (!st) return toasts.say("Chưa có bản lưu nào.", "bad");
-      store.replace(migrateForContent(st, content).state);
+      adoptState(migrateForContent(st, content).state);
       menus.close();
       toasts.say("Đã tải bản lưu.", "good");
     },
@@ -143,11 +158,11 @@ async function boot() {
       const d = await importFromFile();
       const st = d ? migrateSave(d) : null;
       if (!st) return toasts.say("File save không hợp lệ.", "bad");
-      store.replace(migrateForContent(st, content).state);
+      adoptState(migrateForContent(st, content).state);
       menus.close();
       toasts.say("Đã nhập bản lưu.", "good");
     },
-    newGame: () => store.replace(createNewGame(content)),
+    newGame: () => adoptState(createNewGame(content)),
     toggleMute: () => {
       setMuted(!isMuted());
       return isMuted();
@@ -164,22 +179,45 @@ async function boot() {
     }),
   });
 
+  /** Thay state (tải save, chơi mới): camera phải NHẢY tới chỗ mới. Nếu để nó
+   *  làm mượt thì người chơi sẽ thấy khung hình trượt qua nửa bản đồ. */
+  function adoptState(next: GameState) {
+    store.replace(next);
+    camera.setWorld(next.w * TILE, next.h * TILE);
+    camera.jumpTo(next.player.x, next.player.y);
+  }
+
   hud.onSelect((slot) => store.dispatch({ t: "SELECT", slot }));
 
   /* ---- 5. input ---- */
+  const stickZone = document.querySelector<HTMLElement>("#stick");
   const input = createInput(canvas, {
-    toCanvas: (x, y) => renderer.toCanvas(x, y),
+    // Màn hình → world px. Đây là ranh giới duy nhất mà pixel màn hình được
+    // phép xuất hiện; từ đây trở đi mọi thứ là world px.
+    toWorld: (cx, cy) => {
+      const r = stage.getBoundingClientRect();
+      return camera.screenToWorld(cx - r.left, cy - r.top);
+    },
     isModalOpen: () => menus.isOpen(),
+    ...(stickZone
+      ? {
+          joystick: {
+            zone: stickZone,
+            base: stickZone.querySelector<HTMLElement>(".base")!,
+            knob: stickZone.querySelector<HTMLElement>(".knob")!,
+          },
+        }
+      : {}),
   });
 
-  if (matchMedia("(pointer: coarse)").matches) document.body.classList.add("touch");
+  // Cảm ứng: bật lớp điều khiển ảo. Chuột/bàn phím vẫn chạy song song — máy lai
+  // (laptop cảm ứng, tablet có bàn phím) dùng được cả hai mà không phải chọn.
+  if (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)
+    document.body.classList.add("touch");
   for (const [sel, code] of [
-    ["#dpad .up", "KeyW"],
-    ["#dpad .down", "KeyS"],
-    ["#dpad .left", "KeyA"],
-    ["#dpad .right", "KeyD"],
     ["#abtn .a", "Space"],
     ["#abtn .b", "KeyE"],
+    ["#sysbtn .menu", "Escape"],
   ] as [string, string][]) {
     const el = document.querySelector<HTMLElement>(sel);
     if (el) bindTouchButton(el, code);
@@ -242,13 +280,12 @@ async function boot() {
 
   /* ---- 8. ô đang nhắm: theo chuột nếu có, không thì theo hướng nhân vật ---- */
   function targetTile(s: GameState, forceFacing = false): Cursor | null {
-    const p = forceFacing ? null : input.pointer();
+    const p = forceFacing || input.stickActive() ? null : input.pointer();
     let tx: number;
     let ty: number;
     if (p) {
-      const t = renderer.toTile(p.x, p.y, s);
-      tx = t.x;
-      ty = t.y;
+      tx = Math.max(0, Math.min(s.w - 1, Math.floor(p.x / TILE)));
+      ty = Math.max(0, Math.min(s.h - 1, Math.floor(p.y / TILE)));
     } else {
       const d = s.player.dir;
       const ox = d === "left" ? -1 : d === "right" ? 1 : 0;
@@ -306,12 +343,13 @@ async function boot() {
           const c =
             it.t === "pointer"
               ? ((): Cursor | null => {
-                  const t = renderer.toTile(it.sx, it.sy, s);
+                  const tx = Math.max(0, Math.min(s.w - 1, Math.floor(it.wx / TILE)));
+                  const ty = Math.max(0, Math.min(s.h - 1, Math.floor(it.wy / TILE)));
                   const dist = Math.hypot(
-                    t.x * TILE + TILE / 2 - s.player.x,
-                    t.y * TILE + TILE / 2 - s.player.y,
+                    tx * TILE + TILE / 2 - s.player.x,
+                    ty * TILE + TILE / 2 - s.player.y,
                   );
-                  return { x: t.x, y: t.y, ok: dist <= REACH };
+                  return { x: tx, y: ty, ok: dist <= REACH };
                 })()
               : // phím E luôn nhắm ô TRƯỚC MẶT, không bao giờ theo con trỏ chuột
                 targetTile(s, true);
@@ -335,6 +373,9 @@ async function boot() {
       if (upTo) store.dispatch({ t: "LOG_SEEN", upTo });
     }
 
+    // Camera bám nhân vật SAU khi state đã cập nhật và TRƯỚC khi vẽ, để khung
+    // hình nào cũng thấy camera khớp với vị trí thật của nhân vật khung đó.
+    camera.follow(s.player.x, s.player.y, dt);
     renderer.draw(s, content, modal ? null : targetTile(s), elapsed);
     hud.update(s, content);
   });
@@ -357,8 +398,6 @@ async function boot() {
     return null;
   }
 
-  addEventListener("resize", () => renderer.resize());
-  renderer.resize();
   bootEl.style.display = "none";
   loop.start();
 
@@ -373,6 +412,7 @@ async function boot() {
       atlas,
       menus,
       renderer,
+      camera,
       step: (dt = 1 / 60, times = 1) => {
         for (let i = 0; i < times; i++) loop.step(dt);
       },

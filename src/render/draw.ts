@@ -1,31 +1,44 @@
 /* ============================================================================
    RENDERER — chỉ ĐỌC state, không bao giờ sửa.
 
-   Ba điểm đáng chú ý:
+   Mọi thứ ở đây vẽ bằng WORLD PX. Việc đổi sang pixel màn hình do đúng một phép
+   biến đổi ở đầu mỗi khung hình đảm nhiệm:
 
-   1. Độ phân giải nội bộ CỐ ĐỊNH 320×180 rồi phóng to bằng SỐ NGUYÊN với
-      imageSmoothingEnabled=false. Đây là điều kiện bắt buộc để pixel sắc nét:
-      phóng theo hệ số lẻ sẽ làm pixel to nhỏ không đều, nhìn là thấy bẩn.
+       setTransform(scale·dpr, 0, 0, scale·dpr, offX·dpr, offY·dpr)
 
-   2. Sắp xếp theo chiều sâu: mọi thứ đứng trên mặt đất được gom lại rồi sắp
-      theo mép dưới, nên nhân vật đi ra sau gốc cây thì bị cây che, đi ra trước
-      thì che cây. Không có thứ tự này thì thế giới trông dẹt.
+   Nhờ vậy phần còn lại của file không cần biết màn hình to nhỏ ra sao — sprite
+   nào cũng vẽ ở toạ độ world trừ đi camera, y như hồi độ phân giải còn cố định.
 
-   3. Ngày/đêm vẽ trên một lớp riêng: phủ màu tối rồi ĐỤC LỖ bằng
-      destination-out ở chỗ có đèn. Nhờ vậy ánh đèn thật sự "khoét" bóng tối
-      thay vì chỉ là một chấm sáng dán đè lên.
+   Bốn điểm đáng chú ý:
+
+   1. **Nét pixel.** imageSmoothingEnabled = false, hệ số phóng là số nguyên khi
+      có thể (camera.ts lo), và cả offset letterbox lẫn camera đều được làm tròn
+      về pixel nguyên — nửa pixel lệch là đủ làm cả màn hình mờ.
+
+   2. **Sắp theo chiều sâu.** Mọi thứ đứng trên mặt đất gom lại rồi sắp theo mép
+      dưới, nên nhân vật đi sau gốc cây thì bị che, đi trước thì che cây.
+
+   3. **Ngày/đêm đục lỗ.** Phủ màu tối lên một lớp riêng rồi ĐỤC bằng
+      destination-out ở chỗ có đèn, nên ánh sáng thật sự khoét vào bóng tối chứ
+      không phải chấm sáng dán đè. Lớp này vẽ ở nửa độ phân giải màn hình:
+      gradient vốn mềm nên không ai thấy khác biệt, mà đỡ được một nửa fill rate
+      trên màn 4K.
+
+   4. **Cắt theo khung nhìn.** Khi thế giới nhỏ hơn khung nhìn (hoặc màn quá dài
+      nên bị letterbox), phần thừa là viền nền — clip đảm bảo không có sprite nào
+      thò ra ngoài khung.
 ============================================================================ */
 
 import type { Content, GameState, Tile } from "../game/types.ts";
 import { TILE, CROP_H, houseVariantKey, variantFor, type Atlas, type PlayerDir } from "../art/atlas.ts";
+import type { Camera } from "./camera.ts";
 
-export const VIEW_W = 320;
-export const VIEW_H = 180;
+/** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
+const LETTERBOX = "#0b0907";
+const WORLD_BG = "#1a1410";
 
-export interface Camera {
-  x: number;
-  y: number;
-}
+/** Lớp ngày/đêm vẽ ở nửa độ phân giải: gradient mềm nên không lộ, mà rẻ một nửa. */
+const NIGHT_QUALITY = 0.5;
 
 export interface Cursor {
   x: number;
@@ -34,14 +47,9 @@ export interface Cursor {
 }
 
 export interface Renderer {
-  /** gọi lại khi cửa sổ đổi kích thước */
-  resize(): void;
+  /** đồng bộ backing store của canvas với viewport hiện tại của camera */
+  applyViewport(): void;
   draw(s: GameState, content: Content, cursor: Cursor | null, timeSec: number): void;
-  /** đổi pixel màn hình → pixel canvas nội bộ (cho chuột/chạm) */
-  toCanvas(clientX: number, clientY: number): { x: number; y: number } | null;
-  /** đổi pixel canvas nội bộ → toạ độ Ô trong thế giới */
-  toTile(cx: number, cy: number, s: GameState): { x: number; y: number };
-  readonly camera: Camera;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -51,68 +59,53 @@ function nightTint(minutes: number): [string, number] {
   // 6:00 sáng rõ → 17:00 bắt đầu ngả vàng → 20:00 xanh tối → 22:00+ tối hẳn
   if (minutes < 1020) return ["#000022", 0]; // trước 17:00: không phủ gì
   if (minutes < 1140) {
-    // 17:00–19:00 hoàng hôn: ám cam nhẹ
     const t = (minutes - 1020) / 120;
     return ["#3a1e10", 0.28 * t];
   }
   if (minutes < 1320) {
-    // 19:00–22:00 chuyển sang xanh đêm
     const t = (minutes - 1140) / 180;
     return ["#0a1030", 0.28 + 0.34 * t];
   }
   return ["#0a1030", 0.62];
 }
 
+/** Đèn lưu bằng toạ độ WORLD; đổi sang pixel màn hình lúc dựng lớp đêm. */
 interface Light {
-  x: number;
-  y: number;
+  wx: number;
+  wy: number;
   r: number;
   strength: number;
 }
 
-export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Renderer {
+export function createRenderer(
+  canvas: HTMLCanvasElement,
+  atlas: Atlas,
+  camera: Camera,
+): Renderer {
   const g = canvas.getContext("2d", { alpha: false })!;
   const night = document.createElement("canvas");
-  night.width = VIEW_W;
-  night.height = VIEW_H;
   const ng = night.getContext("2d")!;
 
-  const camera: Camera = { x: 0, y: 0 };
-  let scale = 1;
+  /** Canvas phủ kín khung chứa; khung nhìn được căn giữa bên trong bằng offset. */
+  function applyViewport() {
+    const vp = camera.viewport;
+    if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
+    const bw = Math.max(1, Math.round(vp.cssW * vp.dpr));
+    const bh = Math.max(1, Math.round(vp.cssH * vp.dpr));
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+    canvas.style.width = `${vp.cssW}px`;
+    canvas.style.height = `${vp.cssH}px`;
 
-  function resize() {
-    const parent = canvas.parentElement ?? document.body;
-    // Khung chứa có thể đang 0×0 (tab ẩn, iframe chưa layout, phần tử display:none).
-    // Lúc đó rơi về kích thước cửa sổ, và nếu vẫn 0 thì giữ nguyên hệ số cũ —
-    // tuyệt đối không khoá cứng scale=1, vì sau đó chuột sẽ bấm lệch ô.
-    const availW = parent.clientWidth || window.innerWidth;
-    const availH = parent.clientHeight || window.innerHeight;
-    if (availW <= 0 || availH <= 0) return;
-    // hệ số phóng NGUYÊN, tối thiểu 1
-    scale = Math.max(1, Math.floor(Math.min(availW / VIEW_W, availH / VIEW_H)));
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = VIEW_W * scale * dpr;
-    canvas.height = VIEW_H * scale * dpr;
-    canvas.style.width = `${VIEW_W * scale}px`;
-    canvas.style.height = `${VIEW_H * scale}px`;
-    // canvas được căn giữa bằng flexbox trong CSS, không tự tính offset ở đây
-    g.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    const nw = Math.max(1, Math.round(vp.viewW * vp.scale * NIGHT_QUALITY));
+    const nh = Math.max(1, Math.round(vp.viewH * vp.scale * NIGHT_QUALITY));
+    if (night.width !== nw || night.height !== nh) {
+      night.width = nw;
+      night.height = nh;
+    }
     g.imageSmoothingEnabled = false;
-  }
-
-  function toCanvas(clientX: number, clientY: number) {
-    const r = canvas.getBoundingClientRect();
-    const x = (clientX - r.left) / scale;
-    const y = (clientY - r.top) / scale;
-    if (x < 0 || y < 0 || x >= VIEW_W || y >= VIEW_H) return null;
-    return { x, y };
-  }
-
-  function toTile(cx: number, cy: number, s: GameState) {
-    return {
-      x: Math.max(0, Math.min(s.w - 1, Math.floor((cx + camera.x) / TILE))),
-      y: Math.max(0, Math.min(s.h - 1, Math.floor((cy + camera.y) / TILE))),
-    };
   }
 
   /* ---- lớp nền: cỏ / lối đi / nước / đất cày / sàn nhà kính ---- */
@@ -125,14 +118,14 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
     y1: number,
     waterFrame: number,
   ) {
+    const { rx, ry } = camera;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
         if (!t) continue;
-        const px = x * TILE - camera.x;
-        const py = y * TILE - camera.y;
+        const px = x * TILE - rx;
+        const py = y * TILE - ry;
 
-        // nền gốc
         if (t.g === "water") {
           g.drawImage(atlas.water[waterFrame % atlas.water.length]!, px, py);
           continue;
@@ -149,7 +142,6 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
           }
         }
 
-        // đất đã cày
         if (t.tilled) {
           const set = t.wet ? atlas.soilWet : atlas.soil;
           g.drawImage(set[variantFor(x, y, set.length)]!, px, py);
@@ -162,7 +154,7 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
 
   /* ---- lớp vật thể, sắp theo chiều sâu ---- */
   interface Item {
-    /** mép dưới — khoá sắp xếp */
+    /** mép dưới (world px) — khoá sắp xếp */
     base: number;
     run: () => void;
   }
@@ -181,13 +173,16 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
     items: Item[],
     lights: Light[],
   ) {
+    const { rx, ry } = camera;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
         if (!t) continue;
-        const px = x * TILE - camera.x;
-        const py = y * TILE - camera.y;
-        const base = py + TILE;
+        const px = x * TILE - rx;
+        const py = y * TILE - ry;
+        const base = y * TILE + TILE;
+        const wcx = x * TILE + TILE / 2;
+        const wcy = y * TILE;
 
         switch (t.prop) {
           case "tree":
@@ -202,11 +197,11 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
             break;
           case "shop":
             items.push({ base, run: () => g.drawImage(atlas.shop, px, py) });
-            lights.push({ x: px + 8, y: py + 6, r: 26, strength: 0.7 });
+            lights.push({ wx: wcx, wy: wcy + 6, r: 26, strength: 0.7 });
             break;
           case "counter":
             items.push({ base, run: () => g.drawImage(atlas.counter, px, py) });
-            lights.push({ x: px + 8, y: py + 4, r: 24, strength: 0.6 });
+            lights.push({ wx: wcx, wy: wcy + 4, r: 24, strength: 0.6 });
             break;
           case "house":
           case "door": {
@@ -221,27 +216,25 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
             );
             const img = atlas.house.get(key);
             if (img) items.push({ base, run: () => g.drawImage(img, px, py) });
-            // cửa sổ và cửa chính hắt sáng ra ngoài khi trời tối
-            if (t.prop === "door") lights.push({ x: px + 8, y: py + 8, r: 40, strength: 0.9 });
+            if (t.prop === "door") lights.push({ wx: wcx, wy: wcy + 8, r: 40, strength: 0.9 });
             else if (isHouse(s.tiles[(y - 1) * s.w + x]))
               // ô tường (có mái ở trên) → có cửa sổ → hắt sáng
-              lights.push({ x: px + 8, y: py + 7, r: 22, strength: 0.5 });
+              lights.push({ wx: wcx, wy: wcy + 7, r: 22, strength: 0.5 });
             break;
           }
         }
 
-        // công trình người chơi đặt (loại 'object' — 'floor' đã vẽ ở lớp nền)
+        // công trình người chơi đặt ('floor' đã vẽ ở lớp nền)
         if (t.b) {
           const def = content.buildings[t.b];
           const img = atlas.buildings[t.b];
           if (def && img && def.kind === "object") {
             items.push({ base, run: () => g.drawImage(img, px, py) });
             if (def.power.produce > 0 || def.effects.harvestRadius)
-              lights.push({ x: px + 8, y: py + 8, r: 20, strength: 0.5 });
+              lights.push({ wx: wcx, wy: wcy + 8, r: 20, strength: 0.5 });
           }
         }
 
-        // cây trồng — vẽ trên khung cao hơn ô, canh mép dưới trùng mép dưới ô
         if (t.crop) {
           const frames = atlas.crops[t.crop.id];
           const img = frames?.[Math.min(t.crop.stage, frames.length - 1)];
@@ -251,107 +244,122 @@ export function createRenderer(canvas: HTMLCanvasElement, atlas: Atlas): Rendere
     }
   }
 
-  function drawPlayer(s: GameState, items: Item[], timeSec: number) {
+  function drawPlayer(s: GameState, items: Item[]) {
     const p = s.player;
     const frames = atlas.player[p.dir as PlayerDir];
     // 6 khung/giây khi đi; đứng yên thì về khung 0
     const f = p.moving ? 1 + (Math.floor(p.anim * 6) % 2) : 0;
     const img = frames[f] ?? frames[0]!;
-    // player.x/y là TÂM hitbox 10×10 (xem world.ts: PLAYER_W/H), không phải góc ô.
-    // Sprite 16×16 có bàn chân ở hàng ~15, nên canh đáy sprite trùng đáy hitbox:
+    // player.x/y là TÂM hitbox 10×10 (world.ts: PLAYER_W/H), không phải góc ô.
+    // Sprite 16×16 có bàn chân ở hàng ~15 → canh đáy sprite trùng đáy hitbox:
     //   đáy hitbox = y + 5  →  đỉnh sprite = y + 5 - 16 = y - 11
-    const px = Math.round(p.x - camera.x) - TILE / 2;
-    const py = Math.round(p.y - camera.y) - 11;
-    items.push({ base: py + TILE, run: () => g.drawImage(img, px, py) });
-    // đèn đội đầu, đủ để đi lại ban đêm mà không mù
-    void timeSec;
+    // Làm tròn vị trí nhân vật về world px nguyên, cùng lý do với camera.
+    const px = Math.round(p.x - camera.rx) - TILE / 2;
+    const py = Math.round(p.y - camera.ry) - 11;
+    items.push({ base: Math.round(p.y) + 5, run: () => g.drawImage(img, px, py) });
   }
 
   function drawNight(s: GameState, lights: Light[]) {
     const [color, alpha] = nightTint(s.minutes);
     if (alpha <= 0.001) return;
+    const vp = camera.viewport;
+    const k = vp.scale * NIGHT_QUALITY; // world px → pixel của lớp đêm
+
     ng.setTransform(1, 0, 0, 1, 0, 0);
     ng.globalCompositeOperation = "source-over";
-    ng.clearRect(0, 0, VIEW_W, VIEW_H);
+    ng.clearRect(0, 0, night.width, night.height);
     ng.fillStyle = color;
     ng.globalAlpha = alpha;
-    ng.fillRect(0, 0, VIEW_W, VIEW_H);
+    ng.fillRect(0, 0, night.width, night.height);
     ng.globalAlpha = 1;
 
-    // đục lỗ ở chỗ có đèn
     ng.globalCompositeOperation = "destination-out";
     for (const l of lights) {
-      if (l.x < -l.r || l.x > VIEW_W + l.r || l.y < -l.r || l.y > VIEW_H + l.r) continue;
-      const grad = ng.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+      const lx = (l.wx - camera.rx) * k;
+      const ly = (l.wy - camera.ry) * k;
+      const lr = l.r * k;
+      if (lx < -lr || lx > night.width + lr || ly < -lr || ly > night.height + lr) continue;
+      const grad = ng.createRadialGradient(lx, ly, 0, lx, ly, lr);
       grad.addColorStop(0, `rgba(0,0,0,${l.strength})`);
       grad.addColorStop(0.55, `rgba(0,0,0,${l.strength * 0.45})`);
       grad.addColorStop(1, "rgba(0,0,0,0)");
       ng.fillStyle = grad;
-      ng.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+      ng.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
     }
     ng.globalCompositeOperation = "source-over";
-    g.drawImage(night, 0, 0);
+
+    // Ghép ở không gian THIẾT BỊ, bật khử răng cưa cho riêng lớp này: đây là
+    // gradient chứ không phải pixel art, để nó mượt mới đẹp.
+    const s2 = vp.scale * vp.dpr;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.imageSmoothingEnabled = true;
+    g.drawImage(
+      night,
+      Math.round(vp.offX * vp.dpr),
+      Math.round(vp.offY * vp.dpr),
+      vp.viewW * s2,
+      vp.viewH * s2,
+    );
+    g.imageSmoothingEnabled = false;
   }
 
   function draw(s: GameState, content: Content, cursor: Cursor | null, timeSec: number) {
-    // camera bám nhân vật, kẹp trong biên thế giới, làm tròn về pixel nguyên
-    const worldW = s.w * TILE;
-    const worldH = s.h * TILE;
-    camera.x = Math.round(
-      Math.max(0, Math.min(worldW - VIEW_W, s.player.x - VIEW_W / 2)),
-    );
-    camera.y = Math.round(
-      Math.max(0, Math.min(worldH - VIEW_H, s.player.y - VIEW_H / 2)),
-    );
+    const vp = camera.viewport;
+    if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
 
-    g.fillStyle = "#1a1410";
-    g.fillRect(0, 0, VIEW_W, VIEW_H);
+    const scale = vp.scale * vp.dpr;
+    // Offset letterbox làm tròn về pixel THIẾT BỊ: lệch nửa pixel ở đây là cả
+    // khung hình bị nhoè, kể cả khi hệ số phóng là số nguyên.
+    const tx = Math.round(vp.offX * vp.dpr);
+    const ty = Math.round(vp.offY * vp.dpr);
 
-    // chỉ duyệt phần nhìn thấy, cộng một vành đai cho vật thể cao tràn vào
-    const x0 = Math.max(0, Math.floor(camera.x / TILE) - 1);
-    const y0 = Math.max(0, Math.floor(camera.y / TILE) - 2);
-    const x1 = Math.min(s.w - 1, Math.ceil((camera.x + VIEW_W) / TILE));
-    const y1 = Math.min(s.h - 1, Math.ceil((camera.y + VIEW_H) / TILE) + 1);
+    // viền letterbox
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = LETTERBOX;
+    g.fillRect(0, 0, canvas.width, canvas.height);
 
+    g.save();
+    g.setTransform(scale, 0, 0, scale, tx, ty);
+    g.beginPath();
+    g.rect(0, 0, vp.viewW, vp.viewH);
+    g.clip();
+
+    g.fillStyle = WORLD_BG;
+    g.fillRect(0, 0, vp.viewW, vp.viewH);
+
+    const { x0, y0, x1, y1 } = camera.visibleTiles(s.w, s.h);
     const waterFrame = Math.floor(timeSec * 4);
     drawGround(s, content, x0, y0, x1, y1, waterFrame);
 
     // ô đang nhắm — vẽ dưới vật thể để không che cây
     if (cursor) {
-      const cx = cursor.x * TILE - camera.x;
-      const cy = cursor.y * TILE - camera.y;
-      g.drawImage(cursor.ok ? atlas.cursorOk : atlas.cursorNo, cx, cy);
+      g.drawImage(
+        cursor.ok ? atlas.cursorOk : atlas.cursorNo,
+        cursor.x * TILE - camera.rx,
+        cursor.y * TILE - camera.ry,
+      );
     }
 
     const items: Item[] = [];
     const lights: Light[] = [];
     collectEntities(s, content, x0, y0, x1, y1, items, lights);
-    drawPlayer(s, items, timeSec);
-    lights.push({
-      x: Math.round(s.player.x - camera.x),
-      y: Math.round(s.player.y - camera.y),
-      r: 46,
-      strength: 0.85,
-    });
+    drawPlayer(s, items);
+    lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 
     items.sort((a, b) => a.base - b.base);
     for (const it of items) it.run();
 
+    g.restore();
+
     drawNight(s, lights);
 
-    // hiệu ứng ngủ: cả màn hình chìm dần
     if (s.sleeping) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = "rgba(0,0,0,0.55)";
-      g.fillRect(0, 0, VIEW_W, VIEW_H);
+      g.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
 
-  resize();
-  // Bám theo kích thước khung chứa: sự kiện 'resize' của window KHÔNG bắn khi
-  // khung đổi kích thước vì lý do khác (mở/đóng panel, tab ẩn rồi hiện lại).
-  // Thiếu cái này thì canvas kẹt ở tỉ lệ cũ và toạ độ chuột lệch hẳn.
-  if (typeof ResizeObserver !== "undefined") {
-    new ResizeObserver(() => resize()).observe(canvas.parentElement ?? document.body);
-  }
-  return { resize, draw, toCanvas, toTile, camera };
+  applyViewport();
+  return { applyViewport, draw };
 }

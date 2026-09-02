@@ -1,9 +1,14 @@
 /* ============================================================================
    Vỏ giao diện game. Thế giới vẽ trên canvas; HUD và modal là DOM.
 
-   Vì sao tách như vậy: chữ DOM luôn sắc nét ở mọi độ phân giải và mọi cỡ màn
-   hình, trong khi chữ vẽ lên canvas 320×180 sẽ bé xíu hoặc mờ. Menu bằng DOM
-   cũng dễ mở rộng và dùng được bàn phím/đọc màn hình.
+   Vì sao tách như vậy: chữ DOM luôn sắc nét ở mọi độ phân giải, mọi mật độ điểm
+   ảnh và mọi hệ số phóng của game. Chữ vẽ lên canvas sẽ phóng to nhỏ theo camera
+   — trên điện thoại thì bé xíu, trên desktop thì răng cưa.
+
+   Bố cục thích ứng theo BA trục, không chỉ theo chiều rộng:
+     · hướng màn  → [data-orientation] trên <body>, do core/screen.ts đặt
+     · chiều rộng → cỡ hotbar, cỡ chữ
+     · chiều CAO  → màn thấp (điện thoại nằm ngang) phải nén HUD lại
 ============================================================================ */
 
 :root {
@@ -19,6 +24,21 @@
   --red: #e05d5d;
   --blue: #5aa9e6;
   --shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+
+  /* Ô hotbar co giãn theo bề ngang: 9 ô luôn vừa màn 360px mà không bị tràn,
+     nhưng không phình quá to trên desktop. */
+  --slot: clamp(30px, 8.6vw, 44px);
+  --ui-font: 13px;
+  --hud-gap: 10px;
+
+  /* Vùng an toàn (tai thỏ, thanh gesture). 0 trên máy không có. */
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+
+  /* Chiều cao dành cho cụm điều khiển cảm ứng, HUD phải né ra. */
+  --pad-bottom: 0px;
 }
 
 * {
@@ -33,43 +53,45 @@ body {
   color: var(--ink);
   font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
-  font-size: 14px;
+  font-size: var(--ui-font);
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-font-smoothing: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #app {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* 100dvh: thanh địa chỉ trên mobile thu vào/nhả ra làm 100vh sai — dvh bám
+     đúng vùng nhìn thấy thật, nên game không bị cắt mất đáy. */
+  height: 100dvh;
 }
 
 #stage {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  /* Chặn cuộn/zoom bằng ngón tay: mọi cử chỉ trên khu chơi là của game. */
+  touch-action: none;
 }
 
 canvas#game {
   display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Hai dòng này + tắt smoothing trong code là điều kiện để pixel art sắc cạnh.
+     Thiếu nó thì trình duyệt nội suy song tuyến và cả game trông như bị bôi mỡ. */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  background: #14100c;
-}
-
-/* ---------------------------------------------------------------- khung gỗ */
-.panel {
-  background: var(--panel);
-  border: 3px solid var(--edge);
-  border-radius: 4px;
-  box-shadow: var(--shadow), inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  background: #0b0907;
+  touch-action: none;
 }
 
 /* ------------------------------------------------------------------- HUD */
@@ -80,8 +102,15 @@ canvas#game {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 10px;
   gap: 8px;
+  padding: calc(var(--hud-gap) + var(--sa-t)) calc(var(--hud-gap) + var(--sa-r))
+    calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom))
+    calc(var(--hud-gap) + var(--sa-l));
+  /* CAO HƠN lớp điều khiển cảm ứng (#touch, z-index 20). Bản thân #hud không
+     nhận sự kiện chuột (pointer-events:none), chỉ hotbar nhận — nên chạm vào
+     hotbar thì trúng hotbar, chạm chỗ khác vẫn rơi xuống joystick bên dưới.
+     Không có dòng này thì vùng joystick nuốt mất cú chạm vào hotbar trên màn dọc. */
+  z-index: 25;
 }
 
 .hud-row {
@@ -92,22 +121,22 @@ canvas#game {
 }
 
 .hud-box {
-  background: var(--panel);
+  background: rgba(43, 33, 24, 0.92);
   border: 2px solid var(--edge);
   border-radius: 4px;
   box-shadow: var(--shadow);
-  padding: 6px 9px;
+  padding: 5px 8px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-width: 120px;
-  line-height: 1.35;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .hud-line {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   white-space: nowrap;
 }
 
@@ -122,7 +151,7 @@ canvas#game {
 
 .bar {
   position: relative;
-  height: 9px;
+  height: 8px;
   background: #1b140e;
   border: 1px solid #000;
   border-radius: 2px;
@@ -144,10 +173,19 @@ canvas#game {
   background: linear-gradient(#f07070, #b02828);
 }
 
+#goal-box {
+  max-width: 44%;
+}
+
+/* Trên cảm ứng, nút ☰ nằm đè góc phải-trên. Chừa chỗ cho nó, không thì hộp
+   "Mục tiêu" chui xuống dưới nút và bị che mất chữ. */
+body.touch #hud .hud-row:first-child {
+  padding-right: 50px;
+}
+
 #goal {
   color: var(--ink-dim);
-  font-size: 12px;
-  max-width: 240px;
+  font-size: 0.92em;
   white-space: normal;
 }
 
@@ -159,25 +197,27 @@ canvas#game {
 #hotbar {
   pointer-events: auto;
   display: flex;
-  gap: 4px;
+  gap: 3px;
   align-self: center;
-  padding: 5px;
-  background: var(--panel);
+  padding: 4px;
+  background: rgba(43, 33, 24, 0.92);
   border: 2px solid var(--edge);
   border-radius: 4px;
   box-shadow: var(--shadow);
+  max-width: 100%;
 }
 
 .slot {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: var(--slot);
+  height: var(--slot);
   background: var(--panel-2);
   border: 2px solid #1b140e;
   border-radius: 3px;
   display: grid;
   place-items: center;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .slot.sel {
@@ -188,15 +228,15 @@ canvas#game {
 
 .slot canvas {
   image-rendering: pixelated;
-  width: 32px;
-  height: 32px;
+  width: 78%;
+  height: 78%;
 }
 
 .slot .n {
   position: absolute;
-  right: 2px;
-  bottom: 0;
-  font-size: 11px;
+  right: 1px;
+  bottom: -1px;
+  font-size: 0.85em;
   color: var(--ink);
   text-shadow: 1px 1px 0 #000, -1px 1px 0 #000;
 }
@@ -204,33 +244,38 @@ canvas#game {
 .slot .k {
   position: absolute;
   left: 2px;
-  top: 0;
-  font-size: 9px;
+  top: -2px;
+  font-size: 0.7em;
   color: var(--ink-dim);
+}
+
+/* Trên cảm ứng, số phím 1–9 vô nghĩa — bỏ đi cho đỡ rối. */
+body.touch .slot .k {
+  display: none;
 }
 
 /* --------------------------------------------------------------- toast */
 #toasts {
   position: absolute;
   left: 50%;
-  top: 64px;
+  top: calc(58px + var(--sa-t));
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
   pointer-events: none;
   z-index: 30;
+  width: max-content;
+  max-width: 86vw;
 }
 
 .toast {
   background: rgba(20, 15, 10, 0.94);
   border: 2px solid var(--edge);
   border-radius: 4px;
-  padding: 5px 12px;
-  font-size: 13px;
+  padding: 4px 11px;
   animation: toast-in 0.18s ease-out;
-  max-width: 70vw;
   text-align: center;
 }
 
@@ -264,7 +309,8 @@ canvas#game {
   justify-content: center;
   background: rgba(8, 6, 4, 0.72);
   z-index: 40;
-  padding: 16px;
+  padding: calc(12px + var(--sa-t)) calc(12px + var(--sa-r))
+    calc(12px + var(--sa-b)) calc(12px + var(--sa-l));
 }
 
 #modal-root.open {
@@ -277,13 +323,13 @@ canvas#game {
   border-radius: 5px;
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
   width: min(560px, 100%);
-  max-height: min(78vh, 620px);
+  max-height: 100%;
   display: flex;
   flex-direction: column;
 }
 
 .modal header {
-  padding: 10px 14px;
+  padding: 9px 12px;
   border-bottom: 2px solid var(--edge);
   display: flex;
   justify-content: space-between;
@@ -293,39 +339,41 @@ canvas#game {
 
 .modal h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 1.15em;
   letter-spacing: 0.5px;
   color: var(--gold);
 }
 
 .modal .sub {
-  font-size: 12px;
+  font-size: 0.9em;
   color: var(--ink-dim);
 }
 
 .modal .body {
-  padding: 10px 12px;
+  padding: 9px 10px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .modal footer {
-  padding: 9px 12px;
+  padding: 8px 10px;
   border-top: 2px solid var(--edge);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 /* ----------------------------------------------------------- hàng trong shop */
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 8px;
+  gap: 9px;
+  padding: 6px 7px;
   background: var(--panel-2);
   border: 2px solid #1b140e;
   border-radius: 3px;
@@ -337,8 +385,8 @@ canvas#game {
 
 .row canvas {
   image-rendering: pixelated;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   flex: none;
 }
 
@@ -347,32 +395,30 @@ canvas#game {
   min-width: 0;
 }
 
-.row .info .name {
-  font-size: 13px;
-}
-
 .row .info .desc {
-  font-size: 11px;
+  font-size: 0.85em;
   color: var(--ink-dim);
   white-space: normal;
 }
 
 .row .price {
   color: var(--gold);
-  font-size: 13px;
   white-space: nowrap;
 }
 
 button {
   font: inherit;
-  font-size: 12px;
+  font-size: 0.92em;
   color: var(--ink);
   background: var(--panel-2);
   border: 2px solid var(--edge);
   border-bottom-width: 4px;
   border-radius: 3px;
-  padding: 5px 11px;
+  padding: 6px 11px;
   cursor: pointer;
+  touch-action: manipulation;
+  /* Vùng chạm tối thiểu — ngón tay không bấm trúng nút 20px. */
+  min-height: 34px;
 }
 
 button:hover:not(:disabled) {
@@ -411,7 +457,7 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 3px;
   padding: 0 5px;
-  font-size: 11px;
+  font-size: 0.85em;
   color: var(--ink);
 }
 
@@ -419,7 +465,7 @@ kbd {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 5px 12px;
-  font-size: 12px;
+  font-size: 0.92em;
   align-items: center;
 }
 
@@ -427,7 +473,11 @@ kbd {
   text-align: right;
 }
 
-/* --------------------------------------------------- nút cảm ứng (mobile) */
+/* =========================================================================
+   ĐIỀU KHIỂN CẢM ỨNG
+   Chỉ hiện trên thiết bị có cảm ứng; chuột/bàn phím vẫn chạy song song nên
+   máy lai (laptop cảm ứng) dùng được cả hai.
+   ========================================================================= */
 #touch {
   position: absolute;
   inset: 0;
@@ -440,44 +490,172 @@ body.touch #touch {
   display: block;
 }
 
-#dpad {
+/* Vùng nhận joystick. Không vẽ gì cả — vòng nền chỉ hiện khi có ngón tay đặt
+   xuống, nên lúc bình thường màn hình sạch. */
+#stick {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
-  width: 132px;
-  height: 132px;
+  left: 0;
+  bottom: 0;
   pointer-events: auto;
+  touch-action: none;
 }
 
-#dpad button {
+#stick .base {
   position: absolute;
-  width: 44px;
-  height: 44px;
-  font-size: 16px;
-  padding: 0;
-  opacity: 0.82;
+  width: 108px;
+  height: 108px;
+  margin: -54px 0 0 -54px;
+  border-radius: 50%;
+  background: rgba(20, 15, 10, 0.34);
+  border: 2px solid rgba(163, 120, 80, 0.55);
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+  pointer-events: none;
 }
 
-#dpad .up { left: 44px; top: 0; }
-#dpad .down { left: 44px; top: 88px; }
-#dpad .left { left: 0; top: 44px; }
-#dpad .right { left: 88px; top: 44px; }
+#stick .knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(245, 197, 66, 0.72);
+  border: 2px solid rgba(20, 15, 10, 0.6);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
 
 #abtn {
   position: absolute;
-  right: 14px;
-  bottom: 24px;
+  right: calc(12px + var(--sa-r));
+  bottom: calc(14px + var(--sa-b));
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
   gap: 10px;
   pointer-events: auto;
 }
 
 #abtn button {
-  width: 60px;
-  height: 46px;
-  font-size: 13px;
-  opacity: 0.9;
+  border-radius: 50%;
+  padding: 0;
+  opacity: 0.92;
+  font-size: 0.85em;
+  background: rgba(58, 44, 32, 0.92);
+}
+
+/* Nút chính to hơn nút phụ — ngón cái tìm được mà không cần nhìn. */
+#abtn .a {
+  width: 74px;
+  height: 74px;
+  min-height: 74px;
+  background: rgba(61, 107, 42, 0.94);
+  border-color: #5c9b40;
+}
+
+#abtn .b {
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
+}
+
+#abtn button.down {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+
+#sysbtn {
+  position: absolute;
+  right: calc(10px + var(--sa-r));
+  top: calc(10px + var(--sa-t));
+  pointer-events: auto;
+}
+
+#sysbtn .menu {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 1.15em;
+  background: rgba(43, 33, 24, 0.92);
+}
+
+/* ---- bố cục theo HƯỚNG MÀN --------------------------------------------- */
+
+/* Ngang: cụm điều khiển nằm hai góc dưới, hotbar ở giữa nên không đụng nhau. */
+body[data-orientation="landscape"] #stick {
+  width: 38%;
+  height: 62%;
+}
+
+/* Dọc: màn hẹp mà cao — joystick ăn nửa dưới bên trái, và HUD phải chừa chỗ
+   cho cả cụm điều khiển bên dưới hotbar. */
+body[data-orientation="portrait"] #stick {
+  width: 55%;
+  height: 30%;
+}
+
+body.touch[data-orientation="portrait"] {
+  --pad-bottom: 96px;
+}
+
+body.touch[data-orientation="landscape"] {
+  --pad-bottom: 8px;
+}
+
+/* Ngang trên máy nhỏ: hotbar dịch sang trái một chút để không nằm dưới cụm nút
+   tròn bên phải. */
+body.touch[data-orientation="landscape"] #hotbar {
+  margin-right: 150px;
+}
+
+/* ---- màn hẹp: nén chữ và khung lại ------------------------------------- */
+@media (max-width: 560px) {
+  :root {
+    --ui-font: 11.5px;
+    --hud-gap: 7px;
+  }
+  #goal-box {
+    max-width: 50%;
+  }
+}
+
+/* ---- màn THẤP (điện thoại nằm ngang): chiều cao mới là thứ khan hiếm ---- */
+@media (max-height: 460px) {
+  :root {
+    --ui-font: 11px;
+    --hud-gap: 6px;
+    --slot: clamp(26px, 7.4vh, 36px);
+  }
+  #toasts {
+    top: calc(44px + var(--sa-t));
+  }
+  .bar {
+    height: 6px;
+  }
+  #abtn .a {
+    width: 60px;
+    height: 60px;
+    min-height: 60px;
+  }
+  #abtn .b {
+    width: 46px;
+    height: 46px;
+    min-height: 46px;
+  }
+  #stick .base {
+    width: 92px;
+    height: 92px;
+    margin: -46px 0 0 -46px;
+  }
+}
+
+/* ---- màn rất nhỏ: bỏ bớt thứ không sống còn ---------------------------- */
+@media (max-width: 380px) {
+  #goal-box {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------------- màn hình chờ */
@@ -489,7 +667,7 @@ body.touch #touch {
   background: var(--bg);
   z-index: 60;
   text-align: center;
-  gap: 10px;
+  padding: 16px;
 }
 
 #boot .inner {
@@ -501,7 +679,7 @@ body.touch #touch {
 
 #boot h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 1.7em;
   color: var(--gold);
   letter-spacing: 2px;
 }
@@ -509,7 +687,7 @@ body.touch #touch {
 #boot p {
   margin: 0;
   color: var(--ink-dim);
-  font-size: 12px;
+  font-size: 0.92em;
   max-width: 360px;
   line-height: 1.6;
 }
@@ -518,7 +696,7 @@ body.touch #touch {
   color: var(--red);
   white-space: pre-wrap;
   text-align: left;
-  font-size: 11px;
+  font-size: 0.85em;
   max-width: 90vw;
   max-height: 40vh;
   overflow: auto;

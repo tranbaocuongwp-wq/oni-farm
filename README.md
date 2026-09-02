@@ -110,6 +110,51 @@ Bản build hiện tại ~80KB (29KB gzip), zero dependency runtime.
 Nếu sau này thật sự cần particle/chiến đấu/nhiều scene: bọc Phaser làm **lớp
 view thuần** bên trên model hiện có — model không phải viết lại.
 
+### Hiển thị & camera
+
+`src/render/camera.ts` là chỗ **duy nhất** trong dự án biết màn hình to nhỏ ra sao.
+Mọi thứ khác — logic, tầm với, va chạm, đèn — tính bằng **world px** (1 ô = 16 world px):
+
+```
+world px ──▶ camera (rx, ry) ──▶ × scale ──▶ + letterbox ──▶ CSS px ──▶ × dpr ──▶ device px
+```
+
+**Khung nhìn định nghĩa bằng SỐ Ô, không bằng pixel.** Cạnh ngắn của màn hình luôn
+thấy 9–14 ô (`MIN/MAX_TILES_SHORT`). Dưới 9 ô thì trên điện thoại nhân vật to đùng mà
+không thấy gì quanh mình; trên 14 ô thì mỗi ô còn quá ít pixel, chi tiết pixel art nhoè
+thành một đám màu, và trên desktop lớn thì lộ gần hết nông trại. Thực tế mọi khổ máy phổ
+biến rơi vào 9,6–12,2 ô — chênh nhau chưa tới 1,3 lần.
+
+**Hệ số phóng ưu tiên SỐ NGUYÊN.** Hai ràng buộc số ô ở trên đổi thành một dải cho scale,
+rồi lấy số nguyên lớn nhất trong dải (nhiều chi tiết nhất mà vẫn đủ tầm nhìn). Chỉ khi màn
+quá nhỏ để chứa nổi một bội nguyên nào mới dùng hệ số lẻ.
+
+**Chống rung (shimmer).** Camera trôi ở toạ độ thực nhưng luôn *vẽ* ở world px nguyên
+(`camera.rx/ry`), và offset letterbox được làm tròn về pixel thiết bị. Không có hai thứ này
+thì mỗi khung hình các hàng pixel rơi vào ô màn hình khác nhau và cả cảnh trông như lăn tăn.
+Đo thực tế khi đi bộ: bước nhảy camera tối đa **1 world px/khung**, không có lần nào giật ngược.
+
+**Bám nhân vật** có vùng chết (1,6 × 1,1 ô) + làm mượt theo hàm mũ không phụ thuộc tốc độ
+khung hình, và **kẹp vào biên bản đồ**. Thế giới nhỏ hơn khung nhìn thì căn giữa + letterbox
+chứ không kéo lố ra ngoài bản đồ.
+
+`MAX_TILES_LONG = 24` là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn ultrawide):
+quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn thấy cả bản đồ.
+
+`src/core/screen.ts` nghe ba nguồn — ResizeObserver (khung chứa), orientationchange +
+resize (xoay máy, có đo lại sau một nhịp vì mobile hay báo chậm), và matchMedia resolution
+(đổi màn hình / đổi mức zoom làm devicePixelRatio đổi).
+
+### Điều khiển cảm ứng
+
+Bàn phím, chuột và cảm ứng đổ về cùng một chỗ (`axis()` + hàng đợi ý định), nên không có
+nhánh logic riêng cho mobile và máy lai dùng được cả hai cùng lúc.
+
+**Joystick động**: vòng điều khiển mọc ra ngay chỗ ngón tay đặt xuống thay vì bắt người
+chơi mò tới một vị trí cố định — trên màn nhỏ đây là khác biệt lớn. Kèm nút DÙNG / E cỡ
+lớn bên phải và nút ☰ mở menu. Bố cục đổi theo hướng màn qua `body[data-orientation]`,
+và mọi thứ tôn trọng `env(safe-area-inset-*)` để không chui vào tai thỏ.
+
 ### Vì sao pixel art sinh bằng code
 
 Không có file ảnh nào trong repo. Đổi lại: thật sự offline, không lo bản quyền,
