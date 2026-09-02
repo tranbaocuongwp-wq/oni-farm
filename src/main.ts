@@ -42,7 +42,7 @@ import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
-import { interactAt } from "./game/actions.ts";
+import { canUseAt, interactAt } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline.
  *
@@ -292,6 +292,15 @@ async function boot() {
   /* ---- 8. ô đang nhắm: theo chuột nếu có, không thì theo hướng nhân vật ---- */
   function targetTile(s: GameState, forceFacing = false): Cursor | null {
     const p = forceFacing || input.stickActive() ? null : input.pointer();
+
+    // Thứ tự ưu tiên khi ngắm:
+    //   1. chuột VỪA rê  → theo chuột (desktop ngắm bằng chuột là chính)
+    //   2. ô đã ngắm còn trong tầm → giữ nguyên (cứu màn nhỏ: cày rồi gieo rồi
+    //      tưới cùng một ô mà chỉ phải chạm đúng một lần)
+    //   3. ô trước mặt
+    if (!p && !forceFacing && aimed && inReachOf(s, aimed.x, aimed.y))
+      return { x: aimed.x, y: aimed.y, ok: tileActionable(s, aimed.x, aimed.y) };
+
     let tx: number;
     let ty: number;
     if (p) {
@@ -320,6 +329,54 @@ async function boot() {
      liệu — nó sinh ra action MOVE từng khung hình y như bàn phím, nên game
      state và định dạng save không đổi gì. */
   const nav = createNavigator();
+
+  /** Ô cuối cùng người chơi NGẮM tới. Trên màn nhỏ, ô chỉ rộng ~32px nên bắt
+   *  người chơi chạm lại chính xác cho mỗi thao tác là cực hình. Giữ lại ô vừa
+   *  ngắm, chừng nào còn trong tầm với thì nút DÙNG cứ thế làm tiếp ở đó —
+   *  cày rồi gieo rồi tưới cùng một ô mà chỉ phải ngắm đúng một lần.
+   *
+   *  Bị xoá ngay khi người chơi tự di chuyển: lúc đó ý định đã đổi. */
+  let aimed: { x: number; y: number } | null = null;
+
+  /**
+   * Nắn cú chạm về ô "có nghĩa" gần nhất.
+   *
+   * Ngón tay rộng cỡ 44px mà ô chỉ 32px, nên chạm vào mép giữa hai ô là chuyện
+   * thường. Ta xét ô vừa chạm cùng 8 ô quanh nó, ưu tiên ô thật sự làm được
+   * việc với thứ đang cầm, rồi mới tới ô gần điểm chạm nhất.
+   *
+   * Bán kính nắn tính bằng PIXEL MÀN HÌNH rồi đổi ngược ra world px: màn hình
+   * càng nhỏ (hệ số phóng càng thấp) thì ngón tay càng che nhiều ô, nên cần nắn
+   * rộng hơn. Trên desktop gần như không nắn gì.
+   */
+  function snapTap(s: GameState, wx: number, wy: number): { x: number; y: number } {
+    const raw = {
+      x: Math.max(0, Math.min(s.w - 1, Math.floor(wx / TILE))),
+      y: Math.max(0, Math.min(s.h - 1, Math.floor(wy / TILE))),
+    };
+    const radius = Math.max(4, Math.min(16, 26 / camera.viewport.scale));
+    let best: { x: number; y: number } | null = null;
+    let bestScore = Infinity;
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tx = raw.x + dx;
+        const ty = raw.y + dy;
+        if (tx < 0 || ty < 0 || tx >= s.w || ty >= s.h) continue;
+        const d = Math.hypot(tx * TILE + TILE / 2 - wx, ty * TILE + TILE / 2 - wy);
+        if (d > radius && !(dx === 0 && dy === 0)) continue;
+        const useful =
+          canUseAt(s, content, tx, ty, true) !== null || interactAt(s, content, tx, ty) !== null;
+        // Ô làm được việc luôn thắng ô trống, sau đó mới xét gần điểm chạm.
+        const score = (useful ? 0 : 1000) + d;
+        if (score < bestScore) {
+          bestScore = score;
+          best = { x: tx, y: ty };
+        }
+      }
+    }
+    return best ?? raw;
+  }
 
   /** Ô này có gì để làm không (dùng cho màu con trỏ). Nước, cây, đá, tường nhà
    *  thì đứng sát tận nơi cũng chẳng làm được gì — báo đỏ luôn cho khỏi mất công đi. */
@@ -382,6 +439,10 @@ async function boot() {
         // tay lái với nhau.
         nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
+        // Người chơi tự cầm lái thì BỎ ô đang ngắm, kể cả nó còn trong tầm.
+        // Giữ lại sẽ gây bất ngờ: xoay người sang hướng khác rồi bấm DÙNG mà
+        // nhân vật vẫn thò tay về ô cũ phía sau lưng.
+        aimed = null;
       } else {
         const step = nav.update(store.getState(), content, dt);
         if (step) store.dispatch({ t: "MOVE", dx: step.dx, dy: step.dy, dt, run: step.run });
@@ -393,7 +454,10 @@ async function boot() {
       // Vừa tới nơi thì làm luôn việc mà cú bấm lúc nãy đã hẹn.
       const arrived = nav.takeArrival();
       // act=false là đích do bấm trên BẢN ĐỒ NHỎ — chỉ đi tới, không cày cuốc gì.
-      if (arrived?.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
+      if (arrived?.act) {
+        aimed = { x: arrived.tx, y: arrived.ty };
+        if (!actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
+      }
     }
 
     for (const it of input.drain()) {
@@ -430,8 +494,10 @@ async function boot() {
           break;
         }
         case "pointer": {
-          const tx = Math.max(0, Math.min(s.w - 1, Math.floor(it.wx / TILE)));
-          const ty = Math.max(0, Math.min(s.h - 1, Math.floor(it.wy / TILE)));
+          const snapped = snapTap(s, it.wx, it.wy);
+          const tx = snapped.x;
+          const ty = snapped.y;
+          aimed = { x: tx, y: ty };
           nav.cancel();
           // Đủ gần thì làm ngay; còn xa thì đặt đích, đi tới rồi mới làm.
           if (actOnTile(s, tx, ty)) break;

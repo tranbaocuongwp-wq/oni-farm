@@ -197,15 +197,23 @@ function build(d: Draft, content: Content, i: number, x: number, y: number, id: 
 /** Kiểm tra nhanh cho UI: bấm vào ô này bây giờ có làm được gì không. */
 export type UseKind = "harvest" | "till" | "water" | "plant" | "build" | null;
 
+/**
+ * Ô này làm được việc gì với vật phẩm đang cầm?
+ *
+ * `ignoreReach` dùng cho việc NGẮM: khi người chơi chạm hụt sang ô bên cạnh, ta
+ * cần biết ô nào quanh đó là ô "có nghĩa" để nắn cú chạm về đúng chỗ — mà lúc
+ * đó nhân vật còn đứng xa, chưa ô nào trong tầm với cả.
+ */
 export function canUseAt(
   state: import("./types.ts").GameState,
   content: Content,
   x: number,
   y: number,
+  ignoreReach = false,
 ): UseKind {
   const i = tileIndexAt(state, x, y);
   if (i < 0) return null;
-  if (!inReach(state, x, y)) return null;
+  if (!ignoreReach && !inReach(state, x, y)) return null;
   const cur = state.tiles[i];
   if (!cur) return null;
   if (isRipe(cur, content)) return "harvest";

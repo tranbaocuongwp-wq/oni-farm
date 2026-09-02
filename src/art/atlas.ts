@@ -623,16 +623,40 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
    Con trỏ ô + biểu tượng phụ
 --------------------------------------------------------------------------- */
 
+/**
+ * Con trỏ ô. Đây là thứ người chơi NGẮM trên màn hình nhỏ, nên nó phải nổi bật
+ * trên mọi màu nền — cỏ xanh, đất nâu, nước xanh, ban đêm.
+ *
+ * Bản đầu chỉ là 12 chấm 1px ở bốn góc: trên desktop phóng ×7 thì đủ thấy, nhưng
+ * trên điện thoại phóng ×2 thì thành vài chấm mờ, gần như vô hình. Bản này dùng
+ * ba lớp: nền mờ để cả ô sáng lên, viền tối 1px để tách khỏi nền, rồi ngoặc góc
+ * dày 2px làm hình dạng nhận biết.
+ */
 function makeCursor(ok: boolean): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  const c = ok ? "#ffffff" : "#ff6b6b";
-  for (const [x, y] of [
-    [0, 0], [1, 0], [0, 1],
-    [15, 0], [14, 0], [15, 1],
-    [0, 15], [1, 15], [0, 14],
-    [15, 15], [14, 15], [15, 14],
-  ] as [number, number][])
-    s.px(x, y, c);
+  const bright = ok ? "#ffffff" : "#ff8a8a";
+  const wash = ok ? "rgba(255,255,255,0.16)" : "rgba(255,90,90,0.20)";
+  const dark = "rgba(0,0,0,0.55)";
+  const L = 6; // chiều dài ngoặc góc
+  const T = 2; // độ dày
+
+  s.rect(0, 0, TILE, TILE, wash);
+
+  // viền tối quanh mép: không có nó thì con trỏ trắng chìm nghỉm trên nền sáng
+  s.hline(0, 0, TILE, dark);
+  s.hline(0, TILE - 1, TILE, dark);
+  s.vline(0, 0, TILE, dark);
+  s.vline(TILE - 1, 0, TILE, dark);
+
+  // bốn ngoặc góc
+  s.rect(0, 0, L, T, bright);
+  s.rect(0, 0, T, L, bright);
+  s.rect(TILE - L, 0, L, T, bright);
+  s.rect(TILE - T, 0, T, L, bright);
+  s.rect(0, TILE - T, L, T, bright);
+  s.rect(0, TILE - L, T, L, bright);
+  s.rect(TILE - L, TILE - T, L, T, bright);
+  s.rect(TILE - T, TILE - L, T, L, bright);
   return s.c;
 }
 

@@ -338,6 +338,10 @@ export function createMenus(
         cầm bình tưới → về nhà bấm <kbd>E</kbd> ở cửa để ngủ. Cây chỉ lớn nếu ô ĐƯỢC TƯỚI
         trong đêm đó. Chín thì bấm <kbd>Space</kbd> để thu, mang ra quầy bán.
         <br><br>
+        <b style="color:var(--gold)">Ngắm ô:</b> khung sáng nhấp nháy cho biết bạn đang nhắm
+        ô nào. Chạm hơi lệch vẫn trúng, và ô đã ngắm được giữ lại — nên cày xong chỉ cần đổi
+        vật phẩm rồi bấm DÙNG tiếp, khỏi chạm lại.
+        <br><br>
         <b style="color:var(--gold)">Đi lại cho nhanh:</b> bấm vào ô nào thì nhân vật tự đi tới
         đó rồi làm việc — đi xa thì tự chạy. Muốn tới chỗ ngoài tầm nhìn thì bấm thẳng lên
         <b>bản đồ nhỏ</b> góc trên-trái.

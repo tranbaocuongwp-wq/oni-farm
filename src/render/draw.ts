@@ -333,13 +333,18 @@ export function createRenderer(
     const waterFrame = Math.floor(timeSec * 4);
     drawGround(s, content, x0, y0, x1, y1, waterFrame);
 
-    // ô đang nhắm — vẽ dưới vật thể để không che cây
+    // Ô đang nhắm — vẽ DƯỚI lớp vật thể để không che mất cây.
+    // Nhấp nháy nhẹ: trên màn điện thoại, một khung tĩnh mảnh rất dễ lẫn vào
+    // hoa văn nền cỏ; chuyển động là thứ mắt bắt được ngay cả khi liếc qua.
     if (cursor) {
+      const pulse = 0.72 + 0.28 * Math.sin(timeSec * 5);
+      g.globalAlpha = pulse;
       g.drawImage(
         cursor.ok ? atlas.cursorOk : atlas.cursorNo,
         cursor.x * TILE - camera.rx,
         cursor.y * TILE - camera.ry,
       );
+      g.globalAlpha = 1;
     }
 
     const items: Item[] = [];
