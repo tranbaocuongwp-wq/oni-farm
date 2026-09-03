@@ -28,6 +28,8 @@ export interface MenuHandlers {
   newGame(): void;
   toggleMute(): boolean;
   isMuted(): boolean;
+  controlMode(): "tap" | "stick";
+  setControlMode(mode: "tap" | "stick"): void;
   revertContent(): void;
   contentInfo(): { version: string; source: string; pending: string | null };
 }
@@ -417,6 +419,28 @@ export function createMenus(
     });
     body.appendChild(mute);
 
+    // Điều khiển cảm ứng: mặc định là CHẠM. Joystick chỉ dành cho ai thích, vì
+    // vùng nhận của nó phủ cả góc dưới-trái và nuốt mất cú chạm-để-đi ở đó.
+    const ctlLabel = (m: string) =>
+      m === "stick" ? "Điều khiển: JOYSTICK ảo" : "Điều khiển: CHẠM để đi";
+    const ctl = mkBtn(ctlLabel(h.controlMode()), () => {
+      const next = h.controlMode() === "stick" ? "tap" : "stick";
+      h.setControlMode(next);
+      ctl.textContent = ctlLabel(next);
+      ctlNote.textContent =
+        next === "stick"
+          ? "Joystick mọc ra ở nửa dưới bên trái; vùng đó sẽ không chạm-để-đi được."
+          : "Chạm để đi, chạm hai lần để làm. Không có vùng nào nuốt cú chạm.";
+    });
+    body.appendChild(ctl);
+    const ctlNote = document.createElement("div");
+    ctlNote.className = "sub";
+    ctlNote.textContent =
+      h.controlMode() === "stick"
+        ? "Joystick mọc ra ở nửa dưới bên trái; vùng đó sẽ không chạm-để-đi được."
+        : "Chạm để đi, chạm hai lần để làm. Không có vùng nào nuốt cú chạm.";
+    body.appendChild(ctlNote);
+
     if (info.pending) {
       const note = document.createElement("div");
       note.className = "sub";
@@ -469,6 +493,10 @@ export function createMenus(
         <b style="color:var(--gold)">Vòng lặp:</b> cầm cuốc cày ô cỏ → chọn hạt gieo xuống →
         cầm bình tưới → về nhà bấm <kbd>E</kbd> ở cửa để ngủ. Cây chỉ lớn nếu ô ĐƯỢC TƯỚI
         trong đêm đó. Chín thì bấm <kbd>Space</kbd> để thu, mang ra quầy bán.
+        <br><br>
+        <b style="color:var(--gold)">Trên điện thoại không có joystick.</b> Cả màn hình là chỗ
+        chạm — chạm đâu nhân vật đi đó. Thích joystick thì bật ở <kbd>Esc</kbd> → Điều khiển,
+        nhưng lúc đó góc dưới-trái sẽ dành cho joystick và không chạm-để-đi được nữa.
         <br><br>
         <b style="color:var(--gold)">Chạm 1 lần để ĐI, chạm 2 lần để LÀM.</b> Tách ra như vậy
         thì đi ngang qua ruộng không còn lỡ tay cày mất một ô. Khung sáng nhấp nháy cho biết

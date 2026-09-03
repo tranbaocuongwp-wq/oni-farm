@@ -528,12 +528,25 @@ body.touch #touch {
 
 /* Vùng nhận joystick. Không vẽ gì cả — vòng nền chỉ hiện khi có ngón tay đặt
    xuống, nên lúc bình thường màn hình sạch. */
+/* MẶC ĐỊNH BỊ TẮT. Để bấm thoải mái, vùng nhận joystick phải phủ một mảng lớn
+   góc dưới-trái — mà mảng đó lại NUỐT mọi cú chạm-để-đi rơi vào nó. Từ khi có
+   chạm-để-đi kèm tìm đường, joystick thành thừa với hầu hết người chơi nên nó
+   chuyển thành tuỳ chọn: Esc → Điều khiển.
+
+   `display: none` là đủ để vô hiệu hoá hoàn toàn (phần tử ẩn không nhận sự kiện
+   trỏ), nên đổi chế độ chỉ là đổi một thuộc tính chứ không phải gắn/gỡ lại
+   trình xử lý sự kiện. */
 #stick {
+  display: none;
   position: absolute;
   left: 0;
   bottom: 0;
   pointer-events: auto;
   touch-action: none;
+}
+
+body[data-control="stick"] #stick {
+  display: block;
 }
 
 #stick .base {
@@ -638,6 +651,30 @@ body.touch[data-orientation="portrait"] {
 
 body.touch[data-orientation="landscape"] {
   --pad-bottom: 8px;
+}
+
+/* Không có joystick thì cụm nút gọn hơn hẳn, HUD lấy lại được chỗ. */
+body.touch[data-control="tap"][data-orientation="portrait"] {
+  --pad-bottom: 74px;
+}
+
+/* Ở chế độ chạm, nút nhỏ lại: chúng chỉ còn là lối tắt, việc chính đã là chạm
+   thẳng vào thế giới. Càng ít thứ che mặt ruộng càng tốt. */
+body[data-control="tap"] #abtn {
+  gap: 8px;
+  opacity: 0.9;
+}
+
+body[data-control="tap"] #abtn .a {
+  width: 62px;
+  height: 62px;
+  min-height: 62px;
+}
+
+body[data-control="tap"] #abtn .b {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
 }
 
 /* Ngang trên máy nhỏ: hotbar dịch sang trái một chút để không nằm dưới cụm nút

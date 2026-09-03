@@ -323,10 +323,18 @@ thứ nào đụng tới tỉ lệ bản đồ** (bản đồ vẫn 40×30 ô c�
 Bàn phím, chuột và cảm ứng đổ về cùng một chỗ (`axis()` + hàng đợi ý định), nên không có
 nhánh logic riêng cho mobile và máy lai dùng được cả hai cùng lúc.
 
-**Joystick động**: vòng điều khiển mọc ra ngay chỗ ngón tay đặt xuống thay vì bắt người
-chơi mò tới một vị trí cố định — trên màn nhỏ đây là khác biệt lớn. Kèm nút DÙNG / E cỡ
-lớn bên phải và nút ☰ mở menu. Bố cục đổi theo hướng màn qua `body[data-orientation]`,
-và mọi thứ tôn trọng `env(safe-area-inset-*)` để không chui vào tai thỏ.
+**Mặc định trên cảm ứng: KHÔNG có joystick.** Vùng nhận joystick phải phủ một mảng lớn góc
+dưới-trái mới bấm thoải mái — mà mảng đó lại **nuốt mọi cú chạm-để-đi rơi vào nó**, tức là
+mất khoảng một phần ba màn hình. Từ khi có chạm-để-đi kèm tìm đường A\*, joystick thành thừa
+với hầu hết người chơi, nên nó chuyển thành tuỳ chọn: `Esc` → **Điều khiển**.
+
+Chế độ điều khiển là sở thích của **máy**, không thuộc ván chơi, nên nó nằm ở
+`src/core/settings.ts` với localStorage riêng và **không đi vào file save** — mang save sang
+máy khác thì cách điều khiển phải theo máy mới. Bật/tắt chỉ là đổi một thuộc tính trên
+`<body>`; `display: none` đủ để vô hiệu hoá hoàn toàn nên không phải gắn/gỡ lại trình xử lý.
+
+Còn lại: nút DÙNG / E bên phải (nhỏ hơn ở chế độ chạm) và nút ☰ mở menu. Bố cục đổi theo
+hướng màn qua `body[data-orientation]`, và mọi thứ tôn trọng `env(safe-area-inset-*)`.
 
 ### Vì sao pixel art sinh bằng code
 

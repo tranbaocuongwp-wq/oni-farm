@@ -17,6 +17,7 @@ import { buildAtlas, TILE } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
 import { alignedTo, createNavigator } from "./core/navigate.ts";
+import { applyControlMode, loadSettings, saveSettings, type ControlMode } from "./core/settings.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -93,6 +94,12 @@ async function boot() {
   root.dataset["content"] = content.contentVersion;
   root.dataset["contentSource"] = contentSource;
   root.dataset["core"] = CORE_VERSION;
+
+  // Chế độ điều khiển là sở thích của MÁY, không thuộc ván chơi — nên nó nằm ở
+  // localStorage riêng, không đi vào save. Nạp SỚM vì menu tham chiếu tới nó
+  // trong closure ngay lúc dựng.
+  const settings = loadSettings();
+  applyControlMode(settings.control);
 
   /* ---- 2. mỹ thuật ---- */
   const atlas = buildAtlas(content);
@@ -174,6 +181,12 @@ async function boot() {
       return isMuted();
     },
     isMuted,
+    controlMode: () => settings.control,
+    setControlMode: (mode: ControlMode) => {
+      settings.control = mode;
+      saveSettings(settings);
+      applyControlMode(mode);
+    },
     revertContent: async () => {
       await revertToBundled();
       toasts.say(content.strings.msg["otaReverted"] ?? "Đã quay về nội dung đóng kèm.", "good");
@@ -229,6 +242,8 @@ async function boot() {
   // (laptop cảm ứng, tablet có bàn phím) dùng được cả hai mà không phải chọn.
   if (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)
     document.body.classList.add("touch");
+
+
   for (const [sel, code] of [
     ["#abtn .a", "Space"],
     ["#abtn .b", "KeyE"],
