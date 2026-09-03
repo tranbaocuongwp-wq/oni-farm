@@ -18,6 +18,7 @@ import type {
   GroundKind,
   InteractKind,
   PropDef,
+  StoredMap,
   Tile,
 } from "./types.ts";
 
@@ -58,18 +59,19 @@ export function propAt(
   return t ? propDef(content, t.prop) : null;
 }
 
-/** Ô ĐÍCH của cửa dịch chuyển ở (x,y), null nếu ô này không phải cửa.
- *  Đích luôn tra từ content — không ai dịch chuyển tới toạ độ tuỳ ý được. */
+/** BẢN ĐỒ + ô ĐÍCH của cửa dịch chuyển ở (x,y), null nếu ô này không phải cửa.
+ *  Đích luôn tra từ content — không ai dịch chuyển tới bản đồ hay toạ độ tuỳ ý. */
 export function portalAt(
   state: GameState,
   content: Content,
   x: number,
   y: number,
-): { x: number; y: number } | null {
+): { map: string; x: number; y: number } | null {
   const def = propAt(state, content, x, y);
   const p = def?.portal;
-  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-  return { x: Math.floor(p.x), y: Math.floor(p.y) };
+  if (!p || typeof p.map !== "string" || !p.map) return null;
+  if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+  return { map: p.map, x: Math.floor(p.x), y: Math.floor(p.y) };
 }
 
 /** Vật thể "cỏ dại" dùng khi cỏ mọc lan ban đêm: vật thể khai thác được mà
@@ -123,9 +125,42 @@ export function tileIndexAt(state: GameState, x: number, y: number): number {
   return inBounds(state, x, y) ? idx(state.w, x, y) : -1;
 }
 
-/** Dựng lớp ô tĩnh từ `content.map` + legend. Mọi ô bắt đầu chưa cày, khô, trống. */
-export function buildFromMap(content: Content): { w: number; h: number; tiles: Tile[] } {
-  const { w, h, rows } = content.map;
+/* ------------------------------------------------------------ dựng bản đồ */
+
+/** Bản đồ mở đầu ván mới. Spawn trỏ vào bản đồ không tồn tại thì lùi về bản đồ
+ *  đầu tiên trong `mapOrder` — thà vào nhầm phòng còn hơn không vào được đâu. */
+export function spawnMapId(content: Content): string {
+  const want = content.tiles?.spawn?.map;
+  if (typeof want === "string" && content.maps[want]) return want;
+  return content.mapOrder[0] ?? "";
+}
+
+/** Bản đồ `id` ĐANG ở trong state, dù nó là bản đồ hoạt động hay đã cất.
+ *  UI/minimap dùng hàm này để vẽ bất kỳ bản đồ nào mà không phải phân biệt. */
+export function getMap(state: GameState, id: string): StoredMap | null {
+  if (id === state.mapId) return { w: state.w, h: state.h, tiles: state.tiles };
+  return state.maps?.[id] ?? null;
+}
+
+/** Danh sách bản đồ trong state theo thứ tự ỔN ĐỊNH của content (bản đồ lạ,
+ *  không còn trong content, xếp cuối theo thứ tự chữ cái). Mọi vòng lặp đa bản
+ *  đồ phải đi qua đây để kết quả tất định. */
+export function mapIdsOf(state: GameState, content: Content): string[] {
+  const have = new Set<string>([state.mapId, ...Object.keys(state.maps ?? {})]);
+  const out: string[] = [];
+  for (const id of content.mapOrder) {
+    if (have.delete(id)) out.push(id);
+  }
+  for (const id of [...have].sort()) out.push(id);
+  return out;
+}
+
+/** Dựng lớp ô tĩnh của MỘT bản đồ từ `content.maps[mapId]` + legend.
+ *  Mọi ô bắt đầu chưa cày, khô, trống. Bản đồ không tồn tại → null. */
+export function buildFromMap(content: Content, mapId: string): StoredMap | null {
+  const data = content.maps?.[mapId];
+  if (!data) return null;
+  const { w, h, rows } = data;
   const tiles: Tile[] = new Array<Tile>(w * h);
   for (let y = 0; y < h; y++) {
     const row = rows[y] ?? "";
@@ -146,6 +181,30 @@ export function buildFromMap(content: Content): { w: number; h: number; tiles: T
     }
   }
   return { w, h, tiles };
+}
+
+/** Dựng TẤT CẢ bản đồ cho một ván mới.
+ *
+ *  Bản đồ spawn trở thành bản đồ HOẠT ĐỘNG (`mapId` + `w/h/tiles`), phần còn
+ *  lại nằm trong `maps`. Bất biến: `mapId` không bao giờ có mặt trong `maps`. */
+export function buildAllMaps(content: Content): {
+  mapId: string;
+  w: number;
+  h: number;
+  tiles: Tile[];
+  maps: Record<string, StoredMap>;
+} {
+  const mapId = spawnMapId(content);
+  const maps: Record<string, StoredMap> = {};
+  let active: StoredMap | null = null;
+  for (const id of content.mapOrder) {
+    const built = buildFromMap(content, id);
+    if (!built) continue;
+    if (id === mapId) active = built;
+    else maps[id] = built;
+  }
+  if (!active) active = { w: 0, h: 0, tiles: [] };
+  return { mapId, w: active.w, h: active.h, tiles: active.tiles, maps };
 }
 
 /** Ô này chặn người chơi không? Ngoài bản đồ cũng coi là chặn. */

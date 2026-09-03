@@ -10,10 +10,10 @@
 
 import type { Content, DebugOp } from "./types.ts";
 import type { Draft } from "./state.ts";
-import { dTile, nextRandom, setInv, toastText, touch } from "./state.ts";
+import { dTile, mapViews, nextRandom, setInv, toastText, touch } from "./state.ts";
 import { addItem, removeItem, selectedItemId } from "./inventory.ts";
 import { parseItem } from "./items.ts";
-import { waterCapacity } from "./actions.ts";
+import { harvestTileIn, waterCapacity } from "./actions.ts";
 import { newDay } from "./newday.ts";
 import {
   idx,
@@ -151,6 +151,35 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       s.unlocked = [...all];
       s.stagesDone = [...stages];
       toastText(d, "[debug] đã mở hết mốc", "good");
+      return;
+    }
+
+    case "harvestAll": {
+      // Thu MỌI cây đã chín trên MỌI bản đồ vào cùng một túi — kể cả ruộng
+      // đang bỏ ở bản đồ khác. Không tốn năng lượng (đây là bảng gỡ lỗi), còn
+      // cây mọc lại thì `harvestTileIn` lùi giai đoạn y như thu hoạch tay.
+      let picked = 0;
+      let lost = 0;
+      for (const v of mapViews(d, content)) {
+        const n = v.w * v.h;
+        for (let i = 0; i < n; i++) {
+          const t = v.tiles[i];
+          if (!t || !t.crop) continue;
+          const def = content.crops[t.crop.id];
+          if (!def || t.crop.stage < def.growthDays.length) continue;
+          const res = harvestTileIn(d, content, v, i, false);
+          if (!res.ok) continue;
+          picked += res.amount - res.overflow;
+          lost += res.overflow;
+        }
+      }
+      if (picked === 0 && lost === 0) {
+        toastText(d, "[debug] không có cây nào chín", "info");
+        return;
+      }
+      toastText(d, `[debug] thu hoạch ${picked} món`, "good");
+      // Túi đầy thì phần thừa MẤT — nói thẳng ra thay vì im lặng nuốt mất.
+      if (lost > 0) toastText(d, `[debug] túi đầy, mất ${lost} món`, "bad");
       return;
     }
 

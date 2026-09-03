@@ -130,10 +130,6 @@ export function createRenderer(
           g.drawImage(atlas.water[waterFrame % atlas.water.length]!, px, py);
           continue;
         }
-        if (t.g === "void") {
-          g.drawImage(atlas.voidTile, px, py);
-          continue;
-        }
         const base = t.g === "path" ? atlas.path : t.g === "wood" ? atlas.wood : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
 

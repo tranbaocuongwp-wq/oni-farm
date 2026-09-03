@@ -126,8 +126,8 @@ export interface PropDef {
   becomes?: string;
   drops?: { id: string; min: number; max: number }[];
   interact?: InteractKind;
-  /** Cửa dịch chuyển: toạ độ Ô người chơi sẽ hiện ra. */
-  portal?: { x: number; y: number };
+  /** Cửa dịch chuyển: BẢN ĐỒ và toạ độ Ô người chơi sẽ hiện ra. */
+  portal?: { map: string; x: number; y: number };
   art?: { body: string; dark: string; accent: string };
 }
 
@@ -180,7 +180,7 @@ export interface Balance {
   startWater: number;
 }
 
-export type GroundKind = "grass" | "path" | "water" | "wood" | "void";
+export type GroundKind = "grass" | "path" | "water" | "wood";
 export type InteractKind = "SLEEP" | "SHOP" | "SELL" | "REFILL" | "CRAFT" | "PORTAL";
 
 export interface TileLegendEntry {
@@ -198,7 +198,8 @@ export interface GroundDef {
 export interface TilesDef {
   grounds: Record<string, GroundDef>;
   legend: Record<string, TileLegendEntry>;
-  spawn: { x: number; y: number };
+  /** Bản đồ và ô bắt đầu ván mới. */
+  spawn: { map: string; x: number; y: number };
 }
 
 /** Bản đồ đã biên dịch. `rows` là mảng chuỗi ký tự legend, mỗi chuỗi dài `w`. */
@@ -249,7 +250,16 @@ export interface Content {
   recipes: RecipeDef[];
   balance: Balance;
   tiles: TilesDef;
-  map: MapData;
+  /**
+   * Nhiều bản đồ RỜI NHAU, mỗi cái một lưới riêng.
+   *
+   * Trước đây phòng ngủ bị nhét vào một góc của lưới nông trại, độn thêm 288 ô
+   * "hư vô" chỉ để ngăn cách — số ô đó vẫn phải nạp, vẫn phải quét mỗi lần sang
+   * ngày, vẫn hiện trên bản đồ nhỏ. Tách ra thì mỗi lúc chỉ có ĐÚNG một bản đồ
+   * ở trạng thái hoạt động, và không ô nào tồn tại mà không tới được.
+   */
+  maps: Record<string, MapData>;
+  mapOrder: string[];
   stages: ProgressionStage[];
   goals: Goal[];
   strings: Strings;
@@ -334,6 +344,13 @@ export interface LogEntry {
   kind: "info" | "good" | "bad";
 }
 
+/** Một bản đồ đang được cất giữ (không phải bản đồ đang chơi). */
+export interface StoredMap {
+  w: number;
+  h: number;
+  tiles: Tile[];
+}
+
 export interface GameState {
   /** phiên bản ĐỊNH DẠNG SAVE — tăng khi đổi cấu trúc, cần migration ở core */
   save: number;
@@ -350,10 +367,23 @@ export interface GameState {
 
   player: PlayerState;
 
+  /** Bản đồ ĐANG chơi. */
+  mapId: string;
+
   w: number;
   h: number;
-  /** mảng phẳng dài w*h, chỉ số = y*w + x */
+  /** Ô của bản đồ ĐANG chơi — mảng phẳng dài w*h, chỉ số = y*w + x */
   tiles: Tile[];
+
+  /**
+   * Các bản đồ KHÁC, đã cất đi.
+   *
+   * Bản đồ đang chơi cố ý nằm ở `tiles/w/h` chứ không nằm trong đây: nhờ vậy
+   * mọi thứ đọc `state.tiles` (render, va chạm, tìm đường) không phải biết gì
+   * về chuyện có nhiều bản đồ, và chỉ có một lưới duy nhất được duyệt mỗi
+   * khung hình. Bất biến: `mapId` KHÔNG BAO GIỜ có mặt trong `maps`.
+   */
+  maps: Record<string, StoredMap>;
 
   inv: InvSlot[];
   /** chỉ số slot đang chọn trong hotbar */
@@ -405,8 +435,9 @@ export type Action =
   | { t: "CRAFT"; id: string }
   /** Múc đầy bình tưới ở giếng hoặc bờ nước. */
   | { t: "REFILL" }
-  /** Dùng cửa dịch chuyển ở ô (x,y) — reducer tự tra đích trong props.json,
-   *  nên không ai dịch chuyển bừa tới toạ độ tuỳ ý được. */
+  /** Dùng cửa dịch chuyển ở ô (x,y) của bản đồ hiện tại — reducer tự tra đích
+   *  (kể cả bản đồ đích) trong props.json, nên không ai nhảy bừa sang bản đồ
+   *  hay toạ độ tuỳ ý được. */
   | { t: "PORTAL"; x: number; y: number }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
@@ -424,7 +455,8 @@ export type DebugOp =
   | "addGrass"
   | "addTrees"
   | "unlockAll"
-  | "materials";
+  | "materials"
+  | "harvestAll";
 
 /* ---------------------------------------------------------------------------
    PHẦN E — SAVE

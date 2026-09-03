@@ -859,10 +859,14 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   walkTo(store, 16, 4);
   const day0 = store.getState().day;
   const door = portalAt(store.getState(), content, 16, 3);
-  ok(door && door.x === 6 && door.y === 37, "props.json khai cửa nhà dẫn vào phòng ngủ");
+  ok(
+    door && door.map === "house" && door.x === 6 && door.y === 6,
+    "props.json khai cửa nhà dẫn vào bản đồ 'house' ô (6,6)",
+  );
 
   store.dispatch({ t: "INTERACT", x: 16, y: 3 }); // 'D' — cửa nhà
   eq(store.getState().day, day0, "cửa nhà KHÔNG còn là chỗ ngủ nữa");
+  eq(store.getState().mapId, "house", "đã sang bản đồ phòng ngủ");
   const p1 = store.getState().player;
   eq(Math.floor(p1.x / TILE), door.x, "đã dịch chuyển đúng cột");
   eq(Math.floor(p1.y / TILE), door.y, "đã dịch chuyển đúng hàng");
@@ -871,13 +875,14 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau dịch chuyển");
 
   // --- giường mới ngủ được ---
-  walkTo(store, 4, 34);
-  store.dispatch({ t: "INTERACT", x: 4, y: 33 }); // 'E' — giường
+  walkTo(store, 2, 3);
+  store.dispatch({ t: "INTERACT", x: 2, y: 2 }); // 'E' — giường
   eq(store.getState().day, day0 + 1, "giường = ngủ");
 
   // --- cửa trong nhà đưa ra ngoài ---
-  walkTo(store, 6, 37);
-  store.dispatch({ t: "PORTAL", x: 6, y: 38 }); // 'd' — cửa ra
+  walkTo(store, 6, 6);
+  store.dispatch({ t: "PORTAL", x: 6, y: 7 }); // 'd' — cửa ra
+  eq(store.getState().mapId, "farm", "về lại nông trại");
   const p2 = store.getState().player;
   eq(Math.floor(p2.x / TILE), 16, "ra ngoài đúng cột");
   eq(Math.floor(p2.y / TILE), 4, "ra ngoài đúng hàng");
@@ -1201,8 +1206,8 @@ test("23. hết nước không tưới được; múc đầy ở giếng và ở
 /** Đưa nhân vật vào đứng cạnh bàn chế tạo trong nhà, đi bằng cửa như người chơi. */
 function goToBench(store) {
   walkTo(store, 16, 4);
-  store.dispatch({ t: "PORTAL", x: 16, y: 3 });
-  walkTo(store, 9, 37); // ngay dưới bàn chế tạo 'C' ở (9,36)
+  store.dispatch({ t: "PORTAL", x: 16, y: 3 }); // vào bản đồ 'house', hiện ra ở (6,6)
+  walkTo(store, 11, 5); // ngay dưới bàn chế tạo 'C' ở (11,4)
 }
 
 test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì bị từ chối", () => {
@@ -1245,9 +1250,9 @@ test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì b�
   selectItem(store, "tool:can2");
   eq(waterCapacity(store.getState(), content), content.tools.can2.capacity, "cầm bình lớn thì chứa nhiều hơn");
 
-  // --- xa bàn thì không chế được ---
-  walkTo(store, 6, 37);
-  store.dispatch({ t: "PORTAL", x: 6, y: 38 });
+  // --- xa bàn thì không chế được (ra hẳn ngoài nông trại) ---
+  walkTo(store, 6, 6);
+  store.dispatch({ t: "PORTAL", x: 6, y: 7 });
   const before = store.getState();
   store.dispatch({ t: "CRAFT", id: "pickaxe" });
   eq(countInv(store, "tool:pickaxe"), 0, "đứng xa bàn chế tạo thì không chế được");
@@ -1557,6 +1562,349 @@ test("29. migrate: save cũ thiếu hp/water/grow và content gỡ vật thể v
   // --- công thức không còn thì CRAFT chỉ là không-làm-gì ---
   const before = store2.getState();
   eq(store2.dispatch({ t: "CRAFT", id: "khong-ton-tai" }), before, "CRAFT id lạ trả về ĐÚNG state cũ");
+});
+
+/* ========================================================================== */
+/* 30-35. NHIỀU BẢN ĐỒ RỜI NHAU                                               */
+/* ========================================================================== */
+
+/* Phòng ngủ giờ là bản đồ 'house' 14x8 RIÊNG, không còn nhét trong lưới nông
+   trại: giường (2,2), bàn chế tạo (11,4), cửa ra (6,7). Cửa nhà ngoài nông
+   trại vẫn ở (16,3) và dẫn tới house (6,6). */
+
+/** Vào nhà bằng cửa 'D' của nông trại — đi bằng chân như người chơi thật. */
+function enterHouse(store) {
+  walkTo(store, 16, 4);
+  store.dispatch({ t: "INTERACT", x: 16, y: 3 });
+  eq(store.getState().mapId, "house", "đã sang bản đồ 'house'");
+}
+
+/** Ra ngoài bằng cửa 'd' ở (6,7) của phòng ngủ. */
+function leaveHouse(store) {
+  walkTo(store, 6, 6);
+  store.dispatch({ t: "PORTAL", x: 6, y: 7 });
+  eq(store.getState().mapId, "farm", "đã về bản đồ 'farm'");
+}
+
+/** Ngủ trên giường trong phòng ngủ. */
+function sleepInBed(store) {
+  walkTo(store, 2, 3);
+  store.dispatch({ t: "INTERACT", x: 2, y: 2 });
+}
+
+/** Ô (x,y) của NÔNG TRẠI, dù nó đang là bản đồ hoạt động hay đã cất. */
+function farmTile(store, x, y) {
+  const s = store.getState();
+  const m = s.mapId === "farm" ? s : s.maps.farm;
+  ok(m, "state phải giữ bản đồ nông trại");
+  return m.tiles[idx(m.w, x, y)];
+}
+
+/** Tổng tiến độ tăng trưởng của MỘT ô, tính bằng phút (xem totalGrow). */
+function growOfTile(t) {
+  if (!t || !t.crop) return 0;
+  const def = content.crops[t.crop.id];
+  let sum = t.crop.grow;
+  for (let i = 0; i < t.crop.stage && i < def.growthDays.length; i++)
+    sum += Math.max(1, def.growthDays[i] * BAL.growthMinutesPerDay);
+  return sum;
+}
+
+test("30. tách bản đồ: farm ⇄ house đổi lưới, bản đồ rời được cất nguyên vẹn", () => {
+  const store = mkStore(555);
+  let s = store.getState();
+  eq(s.mapId, "farm", "ván mới bắt đầu ở nông trại");
+  eq(s.w, 40, "nông trại rộng 40");
+  eq(s.h, 30, "nông trại cao 30");
+  eq(s.tiles.length, 40 * 30, "lưới nông trại đúng w*h");
+  ok(!Object.prototype.hasOwnProperty.call(s.maps, "farm"), "mapId KHÔNG nằm trong maps");
+  ok(s.maps.house, "phòng ngủ được cất sẵn từ đầu ván");
+  eq(s.maps.house.w, 14, "phòng ngủ rộng 14");
+  eq(s.maps.house.h, 8, "phòng ngủ cao 8");
+  eq(s.maps.house.tiles.length, 14 * 8, "lưới phòng ngủ đúng w*h");
+
+  // để lại dấu vết trên ruộng trước khi bỏ đi
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[1];
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+  selectItem(store, "seed:lettuce");
+  use(store, plot.x, plot.y);
+  selectItem(store, "tool:can");
+  use(store, plot.x, plot.y);
+  const farmBefore = clone(store.getState().tiles);
+
+  // --- farm → house ---
+  const frozen = JSON.stringify(store.getState());
+  const prev = store.getState();
+  enterHouse(store);
+  eq(JSON.stringify(prev), frozen, "PORTAL không sửa state cũ tại chỗ");
+
+  s = store.getState();
+  eq(s.w, 14, "w đổi theo bản đồ mới");
+  eq(s.h, 8, "h đổi theo bản đồ mới");
+  eq(s.tiles.length, 14 * 8, "tiles là lưới của phòng ngủ");
+  ok(!Object.prototype.hasOwnProperty.call(s.maps, "house"), "bản đồ đang chơi đã lấy RA khỏi maps");
+  ok(s.maps.farm, "nông trại được cất vào maps");
+  eq(s.maps.farm.w, 40, "nông trại cất đi giữ nguyên w");
+  eq(s.maps.farm.h, 30, "nông trại cất đi giữ nguyên h");
+  deepEq(s.maps.farm.tiles, farmBefore, "lưới nông trại cất đi nguyên vẹn từng ô");
+  deepEq(checkInvariants(s, content), [], "bất biến khi đang ở trong nhà");
+
+  // --- house → farm: ruộng phải y như lúc rời đi ---
+  leaveHouse(store);
+  s = store.getState();
+  eq(s.w, 40, "về nông trại thì w trở lại 40");
+  eq(s.h, 30, "về nông trại thì h trở lại 30");
+  deepEq(s.tiles, farmBefore, "ruộng còn nguyên như lúc rời đi");
+  const t = farmTile(store, plot.x, plot.y);
+  ok(t.tilled && t.crop && t.wet, "ô đã cày/gieo/tưới vẫn còn đó");
+  ok(!Object.prototype.hasOwnProperty.call(s.maps, "farm"), "mapId lại không nằm trong maps");
+  ok(s.maps.house, "phòng ngủ được cất lại");
+  deepEq(checkInvariants(s, content), [], "bất biến sau khi về ruộng");
+});
+
+test("31. ngủ trong nhà thì cây ngoài ruộng vẫn lớn và vòi tưới ngoài ruộng vẫn tưới", () => {
+  const store = mkStore(556);
+  walkTo(store, HOME.x, HOME.y);
+  unlockAll(store);
+
+  for (const p of [PLOTS[1], PLOTS[3]]) {
+    selectItem(store, "tool:hoe");
+    use(store, p.x, p.y);
+    selectItem(store, "seed:lettuce");
+    use(store, p.x, p.y);
+  }
+  // vòi tưới đứng cạnh PLOTS[3], KHÔNG tưới tay ô đó
+  store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
+  selectItem(store, "build:sprinkler");
+  use(store, PLOTS[4].x, PLOTS[4].y);
+  eq(farmTile(store, PLOTS[4].x, PLOTS[4].y).b, "sprinkler", "vòi tưới đã đặt ngoài ruộng");
+
+  // ô còn lại thì tưới tay
+  topUpWater(store);
+  selectItem(store, "tool:can");
+  use(store, PLOTS[1].x, PLOTS[1].y);
+  ok(farmTile(store, PLOTS[1].x, PLOTS[1].y).wet, "ô tưới tay đang ẩm");
+  ok(!farmTile(store, PLOTS[3].x, PLOTS[3].y).wet, "ô cạnh vòi tưới hiện còn khô");
+
+  const g0 = growOfTile(farmTile(store, PLOTS[1].x, PLOTS[1].y));
+
+  // --- vào nhà rồi ngủ ---
+  enterHouse(store);
+  const day0 = store.getState().day;
+  const sleptAt = store.getState().minutes;
+  sleepInBed(store);
+  eq(store.getState().day, day0 + 1, "giường trong nhà = sang ngày mới");
+  eq(store.getState().mapId, "house", "ngủ dậy vẫn đang ở trong nhà");
+
+  // ĐÂY LÀ BẪY LỚN NHẤT CỦA VIỆC TÁCH MAP: ruộng nằm ở bản đồ ĐÃ CẤT nhưng
+  // vẫn phải được xử lý trọn vẹn một đêm.
+  const g1 = growOfTile(farmTile(store, PLOTS[1].x, PLOTS[1].y));
+  const night = BAL.daylightEndMinutes - sleptAt;
+  ok(
+    Math.abs(g1 - g0 - night) < 1e-6,
+    `cây ngoài ruộng lớn trọn phần ban ngày còn lại: nhận ${g1 - g0}, mong đợi ${night}`,
+  );
+  ok(farmTile(store, PLOTS[3].x, PLOTS[3].y).wet, "vòi tưới ngoài ruộng vẫn tưới dù ngủ trong nhà");
+  const g3 = growOfTile(farmTile(store, PLOTS[3].x, PLOTS[3].y));
+  ok(
+    Math.abs(g3 - night) < 1e-6,
+    `ô được vòi tưới ngoài ruộng cũng lớn đúng một đêm: nhận ${g3}, mong đợi ${night}`,
+  );
+  // ô tưới tay không có vòi thì sáng ra phải khô lại
+  ok(!farmTile(store, PLOTS[1].x, PLOTS[1].y).wet, "ô không có vòi tưới thì sáng ra khô lại");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau đêm ngủ trong nhà");
+
+  // ngủ vài đêm nữa: cây ngoài ruộng chín hẳn dù người chơi không ra khỏi nhà
+  for (let i = 0; i < 4; i++) sleepInBed(store);
+  eq(
+    farmTile(store, PLOTS[3].x, PLOTS[3].y).crop.stage,
+    content.crops.lettuce.growthDays.length,
+    "ở lì trong nhà mấy ngày thì cây dưới vòi tưới vẫn chín",
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau nhiều đêm");
+});
+
+test("32. qua lại nhiều lần: mapId không bao giờ nằm trong maps; save giữ cả hai bản đồ", () => {
+  const store = mkStore(557);
+  const noSelfRef = (where) => {
+    const s = store.getState();
+    ok(
+      !Object.prototype.hasOwnProperty.call(s.maps, s.mapId),
+      `${where}: mapId '${s.mapId}' KHÔNG được có mặt trong maps`,
+    );
+    eq(Object.keys(s.maps).length, content.mapOrder.length - 1, `${where}: giữ đủ các bản đồ còn lại`);
+    deepEq(checkInvariants(s, content), [], `${where}: bất biến`);
+  };
+
+  noSelfRef("ván mới");
+  for (let i = 0; i < 4; i++) {
+    enterHouse(store);
+    noSelfRef(`lượt ${i + 1} trong nhà`);
+    leaveHouse(store);
+    noSelfRef(`lượt ${i + 1} ngoài ruộng`);
+  }
+
+  // --- save round-trip khi ĐANG Ở TRONG NHÀ ---
+  enterHouse(store);
+  setState(store, (s) => {
+    const f = s.maps.farm;
+    f.tiles[idx(f.w, PLOTS[0].x, PLOTS[0].y)].tilled = true;
+  });
+  const before = clone(store.getState());
+  const snap = store.snapshot();
+  const round = JSON.parse(JSON.stringify(snap));
+  store.replace(round.state);
+  deepEq(store.getState(), before, "state sau round-trip giữ nguyên CẢ HAI bản đồ");
+  eq(store.getState().mapId, "house", "round-trip giữ đúng bản đồ đang chơi");
+  eq(store.getState().maps.farm.tiles.length, 40 * 30, "lưới nông trại trong save đủ ô");
+  ok(store.getState().maps.farm.tiles[idx(40, PLOTS[0].x, PLOTS[0].y)].tilled, "dấu vết ngoài ruộng còn trong save");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau round-trip");
+});
+
+test("33. migrate: save thiếu mapId/maps, và content gỡ hẳn một bản đồ", () => {
+  // --- A. save v3 chỉ có đúng một lưới, không biết mapId/maps là gì ---
+  const store = mkStore(558);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[2];
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+
+  const old = clone(store.getState());
+  delete old.mapId;
+  delete old.maps;
+
+  let res;
+  try {
+    res = migrateForContent(old, content);
+  } catch (err) {
+    throw new Error(`migrateForContent đã NÉM LỖI: ${err}`);
+  }
+  eq(res.state.mapId, content.tiles.spawn.map, "thiếu mapId → về bản đồ spawn");
+  ok(res.state.maps.house, "bản đồ content có mà save chưa có thì được dựng mới");
+  ok(!Object.prototype.hasOwnProperty.call(res.state.maps, res.state.mapId), "mapId không nằm trong maps");
+  ok(
+    res.state.tiles[idx(res.state.w, plot.x, plot.y)].tilled,
+    "lưới duy nhất trong save được coi là bản đồ spawn nên ô đã cày còn nguyên",
+  );
+  eq(Math.floor(res.state.player.x / TILE), content.tiles.spawn.x, "người chơi được đặt lại ở ô spawn");
+  eq(Math.floor(res.state.player.y / TILE), content.tiles.spawn.y, "người chơi được đặt lại ở ô spawn");
+  deepEq(checkInvariants(res.state, content), [], "bất biến sau migrate");
+  ok(res.notes.length > 0, "phải có ghi chú migrate");
+
+  // --- B. content mới bỏ hẳn phòng ngủ ---
+  const raw = rawPack();
+  delete raw.maps.house;
+  raw.props = { ...raw.props, props: raw.props.props.filter((p) => !p.portal) };
+  raw.tiles = {
+    ...raw.tiles,
+    legend: { ...raw.tiles.legend, D: { ground: "path" }, d: { ground: "wood" } },
+  };
+  const oneMap = buildContent(raw);
+  eq(oneMap.mapOrder.length, 1, "content mới chỉ còn một bản đồ");
+
+  const store2 = mkStore(559);
+  enterHouse(store2);
+  setState(store2, (s) => {
+    const f = s.maps.farm;
+    f.tiles[idx(f.w, PLOTS[0].x, PLOTS[0].y)].tilled = true;
+  });
+
+  let res2;
+  try {
+    res2 = migrateForContent(clone(store2.getState()), oneMap);
+  } catch (err) {
+    throw new Error(`migrateForContent đã NÉM LỖI: ${err}`);
+  }
+  eq(res2.state.mapId, "farm", "đang đứng trong bản đồ bị gỡ → về bản đồ spawn");
+  eq(Object.keys(res2.state.maps).length, 0, "bản đồ content không còn thì bị bỏ khỏi save");
+  eq(res2.state.w, 40, "lưới hoạt động là nông trại");
+  ok(
+    res2.state.tiles[idx(res2.state.w, PLOTS[0].x, PLOTS[0].y)].tilled,
+    "tiến độ ngoài ruộng vẫn còn sau khi phòng ngủ biến mất",
+  );
+  ok(res2.notes.some((n) => n.includes("house")), "có ghi chú về bản đồ bị gỡ");
+  deepEq(checkInvariants(res2.state, oneMap), [], "bất biến với content ít bản đồ hơn");
+});
+
+test("34. DEBUG harvestAll: thu cây chín ở CẢ bản đồ đang chơi lẫn bản đồ đã cất", () => {
+  const store = mkStore(560);
+  const ripeLettuce = {
+    id: "lettuce",
+    stage: content.crops.lettuce.growthDays.length,
+    grow: 0,
+    regrown: false,
+  };
+  const ripeTomato = {
+    id: "tomato",
+    stage: content.crops.tomato.growthDays.length,
+    grow: 0,
+    regrown: false,
+  };
+
+  walkTo(store, HOME.x, HOME.y);
+  setState(store, (s) => {
+    for (const p of [PLOTS[0], PLOTS[1], PLOTS[2]])
+      setTile(s, p.x, p.y, { tilled: true, wet: false, crop: { ...ripeLettuce } });
+  });
+
+  enterHouse(store);
+  // một chậu cà chua chín ngay trong phòng ngủ = bản đồ ĐANG chơi
+  setState(store, (s) => setTile(s, 8, 2, { tilled: true, wet: false, crop: { ...ripeTomato } }));
+
+  const lettuce0 = countInv(store, "crop:lettuce");
+  const tomato0 = countInv(store, "crop:tomato");
+
+  const prev = store.getState();
+  const frozen = JSON.stringify(prev);
+  store.dispatch({ t: "DEBUG", op: "harvestAll" });
+  eq(JSON.stringify(prev), frozen, "harvestAll không sửa state cũ tại chỗ (copy-on-write cả maps)");
+
+  eq(countInv(store, "crop:lettuce"), lettuce0 + 3, "thu đủ 3 cây chín ở bản đồ ĐÃ CẤT");
+  ok(countInv(store, "crop:tomato") > tomato0, "thu cả cây chín ở bản đồ ĐANG CHƠI");
+
+  for (const p of [PLOTS[0], PLOTS[1], PLOTS[2]])
+    eq(farmTile(store, p.x, p.y).crop, null, "xà lách thu một lần rồi mất cây");
+
+  const pot = tile(store, 8, 2);
+  ok(pot.crop, "cà chua mọc lại nên ô vẫn còn cây");
+  eq(pot.crop.regrown, true, "được đánh dấu đã thu ít nhất một lần");
+  ok(
+    pot.crop.stage < content.crops.tomato.growthDays.length,
+    "cà chua bị lùi giai đoạn đúng như thu hoạch thường",
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau harvestAll");
+
+  // không còn gì chín thì chạy lại cũng không vỡ gì
+  store.dispatch({ t: "DEBUG", op: "harvestAll" });
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến khi harvestAll không có gì để thu");
+});
+
+test("35. TICK chỉ quét bản đồ ĐANG chơi; bản đồ đã cất đợi tới lúc sang ngày", () => {
+  const store = mkStore(561);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[1];
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+  selectItem(store, "seed:lettuce");
+  use(store, plot.x, plot.y);
+  selectItem(store, "tool:can");
+  use(store, plot.x, plot.y);
+
+  enterHouse(store);
+  const mapsBefore = store.getState().maps;
+  const farmBefore = mapsBefore.farm;
+
+  store.dispatch({ t: "TICK", dt: 5 });
+  const s = store.getState();
+  eq(s.maps, mapsBefore, "TICK không đụng tới object maps");
+  eq(s.maps.farm, farmBefore, "TICK không clone lưới đã cất — mỗi khung hình chỉ quét MỘT lưới");
+
+  // nhưng sang ngày mới thì bản đồ đã cất PHẢI được xử lý
+  sleepInBed(store);
+  ok(store.getState().maps.farm !== farmBefore, "sang ngày mới thì lưới đã cất mới bị chạm vào");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau đêm");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

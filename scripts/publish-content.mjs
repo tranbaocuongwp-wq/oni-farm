@@ -39,8 +39,9 @@ const read = (p) => readFileSync(join(SRC, p), "utf8");
 const readJson = (p) => JSON.parse(read(p));
 const sha256 = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
-const map = compileAsciiMap(read("maps/farm.ascii"));
 const manifest = readJson("manifest.json");
+const mapNames = manifest.files.map((f) => /^maps\/(.+)\.json$/.exec(f)?.[1]).filter(Boolean);
+const maps = Object.fromEntries(mapNames.map((n) => [n, compileAsciiMap(read(`maps/${n}.ascii`))]));
 
 const raw = {
   manifest,
@@ -53,7 +54,7 @@ const raw = {
   balance: readJson("balance.json"),
   progression: readJson("progression.json"),
   strings: readJson("strings.vi.json"),
-  map,
+  maps,
 };
 
 const problems = validatePack(raw);
@@ -75,7 +76,8 @@ mkdirSync(join(dir, "maps"), { recursive: true });
 
 const files = {};
 for (const rel of manifest.files) {
-  const body = rel === "maps/farm.json" ? JSON.stringify(map, null, 2) + "\n" : read(rel);
+  const mm = /^maps\/(.+)\.json$/.exec(rel);
+  const body = mm ? JSON.stringify(maps[mm[1]], null, 2) + "\n" : read(rel);
   writeFileSync(join(dir, rel), body);
   files[rel] = sha256(body);
 }

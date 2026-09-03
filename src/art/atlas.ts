@@ -63,7 +63,6 @@ const P = {
   boot: "#4a3a2a",
   plank: ["#a97d4e", "#966d43", "#b98a58"],
   plankDark: "#6b4a2c",
-  voidBg: "#0d0b09",
   cloth: "#d9c9a3",
   quilt: "#c25b48",
   quiltDark: "#8a4a3a",
@@ -210,13 +209,6 @@ function makePlank(variant: number): HTMLCanvasElement {
   s.vline((variant * 7) % TILE, 0, 5, P.plankDark);
   s.vline((variant * 7 + 9) % TILE, 5, 5, P.plankDark);
   s.vline((variant * 7 + 4) % TILE, 10, 6, P.plankDark);
-  return s.c;
-}
-
-/** Ô "hư vô" — vùng ngoài phòng, người chơi không bao giờ tới được. */
-function makeVoid(): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.rect(0, 0, TILE, TILE, P.voidBg);
   return s.c;
 }
 
@@ -864,7 +856,6 @@ export interface Atlas {
   soilWet: HTMLCanvasElement[];
   water: HTMLCanvasElement[];
   wood: HTMLCanvasElement[];
-  voidTile: HTMLCanvasElement;
   tuft: HTMLCanvasElement;
   /** Mọi vật thể, dựng theo props.json. Cao 32px nếu prop khai `tall`. */
   props: Record<string, HTMLCanvasElement>;
@@ -1045,7 +1036,6 @@ export function buildAtlas(content: Content): Atlas {
 
   return {
     grass, path, soil, soilWet, water, wood,
-    voidTile: makeVoid(),
     tuft: makeTuft(),
     props,
     house,

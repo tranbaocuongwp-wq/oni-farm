@@ -27,7 +27,11 @@ export function rawPack() {
     balance: readJson("balance.json"),
     progression: readJson("progression.json"),
     strings: readJson("strings.vi.json"),
-    map: compileAsciiMap(read("maps/farm.ascii")),
+    maps: Object.fromEntries(
+      (readJson("manifest.json").files
+        .map((f) => /^maps\/(.+)\.json$/.exec(f)?.[1])
+        .filter(Boolean)).map((n) => [n, compileAsciiMap(read(`maps/${n}.ascii`))]),
+    ),
   };
 }
 

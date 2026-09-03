@@ -53,7 +53,8 @@ export interface RawPack {
   balance: unknown;
   progression: unknown;
   strings: unknown;
-  map: unknown;
+  /** Mỗi bản đồ một lưới riêng, tra theo tên: { farm: {...}, house: {...} }. */
+  maps: Record<string, unknown>;
 }
 
 export class ContentError extends Error {
@@ -82,10 +83,13 @@ export function validatePack(raw: RawPack): string[] {
 
   // map cần legend nên phải kiểm sau tiles
   const legendChars = new Set<string>();
-  const tiles = raw.tiles as { legend?: Record<string, unknown> } | null;
-  if (tiles && typeof tiles === "object" && tiles.legend)
-    for (const ch of Object.keys(tiles.legend)) legendChars.add(ch);
-  errors.push(...validateMap(raw.map, legendChars));
+  const tilesRaw = raw.tiles as { legend?: Record<string, unknown> } | null;
+  if (tilesRaw && typeof tilesRaw === "object" && tilesRaw.legend)
+    for (const ch of Object.keys(tilesRaw.legend)) legendChars.add(ch);
+  if (!raw.maps || typeof raw.maps !== "object") errors.push("maps: phải là object tên → bản đồ");
+  else
+    for (const [name, m] of Object.entries(raw.maps))
+      errors.push(...validateMap(m, legendChars).map((e) => `maps.${name} → ${e}`));
 
   if (errors.length) return errors;
 
@@ -156,18 +160,28 @@ export function validatePack(raw: RawPack): string[] {
     return false;
   };
 
+  const maps = raw.maps as Record<string, MapData>;
   for (const pr of props) {
     if (pr.becomes && !propIds.has(pr.becomes))
       errors.push(`props '${pr.id}': becomes '${pr.becomes}' không tồn tại`);
     for (const d of pr.drops ?? [])
       if (!knownItem(d.id)) errors.push(`props '${pr.id}': rơi ra '${d.id}' — không có vật phẩm này`);
     if (pr.portal) {
-      const { x, y } = pr.portal;
-      const row = (raw.map as MapData).rows[y];
-      if (!row || x < 0 || x >= (raw.map as MapData).w)
-        errors.push(`props '${pr.id}': cửa dẫn ra ngoài bản đồ (${x},${y})`);
+      // Bẫy kinh điển khi đẩy OTA đổi bản đồ mà quên chỉnh cửa: người chơi bước
+      // vào cửa rồi rơi ra hư vô. Chặn ngay từ lúc kiểm pack.
+      const { map, x, y } = pr.portal;
+      const target = maps?.[map];
+      if (!target) errors.push(`props '${pr.id}': cửa dẫn tới bản đồ '${map}' không tồn tại`);
+      else if (!target.rows[y] || x < 0 || x >= target.w)
+        errors.push(`props '${pr.id}': cửa dẫn ra ngoài bản đồ '${map}' (${x},${y})`);
     }
   }
+
+  const spawn = tilesDef.spawn;
+  const spawnMap = maps?.[spawn.map];
+  if (!spawnMap) errors.push(`tiles.spawn: bản đồ '${spawn.map}' không tồn tại`);
+  else if (!spawnMap.rows[spawn.y] || spawn.x < 0 || spawn.x >= spawnMap.w)
+    errors.push(`tiles.spawn: (${spawn.x},${spawn.y}) nằm ngoài bản đồ '${spawn.map}'`);
 
   // Mọi prop dùng trong legend phải có định nghĩa, không thì ô đó thành vô hình.
   for (const [ch, e] of Object.entries(tilesDef.legend))
@@ -235,7 +249,8 @@ export function buildContent(raw: RawPack): Content {
     recipes: recipeList,
     balance: { ...BALANCE_DEFAULTS, ...(raw.balance as Balance) } as Balance,
     tiles: raw.tiles as TilesDef,
-    map: raw.map as MapData,
+    maps: raw.maps as Record<string, MapData>,
+    mapOrder: Object.keys(raw.maps as Record<string, MapData>),
     stages: prog.stages,
     goals: prog.goals,
     strings: raw.strings as Strings,

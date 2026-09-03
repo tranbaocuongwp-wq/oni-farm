@@ -204,6 +204,7 @@ async function boot() {
     store.replace(next);
     camera.setWorld(next.w * TILE, next.h * TILE);
     camera.jumpTo(next.player.x, next.player.y);
+    lastMap = next.mapId;
   }
 
   hud.onSelect((slot) => store.dispatch({ t: "SELECT", slot }));
@@ -349,12 +350,19 @@ async function boot() {
      state và định dạng save không đổi gì. */
   const nav = createNavigator();
 
-  // Dịch chuyển qua cửa làm nhân vật nhảy cả chục ô. Camera phải nhảy theo, nếu
-  // không nó sẽ trượt mượt qua nửa bản đồ và người chơi hoa mắt.
+  // Dịch chuyển qua cửa: nhân vật nhảy cả chục ô, VÀ bản đồ có thể đổi hẳn kích
+  // thước (nông trại 40×30 ↔ phòng ngủ 14×8). Camera phải được báo cả hai thứ —
+  // thiếu `setWorld` thì nó vẫn kẹp theo biên bản đồ cũ và khung nhìn lệch hẳn.
   // Đăng ký SAU khi có `nav` — trước đó biến còn trong vùng chưa khởi tạo.
   let lastPos = { x: store.getState().player.x, y: store.getState().player.y };
+  let lastMap = store.getState().mapId;
   store.subscribe((st) => {
-    if (Math.hypot(st.player.x - lastPos.x, st.player.y - lastPos.y) > TILE * 4) {
+    const mapChanged = st.mapId !== lastMap;
+    if (mapChanged) {
+      lastMap = st.mapId;
+      camera.setWorld(st.w * TILE, st.h * TILE);
+    }
+    if (mapChanged || Math.hypot(st.player.x - lastPos.x, st.player.y - lastPos.y) > TILE * 4) {
       camera.jumpTo(st.player.x, st.player.y);
       nav.cancel();
     }
@@ -414,7 +422,6 @@ async function boot() {
   function tileActionable(s: GameState, tx: number, ty: number): boolean {
     const t = s.tiles[ty * s.w + tx];
     if (!t) return false;
-    if (t.g === "void") return false;
     if (t.prop) {
       const def = content.props[t.prop];
       // Cây, đá, bụi giờ CHẶT/ĐẬP được nên là ô đáng nhắm; tường với vách nhà

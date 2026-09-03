@@ -154,6 +154,23 @@ export function migrateSave(data: SaveData): GameState | null {
     };
   }
 
+  // v3 → v4: tách nhiều bản đồ. Save cũ chỉ có MỘT lưới (nông trại 40×40 có
+  // phòng ngủ nhét ở góc). Ta giữ nguyên lưới đó làm bản đồ đang chơi và để
+  // `maps` rỗng; `migrateForContent` sẽ dựng nốt các bản đồ mà content hiện tại
+  // có nhưng save chưa có, và kéo người chơi về ô spawn nếu `mapId` vô nghĩa.
+  //
+  // Không cố cắt lưới cũ ra làm hai: toạ độ phòng ngủ đã đổi hoàn toàn, đoán mò
+  // sẽ đặt người chơi vào tường. Mất tiến độ TRONG phòng là chấp nhận được —
+  // phòng ngủ không có gì để mất ngoài vị trí đứng.
+  if (s.save === 3) {
+    s = {
+      ...s,
+      save: 4,
+      mapId: "farm",
+      maps: {},
+    };
+  }
+
   return s.save === SAVE_VERSION ? s : null;
 }
 

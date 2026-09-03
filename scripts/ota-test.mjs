@@ -43,7 +43,18 @@ console.log("\n── Pack đóng kèm ──");
   const problems = validatePack(rawPack());
   check("pack đóng kèm hợp lệ", problems.length === 0, problems.join("\n      "));
   const c = buildContent(rawPack());
-  check("buildContent ra Content dùng được", c.cropOrder.length > 0 && c.map.rows.length === c.map.h);
+  check(
+    "buildContent ra Content dùng được",
+    c.cropOrder.length > 0 &&
+      c.mapOrder.length >= 2 &&
+      c.mapOrder.every((n) => c.maps[n].rows.length === c.maps[n].h),
+    `mapOrder=${JSON.stringify(c.mapOrder)}`,
+  );
+  check(
+    "không bản đồ nào chứa ô thừa: tổng ô = tổng w×h",
+    c.mapOrder.reduce((n, k) => n + c.maps[k].w * c.maps[k].h, 0) ===
+      c.mapOrder.reduce((n, k) => n + c.maps[k].rows.join("").length, 0),
+  );
   check("Content bị đóng băng (không sửa được lúc chạy)", Object.isFrozen(c));
 }
 
@@ -63,8 +74,17 @@ reject("trùng id cây", (p) => (p.crops.crops[1].id = p.crops.crops[0].id));
 reject("màu không phải hex", (p) => (p.crops.crops[0].art.leaf = "xanh lá"));
 reject("kind công trình lạ", (p) => (p.buildings.buildings[0].kind = "bay lơ lửng"));
 reject("hiệu ứng core KHÔNG hỗ trợ", (p) => (p.buildings.buildings[0].effects.dichChuyenTucThoi = 3));
-reject("bản đồ có hàng lệch chiều rộng", (p) => (p.map.rows[5] = p.map.rows[5].slice(0, -1)));
-reject("bản đồ dùng ký tự không có trong legend", (p) => (p.map.rows[5] = "Z".repeat(p.map.w)));
+reject("bản đồ có hàng lệch chiều rộng", (p) => (p.maps.farm.rows[5] = p.maps.farm.rows[5].slice(0, -1)));
+reject("bản đồ dùng ký tự không có trong legend", (p) => (p.maps.farm.rows[5] = "Z".repeat(p.maps.farm.w)));
+reject("cửa dẫn tới bản đồ KHÔNG TỒN TẠI", (p) => {
+  p.props.props.find((x) => x.id === "door").portal = { map: "khongCo", x: 1, y: 1 };
+});
+reject("ô bắt đầu nằm ngoài bản đồ", (p) => {
+  p.tiles.spawn = { map: "farm", x: 999, y: 999 };
+});
+reject("ô bắt đầu trỏ vào bản đồ không tồn tại", (p) => {
+  p.tiles.spawn = { map: "khongCo", x: 1, y: 1 };
+});
 reject("progression mở khoá cây không tồn tại", (p) => p.progression.stages[1].unlocks.push("seed:khongCo"));
 reject("progression require khoá thống kê lạ", (p) => (p.progression.goals[0].require = { soLanNhayLen: 3 }));
 reject("startSeeds trỏ vào cây không tồn tại", (p) => (p.balance.startSeeds = { "seed:khongCo": 3 }));
@@ -75,8 +95,7 @@ reject("requiresCore không phải dải semver", (p) => (p.manifest.requiresCor
 reject("cửa dịch chuyển trỏ ra ngoài bản đồ", (p) => {
   // Bẫy kinh điển khi đẩy OTA đổi map mà quên chỉnh cửa: người chơi bước vào
   // cửa rồi rơi ra hư vô. Phải chặn từ lúc kiểm pack.
-  p.map = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };
-  p.tiles.spawn = { x: 2, y: 1 };
+  p.maps.house = { w: 5, h: 3, rows: ["WWWWW", "W___W", "WWWWW"] };
 });
 reject("vật thể rơi ra thứ không tồn tại", (p) => {
   const tree = p.props.props.find((x) => x.id === "tree");
@@ -124,11 +143,16 @@ accept("gỡ bỏ một cây (kèm mọi tham chiếu tới nó)", (p) => {
     st.unlocks = st.unlocks.filter((u) => u !== "seed:pumpkin");
 });
 accept("đổi bản đồ sang một map khác cùng legend", (p) => {
-  p.map = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };
-  p.tiles.spawn = { x: 2, y: 1 };
+  p.maps.farm = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };
+  p.tiles.spawn = { map: "farm", x: 2, y: 1 };
   // Bản đồ nhỏ lại thì CỬA DỊCH CHUYỂN phải được chỉnh theo — đích cũ nằm ngoài
   // bản đồ mới. Đây chính là việc mà một bản OTA đổi map thật sự phải làm.
-  for (const pr of p.props.props) if (pr.portal) pr.portal = { x: 2, y: 1 };
+  for (const pr of p.props.props)
+    if (pr.portal) pr.portal = { map: pr.portal.map === "farm" ? "farm" : "house", x: 2, y: 1 };
+  p.maps.house = { w: 5, h: 3, rows: ["WWWWW", "W___W", "WWWWW"] };
+});
+accept("THÊM hẳn một bản đồ mới", (p) => {
+  p.maps.hangDong = { w: 6, h: 4, rows: ["oooooo", "o::::o", "o::::o", "oooooo"] };
 });
 
 console.log("\n── Ghép pack: thiếu file thì dùng bản đóng kèm ──");

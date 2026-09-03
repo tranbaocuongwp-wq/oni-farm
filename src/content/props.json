@@ -129,8 +129,9 @@
       "solid": true,
       "interact": "PORTAL",
       "portal": {
+        "map": "house",
         "x": 6,
-        "y": 37
+        "y": 6
       },
       "art": {
         "body": "#5e81ac",
@@ -198,6 +199,7 @@
       "solid": true,
       "interact": "PORTAL",
       "portal": {
+        "map": "farm",
         "x": 16,
         "y": 4
       },

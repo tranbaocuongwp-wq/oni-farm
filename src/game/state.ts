@@ -20,10 +20,11 @@ import type {
   LogEntry,
   PlayerState,
   Stats,
+  StoredMap,
   Tile,
 } from "./types.ts";
 import { CORE_VERSION, SAVE_VERSION } from "../core/version.ts";
-import { buildFromMap, tileCenterX, tileCenterY } from "./world.ts";
+import { buildAllMaps, mapIdsOf, tileCenterX, tileCenterY } from "./world.ts";
 import { createInventory } from "./inventory.ts";
 import { evaluateProgression } from "./progression.ts";
 
@@ -97,6 +98,116 @@ export function dTile(d: Draft, i: number): Tile | null {
   return cur;
 }
 
+/* ------------------------------------------------- bản đồ đã cất (nhiều map)
+
+   Bản đồ ĐANG chơi nằm ở `tiles/w/h`; các bản đồ khác nằm trong `maps`. Việc
+   sang ngày mới phải chạm tới TẤT CẢ, nên cần đúng một cách viết dùng chung
+   cho cả hai chỗ — đó là `MapView`: một cửa sổ đọc/ghi lên MỘT lưới, có sẵn
+   copy-on-write riêng.
+
+   Copy-on-write ba tầng, chỉ clone khi THẬT SỰ ghi:
+     `maps` (object) → `maps[id]` (StoredMap + mảng tiles) → từng ô.
+   Bản đồ không đổi gì trong đêm thì giữ nguyên tham chiếu cũ.
+--------------------------------------------------------------------------- */
+
+/** Bản sao sửa được của chính object `maps`. */
+export function dMaps(d: Draft): Record<string, StoredMap> {
+  if (d.s.maps === d.base.maps) d.s.maps = { ...d.base.maps };
+  d.changed = true;
+  return d.s.maps;
+}
+
+/** Bản sao sửa được của bản đồ đã cất `id` (kèm mảng tiles riêng). */
+export function dStoredMap(d: Draft, id: string): StoredMap | null {
+  const cur = d.s.maps?.[id];
+  if (!cur) return null;
+  const maps = dMaps(d);
+  const m = maps[id];
+  if (!m) return null;
+  if (m === d.base.maps?.[id]) {
+    const copy: StoredMap = { w: m.w, h: m.h, tiles: m.tiles.slice() };
+    maps[id] = copy;
+    return copy;
+  }
+  return m;
+}
+
+/**
+ * Cửa sổ đọc/ghi lên một lưới ô.
+ *
+ * `tiles` được THAY khi lưới bị clone, nên nơi gọi phải đọc `v.tiles[i]` mỗi
+ * lần chứ đừng giữ lại tham chiếu mảng qua các lần `edit()`.
+ */
+export interface MapView {
+  id: string;
+  /** true nếu đây là bản đồ người chơi đang đứng (`state.tiles`). */
+  active: boolean;
+  w: number;
+  h: number;
+  tiles: Tile[];
+  /** Bản sao sửa được của ô `i` trên lưới này; null nếu chỉ số sai. */
+  edit: (i: number) => Tile | null;
+}
+
+/** Cửa sổ lên bản đồ ĐANG chơi. */
+export function activeView(d: Draft): MapView {
+  const v: MapView = {
+    id: d.s.mapId,
+    active: true,
+    w: d.s.w,
+    h: d.s.h,
+    tiles: d.s.tiles,
+    edit: (i) => {
+      const t = dTile(d, i);
+      v.tiles = d.s.tiles;
+      return t;
+    },
+  };
+  return v;
+}
+
+/** Cửa sổ lên một bản đồ ĐÃ CẤT; null nếu state không giữ bản đồ đó. */
+export function storedView(d: Draft, id: string): MapView | null {
+  const cur = d.s.maps?.[id];
+  if (!cur) return null;
+  const v: MapView = {
+    id,
+    active: false,
+    w: cur.w,
+    h: cur.h,
+    tiles: cur.tiles,
+    edit: (i) => {
+      const m = dStoredMap(d, id);
+      if (!m || i < 0 || i >= m.tiles.length) return null;
+      v.tiles = m.tiles;
+      const t = m.tiles[i];
+      if (!t) return null;
+      const baseTiles = d.base.maps?.[id]?.tiles;
+      if (baseTiles && t === baseTiles[i]) {
+        const copy: Tile = { ...t, crop: t.crop ? { ...t.crop } : null };
+        m.tiles[i] = copy;
+        return copy;
+      }
+      return t;
+    },
+  };
+  return v;
+}
+
+/** MỌI bản đồ trong state, theo thứ tự tất định của content. Dùng cho việc sang
+ *  ngày mới và cho debug `harvestAll` — KHÔNG dùng trong TICK. */
+export function mapViews(d: Draft, content: Content): MapView[] {
+  const out: MapView[] = [];
+  for (const id of mapIdsOf(d.s, content)) {
+    if (id === d.s.mapId) out.push(activeView(d));
+    else {
+      const v = storedView(d, id);
+      if (v) out.push(v);
+    }
+  }
+  return out;
+}
+
 export function dInv(d: Draft): InvSlot[] {
   if (d.s.inv === d.base.inv) d.s.inv = d.base.inv.slice();
   d.changed = true;
@@ -161,7 +272,7 @@ export function applyProgression(d: Draft, content: Content): void {
 /* ------------------------------------------------------------- game mới */
 
 export function createNewGame(content: Content, seed = 1): GameState {
-  const { w, h, tiles } = buildFromMap(content);
+  const { mapId, w, h, tiles, maps } = buildAllMaps(content);
   const spawn = content.tiles.spawn;
   const player: PlayerState = {
     x: tileCenterX(spawn.x),
@@ -184,9 +295,12 @@ export function createNewGame(content: Content, seed = 1): GameState {
 
     player,
 
+    mapId,
+
     w,
     h,
     tiles,
+    maps,
 
     inv: createInventory(content),
     sel: 0,

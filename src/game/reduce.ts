@@ -9,7 +9,7 @@
        `state.seed` qua mulberry32 và ghi seed mới vào state trả về.
 ============================================================================ */
 
-import type { Action, Content, GameState } from "./types.ts";
+import type { Action, Content, GameState, StoredMap } from "./types.ts";
 import { applyProgression, commit, dPlayer, draft, toastKey, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
 import { craft, refill, useAt } from "./actions.ts";
@@ -143,19 +143,47 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       const dest = portalAt(state, content, px, py);
       if (!dest) return state; // ô này không phải cửa: không làm gì
 
+      // ---- ĐỔI BẢN ĐỒ ------------------------------------------------------
+      // Cất bản đồ đang chơi vào `maps`, lấy bản đồ đích RA khỏi `maps`. Bất
+      // biến: `mapId` không bao giờ có mặt trong `maps` — nên phải làm đúng thứ
+      // tự này chứ không phải "thêm rồi xoá".
+      //
+      // Cửa nối trong CÙNG một bản đồ (dest.map === mapId) đi nhánh riêng: cất
+      // rồi lấy lại chính nó thì mất luôn mọi thay đổi vừa có.
+      if (dest.map !== state.mapId) {
+        const target = state.maps?.[dest.map];
+        // Bản đồ đích không có trong state (save cũ / content vá dở): thà đứng
+        // yên còn hơn nhảy vào hư vô.
+        if (!target) return state;
+        const maps: Record<string, StoredMap> = { ...state.maps };
+        delete maps[dest.map];
+        maps[state.mapId] = { w: state.w, h: state.h, tiles: state.tiles };
+        const s = touch(d);
+        s.mapId = dest.map;
+        s.w = target.w;
+        s.h = target.h;
+        s.tiles = target.tiles;
+        s.maps = maps;
+      }
+
+      // Từ đây trở đi mọi truy vấn không gian phải hỏi `d.s` (bản đồ MỚI),
+      // không phải `state` (bản đồ cũ).
+      const now = d.changed ? d.s : state;
       let x = tileCenterX(dest.x);
       let y = tileCenterY(dest.y);
-      if (blockedAt(state, content, x, y)) {
-        const fixed = nudgeOutOfSolid(state, content, x, y);
+      if (blockedAt(now, content, x, y)) {
+        const fixed = nudgeOutOfSolid(now, content, x, y);
         x = fixed.x;
         y = fixed.y;
       }
-      if (blockedAt(state, content, x, y)) return state; // bí quá thì đứng yên còn hơn kẹt
+      if (blockedAt(now, content, x, y)) return state; // bí quá thì đứng yên còn hơn kẹt
 
       const p = dPlayer(d);
       p.x = x;
       p.y = y;
       p.moving = false;
+      // Bước qua cửa là dừng mọi thao tác dở: không ai vung cuốc xuyên tường.
+      if (d.s.busy !== 0) touch(d).busy = 0;
       return commit(d);
     }
 

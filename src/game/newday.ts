@@ -12,12 +12,27 @@
      8. đánh giá progression
 
    Bước 3 phải trước bước 4, nếu không thì vòi tưới luôn chậm một ngày.
+
+   NHIỀU BẢN ĐỒ: ngủ trong nhà thì ngoài ruộng vẫn phải lớn, vẫn phải được vòi
+   tưới tưới, vẫn phải khô đi và mọc cỏ. Nên mọi bước ở đây chạy trên MỌI bản đồ
+   (`mapViews`), không chỉ bản đồ đang đứng. Bước 2 gom điện của cả thế giới vào
+   MỘT quỹ, rồi bước 6 tiêu chung — lưới điện chỉ có một.
+
+   Ngược lại, TICK (mỗi khung hình) chỉ gọi `growCrops`, và hàm đó chỉ đụng bản
+   đồ ĐANG chơi. Bản đồ đã cất chỉ được quét đúng một lần mỗi đêm.
 ============================================================================ */
 
 import type { Content } from "./types.ts";
-import type { Draft } from "./state.ts";
-import { applyProgression, dTile, nextRandom, toastKey, touch } from "./state.ts";
-import { harvestTile } from "./actions.ts";
+import type { Draft, MapView } from "./state.ts";
+import {
+  activeView,
+  applyProgression,
+  mapViews,
+  nextRandom,
+  toastKey,
+  touch,
+} from "./state.ts";
+import { harvestTileIn } from "./actions.ts";
 import { idx, playerOverlapsTile, weedProp } from "./world.ts";
 
 /* ---------------------------------------------------------- tăng trưởng */
@@ -30,15 +45,15 @@ import { idx, playerOverlapsTile, weedProp } from "./world.ts";
  * với phần ban ngày vừa trôi qua, còn `newDay` gọi một phát cho phần ban ngày
  * còn lại của hôm nay. Cộng lại đúng bằng nhau, nên đi ngủ sớm không thiệt.
  *
- * Hiệu năng: chỉ đụng vào ô CÓ CÂY và chỉ copy ô thật sự đổi (dTile) — không ô
- * nào đổi thì draft vẫn sạch và `reduce` trả về đúng state cũ.
+ * Hiệu năng: chỉ đụng vào ô CÓ CÂY và chỉ copy ô thật sự đổi — không ô nào đổi
+ * thì draft vẫn sạch và `reduce` trả về đúng state cũ.
  */
-export function growCrops(d: Draft, content: Content, minutes: number): void {
+export function growCropsIn(v: MapView, content: Content, minutes: number): void {
   if (!Number.isFinite(minutes) || minutes <= 0) return;
   const per = Math.max(1, content.balance.growthMinutesPerDay);
-  const tiles = d.s.tiles;
-  for (let i = 0; i < tiles.length; i++) {
-    const t = tiles[i];
+  const n = v.w * v.h;
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t || !t.crop || !t.wet) continue;
     const def = content.crops[t.crop.id];
     if (!def) continue;
@@ -55,44 +70,51 @@ export function growCrops(d: Draft, content: Content, minutes: number): void {
       stage = def.growthDays.length;
       grow = 0;
     }
-    const m = dTile(d, i);
+    const m = v.edit(i);
     if (!m || !m.crop) continue;
     m.crop.stage = stage;
     m.crop.grow = grow;
   }
 }
 
+/** Tăng trưởng trên bản đồ ĐANG chơi. Đây là thứ TICK gọi mỗi khung hình —
+ *  cố ý KHÔNG chạm tới bản đồ đã cất. */
+export function growCrops(d: Draft, content: Content, minutes: number): void {
+  growCropsIn(activeView(d), content, minutes);
+}
+
 /* --------------------------------------------- cỏ mọc / đất cày bỏ hoang */
 
 /**
- * Một đêm trôi qua trên mặt đất:
+ * Một đêm trôi qua trên mặt đất của MỘT bản đồ:
  *   · ô cỏ TRỐNG kề một ô có `decor: "tuft"` thì có `grassSpreadChance` mọc cỏ dại;
  *   · ô đã cày mà BỎ KHÔNG thì có `tilledDecayChance` trở lại thành cỏ.
  *
  * Ngẫu nhiên rút từ `state.seed` nên tái lập được. Ô người chơi đang đứng đè
- * lên thì không mọc gì — không ai bị nhốt trong bụi cỏ lúc đang ngủ.
+ * lên thì không mọc gì — không ai bị nhốt trong bụi cỏ lúc đang ngủ (chỉ có
+ * nghĩa trên bản đồ đang chơi; ở bản đồ khác thì người chơi không ở đó).
  */
-function nightGround(d: Draft, content: Content): void {
+function nightGround(d: Draft, content: Content, v: MapView): void {
   const bal = content.balance;
   const spreadChance = Number.isFinite(bal.grassSpreadChance) ? bal.grassSpreadChance : 0;
   const decayChance = Number.isFinite(bal.tilledDecayChance) ? bal.tilledDecayChance : 0;
   const weed = weedProp(content);
-  const w = d.s.w;
-  const h = d.s.h;
-  const tiles = d.s.tiles;
+  const w = v.w;
+  const h = v.h;
 
   const hasTuftNeighbour = (x: number, y: number): boolean => {
     for (let ny = y - 1; ny <= y + 1; ny++) {
       for (let nx = x - 1; nx <= x + 1; nx++) {
         if ((nx === x && ny === y) || nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        if (tiles[idx(w, nx, ny)]?.decor === "tuft") return true;
+        if (v.tiles[idx(w, nx, ny)]?.decor === "tuft") return true;
       }
     }
     return false;
   };
 
-  for (let i = 0; i < tiles.length; i++) {
-    const t = tiles[i];
+  const n = w * h;
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t) continue;
     const x = i % w;
     const y = (i - x) / w;
@@ -103,7 +125,7 @@ function nightGround(d: Draft, content: Content): void {
         const r = nextRandom(d.s.seed);
         touch(d).seed = r.seed;
         if (r.v < decayChance) {
-          const m = dTile(d, i);
+          const m = v.edit(i);
           if (m) {
             m.tilled = false;
             m.wet = false;
@@ -122,13 +144,13 @@ function nightGround(d: Draft, content: Content): void {
       t.b === null &&
       t.crop === null &&
       !t.tilled &&
-      !playerOverlapsTile(d.s, x, y) &&
+      !(v.active && playerOverlapsTile(d.s, x, y)) &&
       hasTuftNeighbour(x, y)
     ) {
       const r = nextRandom(d.s.seed);
       touch(d).seed = r.seed;
       if (r.v < spreadChance) {
-        const m = dTile(d, i);
+        const m = v.edit(i);
         if (m) {
           m.prop = weed.id;
           m.hp = Math.max(0, Math.floor(weed.hits ?? 0));
@@ -148,37 +170,34 @@ export interface NewDayOptions {
   passedOut: boolean;
 }
 
-export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
-  const bal = content.balance;
-  const w = d.s.w;
-  const h = d.s.h;
-  const sleptAt = d.s.minutes;
+/* ------------------------------------------------- các bước trên MỘT bản đồ */
 
-  // ---- 1. sang ngày mới -------------------------------------------------
-  const s0 = touch(d);
-  s0.day = s0.day + 1;
-  s0.minutes = bal.dayStartMinutes;
-  s0.sleeping = false;
-  // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
-  s0.busy = 0;
-
-  // ---- 2. thu nhập + điện ----------------------------------------------
+/** Tiền + điện của một bản đồ. Chỉ ĐỌC, không sửa gì. */
+function collectPower(content: Content, v: MapView): { income: number; power: number } {
   let income = 0;
   let power = 0;
-  for (let i = 0; i < d.s.tiles.length; i++) {
-    const t = d.s.tiles[i];
+  const n = v.w * v.h;
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t || !t.b) continue;
     const def = content.buildings[t.b];
     if (!def) continue;
     income += def.effects.income ?? 0;
     power += def.power?.produce ?? 0;
   }
-  if (income !== 0) touch(d).money = d.s.money + income;
+  return { income, power };
+}
+
+/** Bước 3+4+5+5b cho một bản đồ: tưới tự động → cây lớn → làm khô → đêm xuống. */
+function nightOnMap(d: Draft, content: Content, v: MapView, daylightLeft: number): void {
+  const w = v.w;
+  const h = v.h;
+  const n = w * h;
 
   // ---- 3. tưới tự động (đánh dấu trước khi cây lớn) ----------------------
   const autoWet = new Set<number>();
-  for (let i = 0; i < d.s.tiles.length; i++) {
-    const t = d.s.tiles[i];
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t || !t.b) continue;
     const def = content.buildings[t.b];
     if (!def) continue;
@@ -191,7 +210,7 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
         for (let x = bx - r; x <= bx + r; x++) {
           if (x < 0 || y < 0 || x >= w || y >= h) continue;
           const j = idx(w, x, y);
-          const tt = d.s.tiles[j];
+          const tt = v.tiles[j];
           if (!tt) continue;
           if (tt.prop !== null || tt.g === "water") continue;
           autoWet.add(j);
@@ -200,51 +219,61 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
     }
   }
   for (const i of autoWet) {
-    const t = d.s.tiles[i];
+    const t = v.tiles[i];
     if (t && !t.wet) {
-      const m = dTile(d, i);
+      const m = v.edit(i);
       if (m) m.wet = true;
     }
   }
 
   // ---- 4. cây lớn lên: cộng nốt phần BAN NGÀY còn lại của hôm nay --------
-  // Trong ngày, TICK đã cộng dần từng phút cho ô ẩm. Đi ngủ là bỏ qua quãng
-  // còn lại tới lúc trời tối, nên cộng cho đủ ở đây — ngủ sớm không bị thiệt,
-  // mà ban ngày vẫn thấy cây nhích lên trông thấy.
-  growCrops(d, content, Math.max(0, bal.daylightEndMinutes - sleptAt));
+  // Trong ngày, TICK đã cộng dần từng phút cho ô ẩm của bản đồ đang chơi. Đi
+  // ngủ là bỏ qua quãng còn lại tới lúc trời tối, nên cộng cho đủ ở đây — ngủ
+  // sớm không bị thiệt, mà ban ngày vẫn thấy cây nhích lên trông thấy.
+  growCropsIn(v, content, daylightLeft);
 
   // ---- 5. làm khô --------------------------------------------------------
-  for (let i = 0; i < d.s.tiles.length; i++) {
-    const t = d.s.tiles[i];
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t || !t.wet) continue;
     if (autoWet.has(i)) continue;
-    const m = dTile(d, i);
+    const m = v.edit(i);
     if (m) m.wet = false;
   }
 
   // ---- 5b. cỏ mọc lan, đất cày bỏ không thì hoang trở lại ----------------
-  nightGround(d, content);
+  nightGround(d, content, v);
+}
 
-  // ---- 6. drone ----------------------------------------------------------
-  let budget = power;
-  let warnedNoPower = false;
-  let warnedFull = false;
-  for (let i = 0; i < d.s.tiles.length; i++) {
-    const t = d.s.tiles[i];
+/** Bước 6 cho một bản đồ. `budget` là quỹ điện CHUNG của cả thế giới; trả về
+ *  phần còn lại sau khi các drone trên bản đồ này ăn xong. */
+function dronesOnMap(
+  d: Draft,
+  content: Content,
+  v: MapView,
+  budget: number,
+  warned: { noPower: boolean; full: boolean },
+): number {
+  const w = v.w;
+  const h = v.h;
+  const n = w * h;
+  let left = budget;
+  for (let i = 0; i < n; i++) {
+    const t = v.tiles[i];
     if (!t || !t.b) continue;
     const def = content.buildings[t.b];
     if (!def) continue;
     const r = def.effects.harvestRadius ?? 0;
     if (r <= 0) continue;
     const need = def.power?.consume ?? 0;
-    if (need > budget) {
-      if (!warnedNoPower) {
+    if (need > left) {
+      if (!warned.noPower) {
         toastKey(d, content, "droneNoPower", "bad");
-        warnedNoPower = true;
+        warned.noPower = true;
       }
       continue;
     }
-    budget -= need;
+    left -= need;
 
     const bx = i % w;
     const by = (i - bx) / w;
@@ -252,18 +281,55 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
       for (let x = bx - r; x <= bx + r; x++) {
         if (x < 0 || y < 0 || x >= w || y >= h) continue;
         const j = idx(w, x, y);
-        const tt = d.s.tiles[j];
+        const tt = v.tiles[j];
         if (!tt || !tt.crop) continue;
         const cd = content.crops[tt.crop.id];
         if (!cd || tt.crop.stage < cd.growthDays.length) continue;
-        const res = harvestTile(d, content, j, false);
-        if (res.overflow > 0 && !warnedFull) {
+        // Drone ở bản đồ khác vẫn đổ đồ vào ĐÚNG một cái túi.
+        const res = harvestTileIn(d, content, v, j, false);
+        if (res.overflow > 0 && !warned.full) {
           toastKey(d, content, "invFull", "bad");
-          warnedFull = true;
+          warned.full = true;
         }
       }
     }
   }
+  return left;
+}
+
+export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
+  const bal = content.balance;
+  const sleptAt = d.s.minutes;
+
+  // ---- 1. sang ngày mới -------------------------------------------------
+  const s0 = touch(d);
+  s0.day = s0.day + 1;
+  s0.minutes = bal.dayStartMinutes;
+  s0.sleeping = false;
+  // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
+  s0.busy = 0;
+
+  // Lấy cửa sổ cho MỌI bản đồ đúng một lần, theo thứ tự tất định.
+  const views = mapViews(d, content);
+
+  // ---- 2. thu nhập + điện (gộp cả thế giới) -----------------------------
+  let income = 0;
+  let power = 0;
+  for (const v of views) {
+    const got = collectPower(content, v);
+    income += got.income;
+    power += got.power;
+  }
+  if (income !== 0) touch(d).money = d.s.money + income;
+
+  // ---- 3..5b trên từng bản đồ -------------------------------------------
+  const daylightLeft = Math.max(0, bal.daylightEndMinutes - sleptAt);
+  for (const v of views) nightOnMap(d, content, v, daylightLeft);
+
+  // ---- 6. drone (quỹ điện dùng chung, duyệt theo thứ tự bản đồ) ----------
+  let budget = power;
+  const warned = { noPower: false, full: false };
+  for (const v of views) budget = dronesOnMap(d, content, v, budget, warned);
 
   // ---- 7. năng lượng -----------------------------------------------------
   const ratio = opts.passedOut

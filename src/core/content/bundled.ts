@@ -16,13 +16,17 @@ import recipes from "../../content/recipes.json";
 import balance from "../../content/balance.json";
 import progression from "../../content/progression.json";
 import strings from "../../content/strings.vi.json";
-import map from "../../content/maps/farm.json";
+import farmMap from "../../content/maps/farm.json";
+import houseMap from "../../content/maps/house.json";
 
 import type { Content } from "../../game/types.ts";
 import { buildContent, type RawPack } from "./loader.ts";
 
 export function bundledRawPack(): RawPack {
-  return { manifest, tiles, props, crops, buildings, items, recipes, balance, progression, strings, map };
+  return {
+    manifest, tiles, props, crops, buildings, items, recipes, balance, progression, strings,
+    maps: { farm: farmMap, house: houseMap },
+  };
 }
 
 /** Ném lỗi nếu content đóng kèm hỏng — đó là lỗi lập trình, phải nổ to lúc dev

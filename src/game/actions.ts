@@ -11,8 +11,8 @@
 ============================================================================ */
 
 import type { Content, GameState, PropDef, RecipeDef, Tile, ToolAction, ToolDef } from "./types.ts";
-import type { Draft } from "./state.ts";
-import { dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
+import type { Draft, MapView } from "./state.ts";
+import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import {
@@ -89,14 +89,28 @@ export interface HarvestResult {
   overflow: number;
 }
 
-/** Thu hoạch ô `i`. `spendEnergy` = false khi drone làm thay. */
+/** Thu hoạch ô `i` của bản đồ ĐANG chơi. `spendEnergy` = false khi drone làm thay. */
 export function harvestTile(
   d: Draft,
   content: Content,
   i: number,
   spendEnergy: boolean,
 ): HarvestResult {
-  const cur = d.s.tiles[i];
+  return harvestTileIn(d, content, activeView(d), i, spendEnergy);
+}
+
+/** Thu hoạch ô `i` trên MỘT bản đồ bất kỳ (kể cả bản đồ đã cất).
+ *
+ *  Túi đồ, tiền, seed và thống kê là của cả ván chứ không của riêng bản đồ nào,
+ *  nên drone ngoài ruộng vẫn đổ đồ vào đúng cái túi người chơi đang mang. */
+export function harvestTileIn(
+  d: Draft,
+  content: Content,
+  v: MapView,
+  i: number,
+  spendEnergy: boolean,
+): HarvestResult {
+  const cur = v.tiles[i];
   if (!cur || !cur.crop) return { ok: false, amount: 0, overflow: 0 };
   const def = content.crops[cur.crop.id];
   if (!def) return { ok: false, amount: 0, overflow: 0 };
@@ -117,7 +131,7 @@ export function harvestTile(
   setInv(d, added.inv);
   const overflow = amount - added.added;
 
-  const t = dTile(d, i);
+  const t = v.edit(i);
   if (t) {
     if (def.regrowDays !== null && def.regrowDays !== undefined) {
       const r = regrowStage(def.growthDays, def.regrowDays, content.balance.growthMinutesPerDay);

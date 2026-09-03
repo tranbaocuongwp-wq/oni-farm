@@ -22,7 +22,6 @@ const C = {
   path: "#a5875e",
   water: "#2f6fc4",
   wood: "#a97d4e",
-  void: "#0d0b09",
   tree: "#24521f",
   sapling: "#3d8a3f",
   stump: "#6b4a2c",
@@ -93,7 +92,6 @@ export function createMinimap(host: HTMLElement): Minimap {
         if (t.g === "water") c = C.water;
         else if (t.g === "path") c = C.path;
         else if (t.g === "wood") c = C.wood;
-        else if (t.g === "void") c = C.void;
 
         if (t.tilled) c = t.wet ? C.soilWet : C.soil;
         if (t.b) {

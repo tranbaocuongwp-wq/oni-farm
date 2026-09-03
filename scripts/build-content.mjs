@@ -35,10 +35,21 @@ const fail = (msg) => {
 };
 
 /* ---- 1. ascii → json ---------------------------------------------------- */
-const ascii = read("maps/farm.ascii");
-const map = compileAsciiMap(ascii);
-writeFileSync(join(SRC, "maps/farm.json"), JSON.stringify(map, null, 2) + "\n");
-console.log(`✓ maps/farm.json  ${map.w}×${map.h} ô`);
+// Mỗi tên trong manifest.files dạng maps/<tên>.json có một nguồn ASCII cùng tên.
+const manifest0 = readJson("manifest.json");
+const mapNames = manifest0.files
+  .map((f) => /^maps\/(.+)\.json$/.exec(f)?.[1])
+  .filter(Boolean);
+const maps = {};
+let totalTiles = 0;
+for (const name of mapNames) {
+  const m = compileAsciiMap(read(`maps/${name}.ascii`));
+  maps[name] = m;
+  totalTiles += m.w * m.h;
+  writeFileSync(join(SRC, `maps/${name}.json`), JSON.stringify(m, null, 2) + "\n");
+  console.log(`✓ maps/${name}.json  ${m.w}×${m.h} = ${m.w * m.h} ô`);
+}
+console.log(`✓ tổng ${mapNames.length} bản đồ · ${totalTiles} ô`);
 
 /* ---- 2. kiểm tra -------------------------------------------------------- */
 const raw = {
@@ -52,7 +63,7 @@ const raw = {
   balance: readJson("balance.json"),
   progression: readJson("progression.json"),
   strings: readJson("strings.vi.json"),
-  map,
+  maps,
 };
 
 const problems = validatePack(raw);
@@ -89,7 +100,8 @@ mkdirSync(join(dir, "maps"), { recursive: true });
 
 const files = {};
 for (const rel of raw.manifest.files) {
-  const body = rel === "maps/farm.json" ? JSON.stringify(map, null, 2) + "\n" : read(rel);
+  const mm = /^maps\/(.+)\.json$/.exec(rel);
+  const body = mm ? JSON.stringify(maps[mm[1]], null, 2) + "\n" : read(rel);
   writeFileSync(join(dir, rel), body);
   files[rel] = sha256(body);
 }

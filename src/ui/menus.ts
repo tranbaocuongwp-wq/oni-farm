@@ -361,6 +361,7 @@ export function createMenus(
     add("Mở khoá tất cả", "unlockAll");
     add("Sang ngày mới", "skipDay");
     add("Cho cây chín hết", "growAll");
+    add("Thu hoạch tất cả", "harvestAll");
     add("Tự cày + gieo quanh đây", "plantAround");
     add("Rắc cỏ quanh đây", "addGrass");
     add("Rắc cây nhỏ quanh đây", "addTrees");
@@ -518,8 +519,10 @@ export function createMenus(
         <b style="color:var(--gold)">Nước có hạn:</b> bình tưới cạn thì ra <b>giếng</b> hoặc
         bờ ao bấm <kbd>E</kbd> múc đầy.
         <br><br>
-        <b style="color:var(--gold)">Về nhà ngủ:</b> bấm <kbd>E</kbd> ở cửa để VÀO NHÀ, rồi
-        lên <b>giường</b> mới ngủ được. Trong nhà còn có <b>bàn chế tạo</b> để ghép công cụ.
+        <b style="color:var(--gold)">Về nhà ngủ:</b> bấm <kbd>E</kbd> ở cửa để VÀO NHÀ — trong
+        nhà là một khu vực riêng, bản đồ nhỏ đổi thành sơ đồ phòng. Lên <b>giường</b> mới ngủ
+        được. Trong phòng còn có <b>bàn chế tạo</b>. Ngủ trong nhà thì ngoài ruộng vẫn lớn cây
+        và vòi tưới vẫn tưới như thường.
         <br><br>
         <b style="color:var(--gold)">Cây lớn theo thời gian:</b> ô còn ẩm và trời còn sáng thì
         cây lớn dần trông thấy, không phải đợi tới lúc ngủ. Cỏ dại cũng tự lan ra mỗi đêm.

@@ -1,30 +1,88 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, còn của nền nằm ở mục grounds dưới đây.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.",
   "grounds": {
-    "water": { "solid": true, "interact": "REFILL" },
-    "void": { "solid": true }
+    "water": {
+      "solid": true,
+      "interact": "REFILL"
+    }
   },
   "legend": {
-    ".": { "ground": "grass" },
-    ",": { "ground": "grass", "decor": "tuft" },
-    ":": { "ground": "path" },
-    "~": { "ground": "water" },
-    "T": { "ground": "grass", "prop": "tree" },
-    "t": { "ground": "grass", "prop": "sapling" },
-    "s": { "ground": "grass", "prop": "stump" },
-    "o": { "ground": "grass", "prop": "rock" },
-    "b": { "ground": "grass", "prop": "bush" },
-    "G": { "ground": "grass", "prop": "well" },
-    "H": { "ground": "path", "prop": "house" },
-    "D": { "ground": "path", "prop": "door" },
-    "S": { "ground": "path", "prop": "shop" },
-    "B": { "ground": "path", "prop": "counter" },
-    "W": { "ground": "wood", "prop": "wall" },
-    "_": { "ground": "wood" },
-    "E": { "ground": "wood", "prop": "bed" },
-    "C": { "ground": "wood", "prop": "bench" },
-    "d": { "ground": "wood", "prop": "door_in" },
-    "#": { "ground": "void" }
+    ".": {
+      "ground": "grass"
+    },
+    ",": {
+      "ground": "grass",
+      "decor": "tuft"
+    },
+    ":": {
+      "ground": "path"
+    },
+    "~": {
+      "ground": "water"
+    },
+    "T": {
+      "ground": "grass",
+      "prop": "tree"
+    },
+    "t": {
+      "ground": "grass",
+      "prop": "sapling"
+    },
+    "s": {
+      "ground": "grass",
+      "prop": "stump"
+    },
+    "o": {
+      "ground": "grass",
+      "prop": "rock"
+    },
+    "b": {
+      "ground": "grass",
+      "prop": "bush"
+    },
+    "G": {
+      "ground": "grass",
+      "prop": "well"
+    },
+    "H": {
+      "ground": "path",
+      "prop": "house"
+    },
+    "D": {
+      "ground": "path",
+      "prop": "door"
+    },
+    "S": {
+      "ground": "path",
+      "prop": "shop"
+    },
+    "B": {
+      "ground": "path",
+      "prop": "counter"
+    },
+    "W": {
+      "ground": "wood",
+      "prop": "wall"
+    },
+    "_": {
+      "ground": "wood"
+    },
+    "E": {
+      "ground": "wood",
+      "prop": "bed"
+    },
+    "C": {
+      "ground": "wood",
+      "prop": "bench"
+    },
+    "d": {
+      "ground": "wood",
+      "prop": "door_in"
+    }
   },
-  "spawn": { "x": 16, "y": 5 }
+  "spawn": {
+    "map": "farm",
+    "x": 16,
+    "y": 5
+  }
 }

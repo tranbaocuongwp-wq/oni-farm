@@ -40,6 +40,10 @@ interface CachedPack {
 }
 
 /** Ánh xạ tên file trong manifest sang khoá của RawPack. */
+/** File bản đồ ghi vào `maps[<tên>]` chứ không phải một khoá cố định — nhờ vậy
+ *  content pack thêm bản đồ mới không cần core biết trước tên nó. */
+const MAP_FILE = /^maps\/(.+)\.json$/;
+
 const FILE_TO_KEY: Record<string, keyof RawPack> = {
   "tiles.json": "tiles",
   "props.json": "props",
@@ -50,7 +54,7 @@ const FILE_TO_KEY: Record<string, keyof RawPack> = {
   "balance.json": "balance",
   "progression.json": "progression",
   "strings.vi.json": "strings",
-  "maps/farm.json": "map",
+
 };
 
 export interface OtaOptions {
@@ -123,9 +127,14 @@ export async function checkForUpdate(
     // thì file đó vẫn dùng bản đóng kèm, thay vì thủng lỗ.
     const raw: RawPack = { ...bundledRawPack(), manifest };
     for (const rel of Object.keys(manifest.files)) {
+      const m = MAP_FILE.exec(rel);
+      if (m) {
+        raw.maps = { ...raw.maps, [m[1]!]: await fetchJson(`${base}${manifest.base}${rel}`, timeoutMs) };
+        continue;
+      }
       const key = FILE_TO_KEY[rel];
       if (!key) continue; // file lạ trong manifest — bỏ qua, không đoán mò
-      raw[key] = await fetchJson(`${base}${manifest.base}${rel}`, timeoutMs);
+      raw[key] = await fetchJson(`${base}${manifest.base}${rel}`, timeoutMs) as never;
     }
 
     // ---- validate trước khi cho chạm vào bất cứ thứ gì ----

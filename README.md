@@ -144,15 +144,44 @@ tạo là một prop có `interact: "CRAFT"`, đặt trong phòng ngủ.
 Bình tưới có `capacity`; mỗi lần tưới tốn một nước. Cạn thì ra **giếng** hoặc bờ ao —
 cả hai đều là `interact: "REFILL"`, một cái khai ở prop, một cái khai ở `tiles.grounds.water`.
 
-### Cửa dịch chuyển & phòng ngủ
+### Nhiều bản đồ rời nhau
 
-Bản đồ **cố định 40×40**, trong đó phần nông trại là 40×30 còn phòng ngủ nằm tách hẳn ở dưới,
-bao quanh bởi nền `void`. Không cần cơ chế nhiều bản đồ: cửa chỉ là prop có
-`interact: "PORTAL"` kèm `portal: {x,y}`.
+Mỗi bản đồ là một **lưới riêng**: nông trại 40×30 (1200 ô), phòng ngủ 14×8 (112 ô).
 
-Reducer **tự tra đích trong content** thay vì nhận toạ độ từ UI, nên không ai dịch chuyển bừa
-tới chỗ tuỳ ý được. Cửa nhà giờ **chỉ để đi vào**; muốn ngủ phải lên **giường** (prop
-`interact: "SLEEP"`). Camera nhảy thay vì trượt khi vị trí nhân vật đổi quá 4 ô.
+Bản đầu nhét phòng ngủ vào một góc lưới 40×40 chung, độn **288 ô "hư vô"** chỉ để ngăn cách.
+Số ô đó không vô hại: vẫn phải nạp, vẫn bị quét mỗi lần sang ngày, vẫn nằm trong file save,
+vẫn hiện thành mảng đen trên bản đồ nhỏ. Tách ra thì **không ô nào tồn tại mà không tới được**.
+
+**Cách biểu diễn:** bản đồ đang chơi nằm ở `state.tiles/w/h` như cũ, các bản đồ khác cất ở
+`state.maps`. Nhờ vậy mọi thứ đọc `state.tiles` — va chạm, tìm đường, renderer — **không phải
+biết gì** về chuyện có nhiều bản đồ, và mỗi khung hình chỉ duyệt đúng một lưới.
+Bất biến đi kèm: `mapId` **không bao giờ** có mặt trong `maps` (`checkInvariants` canh).
+
+Cửa là prop có `interact: "PORTAL"` kèm `portal: {map, x, y}`. Reducer **tự tra đích trong
+content** thay vì nhận toạ độ từ UI, nên không ai nhảy bừa sang bản đồ hay toạ độ tuỳ ý.
+Loader chặn ngay lúc kiểm pack: cửa trỏ tới bản đồ không tồn tại, hoặc ra ngoài biên bản đồ
+đích, đều bị từ chối — đúng cái bẫy khi đẩy OTA đổi map mà quên chỉnh cửa.
+
+Cửa nhà **chỉ để đi vào**; muốn ngủ phải lên **giường**. Camera được báo cả hai thay đổi khi
+qua cửa: nhảy vị trí **và** `setWorld` kích thước mới — thiếu cái sau thì nó vẫn kẹp theo biên
+bản đồ cũ.
+
+**Bẫy lớn nhất của việc tách map:** ngủ trong nhà thì ngoài ruộng vẫn phải chạy. `newDay` xử
+lý **mọi** bản đồ (tăng trưởng, vòi tưới, làm khô, drone, cỏ lan), còn `TICK` — chạy mỗi khung
+hình — chỉ đụng bản đồ đang chơi.
+
+### Hiệu năng, đo thật
+
+| | Số đo |
+|---|---|
+| Ô của bản đồ đang chơi | 1200 |
+| Ô thực sự **vẽ** mỗi khung hình | 289 → **75,9% không phải vẽ** |
+| Thời gian một khung hình | **0,57 ms** (ngân sách 60fps là 16,7 ms) |
+| Ô quét mỗi TICK | 1200, trước khi tách là 1600 → **giảm 25%** |
+
+Nói cho công bằng: renderer **vốn đã** cắt theo khung nhìn từ trước, nên phần "chỉ vẽ cái cần
+vẽ" không phải là cái mới. Cái mới là **không còn nạp và quét 288 ô không bao giờ tới được**,
+và bản đồ nhỏ chỉ vẽ đúng nơi đang đứng.
 
 ### Cây lớn theo thời gian
 
