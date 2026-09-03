@@ -388,7 +388,7 @@ export function validateBalance(raw: unknown): string[] {
   return c.errors;
 }
 
-const GROUNDS = ["grass", "path", "water", "wood", "void"] as const;
+const GROUNDS = ["grass", "path", "water", "wood"] as const;
 
 export function validateTiles(raw: unknown): string[] {
   const c = new Check("tiles.json");

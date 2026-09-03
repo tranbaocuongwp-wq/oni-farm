@@ -10,7 +10,7 @@
    thì game biết đường migrate thay vì crash.
 ============================================================================ */
 
-import type { GameState, SaveData } from "../game/types.ts";
+import type { GameState, SaveData, StoredMap } from "../game/types.ts";
 import { SAVE_VERSION } from "./version.ts";
 
 const DB_NAME = "oni-farm";
@@ -169,6 +169,21 @@ export function migrateSave(data: SaveData): GameState | null {
       mapId: "farm",
       maps: {},
     };
+  }
+
+  // v4 → v5: mỗi bản đồ đã cất mang thêm `awayAt` — mốc thời gian nó bị cất đi,
+  // để cây trên đó được cộng bù đúng quãng vắng mặt. Save cũ không biết mình
+  // vắng từ bao giờ, nên lấy MỐC HIỆN TẠI: không tặng không, không phạt.
+  if (s.save === 4) {
+    const src = (s.maps ?? {}) as Record<string, StoredMap>;
+    const maps: Record<string, StoredMap> = {};
+    const now = Number.isFinite(s.minutes) ? s.minutes : 0;
+    for (const id of Object.keys(src)) {
+      const m = src[id];
+      if (!m) continue;
+      maps[id] = Number.isFinite(m.awayAt) ? m : { ...m, awayAt: now };
+    }
+    s = { ...s, save: 5, maps };
   }
 
   return s.save === SAVE_VERSION ? s : null;

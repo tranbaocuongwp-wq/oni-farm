@@ -138,7 +138,10 @@ export function spawnMapId(content: Content): string {
 /** Bản đồ `id` ĐANG ở trong state, dù nó là bản đồ hoạt động hay đã cất.
  *  UI/minimap dùng hàm này để vẽ bất kỳ bản đồ nào mà không phải phân biệt. */
 export function getMap(state: GameState, id: string): StoredMap | null {
-  if (id === state.mapId) return { w: state.w, h: state.h, tiles: state.tiles };
+  // Bản đồ đang chơi không "vắng mặt" — nó đang được TICK nuôi — nên `awayAt`
+  // của nó chỉ là chỗ giữ chỗ để hai nhánh cùng một kiểu.
+  if (id === state.mapId)
+    return { w: state.w, h: state.h, tiles: state.tiles, awayAt: state.minutes };
   return state.maps?.[id] ?? null;
 }
 
@@ -180,7 +183,9 @@ export function buildFromMap(content: Content, mapId: string): StoredMap | null 
       };
     }
   }
-  return { w, h, tiles };
+  // Bản đồ vừa dựng coi như "cất từ đầu ngày": chưa ai bước vào, nên cả ngày
+  // hôm nay đều là thời gian vắng mặt.
+  return { w, h, tiles, awayAt: content.balance.dayStartMinutes };
 }
 
 /** Dựng TẤT CẢ bản đồ cho một ván mới.
@@ -203,8 +208,8 @@ export function buildAllMaps(content: Content): {
     if (id === mapId) active = built;
     else maps[id] = built;
   }
-  if (!active) active = { w: 0, h: 0, tiles: [] };
-  return { mapId, w: active.w, h: active.h, tiles: active.tiles, maps };
+  const a: StoredMap = active ?? { w: 0, h: 0, tiles: [], awayAt: content.balance.dayStartMinutes };
+  return { mapId, w: a.w, h: a.h, tiles: a.tiles, maps };
 }
 
 /** Ô này chặn người chơi không? Ngoài bản đồ cũng coi là chặn. */

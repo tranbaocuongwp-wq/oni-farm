@@ -128,6 +128,9 @@ export function checkInvariants(state: GameState, content: Content): string[] {
       e.push(`maps['${id}'] kích thước ${m.w}x${m.h} khác content ${def.w}x${def.h}`);
     if (m.tiles.length !== m.w * m.h)
       e.push(`maps['${id}'].tiles.length = ${m.tiles.length}, phải là w*h = ${m.w * m.h}`);
+    // awayAt hỏng thì mọi phép cộng bù ra NaN và cây đứng hình vĩnh viễn —
+    // im lặng, nên phải bắt ở đây.
+    if (!Number.isFinite(m.awayAt)) e.push(`maps['${id}'].awayAt phải là số (đang là ${String(m.awayAt)})`);
     checkGrid(m.tiles, content, `maps['${id}']`, e);
   }
 
@@ -198,7 +201,7 @@ interface MergeLog {
  * (cây/đá/bụi cỏ) và mọi thứ mình đặt lên (cày/tưới/cây trồng/công trình).
  */
 function mergeGrid(
-  old: { w: number; h: number; tiles: Tile[] } | null,
+  old: { w: number; h: number; tiles: Tile[]; awayAt?: number } | null,
   fresh: StoredMap,
   content: Content,
   log: MergeLog,
@@ -273,7 +276,11 @@ function mergeGrid(
       tiles[ni] = t;
     }
   }
-  return { w: fresh.w, h: fresh.h, tiles };
+  // Mốc vắng mặt là tiến độ của NGƯỜI CHƠI, không phải của bản đồ: content mới
+  // dựng lại lưới thì vẫn phải giữ, nếu không đổi content sẽ tặng không một
+  // ngày tăng trưởng cho mọi bản đồ đang cất.
+  const awayAt = Number.isFinite(old?.awayAt) ? (old as { awayAt: number }).awayAt : fresh.awayAt;
+  return { w: fresh.w, h: fresh.h, tiles, awayAt };
 }
 
 /** Chỉnh save cho khớp content MỚI. Không bao giờ ném lỗi. */
@@ -295,7 +302,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       );
 
     // ---- gom mọi lưới CŨ, tra theo tên bản đồ ----------------------------
-    const oldGrids: Record<string, { w: number; h: number; tiles: Tile[] }> = {};
+    const oldGrids: Record<string, { w: number; h: number; tiles: Tile[]; awayAt?: number }> = {};
     const rawStored: Record<string, unknown> =
       state.maps && typeof state.maps === "object" ? (state.maps as Record<string, unknown>) : {};
     for (const id of Object.keys(rawStored)) {
@@ -303,7 +310,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       if (!m || !Array.isArray(m.tiles)) continue;
       const w = Number.isInteger(m.w) ? m.w : 0;
       const h = Number.isInteger(m.h) ? m.h : 0;
-      oldGrids[id] = { w, h, tiles: m.tiles };
+      oldGrids[id] = { w, h, tiles: m.tiles, awayAt: m.awayAt };
     }
     // Lưới đang chơi. `mapId` hỏng thì đoán nó là bản đồ spawn — save v3 chỉ có
     // đúng một lưới và đó luôn là bản đồ chính; đoán thế giữ được cả ruộng, còn
@@ -343,7 +350,12 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       if (fallback !== mapId) notes.push(`bản đồ '${mapId}' không dựng được — về '${fallback}'`);
       mapId = fallback;
     }
-    const active: StoredMap = rebuilt[mapId] ?? { w: 0, h: 0, tiles: [] };
+    const active: StoredMap = rebuilt[mapId] ?? {
+      w: 0,
+      h: 0,
+      tiles: [],
+      awayAt: content.balance.dayStartMinutes,
+    };
     const maps: Record<string, StoredMap> = {};
     for (const id of Object.keys(rebuilt)) if (id !== mapId) maps[id] = rebuilt[id]!;
 

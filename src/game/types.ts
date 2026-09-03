@@ -349,6 +349,16 @@ export interface StoredMap {
   w: number;
   h: number;
   tiles: Tile[];
+  /**
+   * Phút game lúc bản đồ này bị CẤT đi (lúc người chơi bước ra khỏi nó).
+   *
+   * TICK chỉ nuôi cây trên bản đồ ĐANG chơi — quét cả thế giới mỗi khung hình
+   * là thứ ta cố tình tránh. Nhưng bỏ hẳn thì đứng trong nhà giữa ban ngày sẽ
+   * làm ruộng ngoài kia đứng hình, mà người chơi không thể nào đoán ra. Con số
+   * này là lời giải: nó cho phép cộng BÙ đúng bằng khoảng thời gian vắng mặt,
+   * một lần duy nhất lúc quay lại (hoặc lúc sang ngày mới), thay vì cộng dần.
+   */
+  awayAt: number;
 }
 
 export interface GameState {

@@ -10,10 +10,10 @@
 ============================================================================ */
 
 import type { Action, Content, GameState, StoredMap } from "./types.ts";
-import { applyProgression, commit, dPlayer, draft, toastKey, touch } from "./state.ts";
+import { applyProgression, commit, dPlayer, draft, storedView, toastKey, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
 import { craft, refill, useAt } from "./actions.ts";
-import { growCrops, newDay } from "./newday.ts";
+import { growCrops, growCropsIn, newDay } from "./newday.ts";
 import { applyDebug } from "./debug.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
@@ -151,13 +151,37 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       // Cửa nối trong CÙNG một bản đồ (dest.map === mapId) đi nhánh riêng: cất
       // rồi lấy lại chính nó thì mất luôn mọi thay đổi vừa có.
       if (dest.map !== state.mapId) {
-        const target = state.maps?.[dest.map];
+        const stored = state.maps?.[dest.map];
         // Bản đồ đích không có trong state (save cũ / content vá dở): thà đứng
         // yên còn hơn nhảy vào hư vô.
-        if (!target) return state;
-        const maps: Record<string, StoredMap> = { ...state.maps };
+        if (!stored) return state;
+
+        // Cộng bù cho bản đồ sắp bước vào: nó không được TICK nuôi trong lúc
+        // vắng mặt, nên trả đúng số phút BAN NGÀY đã trôi qua. Cắt theo
+        // `daylightEnd` ở cả hai đầu để quãng vắng mặt ban đêm không tính.
+        //
+        // Phải làm TRƯỚC khi tráo lưới. `dTile` đo chỉ số và so tham chiếu với
+        // `d.base.tiles` — tức lưới lúc vào reduce. Tráo trước rồi mới cộng thì
+        // nó vừa chặn nhầm mọi ô ngoài kích thước lưới cũ, vừa ghi thẳng lên
+        // mảng đang nằm trong `maps` (mất tính thuần). `storedView` thì ngắm
+        // đúng `d.base.maps[id]`, nên còn đúng.
+        const dawn = content.balance.daylightEndMinutes;
+        const away = Math.max(0, Math.min(state.minutes, dawn) - Math.min(stored.awayAt, dawn));
+        if (away > 0) {
+          const tv = storedView(d, dest.map);
+          if (tv) growCropsIn(tv, content, away);
+        }
+        // đọc lại: growCropsIn có thể đã nhân bản lưới đích
+        const target = d.s.maps?.[dest.map] ?? stored;
+
+        const maps: Record<string, StoredMap> = { ...d.s.maps };
         delete maps[dest.map];
-        maps[state.mapId] = { w: state.w, h: state.h, tiles: state.tiles };
+        maps[state.mapId] = {
+          w: state.w,
+          h: state.h,
+          tiles: state.tiles,
+          awayAt: state.minutes, // đồng hồ bắt đầu chạy cho bản đồ vừa rời
+        };
         const s = touch(d);
         s.mapId = dest.map;
         s.w = target.w;

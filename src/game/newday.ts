@@ -27,6 +27,7 @@ import type { Draft, MapView } from "./state.ts";
 import {
   activeView,
   applyProgression,
+  dStoredMap,
   mapViews,
   nextRandom,
   toastKey,
@@ -323,8 +324,24 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   if (income !== 0) touch(d).money = d.s.money + income;
 
   // ---- 3..5b trên từng bản đồ -------------------------------------------
-  const daylightLeft = Math.max(0, bal.daylightEndMinutes - sleptAt);
-  for (const v of views) nightOnMap(d, content, v, daylightLeft);
+  //
+  // Mỗi bản đồ có mốc riêng: bản đồ đang đứng đã được TICK nuôi tới tận lúc đi
+  // ngủ, nên chỉ còn thiếu phần từ `sleptAt`; bản đồ đã cất thì đứng hình từ
+  // lúc bị cất, nên phải tính từ `awayAt`. Dùng chung một mốc cho cả hai là
+  // cách làm cho "ở lì trong nhà" âm thầm phạt cây ngoài ruộng.
+  const dawn = bal.daylightEndMinutes;
+  for (const v of views) {
+    const from = v.active ? sleptAt : (d.s.maps?.[v.id]?.awayAt ?? sleptAt);
+    nightOnMap(d, content, v, Math.max(0, dawn - Math.min(from, dawn)));
+  }
+
+  // Sang ngày mới thì đồng hồ vắng mặt đặt lại về bình minh: chưa ai bước vào
+  // bản đồ đó hôm nay, nên cả ngày mai lại là thời gian vắng mặt.
+  for (const v of views) {
+    if (v.active) continue;
+    const m = dStoredMap(d, v.id);
+    if (m) m.awayAt = bal.dayStartMinutes;
+  }
 
   // ---- 6. drone (quỹ điện dùng chung, duyệt theo thứ tự bản đồ) ----------
   let budget = power;

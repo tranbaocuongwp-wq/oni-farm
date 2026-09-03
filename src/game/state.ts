@@ -125,7 +125,7 @@ export function dStoredMap(d: Draft, id: string): StoredMap | null {
   const m = maps[id];
   if (!m) return null;
   if (m === d.base.maps?.[id]) {
-    const copy: StoredMap = { w: m.w, h: m.h, tiles: m.tiles.slice() };
+    const copy: StoredMap = { w: m.w, h: m.h, tiles: m.tiles.slice(), awayAt: m.awayAt };
     maps[id] = copy;
     return copy;
   }

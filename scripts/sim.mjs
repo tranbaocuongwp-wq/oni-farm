@@ -1907,6 +1907,114 @@ test("35. TICK chỉ quét bản đồ ĐANG chơi; bản đồ đã cất đợ
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau đêm");
 });
 
+/** Đẩy đồng hồ game đi `mins` phút bằng TICK (không đụng gì khác). */
+function advanceMinutes(store, mins) {
+  store.dispatch({ t: "TICK", dt: (mins * BAL.realSecondsPerGameTenMinutes) / 10 });
+}
+
+test("36. thời gian ở trong nhà vẫn tính cho ruộng: về cửa được cộng bù, ngủ trong nhà không thiệt", () => {
+  /* Đây là cái giá phải trả cho việc TICK chỉ quét một lưới (kịch bản 35): nếu
+     không cộng bù, đứng trong nhà giữa ban ngày sẽ làm ruộng đứng hình — một
+     hình phạt vô hình mà người chơi không tài nào đoán ra. `StoredMap.awayAt`
+     ghi mốc lúc bản đồ bị cất, và ở đây ta kiểm đúng hai chỗ tiêu thụ nó. */
+
+  // ---- (a) đi vào nhà rồi quay ra: ruộng phải được cộng bù ngay tại cửa ----
+  const store = mkStore(560);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[1];
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+  selectItem(store, "seed:lettuce");
+  use(store, plot.x, plot.y);
+  topUpWater(store);
+  selectItem(store, "tool:can");
+  use(store, plot.x, plot.y);
+  ok(farmTile(store, plot.x, plot.y).wet, "ô đã tưới, đủ điều kiện lớn");
+
+  enterHouse(store);
+  const g0 = growOfTile(farmTile(store, plot.x, plot.y));
+  const away = 300;
+  advanceMinutes(store, away);
+  eq(
+    growOfTile(farmTile(store, plot.x, plot.y)),
+    g0,
+    "đang ở trong nhà thì lưới đã cất chưa bị chạm tới (TICK vẫn chỉ quét một lưới)",
+  );
+
+  leaveHouse(store);
+  const g1 = growOfTile(farmTile(store, plot.x, plot.y));
+  ok(
+    Math.abs(g1 - g0 - away) < 1e-6,
+    `bước ra cửa là ruộng được cộng bù trọn ${away} phút vắng mặt: nhận ${g1 - g0}`,
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi cộng bù ở cửa");
+
+  // đi vào rồi ra NGAY thì không được cộng thêm gì — không có kẽ hở farm thời gian
+  const g2 = growOfTile(farmTile(store, plot.x, plot.y));
+  enterHouse(store);
+  leaveHouse(store);
+  const g3 = growOfTile(farmTile(store, plot.x, plot.y));
+  ok(g3 - g2 < 30, `ra vào liên tục không đẻ ra thời gian: nhận thêm ${g3 - g2} phút`);
+
+  // ---- (b) ngủ trong nhà không thiệt hơn đứng ngoài ruộng -----------------
+  // Hai ván giống hệt nhau, chỉ khác THỨ TỰ: chờ ngoài ruộng rồi mới vào ngủ,
+  // với vào nhà trước rồi chờ trong đó. Cùng một khoảnh khắc đi ngủ ⇒ cây phải
+  // ở cùng một tiến độ.
+  const grow = (seed, inside) => {
+    const st = mkStore(seed);
+    walkTo(st, HOME.x, HOME.y);
+    selectItem(st, "tool:hoe");
+    use(st, plot.x, plot.y);
+    selectItem(st, "seed:lettuce");
+    use(st, plot.x, plot.y);
+    topUpWater(st);
+    selectItem(st, "tool:can");
+    use(st, plot.x, plot.y);
+
+    if (inside) {
+      enterHouse(st);
+      advanceMinutes(st, 240);
+    } else {
+      advanceMinutes(st, 240);
+      enterHouse(st);
+    }
+    sleepInBed(st);
+    deepEq(checkInvariants(st.getState(), content), [], "bất biến sau đêm");
+    return growOfTile(farmTile(st, plot.x, plot.y));
+  };
+
+  const outside = grow(561, false);
+  const inside = grow(561, true);
+  ok(
+    Math.abs(outside - inside) < 1e-6,
+    `ở trong nhà 4 tiếng ban ngày cho cùng tiến độ với đứng ngoài ruộng: ngoài ${outside}, trong ${inside}`,
+  );
+
+  // ---- (c) không bao giờ được cộng bù HAI lần ----------------------------
+  // Sang ngày mới đặt lại mốc vắng mặt; nếu quên, đêm sau sẽ cộng lại phần cũ.
+  const st = mkStore(562);
+  walkTo(st, HOME.x, HOME.y);
+  selectItem(st, "tool:hoe");
+  use(st, plot.x, plot.y);
+  selectItem(st, "seed:lettuce");
+  use(st, plot.x, plot.y);
+  enterHouse(st);
+  sleepInBed(st);
+  const day1 = growOfTile(farmTile(st, plot.x, plot.y));
+  sleepInBed(st);
+  const day2 = growOfTile(farmTile(st, plot.x, plot.y));
+  const oneDay = BAL.daylightEndMinutes - BAL.dayStartMinutes;
+  ok(
+    day2 - day1 <= oneDay + 1e-6,
+    `một đêm không cộng quá một ngày ban ngày: nhận ${day2 - day1}, trần ${oneDay}`,
+  );
+  eq(
+    st.getState().maps.farm.awayAt,
+    BAL.dayStartMinutes,
+    "sang ngày mới thì mốc vắng mặt lùi về bình minh",
+  );
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 console.log("\n  ONIFARM — sim\n");
