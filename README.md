@@ -192,8 +192,16 @@ gì đổi. Ô vàng = cây đã chín, khung trắng = khung nhìn hiện tại
 
 ### Bấm-để-đi
 
-Bấm (hoặc chạm) vào một ô ở xa thì nhân vật **tự đi tới rồi mới làm việc** — cày, gieo, tưới,
-mở cửa hàng, ngủ. Đủ gần sẵn thì làm ngay, không đi đâu cả.
+**Chạm MỘT lần là ĐI, chạm HAI lần mới THỰC THI.** Hai ý định này rất dễ lẫn trên màn nhỏ:
+đang muốn đi ngang qua ruộng mà lỡ tay cày mất một ô là chuyện bực nhất, nên tách hẳn ra.
+
+- **1 lần** → đi tới ô đó, và ngắm sẵn ô đó (không làm gì cả).
+- **2 lần** (dưới 350ms, trong vòng 44px) → thực thi: cày, gieo, tưới, dùng công cụ. Còn ở xa
+  thì đi tới rồi mới làm.
+- Tới nơi thì ô đó **vẫn đang được ngắm**, nên `Space`/nút DÙNG làm việc ngay — khỏi chạm lại.
+
+Sau một cặp chạm kép thì mốc thời gian được đặt lại, nếu không cú chạm thứ ba lại ghép với cú
+thứ hai và thao tác chạy hai lần liền.
 
 `src/core/navigate.ts` là một **cách nhập liệu**, không phải luật chơi: nó chỉ sinh vector
 di chuyển từng khung hình y như bàn phím hay joystick, còn mọi thay đổi state vẫn đi qua

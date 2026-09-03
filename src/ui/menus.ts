@@ -331,16 +331,18 @@ export function createMenus(
         <span class="k"><kbd>1</kbd>–<kbd>9</kbd></span><span>Chọn ô trong hotbar (hoặc lăn chuột)</span>
         <span class="k"><kbd>B</kbd></span><span>Mở cửa hàng nhanh</span>
         <span class="k"><kbd>Esc</kbd></span><span>Menu: lưu, tải, xuất/nhập file save</span>
-        <span class="k">Chuột/chạm</span><span>Bấm ô nào thì nhân vật <b>tự đi tới</b> rồi làm việc ở đó</span>
+        <span class="k">Chạm 1 lần</span><span>Nhân vật <b>đi tới</b> ô đó (và ngắm sẵn ô đó)</span>
+        <span class="k">Chạm 2 lần</span><span><b>Thực thi</b>: cày, gieo, tưới, dùng công cụ</span>
       </div>
       <div class="sub" style="margin-top:10px;line-height:1.7">
         <b style="color:var(--gold)">Vòng lặp:</b> cầm cuốc cày ô cỏ → chọn hạt gieo xuống →
         cầm bình tưới → về nhà bấm <kbd>E</kbd> ở cửa để ngủ. Cây chỉ lớn nếu ô ĐƯỢC TƯỚI
         trong đêm đó. Chín thì bấm <kbd>Space</kbd> để thu, mang ra quầy bán.
         <br><br>
-        <b style="color:var(--gold)">Ngắm ô:</b> khung sáng nhấp nháy cho biết bạn đang nhắm
-        ô nào. Chạm hơi lệch vẫn trúng, và ô đã ngắm được giữ lại — nên cày xong chỉ cần đổi
-        vật phẩm rồi bấm DÙNG tiếp, khỏi chạm lại.
+        <b style="color:var(--gold)">Chạm 1 lần để ĐI, chạm 2 lần để LÀM.</b> Tách ra như vậy
+        thì đi ngang qua ruộng không còn lỡ tay cày mất một ô. Khung sáng nhấp nháy cho biết
+        bạn đang nhắm ô nào; chạm hơi lệch vẫn trúng, và ô đã ngắm được giữ lại — nên cày xong
+        chỉ cần đổi vật phẩm rồi bấm DÙNG, khỏi chạm lại.
         <br><br>
         <b style="color:var(--gold)">Đi lại cho nhanh:</b> bấm vào ô nào thì nhân vật tự đi tới
         đó rồi làm việc — đi xa thì tự chạy. Muốn tới chỗ ngoài tầm nhìn thì bấm thẳng lên

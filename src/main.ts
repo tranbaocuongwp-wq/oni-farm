@@ -453,10 +453,13 @@ async function boot() {
 
       // Vừa tới nơi thì làm luôn việc mà cú bấm lúc nãy đã hẹn.
       const arrived = nav.takeArrival();
-      // act=false là đích do bấm trên BẢN ĐỒ NHỎ — chỉ đi tới, không cày cuốc gì.
-      if (arrived?.act) {
+      if (arrived) {
+        // Tới nơi thì ô đó thành ô đang ngắm, kể cả khi chỉ đi chứ không làm gì:
+        // người chơi chạm một lần để đi tới, xong bấm DÙNG là thao tác được ngay,
+        // khỏi phải ngắm lại.
         aimed = { x: arrived.tx, y: arrived.ty };
-        if (!actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
+        // act=false: đích do chạm MỘT lần hoặc bấm bản đồ nhỏ — chỉ đi, không làm gì.
+        if (arrived.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
       }
     }
 
@@ -499,7 +502,22 @@ async function boot() {
           const ty = snapped.y;
           aimed = { x: tx, y: ty };
           nav.cancel();
-          // Đủ gần thì làm ngay; còn xa thì đặt đích, đi tới rồi mới làm.
+
+          // LUẬT ĐIỀU KHIỂN: chạm MỘT lần là ĐI, chạm HAI lần mới THỰC THI.
+          // Tách hai ý định ra vì trên màn nhỏ chúng rất dễ lẫn: định đi ngang
+          // qua ruộng mà lỡ tay cày mất một ô là chuyện bực mình nhất.
+          if (!it.double) {
+            // Chỉ đi tới và ngắm sẵn ô đó. Đã đứng trong tầm rồi thì khỏi đi
+            // đâu cả — cú chạm coi như chỉ để ngắm.
+            if (!inReachOf(s, tx, ty))
+              nav.goTo(s, content, tx, ty, {
+                act: false,
+                avoidStandingOn: holdingSolidBuilding(s),
+              });
+            break;
+          }
+
+          // Chạm kép: đủ gần thì làm ngay, còn xa thì đi tới rồi làm.
           if (actOnTile(s, tx, ty)) break;
           if (
             !tileActionable(s, tx, ty) ||

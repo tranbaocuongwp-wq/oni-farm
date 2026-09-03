@@ -23,8 +23,12 @@ export type Intent =
   | { t: "shop" }
   | { t: "inventory" }
   | { t: "map" }
-  /** bấm/chạm vào thế giới — toạ độ WORLD px */
-  | { t: "pointer"; wx: number; wy: number };
+  /** Bấm/chạm vào thế giới — toạ độ WORLD px.
+   *  `double` = cú chạm thứ hai của một lần chạm kép. Luật điều khiển:
+   *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
+   *  công cụ). Tách hai ý định ra như vậy thì trên màn nhỏ không còn chuyện
+   *  định đi mà lại lỡ tay cày mất một ô. */
+  | { t: "pointer"; wx: number; wy: number; double: boolean };
 
 export interface Input {
   /** hướng đi mong muốn, độ dài <= 1 */
@@ -77,6 +81,12 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const queue: Intent[] = [];
   let ptr: { x: number; y: number } | null = null;
   let ptrAt = 0;
+  /** Lần chạm gần nhất, để nhận ra chạm kép. */
+  let lastTap = { t: 0, x: -1e9, y: -1e9 };
+  /** Hai cú chạm cách nhau dưới ngần này ms thì tính là chạm kép. */
+  const DOUBLE_MS = 350;
+  /** …và phải trong khoảng này (CSS px) — ngón tay rung vài pixel là bình thường. */
+  const DOUBLE_DIST = 44;
   /** Sau ngần này ms không cử động, con trỏ coi như "bỏ đó", nhường cho bàn phím. */
   const POINTER_STALE_MS = 1500;
 
@@ -150,11 +160,18 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const onDown = (e: PointerEvent) => {
     const p = opts.toWorld(e.clientX, e.clientY);
     if (!p) return;
+    const now = performance.now();
     if (e.pointerType !== "touch") {
       ptr = p;
-      ptrAt = performance.now();
+      ptrAt = now;
     }
-    push({ t: "pointer", wx: p.x, wy: p.y });
+    const isDouble =
+      now - lastTap.t < DOUBLE_MS &&
+      Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_DIST;
+    // Sau một cú chạm kép thì đặt lại mốc, nếu không chạm lần thứ ba sẽ lại
+    // được tính là kép và thao tác chạy hai lần liền.
+    lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY };
+    push({ t: "pointer", wx: p.x, wy: p.y, double: isDouble });
   };
 
   const onLeave = () => {
