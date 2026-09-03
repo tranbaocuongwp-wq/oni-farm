@@ -16,7 +16,7 @@ import "./style.css";
 import { buildAtlas, TILE } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
-import { createNavigator } from "./core/navigate.ts";
+import { alignedTo, createNavigator } from "./core/navigate.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -396,8 +396,9 @@ async function boot() {
     return !!def && def.kind === "object" && def.solid;
   }
 
-  /** Làm việc trên ô. Trả false nếu còn ở xa quá, chưa làm được gì. */
-  function actOnTile(s: GameState, tx: number, ty: number): boolean {
+  /** Tương tác với công trình (cửa nhà, máy bán hạt, quầy thu mua).
+   *  KHÔNG đòi thẳng hàng: mở cửa hàng không có động tác vung tay nào để mà lệch. */
+  function tryInteract(s: GameState, tx: number, ty: number): boolean {
     const kind = nearbyInteract(s, tx, ty);
     if (kind === "SHOP") {
       menus.openShop();
@@ -411,12 +412,19 @@ async function boot() {
       store.dispatch({ t: "SLEEP" });
       return true;
     }
-    const dist = Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y);
-    if (dist <= REACH) {
-      store.dispatch({ t: "USE", x: tx, y: ty });
-      return true;
-    }
     return false;
+  }
+
+  /** Dùng vật phẩm lên ô. Trả false nếu còn ở xa quá. */
+  function tryUse(s: GameState, tx: number, ty: number): boolean {
+    if (!inReachOf(s, tx, ty)) return false;
+    store.dispatch({ t: "USE", x: tx, y: ty });
+    return true;
+  }
+
+  /** Làm việc trên ô. Trả false nếu còn ở xa quá, chưa làm được gì. */
+  function actOnTile(s: GameState, tx: number, ty: number): boolean {
+    return tryInteract(s, tx, ty) || tryUse(s, tx, ty);
   }
 
   const vpTiles = () => ({
@@ -517,8 +525,13 @@ async function boot() {
             break;
           }
 
-          // Chạm kép: đủ gần thì làm ngay, còn xa thì đi tới rồi làm.
-          if (actOnTile(s, tx, ty)) break;
+          // Chạm kép.
+          // Công trình thì mở ngay, không cần bước vào cho ngay ngắn.
+          if (tryInteract(s, tx, ty)) break;
+          // Với lô đất: chỉ làm ngay khi đã ĐỨNG THẲNG HÀNG. Đứng chéo góc thì
+          // vẫn với tới được, nhưng nhân vật sẽ thò tay theo một hướng chẳng
+          // ăn nhập gì với lô đất — thà bước một bước cho ngang bằng rồi làm.
+          if (alignedTo(s, tx, ty) && tryUse(s, tx, ty)) break;
           if (
             !tileActionable(s, tx, ty) ||
             !nav.goTo(s, content, tx, ty, { avoidStandingOn: holdingSolidBuilding(s) })

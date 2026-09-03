@@ -213,8 +213,17 @@ action `MOVE`/`USE`. Nhờ vậy `src/game/` không phải biết gì về nó v
 - **Kéo dây**: mỗi khung bỏ qua các điểm mốc còn nhìn thẳng tới được, nên nhân vật cắt chéo
   tự nhiên thay vì đi zigzag theo tâm từng ô. Kiểm tầm nhìn bằng chính hộp va chạm của nhân
   vật chứ không phải một điểm, để đường đi không "lách" qua khe mà thân không lọt.
-- **Dừng khi đủ gần** (ô kề bên) rồi mới xử lý — bấm vào ô đất là muốn cày nó, không phải
-  muốn đứng lên nó. Ô đích đặc (cửa hàng, quầy, cửa nhà) thì đích thật sự là các ô kề.
+- **Tiến vào cho THẲNG HÀNG với lô đất rồi mới làm.** A* ưu tiên bốn ô kề **thẳng**, chỉ khi
+  không có đường mới chịu ô kề chéo. Chỉ đo khoảng cách là không đủ: đứng chéo góc cách 1,41 ô
+  vẫn "với tới" được, nhưng nhìn xiên và tư thế vung tay chỉ sang hướng chẳng liên quan.
+  `alignedTo()` đòi cả ba: đứng trên ô đích hoặc một ô kề THẲNG, lệch ≤ 4px trên trục thẳng
+  hàng, và cách ≤ 1,05 ô. Đo thực tế: bấm ô nằm chéo → nhân vật bước một bước sang ô kề thẳng
+  (lệch 3px, cách 1,017 ô) rồi mới cày, mặt quay đúng vào lô đất.
+- Chạy A* theo **từng nhóm ưu tiên** thay vì gộp một tập: gộp lại thì A* vớ lấy ô gần nhất,
+  mà ô chéo thường gần hơn ô thẳng — đúng cái cần tránh.
+- Ô đích đặc (cửa hàng, quầy, cửa nhà) thì đích là các ô kề. Tương tác với chúng **không** đòi
+  thẳng hàng: mở cửa hàng có động tác vung tay nào đâu mà lệch.
+- Đi thuần tuý (bản đồ nhỏ) thì ngược lại — phải **giẫm lên** đúng ô đó mới là tới.
 - Cầm công trình ĐẶC thì dừng **cạnh** ô đích, không đứng lên, nếu không sẽ tự nhốt mình.
 - Bấm phím di chuyển hoặc kéo joystick là **huỷ** đường đi ngay — không giành tay lái.
 - Bỏ cuộc nếu kẹt sau vật cản quá 0,6 giây.

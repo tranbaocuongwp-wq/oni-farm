@@ -31,9 +31,47 @@ import {
   tileCenterY,
 } from "../game/world.ts";
 
-/** Đủ gần để xử lý: đứng ở ô kề bên (thẳng 1,0 ô hoặc chéo 1,41 ô).
- *  Nhỏ hơn REACH_TILES của game (1,6) nên tới nơi là chắc chắn thao tác được. */
-export const ARRIVE_TILES = 1.5;
+/** Tầm coi là "đã tới nơi" khi đi để LÀM VIỆC.
+ *
+ *  1,05 ô: vừa đủ chứa ô kề thẳng khi đứng đúng TÂM ô đó (1,0), nhưng không
+ *  chứa ô kề chéo (1,41). Đặt rộng hơn (1,2) thì nhân vật dừng lùi lại vài pixel
+ *  so với tâm ô, nhìn cứ như chưa tiến hẳn vào lô đất.
+ *
+ *  Nếu vì vật cản mà không bao giờ vào sát được thì `finishOrGiveUp` vẫn cứu:
+ *  đi hết đường mà đã lọt tầm với thì cứ làm. */
+const ARRIVE_TILES = 1.05;
+
+/** Đứng cách tâm ô đích quá ngần này (world px) trên trục thẳng hàng thì coi
+ *  như chưa thẳng hàng. Đứng đúng tâm ô kề thì lệch bằng 0. */
+const ALIGN_SLACK = 4;
+
+/** Đi THUẦN TUÝ (bấm bản đồ nhỏ) thì mới tính là tới khi đã giẫm lên ô đó. */
+const TRAVEL_ARRIVE_TILES = 0.6;
+
+/**
+ * Nhân vật đã đứng THẲNG HÀNG với ô đích chưa — cùng cột hoặc cùng hàng, và
+ * sát bên.
+ *
+ * Đây là điểm khác biệt so với chỉ đo khoảng cách: đứng chéo góc cách ô đất
+ * 1,41 ô thì vẫn "với tới" được, nhưng nhìn rất lệch và tư thế vung tay chỉ
+ * sang hướng chẳng liên quan. Người chơi mong nhân vật tiến vào cho ngang bằng
+ * với lô đất rồi mới làm.
+ */
+export function alignedTo(state: GameState, tx: number, ty: number): boolean {
+  const dx = Math.abs(state.player.x - tileCenterX(tx));
+  const dy = Math.abs(state.player.y - tileCenterY(ty));
+  if (Math.hypot(dx, dy) > ARRIVE_TILES * TILE) return false;
+
+  // Phải ĐỨNG HẲN trên ô đích hoặc một ô kề THẲNG của nó. Chỉ đo khoảng cách là
+  // chưa đủ: đứng vắt ở góc hai ô vẫn có thể lọt ngưỡng mà nhìn thì vẫn xiên.
+  const ptx = Math.floor(state.player.x / TILE);
+  const pty = Math.floor(state.player.y / TILE);
+  const onTileLine =
+    (ptx === tx && Math.abs(pty - ty) <= 1) || (pty === ty && Math.abs(ptx - tx) <= 1);
+  if (!onTileLine) return false;
+
+  return dx <= ALIGN_SLACK || dy <= ALIGN_SLACK;
+}
 
 /** Bỏ cuộc nếu đi mãi không tiến thêm được (bị kẹt sau lưng vật cản). */
 const STUCK_SECONDS = 0.6;
@@ -218,24 +256,43 @@ export function createNavigator(): Navigator {
       clear();
       if (tx < 0 || ty < 0 || tx >= state.w || ty >= state.h) return false;
 
-      // Đã đủ gần rồi thì khỏi đi đâu cả — người gọi tự xử lý ngay.
-      if (distToTile(state, tx, ty) <= ARRIVE_TILES) return false;
+      // Đã đứng đúng chỗ rồi thì khỏi đi đâu cả — người gọi tự xử lý ngay.
+      if (act ? alignedTo(state, tx, ty) : distToTile(state, tx, ty) <= TRAVEL_ARRIVE_TILES)
+        return false;
 
-      const goals = new Set<number>();
+      const at = (x: number, y: number) => idx(state.w, x, y);
+      const ORTHO: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      const DIAG: [number, number][] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+
+      // Thứ tự ưu tiên chỗ đứng:
+      //   1. bốn ô kề THẲNG  → thẳng hàng với lô đất, tư thế vung tay đúng hướng
+      //   2. chính ô đó       → chỉ khi đi thuần tuý, hoặc không cấm giẫm lên
+      //   3. bốn ô kề CHÉO    → phương án chót khi ô đất bị kẹp giữa vật cản
+      // Chạy A* theo từng nhóm thay vì gộp một tập: A* với tập gộp sẽ vớ lấy ô
+      // nào GẦN NHẤT, mà ô chéo thường gần hơn ô thẳng — đúng cái ta muốn tránh.
+      const groups: number[][] = [];
+      const ortho = ORTHO.filter(([dx, dy]) => walkable(state, content, tx + dx, ty + dy)).map(
+        ([dx, dy]) => at(tx + dx, ty + dy),
+      );
+      if (ortho.length) groups.push(ortho);
+
       const selfOk = !avoidStandingOn && walkable(state, content, tx, ty);
-      if (selfOk) goals.add(idx(state.w, tx, ty));
-      // Ô đích đặc (cửa hàng, quầy, cửa nhà, cây) — hoặc ta cố ý không đứng lên
-      // nó — thì đích thật sự là các ô kề bên.
-      for (let dy = -1; dy <= 1; dy++)
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          if (walkable(state, content, tx + dx, ty + dy)) goals.add(idx(state.w, tx + dx, ty + dy));
-        }
-      if (!goals.size) return false;
+      // Khi đi thuần tuý thì đích là chính ô đó, nên nó phải được xét TRƯỚC.
+      if (selfOk) groups[act ? "push" : "unshift"]([at(tx, ty)]);
+
+      const diag = DIAG.filter(([dx, dy]) => walkable(state, content, tx + dx, ty + dy)).map(
+        ([dx, dy]) => at(tx + dx, ty + dy),
+      );
+      if (diag.length) groups.push(diag);
+      if (!groups.length) return false;
 
       const px = Math.floor(state.player.x / TILE);
       const py = Math.floor(state.player.y / TILE);
-      const found = findPath(state, content, px, py, goals);
+      let found: NavTarget[] | null = null;
+      for (const gset of groups) {
+        found = findPath(state, content, px, py, new Set(gset));
+        if (found) break;
+      }
       if (!found) return false;
 
       path = found;
@@ -259,8 +316,15 @@ export function createNavigator(): Navigator {
     update(state, content, dt) {
       if (!goal) return null;
 
-      // Tới nơi? Kiểm TRƯỚC khi đi tiếp, để dừng ngay khi vừa đủ gần.
-      if (distToTile(state, goal.tx, goal.ty) <= ARRIVE_TILES) {
+      // Tới nơi? Kiểm TRƯỚC khi đi tiếp.
+      //
+      // Đi để LÀM VIỆC thì phải THẲNG HÀNG với ô đất mới dừng — chỉ "gần" thôi
+      // là chưa đủ, vì đứng chéo góc vẫn với tới được nhưng nhìn lệch hẳn.
+      // Đi thuần tuý (bản đồ nhỏ) thì giẫm lên ô đó mới là tới.
+      const done = goal.act
+        ? alignedTo(state, goal.tx, goal.ty)
+        : distToTile(state, goal.tx, goal.ty) <= TRAVEL_ARRIVE_TILES;
+      if (done) {
         arrived = goal;
         clear();
         return null;
