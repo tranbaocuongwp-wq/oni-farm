@@ -42,7 +42,7 @@ import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
-import { canUseAt, interactAt } from "./game/actions.ts";
+import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline.
  *
@@ -138,6 +138,10 @@ async function boot() {
 
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
+    craft: (id) => store.dispatch({ t: "CRAFT", id }),
+    canCraft: (id) => canCraft(store.getState(), content, id),
+    missingFor: (id) => missingFor(store.getState(), content, id),
+    debug: (op, n) => store.dispatch({ t: "DEBUG", op, ...(n === undefined ? {} : { n }) }),
     sell: (id, n) => store.dispatch({ t: "SELL", id, n }),
     sellAll: () => store.dispatch({ t: "SELL_ALL" }),
     save: async () => {
@@ -330,6 +334,18 @@ async function boot() {
      state và định dạng save không đổi gì. */
   const nav = createNavigator();
 
+  // Dịch chuyển qua cửa làm nhân vật nhảy cả chục ô. Camera phải nhảy theo, nếu
+  // không nó sẽ trượt mượt qua nửa bản đồ và người chơi hoa mắt.
+  // Đăng ký SAU khi có `nav` — trước đó biến còn trong vùng chưa khởi tạo.
+  let lastPos = { x: store.getState().player.x, y: store.getState().player.y };
+  store.subscribe((st) => {
+    if (Math.hypot(st.player.x - lastPos.x, st.player.y - lastPos.y) > TILE * 4) {
+      camera.jumpTo(st.player.x, st.player.y);
+      nav.cancel();
+    }
+    lastPos = { x: st.player.x, y: st.player.y };
+  });
+
   /** Ô cuối cùng người chơi NGẮM tới. Trên màn nhỏ, ô chỉ rộng ~32px nên bắt
    *  người chơi chạm lại chính xác cho mỗi thao tác là cực hình. Giữ lại ô vừa
    *  ngắm, chừng nào còn trong tầm với thì nút DÙNG cứ thế làm tiếp ở đó —
@@ -383,8 +399,15 @@ async function boot() {
   function tileActionable(s: GameState, tx: number, ty: number): boolean {
     const t = s.tiles[ty * s.w + tx];
     if (!t) return false;
-    if (t.g === "water") return false;
-    return t.prop !== "tree" && t.prop !== "rock" && t.prop !== "bush" && t.prop !== "house";
+    if (t.g === "void") return false;
+    if (t.prop) {
+      const def = content.props[t.prop];
+      // Cây, đá, bụi giờ CHẶT/ĐẬP được nên là ô đáng nhắm; tường với vách nhà
+      // thì vẫn vô nghĩa.
+      return !!def && (!!def.hits || !!def.interact);
+    }
+    // Bờ nước múc được nước; giữa hồ thì không.
+    return t.g !== "water" || !!content.tiles.grounds["water"]?.interact;
   }
 
   /** Đang cầm công trình ĐẶC? Vậy phải đứng CẠNH ô đích chứ không đứng lên nó,
@@ -399,20 +422,31 @@ async function boot() {
   /** Tương tác với công trình (cửa nhà, máy bán hạt, quầy thu mua).
    *  KHÔNG đòi thẳng hàng: mở cửa hàng không có động tác vung tay nào để mà lệch. */
   function tryInteract(s: GameState, tx: number, ty: number): boolean {
-    const kind = nearbyInteract(s, tx, ty);
-    if (kind === "SHOP") {
-      menus.openShop();
-      return true;
+    const hit = nearbyInteract(s, tx, ty);
+    if (!hit) return false;
+    switch (hit.kind) {
+      case "SHOP":
+        menus.openShop();
+        return true;
+      case "SELL":
+        menus.openSell();
+        return true;
+      case "CRAFT":
+        menus.openCraft();
+        return true;
+      case "SLEEP":
+        // Chỉ GIƯỜNG mới ngủ được — cửa nhà giờ chỉ để đi vào phòng.
+        store.dispatch({ t: "SLEEP" });
+        return true;
+      case "REFILL":
+        store.dispatch({ t: "REFILL" });
+        return true;
+      case "PORTAL":
+        store.dispatch({ t: "PORTAL", x: hit.x, y: hit.y });
+        return true;
+      default:
+        return false;
     }
-    if (kind === "SELL") {
-      menus.openSell();
-      return true;
-    }
-    if (kind === "SLEEP") {
-      store.dispatch({ t: "SLEEP" });
-      return true;
-    }
-    return false;
   }
 
   /** Dùng vật phẩm lên ô. Trả false nếu còn ở xa quá. */
@@ -486,6 +520,9 @@ async function boot() {
           break;
         case "map":
           minimap.toggle();
+          break;
+        case "debug":
+          menus.openDebug();
           break;
         case "select":
           store.dispatch({ t: "SELECT", slot: it.slot });
@@ -574,7 +611,8 @@ async function boot() {
   });
 
   /** Tương tác nhận cả ô kề bên ô đang nhắm — đứng chệch một chút vẫn bấm được,
-   *  đỡ phải căn chỉnh từng pixel. */
+   *  đỡ phải căn chỉnh từng pixel. Trả về cả TOẠ ĐỘ vì cửa dịch chuyển cần biết
+   *  chính xác mình đang dùng cái cửa nào. */
   function nearbyInteract(s: GameState, x: number, y: number) {
     for (const [dx, dy] of [
       [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0],
@@ -585,7 +623,7 @@ async function boot() {
           (x + dx) * TILE + TILE / 2 - s.player.x,
           (y + dy) * TILE + TILE / 2 - s.player.y,
         );
-        if (dist <= REACH + TILE) return k;
+        if (dist <= REACH + TILE) return { kind: k, x: x + dx, y: y + dy };
       }
     }
     return null;

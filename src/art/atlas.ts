@@ -61,6 +61,12 @@ const P = {
   denim: "#3f6493",
   denimDark: "#2d4a70",
   boot: "#4a3a2a",
+  plank: ["#a97d4e", "#966d43", "#b98a58"],
+  plankDark: "#6b4a2c",
+  voidBg: "#0d0b09",
+  cloth: "#d9c9a3",
+  quilt: "#c25b48",
+  quiltDark: "#8a4a3a",
   shadow: "rgba(0,0,0,0.22)",
 } as const;
 
@@ -190,6 +196,30 @@ function makeSoil(wet: boolean, variant: number): HTMLCanvasElement {
   return s.c;
 }
 
+/** Sàn gỗ trong nhà: các thanh ván so le, có khe tối để đọc ra hướng. */
+function makePlank(variant: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x51a2b + variant * 7717);
+  s.rect(0, 0, TILE, TILE, P.plank[0]!);
+  for (let y = 0; y < TILE; y += 5) {
+    s.hline(0, y, TILE, P.plankDark);
+    for (let x = 0; x < TILE; x++)
+      if (rnd() > 0.72) s.px(x, y + 1 + Math.floor(rnd() * 3), pick(P.plank, rnd()));
+  }
+  // khe dọc so le giữa các hàng ván
+  s.vline((variant * 7) % TILE, 0, 5, P.plankDark);
+  s.vline((variant * 7 + 9) % TILE, 5, 5, P.plankDark);
+  s.vline((variant * 7 + 4) % TILE, 10, 6, P.plankDark);
+  return s.c;
+}
+
+/** Ô "hư vô" — vùng ngoài phòng, người chơi không bao giờ tới được. */
+function makeVoid(): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 0, TILE, TILE, P.voidBg);
+  return s.c;
+}
+
 function makeWater(frame: number): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const rnd = mulberry32(0xa2e1);
@@ -212,7 +242,7 @@ function makeWater(frame: number): HTMLCanvasElement {
    VẬT THỂ TĨNH
 --------------------------------------------------------------------------- */
 
-function makeTree(): HTMLCanvasElement {
+function makeTree(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE * 2); // cây cao 2 ô, phần trên tràn lên ô phía trên
   const rnd = mulberry32(0x77ee);
   const baseY = TILE * 2;
@@ -222,7 +252,7 @@ function makeTree(): HTMLCanvasElement {
   s.g.ellipse(8, baseY - 2, 6, 2.5, 0, 0, Math.PI * 2);
   s.g.fill();
   // thân
-  s.rect(6, baseY - 10, 4, 9, P.trunk);
+  s.rect(6, baseY - 10, 4, 9, art.accent);
   s.vline(6, baseY - 10, 9, P.trunkDark);
   s.px(9, baseY - 6, P.trunkDark);
   // tán: ba cụm chồng lên nhau
@@ -232,42 +262,42 @@ function makeTree(): HTMLCanvasElement {
     [12, baseY - 14, 5],
     [8, baseY - 12, 6],
   ];
-  for (const [cx, cy, r] of blobs) s.disc(cx, cy, r, P.leaf[0]!);
+  for (const [cx, cy, r] of blobs) s.disc(cx, cy, r, art.body);
   // đốm sáng/tối cho tán có khối
   for (let i = 0; i < 70; i++) {
     const x = Math.floor(rnd() * TILE);
     const y = baseY - 24 + Math.floor(rnd() * 16);
     const img = s.g.getImageData(x, y, 1, 1).data;
     if (img[3]! === 0) continue;
-    s.px(x, y, rnd() > 0.55 ? P.leaf[1]! : P.leaf[2]!);
+    s.px(x, y, rnd() > 0.55 ? P.leaf[1]! : art.dark);
   }
   return s.c;
 }
 
-function makeRock(): HTMLCanvasElement {
+function makeRock(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.g.fillStyle = P.shadow;
   s.g.beginPath();
   s.g.ellipse(8, 14, 5, 2, 0, 0, Math.PI * 2);
   s.g.fill();
-  s.disc(8, 10, 5, P.rock[0]!);
-  s.disc(6, 8, 3, P.rock[1]!);
-  s.disc(11, 11, 3, P.rock[2]!);
-  s.px(5, 8, P.rock[1]!);
-  s.px(6, 7, P.rock[1]!);
+  s.disc(8, 10, 5, art.body);
+  s.disc(6, 8, 3, art.accent);
+  s.disc(11, 11, 3, art.dark);
+  s.px(5, 8, art.accent);
+  s.px(6, 7, art.accent);
   return s.c;
 }
 
-function makeBush(): HTMLCanvasElement {
+function makeBush(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const rnd = mulberry32(0x51b1);
   s.g.fillStyle = P.shadow;
   s.g.beginPath();
   s.g.ellipse(8, 14, 6, 2, 0, 0, Math.PI * 2);
   s.g.fill();
-  s.disc(8, 10, 5, P.bush[0]!);
-  s.disc(5, 9, 3, P.bush[1]!);
-  s.disc(11, 10, 3, P.bush[2]!);
+  s.disc(8, 10, 5, art.body);
+  s.disc(5, 9, 3, art.accent);
+  s.disc(11, 10, 3, art.dark);
   for (let i = 0; i < 20; i++) {
     const x = 2 + Math.floor(rnd() * 12);
     const y = 5 + Math.floor(rnd() * 9);
@@ -278,10 +308,133 @@ function makeBush(): HTMLCanvasElement {
   return s.c;
 }
 
+/** Cây gỗ NHỎ: một ô, tán bé, chặt vài nhát là xong. */
+function makeSapling(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x5a91);
+  s.g.fillStyle = P.shadow;
+  s.g.beginPath();
+  s.g.ellipse(8, 14, 4, 1.6, 0, 0, Math.PI * 2);
+  s.g.fill();
+  s.rect(7, 8, 2, 6, art.accent);
+  s.disc(8, 6, 4, art.body);
+  s.disc(6, 5, 2, art.dark);
+  for (let i = 0; i < 18; i++) {
+    const x = 3 + Math.floor(rnd() * 10);
+    const y = 1 + Math.floor(rnd() * 9);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, rnd() > 0.5 ? art.dark : art.body);
+  }
+  return s.c;
+}
+
+/** Gốc cây còn lại sau khi hạ cây lớn — vẫn chặt tiếp được để lấy nốt gỗ. */
+function makeStump(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.g.fillStyle = P.shadow;
+  s.g.beginPath();
+  s.g.ellipse(8, 14, 5, 2, 0, 0, Math.PI * 2);
+  s.g.fill();
+  s.rect(4, 8, 8, 5, art.body);
+  s.rect(4, 8, 8, 2, art.accent); // mặt cắt sáng hơn
+  s.hline(4, 12, 8, art.dark);
+  // vân gỗ đồng tâm
+  s.rect(6, 9, 4, 1, art.dark);
+  s.px(7, 8, art.dark);
+  s.px(8, 8, art.dark);
+  s.vline(4, 10, 3, art.dark);
+  s.vline(11, 10, 3, art.dark);
+  return s.c;
+}
+
+/** Giếng nước: thành đá tròn, mái che, nước xanh bên trong. */
+function makeWell(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.g.fillStyle = P.shadow;
+  s.g.beginPath();
+  s.g.ellipse(8, 14, 6, 2, 0, 0, Math.PI * 2);
+  s.g.fill();
+  s.rect(2, 8, 12, 6, art.dark); // thành giếng
+  s.rect(3, 9, 10, 4, art.body);
+  s.rect(4, 10, 8, 2, art.accent); // mặt nước
+  s.hline(2, 8, 12, art.body);
+  // cột và mái
+  s.vline(3, 3, 5, P.wood);
+  s.vline(12, 3, 5, P.wood);
+  s.rect(1, 1, 14, 3, P.roof);
+  s.hline(1, 1, 14, P.roofLight);
+  return s.c;
+}
+
+/** Giường — chỉ chỗ này mới ngủ được, không phải cái cửa. */
+function makeBed(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(2, 1, 12, 14, P.woodDark);
+  s.rect(3, 2, 10, 12, art.body); // đệm
+  s.rect(3, 2, 10, 4, "#f2ecdd"); // gối
+  s.rect(3, 7, 10, 7, art.accent); // chăn
+  s.hline(3, 7, 10, art.dark);
+  s.hline(3, 10, 10, art.dark);
+  s.rect(2, 0, 12, 1, P.wood);
+  s.rect(2, 15, 12, 1, P.wood);
+  return s.c;
+}
+
+/** Bàn chế tạo. */
+function makeBench(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.g.fillStyle = P.shadow;
+  s.g.beginPath();
+  s.g.ellipse(8, 14, 6, 2, 0, 0, Math.PI * 2);
+  s.g.fill();
+  s.rect(1, 6, 14, 3, art.body); // mặt bàn
+  s.hline(1, 6, 14, "#b8905e");
+  s.hline(1, 8, 14, art.dark);
+  s.rect(2, 9, 2, 5, art.dark); // chân
+  s.rect(12, 9, 2, 5, art.dark);
+  // dụng cụ trên bàn
+  s.rect(4, 3, 5, 2, art.accent);
+  s.px(3, 4, art.accent);
+  s.rect(10, 2, 2, 4, P.wood);
+  s.rect(9, 2, 4, 2, art.accent);
+  return s.c;
+}
+
+/** Tường trong nhà. */
+function makeWall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 0, TILE, TILE, art.body);
+  for (let y = 0; y < TILE; y += 4) {
+    s.hline(0, y, TILE, art.dark);
+    for (let x = (y / 4) % 2 === 0 ? 0 : 4; x < TILE; x += 8) s.vline(x, y, 4, art.dark);
+  }
+  s.hline(0, 0, TILE, art.accent);
+  return s.c;
+}
+
+/** Cửa ra vào nhìn từ trong phòng. */
+function makeDoorIn(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 0, TILE, TILE, P.roofDark);
+  s.rect(2, 2, 12, 14, art.body);
+  s.rect(3, 3, 10, 6, art.accent);
+  s.vline(8, 3, 12, art.dark);
+  s.hline(2, 9, 12, art.dark);
+  s.px(5, 11, "#f5d76e");
+  return s.c;
+}
+
 /** Nhà tự ghép ô (autotile): mỗi ô nhìn 4 hàng xóm để biết mình là mái, tường
  *  hay góc. Nhờ vậy sửa hình dạng nhà trong farm.ascii là hình tự khớp theo,
  *  không cần vẽ lại gì. */
 export type Neighbors = { up: boolean; down: boolean; left: boolean; right: boolean };
+
+/** Ba màu mà content khai cho mỗi vật thể. Nhờ vậy đổi tông một loại địa hình
+ *  chỉ là sửa props.json, không đụng code. */
+export interface PropArt {
+  body: string;
+  dark: string;
+  accent: string;
+}
 
 function makeHouseTile(n: Neighbors, door: boolean): HTMLCanvasElement {
   const s = surface(TILE, TILE);
@@ -357,6 +510,36 @@ function makeCounter(): HTMLCanvasElement {
   // cân
   s.rect(9, 5, 4, 2, P.metal);
   return s.c;
+}
+
+/**
+ * Vẽ một vật thể theo id. Đây là chỗ DUY NHẤT ánh xạ id trong props.json sang
+ * hình. Id lạ (content mới đẩy qua OTA, core chưa biết vẽ) vẫn ra một hình cọc
+ * dễ nhận, chứ không làm trắng màn hình.
+ */
+function makeProp(id: string, art: PropArt): HTMLCanvasElement {
+  switch (id) {
+    case "tree": return makeTree(art);
+    case "sapling": return makeSapling(art);
+    case "stump": return makeStump(art);
+    case "rock": return makeRock(art);
+    case "bush": return makeBush(art);
+    case "well": return makeWell(art);
+    case "bed": return makeBed(art);
+    case "bench": return makeBench(art);
+    case "wall": return makeWall(art);
+    case "door_in": return makeDoorIn(art);
+    case "shop": return makeShop();
+    case "counter": return makeCounter();
+    default: {
+      const s = surface(TILE, TILE);
+      s.rect(2, 3, 12, 11, art.dark);
+      s.rect(3, 4, 10, 9, art.body);
+      s.rect(7, 6, 2, 4, art.accent);
+      s.rect(7, 11, 2, 2, art.accent);
+      return s.c;
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -680,12 +863,11 @@ export interface Atlas {
   soil: HTMLCanvasElement[];
   soilWet: HTMLCanvasElement[];
   water: HTMLCanvasElement[];
+  wood: HTMLCanvasElement[];
+  voidTile: HTMLCanvasElement;
   tuft: HTMLCanvasElement;
-  tree: HTMLCanvasElement;
-  rock: HTMLCanvasElement;
-  bush: HTMLCanvasElement;
-  shop: HTMLCanvasElement;
-  counter: HTMLCanvasElement;
+  /** Mọi vật thể, dựng theo props.json. Cao 32px nếu prop khai `tall`. */
+  props: Record<string, HTMLCanvasElement>;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   player: Record<PlayerDir, HTMLCanvasElement[]>;
@@ -731,8 +913,58 @@ function makeCropIcon(def: CropDef): HTMLCanvasElement {
   return s.c;
 }
 
-function makeToolIcon(id: string): HTMLCanvasElement {
+/** Vật liệu thô: gỗ, đá, sợi cỏ. */
+function makeMaterialIcon(id: string): HTMLCanvasElement {
   const s = surface(TILE, TILE);
+  if (id === "wood") {
+    // khúc gỗ nhìn nghiêng, thấy mặt cắt
+    s.rect(2, 5, 12, 6, "#8a6440");
+    s.rect(2, 5, 12, 2, "#a37c52");
+    s.hline(2, 10, 12, "#5a3b21");
+    s.rect(1, 5, 3, 6, "#c49a6a");
+    s.rect(2, 6, 1, 4, "#8a6440");
+    s.px(2, 7, "#6b4a2c");
+  } else if (id === "stone") {
+    s.disc(7, 9, 4, "#8a8f98");
+    s.disc(11, 11, 3, "#6b7078");
+    s.disc(6, 7, 2, "#a2a8b1");
+    s.px(4, 9, "#6b7078");
+  } else {
+    // bó sợi cỏ
+    for (let i = 0; i < 5; i++) {
+      const x = 3 + i * 2;
+      s.vline(x, 3 + (i % 2), 10, i % 2 ? "#6aa84f" : "#8ac46a");
+    }
+    s.rect(2, 8, 12, 2, "#c2ad82");
+  }
+  return s.c;
+}
+
+function makeToolIcon(id: string, action: string): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  // Công cụ cùng loại chỉ khác màu đầu (gỗ vs thép), nên thêm bậc nâng cấp mới
+  // chỉ là thêm một dòng trong items.json.
+  const steel = id.endsWith("2");
+  const head = steel ? "#cdd6e0" : "#b8c6d4";
+  const headDark = steel ? "#7c8794" : "#5d7186";
+  if (action === "CHOP") {
+    for (let i = 0; i < 11; i++) s.px(4 + i, 13 - i, P.wood);
+    for (let i = 0; i < 11; i++) s.px(5 + i, 13 - i, P.woodDark);
+    s.rect(10, 1, 5, 5, head);
+    s.rect(10, 1, 2, 5, headDark);
+    s.px(9, 3, headDark);
+    return s.c;
+  }
+  if (action === "MINE") {
+    for (let i = 0; i < 11; i++) s.px(4 + i, 13 - i, P.wood);
+    for (let i = 0; i < 11; i++) s.px(5 + i, 13 - i, P.woodDark);
+    s.rect(9, 2, 6, 2, head);
+    s.px(8, 3, head);
+    s.px(15, 1, head);
+    s.px(8, 1, headDark);
+    s.px(14, 3, headDark);
+    return s.c;
+  }
   if (id === "hoe") {
     for (let i = 0; i < 10; i++) s.px(4 + i, 12 - i, P.wood);
     for (let i = 0; i < 10; i++) s.px(5 + i, 12 - i, P.woodDark);
@@ -740,16 +972,17 @@ function makeToolIcon(id: string): HTMLCanvasElement {
     s.rect(13, 2, 2, 4, P.metal);
     s.hline(11, 2, 4, P.metalDark);
   } else {
-    // bình tưới
-    s.rect(3, 7, 8, 7, P.metal);
-    s.rect(3, 7, 8, 1, "#dbe6f0");
-    s.hline(3, 13, 8, P.metalDark);
-    s.rect(10, 5, 4, 2, P.metal); // vòi
-    s.rect(13, 3, 2, 3, P.metal);
-    s.rect(5, 4, 4, 3, P.metalDark); // quai
-    s.rect(6, 5, 2, 2, "#00000000");
-    s.px(15, 3, "#7fb6ec");
-    s.px(15, 5, "#7fb6ec");
+    // bình tưới — bản lớn thì thân cao hơn
+    const big = id.endsWith("2");
+    const top = big ? 5 : 7;
+    s.rect(3, top, 8, 14 - top, head);
+    s.rect(3, top, 8, 1, "#dbe6f0");
+    s.hline(3, 13, 8, headDark);
+    s.rect(10, top - 2, 4, 2, head); // vòi
+    s.rect(13, top - 4, 2, 3, head);
+    s.rect(5, top - 3, 4, 3, headDark); // quai
+    s.px(15, top - 4, "#7fb6ec");
+    s.px(15, top - 2, "#7fb6ec");
   }
   return s.c;
 }
@@ -757,6 +990,7 @@ function makeToolIcon(id: string): HTMLCanvasElement {
 export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
+  const wood = [0, 1, 2, 3].map(makePlank);
   const soil = [0, 1].map((v) => makeSoil(false, v));
   const soilWet = [0, 1].map((v) => makeSoil(true, v));
   const water = [0, 1, 2, 3].map(makeWater);
@@ -787,9 +1021,21 @@ export function buildAtlas(content: Content): Atlas {
   for (const id of content.buildingOrder)
     buildings[id] = makeBuilding(id, content.buildings[id]!.art);
 
+  // Vật thể dựng theo content: thêm một loại địa hình chỉ là thêm object trong
+  // props.json, không phải đụng vào danh sách nào ở đây.
+  const FALLBACK_ART: PropArt = { body: "#8a8f98", dark: "#4a4f56", accent: "#c8cfdb" };
+  const props: Record<string, HTMLCanvasElement> = {};
+  for (const id of content.propOrder) {
+    // house/door do lớp autotile của ngôi nhà lo, không vẽ riêng
+    if (id === "house" || id === "door") continue;
+    props[id] = makeProp(id, content.props[id]?.art ?? FALLBACK_ART);
+  }
+
   // icon cho UI — dựng sẵn để menu không phải vẽ lại mỗi lần mở
   const icons = new Map<string, HTMLCanvasElement>();
-  for (const id of content.toolOrder) icons.set(`tool:${id}`, makeToolIcon(id));
+  for (const id of content.toolOrder)
+    icons.set(`tool:${id}`, makeToolIcon(id, content.tools[id]?.action ?? "TILL"));
+  for (const id of content.materialOrder) icons.set(`item:${id}`, makeMaterialIcon(id));
   for (const id of content.cropOrder) {
     const def = content.crops[id]!;
     icons.set(`seed:${id}`, makeSeedIcon(def));
@@ -798,13 +1044,10 @@ export function buildAtlas(content: Content): Atlas {
   for (const id of content.buildingOrder) icons.set(`build:${id}`, buildings[id]!);
 
   return {
-    grass, path, soil, soilWet, water,
+    grass, path, soil, soilWet, water, wood,
+    voidTile: makeVoid(),
     tuft: makeTuft(),
-    tree: makeTree(),
-    rock: makeRock(),
-    bush: makeBush(),
-    shop: makeShop(),
-    counter: makeCounter(),
+    props,
     house,
     player,
     crops,

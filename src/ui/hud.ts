@@ -34,6 +34,8 @@ export function itemLabel(id: string, content: Content): string {
       return content.crops[ref]?.name ?? ref;
     case "build":
       return content.buildings[ref]?.name ?? ref;
+    case "item":
+      return content.materials[ref]?.name ?? ref;
     default:
       return id;
   }
@@ -48,6 +50,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <div class="hud-line"><span>Ngày</span><span><span id="hud-day">1</span> · <span class="clock" id="hud-clock">6:00</span></span></div>
         <div class="hud-line"><span>Năng lượng</span><span id="hud-energy">100</span></div>
         <div class="bar" id="hud-bar"><i style="width:100%"></i></div>
+        <div class="hud-line" id="hud-water-line"><span>Nước</span><span id="hud-water">0</span></div>
         <div class="hud-line" id="hud-power-line"><span>Điện</span><span id="hud-power">0</span></div>
       </div>
       <div id="minimap"><canvas></canvas></div>
@@ -70,12 +73,17 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elBarFill = elBar.querySelector("i") as HTMLElement;
   const elPower = $("hud-power");
   const elPowerLine = $("hud-power-line");
+  const elWater = $("hud-water");
+  const elWaterLine = $("hud-water-line");
   const elGoal = $("goal");
   const elHotbar = $("hotbar");
 
   let selectFn: (slot: number) => void = () => {};
   // ghi nhớ giá trị đã vẽ để bỏ qua lần cập nhật không đổi gì
-  const prev = { money: -1, day: -1, clock: "", energy: -1, power: -1, goal: "", hotbar: "" };
+  const prev = {
+    money: -1, day: -1, clock: "", energy: -1, power: -1, water: -1, cap: -1,
+    goal: "", hotbar: "",
+  };
 
   elHotbar.addEventListener("click", (e) => {
     const slot = (e.target as HTMLElement).closest<HTMLElement>(".slot");
@@ -160,6 +168,23 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         elBarFill.style.width = `${Math.max(0, Math.min(100, (energy / max) * 100))}%`;
         const ratio = energy / max;
         elBar.className = `bar${ratio < 0.15 ? " crit" : ratio < 0.35 ? " low" : ""}`;
+      }
+
+      // Nước trong bình: chỉ hiện khi người chơi thật sự có bình tưới, và tô đỏ
+      // khi sắp cạn để họ biết đường ghé giếng trước khi ra ruộng.
+      let cap = 0;
+      for (const slot of s.inv) {
+        if (!slot?.id.startsWith("tool:")) continue;
+        const t = content.tools[slot.id.slice(5)];
+        if (t?.capacity) cap = Math.max(cap, t.capacity);
+      }
+      const water = Math.round(s.water);
+      if (water !== prev.water || cap !== prev.cap) {
+        prev.water = water;
+        prev.cap = cap;
+        elWater.textContent = `${water}/${cap}`;
+        elWater.style.color = cap > 0 && water <= cap * 0.15 ? "var(--red)" : "";
+        elWaterLine.style.display = cap > 0 ? "" : "none";
       }
 
       let power = 0;

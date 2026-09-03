@@ -23,6 +23,7 @@ export type Intent =
   | { t: "shop" }
   | { t: "inventory" }
   | { t: "map" }
+  | { t: "debug" }
   /** Bấm/chạm vào thế giới — toạ độ WORLD px.
    *  `double` = cú chạm thứ hai của một lần chạm kép. Luật điều khiển:
    *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
@@ -129,6 +130,10 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         break;
       case "KeyM":
         push({ t: "map" });
+        break;
+      case "F2":
+        push({ t: "debug" });
+        e.preventDefault();
         break;
       case "Tab":
         push({ t: "selectDelta", d: e.shiftKey ? -1 : 1 });

@@ -110,6 +110,71 @@ Bản build hiện tại ~80KB (29KB gzip), zero dependency runtime.
 Nếu sau này thật sự cần particle/chiến đấu/nhiều scene: bọc Phaser làm **lớp
 view thuần** bên trên model hiện có — model không phải viết lại.
 
+### Địa hình khai thác được
+
+`src/content/props.json` là nguồn sự thật duy nhất cho **mọi vật thể đứng trên ô** — cây gỗ
+lớn/nhỏ, gốc cây, đá, bụi cỏ, giếng, giường, bàn chế tạo, tường, cửa. Trước đây "đặc hay
+không" và "tương tác được gì" nằm rải trong `tiles.json` cộng một `switch` trong renderer;
+giờ gom hết về một chỗ, nên **thêm một loại địa hình = thêm một object JSON**:
+
+```json
+{ "id": "rock", "name": "Tảng đá", "solid": true,
+  "hits": 3, "tool": "MINE",
+  "drops": [{ "id": "item:stone", "min": 2, "max": 4 }],
+  "art": { "body": "#8a8f98", "dark": "#6b7078", "accent": "#a2a8b1" } }
+```
+
+- `hits` + `tool` = khai thác được. Không khai `tool` thì tay không cũng phá (bụi cỏ).
+- `becomes` = phá xong để lại gì — cây lớn để lại **gốc cây**, chặt tiếp mới hết.
+- `tool.power` trong `items.json` = số nhát ăn mỗi lần vung, nên rìu thép đỡ đúng một nửa công.
+- Id lạ (content OTA mới, core chưa biết vẽ) vẫn ra hình mặc định và **coi là đặc** — thà xấu
+  còn hơn để người chơi đi xuyên qua thứ đáng lẽ chặn đường.
+
+`Tile.hp` giữ số nhát còn lại; renderer vẽ vạch vàng trên đầu vật thể đang bị đánh dở, vì
+không có phản hồi đó thì người chơi bổ mấy nhát rồi tưởng vô ích.
+
+### Chế tạo
+
+`recipes.json`. Nguyên liệu có thể là **vật liệu hoặc chính công cụ cũ**, nên nâng cấp công cụ
+chỉ là một công thức ăn cả cái cũ lẫn vật liệu — không cần cơ chế "nâng cấp" riêng. Bàn chế
+tạo là một prop có `interact: "CRAFT"`, đặt trong phòng ngủ.
+
+### Nước có hạn
+
+Bình tưới có `capacity`; mỗi lần tưới tốn một nước. Cạn thì ra **giếng** hoặc bờ ao —
+cả hai đều là `interact: "REFILL"`, một cái khai ở prop, một cái khai ở `tiles.grounds.water`.
+
+### Cửa dịch chuyển & phòng ngủ
+
+Bản đồ **cố định 40×40**, trong đó phần nông trại là 40×30 còn phòng ngủ nằm tách hẳn ở dưới,
+bao quanh bởi nền `void`. Không cần cơ chế nhiều bản đồ: cửa chỉ là prop có
+`interact: "PORTAL"` kèm `portal: {x,y}`.
+
+Reducer **tự tra đích trong content** thay vì nhận toạ độ từ UI, nên không ai dịch chuyển bừa
+tới chỗ tuỳ ý được. Cửa nhà giờ **chỉ để đi vào**; muốn ngủ phải lên **giường** (prop
+`interact: "SLEEP"`). Camera nhảy thay vì trượt khi vị trí nhân vật đổi quá 4 ô.
+
+### Cây lớn theo thời gian
+
+`CropInstance.grow` đếm **phút game** thay cho số ngày. Ô còn ẩm và `minutes <
+daylightEndMinutes` thì mỗi TICK cộng thêm, đủ `growthDays[stage] × growthMinutesPerDay` là
+sang giai đoạn — nên cây lớn dần **trông thấy trong ngày** chứ không nhảy cóc lúc ngủ.
+
+Lúc ngủ, phần ban ngày **còn lại** của hôm đó vẫn được cộng nốt. Thiếu chi tiết này thì ngủ
+sớm bị phạt mất tiến độ, mà người chơi chẳng có cách nào đoán ra.
+
+Cỏ dại lan sang ô cỏ trống kề bên mỗi đêm (`grassSpreadChance`), còn ô đã cày mà bỏ không thì
+dần trở lại thành cỏ (`tilledDecayChance`) — bỏ bê là ruộng hoang.
+
+### Bảng gỡ lỗi
+
+`F2` hoặc `Esc` → *Bảng gỡ lỗi*. Cộng tiền, đầy năng lượng/nước, sang ngày mới, cho cây chín
+hết, tự cày + gieo quanh nhân vật, rắc cỏ, rắc cây, mở khoá tất cả, +50 mỗi vật liệu.
+
+Mọi thao tác gỡ lỗi đi qua **một action `DEBUG` trong reducer**, không phải UI thò tay sửa
+thẳng state — giữ đúng luật "mọi thay đổi qua một cửa", nên nó cũng chịu kiểm bất biến như
+mọi thứ khác.
+
 ### Hiển thị & camera
 
 `src/render/camera.ts` là chỗ **duy nhất** trong dự án biết màn hình to nhỏ ra sao.

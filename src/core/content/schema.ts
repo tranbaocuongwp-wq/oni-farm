@@ -210,17 +210,135 @@ export function validateItems(raw: unknown): string[] {
   const c = new Check("items.json");
   if (!isObj(raw)) return ["items.json: phải là object"];
   const list = c.arr(raw, "tools");
+  if (list)
+    list.forEach((item, i) => {
+      const k = new Check(`tools[${i}]`);
+      if (!isObj(item)) {
+        c.fail(`tools[${i}]`, "phải là object");
+        return;
+      }
+      k.str(item, "id");
+      k.str(item, "name");
+      k.enumStr(item, "action", ["TILL", "WATER", "CHOP", "MINE"] as const);
+      if (item["power"] !== undefined) k.num(item, "power", 1, 10);
+      if (item["capacity"] !== undefined) k.num(item, "capacity", 1, 999);
+      if (item["action"] === "WATER" && item["capacity"] === undefined)
+        k.fail("capacity", "công cụ tưới phải khai sức chứa");
+      c.merge(k);
+    });
+
+  const mats = c.arr(raw, "materials");
+  if (mats)
+    mats.forEach((m, i) => {
+      const k = new Check(`materials[${i}]`);
+      if (!isObj(m)) {
+        c.fail(`materials[${i}]`, "phải là object");
+        return;
+      }
+      k.str(m, "id");
+      k.str(m, "name");
+      k.num(m, "sellPrice", 0);
+      c.merge(k);
+    });
+  return c.errors;
+}
+
+const INTERACTS = ["SLEEP", "SHOP", "SELL", "REFILL", "CRAFT", "PORTAL"] as const;
+const TOOL_ACTIONS = ["TILL", "WATER", "CHOP", "MINE"] as const;
+
+export function validateProps(raw: unknown): string[] {
+  const c = new Check("props.json");
+  if (!isObj(raw)) return ["props.json: phải là object"];
+  const list = c.arr(raw, "props");
   if (!list) return c.errors;
+
+  const seen = new Set<string>();
   list.forEach((item, i) => {
-    const k = new Check(`tools[${i}]`);
+    const k = new Check(`props[${i}]`);
     if (!isObj(item)) {
-      c.fail(`tools[${i}]`, "phải là object");
+      c.fail(`props[${i}]`, "phải là object");
       return;
     }
-    k.str(item, "id");
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
     k.str(item, "name");
-    k.enumStr(item, "action", ["TILL", "WATER"] as const);
-    k.num(item, "energy", 0);
+    if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
+    if (item["tall"] !== undefined && typeof item["tall"] !== "boolean")
+      k.fail("tall", "phải là boolean");
+    if (item["hits"] !== undefined) k.num(item, "hits", 1, 99);
+    if (item["tool"] !== undefined) k.enumStr(item, "tool", TOOL_ACTIONS);
+    if (item["becomes"] !== undefined && !isStr(item["becomes"]))
+      k.fail("becomes", "phải là chuỗi id prop");
+    if (item["interact"] !== undefined) k.enumStr(item, "interact", INTERACTS);
+
+    const drops = item["drops"];
+    if (drops !== undefined) {
+      if (!Array.isArray(drops)) k.fail("drops", "phải là mảng");
+      else
+        drops.forEach((d, j) => {
+          if (!isObj(d)) return k.fail(`drops[${j}]`, "phải là object");
+          if (!isStr(d["id"])) k.fail(`drops[${j}].id`, "phải là chuỗi");
+          const mn = d["min"];
+          const mx = d["max"];
+          if (!isNum(mn) || mn < 0) k.fail(`drops[${j}].min`, "phải là số >= 0");
+          if (!isNum(mx) || (isNum(mn) && mx < mn)) k.fail(`drops[${j}].max`, "phải >= min");
+        });
+      if (item["hits"] === undefined) k.fail("drops", "có drops thì phải có hits");
+    }
+
+    const portal = item["portal"];
+    if (portal !== undefined) {
+      if (!isObj(portal)) k.fail("portal", "phải là object {x,y}");
+      else {
+        if (!isNum(portal["x"]) || !isNum(portal["y"])) k.fail("portal", "x,y phải là số");
+      }
+      if (item["interact"] !== "PORTAL") k.fail("portal", "chỉ có nghĩa khi interact = PORTAL");
+    }
+    if (item["interact"] === "PORTAL" && portal === undefined)
+      k.fail("interact", "PORTAL thì phải khai portal {x,y}");
+
+    const art = k.obj(item, "art");
+    if (art) colors(k, art, ["body", "dark", "accent"], "art");
+    c.merge(k);
+  });
+  return c.errors;
+}
+
+export function validateRecipes(raw: unknown): string[] {
+  const c = new Check("recipes.json");
+  if (!isObj(raw)) return ["recipes.json: phải là object"];
+  const list = c.arr(raw, "recipes");
+  if (!list) return c.errors;
+  const seen = new Set<string>();
+  list.forEach((item, i) => {
+    const k = new Check(`recipes[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`recipes[${i}]`, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    const out = k.obj(item, "out");
+    if (out) {
+      if (!isStr(out["id"])) k.fail("out.id", "phải là chuỗi");
+      if (!isNum(out["n"]) || (out["n"] as number) < 1) k.fail("out.n", "phải là số >= 1");
+    }
+    const ins = k.arr(item, "in");
+    if (ins) {
+      if (!ins.length) k.fail("in", "phải có ít nhất một nguyên liệu");
+      ins.forEach((v, j) => {
+        if (!isObj(v)) return k.fail(`in[${j}]`, "phải là object");
+        if (!isStr(v["id"])) k.fail(`in[${j}].id`, "phải là chuỗi");
+        if (!isNum(v["n"]) || (v["n"] as number) < 1) k.fail(`in[${j}].n`, "phải là số >= 1");
+      });
+    }
     c.merge(k);
   });
   return c.errors;
@@ -247,7 +365,10 @@ export function validateBalance(raw: unknown): string[] {
     c.fail("hotbarSlots", "không được lớn hơn inventorySlots");
 
   const cost = c.obj(raw, "energyCost");
-  if (cost) c.merge(numsIn(cost, ["till", "water", "plant", "harvest", "build"], "energyCost"));
+  if (cost)
+    c.merge(
+      numsIn(cost, ["till", "water", "plant", "harvest", "build", "chop", "mine"], "energyCost"),
+    );
 
   // Ba trường dưới đây được thêm ở core 1.1: cho phép THIẾU để pack cũ đã cache
   // vẫn dùng được (loader sẽ điền giá trị mặc định), nhưng có thì phải hợp lệ.
@@ -267,9 +388,28 @@ export function validateBalance(raw: unknown): string[] {
   return c.errors;
 }
 
+const GROUNDS = ["grass", "path", "water", "wood", "void"] as const;
+
 export function validateTiles(raw: unknown): string[] {
   const c = new Check("tiles.json");
   if (!isObj(raw)) return ["tiles.json: phải là object"];
+
+  const grounds = c.obj(raw, "grounds");
+  if (grounds)
+    for (const [name, v] of Object.entries(grounds)) {
+      if (!(GROUNDS as readonly string[]).includes(name))
+        c.fail(`grounds.${name}`, `nền không có thật (core biết: ${GROUNDS.join(", ")})`);
+      if (!isObj(v)) {
+        c.fail(`grounds.${name}`, "phải là object");
+        continue;
+      }
+      const k = new Check(`grounds.${name}`);
+      if (v["solid"] !== undefined && typeof v["solid"] !== "boolean")
+        k.fail("solid", "phải là boolean");
+      if (v["interact"] !== undefined) k.enumStr(v, "interact", INTERACTS);
+      c.merge(k);
+    }
+
   const legend = c.obj(raw, "legend");
   if (legend) {
     for (const [ch, v] of Object.entries(legend)) {
@@ -279,11 +419,7 @@ export function validateTiles(raw: unknown): string[] {
         continue;
       }
       const k = new Check(`legend.${ch}`);
-      k.enumStr(v, "ground", ["grass", "path", "water"] as const);
-      if (v["solid"] !== undefined && typeof v["solid"] !== "boolean")
-        k.fail("solid", "phải là boolean");
-      if (v["interact"] !== undefined)
-        k.enumStr(v, "interact", ["SLEEP", "SHOP", "SELL"] as const);
+      k.enumStr(v, "ground", GROUNDS);
       c.merge(k);
     }
   }

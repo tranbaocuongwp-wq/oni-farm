@@ -130,7 +130,11 @@ export function createRenderer(
           g.drawImage(atlas.water[waterFrame % atlas.water.length]!, px, py);
           continue;
         }
-        const base = t.g === "path" ? atlas.path : atlas.grass;
+        if (t.g === "void") {
+          g.drawImage(atlas.voidTile, px, py);
+          continue;
+        }
+        const base = t.g === "path" ? atlas.path : t.g === "wood" ? atlas.wood : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
 
         // sàn nhà kính (công trình kind='floor') nằm ĐÈ lên nền
@@ -184,25 +188,34 @@ export function createRenderer(
         const wcx = x * TILE + TILE / 2;
         const wcy = y * TILE;
 
+        // Vật thể vẽ theo props.json: thêm một loại địa hình mới không phải
+        // đụng vào renderer, miễn là atlas biết vẽ id đó (không thì nó vẽ hình
+        // mặc định thay vì bỏ trống).
+        if (t.prop && t.prop !== "house" && t.prop !== "door") {
+          const def = content.props[t.prop];
+          const img = atlas.props[t.prop];
+          if (img) {
+            const oy = def?.tall ? py - TILE : py;
+            items.push({ base, run: () => g.drawImage(img, px, oy) });
+            // Vật thể đang bị đánh dở: hiện số nhát còn lại ngay trên đầu nó.
+            // Không có phản hồi này thì người chơi bổ mấy nhát mà tưởng vô ích.
+            const full = def?.hits ?? 0;
+            if (full > 1 && t.hp > 0 && t.hp < full) {
+              const hp = t.hp;
+              items.push({
+                base: base + 0.5,
+                run: () => drawHits(px, oy, hp, full),
+              });
+            }
+          }
+          if (def?.interact === "SHOP") lights.push({ wx: wcx, wy: wcy + 6, r: 26, strength: 0.7 });
+          else if (def?.interact === "SELL") lights.push({ wx: wcx, wy: wcy + 4, r: 24, strength: 0.6 });
+          else if (def?.interact === "CRAFT") lights.push({ wx: wcx, wy: wcy + 6, r: 20, strength: 0.5 });
+          else if (def?.interact === "PORTAL") lights.push({ wx: wcx, wy: wcy + 8, r: 30, strength: 0.8 });
+          else if (def?.interact === "REFILL") lights.push({ wx: wcx, wy: wcy + 8, r: 18, strength: 0.4 });
+        }
+
         switch (t.prop) {
-          case "tree":
-            // cây cao 2 ô: vẽ tràn lên ô phía trên
-            items.push({ base, run: () => g.drawImage(atlas.tree, px, py - TILE) });
-            break;
-          case "rock":
-            items.push({ base, run: () => g.drawImage(atlas.rock, px, py) });
-            break;
-          case "bush":
-            items.push({ base, run: () => g.drawImage(atlas.bush, px, py) });
-            break;
-          case "shop":
-            items.push({ base, run: () => g.drawImage(atlas.shop, px, py) });
-            lights.push({ wx: wcx, wy: wcy + 6, r: 26, strength: 0.7 });
-            break;
-          case "counter":
-            items.push({ base, run: () => g.drawImage(atlas.counter, px, py) });
-            lights.push({ wx: wcx, wy: wcy + 4, r: 24, strength: 0.6 });
-            break;
           case "house":
           case "door": {
             const key = houseVariantKey(
@@ -241,6 +254,19 @@ export function createRenderer(
           if (img) items.push({ base, run: () => g.drawImage(img, px, py + TILE - CROP_H) });
         }
       }
+    }
+  }
+
+  /** Vạch nhát còn lại trên đầu vật thể đang bị chặt/đập dở. */
+  function drawHits(px: number, py: number, hp: number, full: number) {
+    const w = full * 2 - 1;
+    const x0 = px + Math.round((TILE - w) / 2);
+    const y0 = py - 3;
+    g.fillStyle = "rgba(0,0,0,0.6)";
+    g.fillRect(x0 - 1, y0 - 1, w + 2, 3);
+    for (let i = 0; i < full; i++) {
+      g.fillStyle = i < hp ? "#f5c542" : "#5a4632";
+      g.fillRect(x0 + i * 2, y0, 1, 1);
     }
   }
 

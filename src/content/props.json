@@ -1,0 +1,211 @@
+{
+  "$comment": "LÀN NHANH — mọi vật thể đứng trên ô. Trước đây tính đặc/tương tác nằm rải trong tiles.json và code; giờ gom hết về đây. Thêm một loại địa hình mới = thêm một object, không sửa code (miễn là art/atlas.ts biết vẽ id đó, không thì nó vẽ hình mặc định).\n\nhits/tool/drops = khai thác được. becomes = sau khi phá thì để lại gì (cây lớn để lại gốc). interact = tương tác bằng phím E. portal = cửa dịch chuyển.",
+  "props": [
+    {
+      "id": "tree",
+      "name": "Cây gỗ lớn",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#2f6b33",
+        "dark": "#245227",
+        "accent": "#5a3d24"
+      }
+    },
+    {
+      "id": "sapling",
+      "name": "Cây gỗ nhỏ",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "art": {
+        "body": "#3d8a3f",
+        "dark": "#2b6b2e",
+        "accent": "#5a3d24"
+      }
+    },
+    {
+      "id": "stump",
+      "name": "Gốc cây",
+      "solid": true,
+      "hits": 3,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#6b4a2c",
+        "dark": "#402b19",
+        "accent": "#8a6440"
+      }
+    },
+    {
+      "id": "rock",
+      "name": "Tảng đá",
+      "solid": true,
+      "hits": 3,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 2,
+          "max": 4
+        }
+      ],
+      "art": {
+        "body": "#8a8f98",
+        "dark": "#6b7078",
+        "accent": "#a2a8b1"
+      }
+    },
+    {
+      "id": "bush",
+      "name": "Bụi cỏ dại",
+      "solid": true,
+      "hits": 1,
+      "drops": [
+        {
+          "id": "item:fiber",
+          "min": 2,
+          "max": 3
+        },
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "art": {
+        "body": "#3f7a3a",
+        "dark": "#2e5c2b",
+        "accent": "#4f9647"
+      }
+    },
+    {
+      "id": "well",
+      "name": "Giếng nước",
+      "solid": true,
+      "interact": "REFILL",
+      "art": {
+        "body": "#8a8f98",
+        "dark": "#5a5f66",
+        "accent": "#3b81d8"
+      }
+    },
+    {
+      "id": "house",
+      "name": "Nhà",
+      "solid": true,
+      "art": {
+        "body": "#e5e9f0",
+        "dark": "#3b4252",
+        "accent": "#5e81ac"
+      }
+    },
+    {
+      "id": "door",
+      "name": "Cửa nhà",
+      "solid": true,
+      "interact": "PORTAL",
+      "portal": {
+        "x": 6,
+        "y": 37
+      },
+      "art": {
+        "body": "#5e81ac",
+        "dark": "#2b313d",
+        "accent": "#88c0d0"
+      }
+    },
+    {
+      "id": "shop",
+      "name": "Máy bán hạt giống",
+      "solid": true,
+      "interact": "SHOP",
+      "art": {
+        "body": "#b8c6d4",
+        "dark": "#5d7186",
+        "accent": "#6cc94f"
+      }
+    },
+    {
+      "id": "counter",
+      "name": "Quầy thu mua",
+      "solid": true,
+      "interact": "SELL",
+      "art": {
+        "body": "#7a5230",
+        "dark": "#5a3b21",
+        "accent": "#4ade80"
+      }
+    },
+    {
+      "id": "wall",
+      "name": "Tường",
+      "solid": true,
+      "art": {
+        "body": "#6b5540",
+        "dark": "#3a2c20",
+        "accent": "#8a6f52"
+      }
+    },
+    {
+      "id": "bed",
+      "name": "Giường",
+      "solid": true,
+      "interact": "SLEEP",
+      "art": {
+        "body": "#d9c9a3",
+        "dark": "#8a4a3a",
+        "accent": "#c25b48"
+      }
+    },
+    {
+      "id": "bench",
+      "name": "Bàn chế tạo",
+      "solid": true,
+      "interact": "CRAFT",
+      "art": {
+        "body": "#8a6440",
+        "dark": "#5a3b21",
+        "accent": "#b8c6d4"
+      }
+    },
+    {
+      "id": "door_in",
+      "name": "Cửa ra",
+      "solid": true,
+      "interact": "PORTAL",
+      "portal": {
+        "x": 16,
+        "y": 4
+      },
+      "art": {
+        "body": "#5e81ac",
+        "dark": "#2b313d",
+        "accent": "#88c0d0"
+      }
+    }
+  ]
+}

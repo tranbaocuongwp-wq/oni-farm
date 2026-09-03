@@ -12,7 +12,8 @@ import { buildContent } from "../src/core/content/loader.ts";
 import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
-import { TILE, tileAt, idx } from "../src/game/world.ts";
+import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
+import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -108,6 +109,25 @@ function selectItem(store, id) {
 /** Thao tác rồi CHỜ HẾT KHOÁ. Từ core 1.1 mỗi thao tác khoá `balance.actionSeconds`
  *  để việc diễn ra tuần tự, nên muốn làm việc kế tiếp thì phải để thời gian trôi —
  *  y như người chơi thật phải chờ vung xong nhát cuốc. */
+
+/** Tổng tiến độ tăng trưởng của một ô, tính bằng PHÚT.
+ *
+ *  `crop.grow` chỉ là phần dư của giai đoạn hiện tại — vượt một giai đoạn là nó
+ *  bị trừ đi ngưỡng. So thẳng `grow` giữa hai lần đo chỉ đúng khi chắc chắn
+ *  không có giai đoạn nào bị vượt qua, mà điều đó phụ thuộc vào con số cân bằng.
+ *  Cộng lại các giai đoạn đã qua thì phép đo đúng với mọi cấu hình. */
+function totalGrow(store, x, y) {
+  const t = tile(store, x, y);
+  if (!t.crop) return 0;
+  const def = content.crops[t.crop.id];
+  const per = BAL.growthMinutesPerDay;
+  let sum = t.crop.grow;
+  for (let i = 0; i < t.crop.stage && i < def.growthDays.length; i++) {
+    sum += Math.max(1, def.growthDays[i] * per);
+  }
+  return sum;
+}
+
 function use(store, x, y) {
   store.dispatch({ t: "USE", x, y });
   clearBusy(store);
@@ -123,6 +143,63 @@ function clearBusy(store) {
 }
 function sleep(store) {
   store.dispatch({ t: "SLEEP" });
+}
+
+/** Đổ đầy bình bằng bảng gỡ lỗi — các test dài không phải chạy ra giếng mỗi ngày. */
+function topUpWater(store) {
+  store.dispatch({ t: "DEBUG", op: "water" });
+}
+
+/** Số phút BAN NGÀY một đêm ngủ đúng giờ cộng cho cây: từ lúc dậy tới lúc trời tối. */
+const DAYLIGHT_PER_DAY = BAL.daylightEndMinutes - BAL.dayStartMinutes;
+
+/** Số đêm (ngủ ngay lúc dậy, có tưới) để cây đi hết `days` "ngày lớn". */
+function nightsFor(days) {
+  return Math.ceil((days * BAL.growthMinutesPerDay) / DAYLIGHT_PER_DAY);
+}
+
+/** Tưới rồi ngủ cho tới khi cây ở ô này chín. Trả về số đêm đã qua. */
+function ripen(store, x, y, cap = 40) {
+  let nights = 0;
+  while (nights < cap) {
+    const t = tile(store, x, y);
+    const def = t && t.crop ? content.crops[t.crop.id] : null;
+    if (!def || t.crop.stage >= def.growthDays.length) break;
+    topUpWater(store);
+    selectItem(store, "tool:can");
+    use(store, x, y);
+    sleep(store);
+    nights++;
+  }
+  return nights;
+}
+
+/** Đặt một vật thể (cây/đá/bụi) lên ô, kèm đúng máu của nó. */
+function putProp(s, x, y, id) {
+  const def = content.props[id];
+  setTile(s, x, y, {
+    prop: id,
+    hp: def && def.hits ? def.hits : 0,
+    tilled: false,
+    wet: false,
+    crop: null,
+    b: null,
+  });
+}
+
+/** Nhét một vật phẩm vào ô hotbar còn trống. */
+function giveItem(store, id, n = 1) {
+  setState(store, (s) => {
+    const at = s.inv.findIndex((v, i) => i >= 2 && i < BAL.hotbarSlots && (v === null || v === undefined));
+    ok(at >= 0, "hết ô hotbar trống để đặt " + id);
+    s.inv[at] = { id, n };
+  });
+}
+
+function countInv(store, id) {
+  let n = 0;
+  for (const v of store.getState().inv) if (v && v.id === id) n += v.n;
+  return n;
 }
 
 function unlockAll(store) {
@@ -165,7 +242,7 @@ const PLOTS = [
 /* 1. Vòng lặp lõi                                                            */
 /* ========================================================================== */
 
-test("1. vòng lặp lõi: cày → gieo → tưới → 3 đêm → thu hoạch → bán", () => {
+test("1. vòng lặp lõi: cày → gieo → tưới → lớn theo thời gian → thu hoạch → bán", () => {
   const store = mkStore();
   walkTo(store, HOME.x, HOME.y);
   const plot = PLOTS[1];
@@ -182,12 +259,16 @@ test("1. vòng lặp lõi: cày → gieo → tưới → 3 đêm → thu hoạch
   eq(store.getState().inv.find((v) => v && v.id === "seed:lettuce").n, seedsBefore - 1, "trừ hạt");
 
   const def = content.crops.lettuce;
-  for (let n = 0; n < def.growthDays.length; n++) {
-    selectItem(store, "tool:can");
-    use(store, plot.x, plot.y);
-    ok(tile(store, plot.x, plot.y).wet, "ô phải ướt sau khi tưới");
-    sleep(store);
-  }
+  selectItem(store, "tool:can");
+  const water0 = store.getState().water;
+  use(store, plot.x, plot.y);
+  ok(tile(store, plot.x, plot.y).wet, "ô phải ướt sau khi tưới");
+  eq(store.getState().water, water0 - 1, "tưới một ô tốn đúng 1 nước");
+  sleep(store);
+
+  const nights = 1 + ripen(store, plot.x, plot.y);
+  const want = nightsFor(def.growthDays.reduce((a, b) => a + b, 0));
+  eq(nights, want, "số đêm cần để chín = tổng growthDays quy ra phút ban ngày");
   eq(tile(store, plot.x, plot.y).crop.stage, def.growthDays.length, "cây phải chín");
 
   const moneyBefore = store.getState().money;
@@ -219,7 +300,7 @@ test("2. gieo rồi ngủ 5 đêm mà không tưới → stage vẫn 0", () => {
   use(store, plot.x, plot.y);
   for (let i = 0; i < 5; i++) sleep(store);
   eq(tile(store, plot.x, plot.y).crop.stage, 0, "stage");
-  eq(tile(store, plot.x, plot.y).crop.days, 0, "days");
+  eq(tile(store, plot.x, plot.y).crop.grow, 0, "grow (phút) vẫn 0 vì ô khô");
   eq(store.getState().day, 6, "đã qua 5 đêm");
 });
 
@@ -246,13 +327,32 @@ test("3. vòi tưới: ngủ dậy 4 ô kề đều ướt và cây lớn dù kh
   eq(tile(store, PLOTS[4].x, PLOTS[4].y).b, "sprinkler", "vòi tưới đã đặt");
   eq(store.getState().stats.built.sprinkler, 1, "stats.built.sprinkler");
 
+  // Mỗi lần vung khoá `actionSeconds` nên trong ngày đã trôi mất một ít thời
+  // gian: phần ban ngày còn lại được cộng cho cây đúng bằng chỗ chưa dùng.
+  const sleptAt = store.getState().minutes;
   sleep(store);
   const c = PLOTS[4];
   for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
     ok(tile(store, c.x + dx, c.y + dy).wet, `ô kề (${c.x + dx},${c.y + dy}) phải ướt`);
   }
-  eq(tile(store, PLOTS[3].x, PLOTS[3].y).crop.stage, 1, "cây trên ô được vòi tưới đã lớn");
-  eq(tile(store, PLOTS[5].x, PLOTS[5].y).crop.stage, 1, "cây thứ hai cũng lớn");
+  const grew = totalGrow(store, PLOTS[3].x, PLOTS[3].y);
+  eq(
+    grew,
+    BAL.daylightEndMinutes - sleptAt,
+    "một đêm dưới vòi tưới = trọn phần ban ngày còn lại của hôm đó",
+  );
+  sleep(store);
+  // Điều cần chứng minh là VÒI TƯỚI làm cây lớn mà không phải tưới tay — chứ
+  // không phải "đúng 1 giai đoạn sau 2 đêm". Gắn cứng con số giai đoạn ở đây là
+  // gắn cứng vào balance.json, chỉnh nhịp game một cái là test đỏ oan.
+  ok(
+    tile(store, PLOTS[3].x, PLOTS[3].y).crop.stage >= 1,
+    `cây trên ô được vòi tưới đã lớn (stage ${tile(store, PLOTS[3].x, PLOTS[3].y).crop.stage})`,
+  );
+  ok(
+    tile(store, PLOTS[5].x, PLOTS[5].y).crop.stage >= 1,
+    `cây thứ hai cũng lớn (stage ${tile(store, PLOTS[5].x, PLOTS[5].y).crop.stage})`,
+  );
 
   // ô ngoài bán kính thì khô như thường
   ok(!tile(store, c.x - 2, c.y).wet, "ô ngoài bán kính vẫn khô");
@@ -300,7 +400,7 @@ function droneScenario(store, { solar, drones }) {
       setTile(s, blk.x + dx, blk.y + dy, {
         tilled: true,
         wet: false,
-        crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, days: 0, regrown: false },
+        crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false },
       });
     }
     for (let i = 0; i < drones; i++) setTile(s, cx + (i === 0 ? 0 : 1), cy, { b: "drone" });
@@ -379,7 +479,7 @@ test("6. mốc mở khoá bắn đúng thứ tự, hàng chưa mở khoá không
     for (const p of PLOTS) {
       setTile(s, p.x, p.y, {
         tilled: true,
-        crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, days: 0, regrown: false },
+        crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false },
       });
     }
   });
@@ -505,6 +605,7 @@ const SCRIPT = [
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
+  { t: "DEBUG", op: "growAll" },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 15, y: 7 },
@@ -549,11 +650,11 @@ test("10. content gỡ 'pumpkin' → migrateForContent không ném lỗi, cây b
   setState(store, (s) => {
     setTile(s, PLOTS[0].x, PLOTS[0].y, {
       tilled: true,
-      crop: { id: "pumpkin", stage: 2, days: 1, regrown: false },
+      crop: { id: "pumpkin", stage: 2, grow: 600, regrown: false },
     });
     setTile(s, PLOTS[1].x, PLOTS[1].y, {
       tilled: true,
-      crop: { id: "lettuce", stage: 1, days: 0, regrown: false },
+      crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
     });
     s.inv[5] = { id: "seed:pumpkin", n: 3 };
     s.inv[6] = { id: "crop:pumpkin", n: 2 };
@@ -603,6 +704,14 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
   const FARM = [PLOTS[0], PLOTS[1], PLOTS[2], PLOTS[5]]; // 3 và 4 để dành cho công trình
 
   for (let day = 1; day <= 30; day++) {
+    topUpWater(store);
+
+    // cỏ dại mọc đêm qua có thể lấn vào ruộng — dọn trước đã (tay không cũng phá được)
+    for (const p of [...FARM, PLOTS[3], PLOTS[4]]) {
+      let guard = 0;
+      while (tile(store, p.x, p.y).prop !== null && guard++ < 4) use(store, p.x, p.y);
+    }
+
     // thu hoạch mọi cây chín trong tầm với
     for (const p of FARM) {
       const t = tile(store, p.x, p.y);
@@ -718,7 +827,7 @@ test("14. cà chua mọc lại: thu xong lùi về giai đoạn cần đúng reg
     setTile(s, p.x, p.y, {
       tilled: true,
       wet: false,
-      crop: { id: "tomato", stage: def.growthDays.length, days: 0, regrown: false },
+      crop: { id: "tomato", stage: def.growthDays.length, grow: 0, regrown: false },
     });
   });
   use(store, p.x, p.y);
@@ -726,29 +835,64 @@ test("14. cà chua mọc lại: thu xong lùi về giai đoạn cần đúng reg
   ok(c !== null, "cà chua không biến mất sau khi thu");
   eq(c.regrown, true, "đánh dấu regrown");
 
-  // đếm số ngày (có tưới) cần để chín lại
-  let days = 0;
-  while (tile(store, p.x, p.y).crop.stage < def.growthDays.length && days < 20) {
-    selectItem(store, "tool:can");
-    use(store, p.x, p.y);
-    sleep(store);
-    days++;
-  }
-  eq(days, def.regrowDays, "chín lại đúng sau regrowDays ngày");
+  // đếm số đêm (có tưới) cần để chín lại — regrowDays là "ngày lớn", quy ra
+  // phút rồi chia cho phần ban ngày mỗi hôm mới ra số đêm thật sự phải ngủ
+  const nights = ripen(store, p.x, p.y);
+  eq(nights, nightsFor(def.regrowDays), "chín lại đúng sau regrowDays 'ngày lớn'");
 });
 
-test("15. INTERACT ở cửa nhà = ngủ; ở cửa hàng/quầy thì state không đổi", () => {
+test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CHUYỂN, giường mới ngủ", () => {
   const store = mkStore();
-  const before = store.getState();
+
+  // --- SHOP / SELL: UI tự mở modal, reducer không đụng state ---
+  walkTo(store, 12, 5);
+  let before = store.getState();
   store.dispatch({ t: "INTERACT", x: 11, y: 5 }); // 'S' — cửa hàng
   eq(store.getState(), before, "INTERACT SHOP không đổi state");
+
+  walkTo(store, 22, 6);
+  before = store.getState();
   store.dispatch({ t: "INTERACT", x: 22, y: 5 }); // 'B' — quầy thu mua
   eq(store.getState(), before, "INTERACT SELL không đổi state");
-  const day0 = store.getState().day;
-  store.dispatch({ t: "INTERACT", x: 16, y: 3 }); // 'D' — cửa nhà
-  eq(store.getState().day, day0 + 1, "INTERACT cửa nhà = ngủ");
-});
 
+  // --- cửa nhà = PORTAL, KHÔNG còn là ngủ ---
+  walkTo(store, 16, 4);
+  const day0 = store.getState().day;
+  const door = portalAt(store.getState(), content, 16, 3);
+  ok(door && door.x === 6 && door.y === 37, "props.json khai cửa nhà dẫn vào phòng ngủ");
+
+  store.dispatch({ t: "INTERACT", x: 16, y: 3 }); // 'D' — cửa nhà
+  eq(store.getState().day, day0, "cửa nhà KHÔNG còn là chỗ ngủ nữa");
+  const p1 = store.getState().player;
+  eq(Math.floor(p1.x / TILE), door.x, "đã dịch chuyển đúng cột");
+  eq(Math.floor(p1.y / TILE), door.y, "đã dịch chuyển đúng hàng");
+  ok(!isSolid(store.getState(), content, door.x, door.y), "ô đích không được đặc");
+  eq(p1.moving, false, "dịch chuyển xong thì đứng yên");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau dịch chuyển");
+
+  // --- giường mới ngủ được ---
+  walkTo(store, 4, 34);
+  store.dispatch({ t: "INTERACT", x: 4, y: 33 }); // 'E' — giường
+  eq(store.getState().day, day0 + 1, "giường = ngủ");
+
+  // --- cửa trong nhà đưa ra ngoài ---
+  walkTo(store, 6, 37);
+  store.dispatch({ t: "PORTAL", x: 6, y: 38 }); // 'd' — cửa ra
+  const p2 = store.getState().player;
+  eq(Math.floor(p2.x / TILE), 16, "ra ngoài đúng cột");
+  eq(Math.floor(p2.y / TILE), 4, "ra ngoài đúng hàng");
+
+  // --- PORTAL vào ô không phải cửa thì không làm gì ---
+  before = store.getState();
+  store.dispatch({ t: "PORTAL", x: 16, y: 5 });
+  eq(store.getState(), before, "PORTAL vào ô thường trả về ĐÚNG state cũ");
+
+  // --- và không dịch chuyển được từ xa ---
+  walkTo(store, 16, 8);
+  before = store.getState();
+  store.dispatch({ t: "PORTAL", x: 16, y: 3 });
+  eq(store.getState(), before, "PORTAL ngoài tầm với: không làm gì");
+});
 
 /* ========================================================================== */
 /* 17. Thao tác TUẦN TỰ — bấm loạn không làm được nhanh hơn                    */
@@ -848,6 +992,15 @@ test("16. reduce THUẦN: không action nào sửa state cũ tại chỗ", () =>
     { t: "USE", x: 15, y: 8 },
     { t: "SELL_ALL" },
     { t: "BUY", id: "seed:lettuce", n: 2 },
+    { t: "DEBUG", op: "money", n: 50 },
+    { t: "DEBUG", op: "materials" },
+    { t: "DEBUG", op: "addGrass" },
+    { t: "DEBUG", op: "water" },
+    { t: "REFILL" },
+    { t: "PORTAL", x: 16, y: 3 },
+    { t: "CRAFT", id: "axe" },
+    { t: "INTERACT", x: 15, y: 8 },
+    { t: "DEBUG", op: "skipDay" },
     { t: "LOG_SEEN", upTo: 3 },
   ];
   for (const a of script) {
@@ -857,6 +1010,553 @@ test("16. reduce THUẦN: không action nào sửa state cũ tại chỗ", () =>
     deepEq(JSON.parse(JSON.stringify(before)), JSON.parse(frozenJson), `action ${a.t} đã sửa state cũ tại chỗ`);
     if (after !== before) ok(after.tiles !== before.tiles || after === after, "state mới là object khác");
   }
+});
+
+/* ========================================================================== */
+/* 19-22. Chặt cây, đập đá, phá bụi                                           */
+/* ========================================================================== */
+
+test("19. chặt cây lớn: đủ nhát → gốc cây → chặt tiếp → biến mất, gỗ vào túi", () => {
+  const store = mkStore(101);
+  walkTo(store, HOME.x, HOME.y);
+  const p = PLOTS[1];
+  setState(store, (s) => putProp(s, p.x, p.y, "tree"));
+  giveItem(store, "tool:axe");
+  selectItem(store, "tool:axe");
+
+  const tree = content.props.tree;
+  const stump = content.props.stump;
+  eq(canUseAt(store.getState(), content, p.x, p.y), "chop", "cầm rìu đứng cạnh cây = chặt được");
+  eq(tile(store, p.x, p.y).hp, tree.hits, "cây bắt đầu với đủ máu");
+
+  for (let i = 1; i < tree.hits; i++) {
+    use(store, p.x, p.y);
+    eq(tile(store, p.x, p.y).prop, "tree", `nhát ${i}: cây vẫn đứng`);
+    eq(tile(store, p.x, p.y).hp, tree.hits - i, `nhát ${i}: trừ đúng 1 máu`);
+  }
+  use(store, p.x, p.y);
+  eq(tile(store, p.x, p.y).prop, "stump", "hết máu thì thành gốc cây");
+  eq(tile(store, p.x, p.y).hp, stump.hits, "gốc cây có máu riêng của nó");
+  const wood1 = countInv(store, "item:wood");
+  ok(
+    wood1 >= tree.drops[0].min && wood1 <= tree.drops[0].max,
+    `gỗ rơi ra nằm trong [${tree.drops[0].min},${tree.drops[0].max}], nhận ${wood1}`,
+  );
+
+  for (let i = 0; i < stump.hits; i++) use(store, p.x, p.y);
+  eq(tile(store, p.x, p.y).prop, null, "chặt nốt gốc thì ô sạch");
+  eq(tile(store, p.x, p.y).hp, 0, "ô sạch thì hp về 0");
+  const wood2 = countInv(store, "item:wood");
+  ok(
+    wood2 - wood1 >= stump.drops[0].min && wood2 - wood1 <= stump.drops[0].max,
+    `gốc cây cho thêm gỗ trong [${stump.drops[0].min},${stump.drops[0].max}], nhận ${wood2 - wood1}`,
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi chặt");
+});
+
+test("20. cầm sai công cụ thì không ăn nhát nào", () => {
+  const store = mkStore(102);
+  walkTo(store, HOME.x, HOME.y);
+  const p = PLOTS[1];
+  setState(store, (s) => putProp(s, p.x, p.y, "rock"));
+  giveItem(store, "tool:axe");
+  selectItem(store, "tool:axe");
+
+  eq(canUseAt(store.getState(), content, p.x, p.y), null, "rìu không đập được đá");
+  const e0 = store.getState().energy;
+  use(store, p.x, p.y);
+  eq(tile(store, p.x, p.y).hp, content.props.rock.hits, "đá không mất máu nào");
+  eq(store.getState().energy, e0, "cầm sai công cụ thì không tốn năng lượng");
+  eq(store.getState().busy, 0, "và cũng không bị khoá thao tác");
+  ok(
+    store.getState().log.some((l) => l.text.startsWith("Cần ")),
+    "phải có toast nhắc cầm đúng công cụ",
+  );
+
+  // ngược lại: cuốc chim không chặt được cây
+  const q = PLOTS[4];
+  setState(store, (s) => putProp(s, q.x, q.y, "tree"));
+  giveItem(store, "tool:pickaxe");
+  selectItem(store, "tool:pickaxe");
+  use(store, q.x, q.y);
+  eq(tile(store, q.x, q.y).hp, content.props.tree.hits, "cuốc chim không chặt được cây");
+});
+
+test("21. rìu thép (power 2) tốn ít nhát hơn rìu gỗ", () => {
+  const swings = (toolId) => {
+    const store = mkStore(103);
+    walkTo(store, HOME.x, HOME.y);
+    const p = PLOTS[1];
+    setState(store, (s) => putProp(s, p.x, p.y, "tree"));
+    giveItem(store, toolId);
+    selectItem(store, toolId);
+    let n = 0;
+    while (tile(store, p.x, p.y).prop === "tree" && n < 20) {
+      use(store, p.x, p.y);
+      n++;
+    }
+    return n;
+  };
+  const wood = swings("tool:axe");
+  const steel = swings("tool:axe2");
+  eq(wood, content.props.tree.hits, "rìu gỗ bổ 1 máu mỗi nhát");
+  eq(steel, Math.ceil(content.props.tree.hits / content.tools.axe2.power), "rìu thép bổ 2 máu mỗi nhát");
+  ok(steel < wood, `rìu thép phải đỡ công hơn: ${steel} < ${wood}`);
+});
+
+test("22. đập đá ra đá; bụi cỏ phá được bằng tay không; ô dọn xong đi qua được", () => {
+  const store = mkStore(104);
+  walkTo(store, HOME.x, HOME.y);
+  const rockAt = PLOTS[1];
+  const bushAt = PLOTS[4];
+  setState(store, (s) => {
+    putProp(s, rockAt.x, rockAt.y, "rock");
+    putProp(s, bushAt.x, bushAt.y, "bush");
+  });
+
+  // --- đá: cần cuốc chim ---
+  giveItem(store, "tool:pickaxe");
+  selectItem(store, "tool:pickaxe");
+  eq(canUseAt(store.getState(), content, rockAt.x, rockAt.y), "mine", "cuốc chim + đá = đập");
+  for (let i = 0; i < content.props.rock.hits; i++) use(store, rockAt.x, rockAt.y);
+  eq(tile(store, rockAt.x, rockAt.y).prop, null, "đá vỡ hẳn");
+  const stone = countInv(store, "item:stone");
+  ok(stone >= content.props.rock.drops[0].min, `đập đá phải ra đá, nhận ${stone}`);
+
+  // --- bụi cỏ: tay không ---
+  const empty = store.getState().inv.findIndex((v, i) => i < BAL.hotbarSlots && !v);
+  ok(empty >= 0, "cần một ô hotbar trống để thử tay không");
+  store.dispatch({ t: "SELECT", slot: empty }); // ô trống = tay không
+  eq(canUseAt(store.getState(), content, bushAt.x, bushAt.y), "chop", "tay không vẫn phá được bụi cỏ");
+  ok(isSolid(store.getState(), content, bushAt.x, bushAt.y), "bụi cỏ chặn đường trước khi phá");
+  use(store, bushAt.x, bushAt.y);
+  eq(tile(store, bushAt.x, bushAt.y).prop, null, "bụi cỏ biến mất sau một nhát tay không");
+  ok(countInv(store, "item:fiber") > 0, "bụi cỏ cho sợi cỏ");
+
+  // --- ô vừa dọn đi qua được ngay ---
+  ok(!isSolid(store.getState(), content, bushAt.x, bushAt.y), "ô vừa dọn không còn đặc");
+  ok(!isSolid(store.getState(), content, rockAt.x, rockAt.y), "ô đá vỡ cũng thế");
+  walkTo(store, bushAt.x, bushAt.y);
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi đi vào ô vừa dọn");
+});
+
+/* ========================================================================== */
+/* 23. Nước có hạn                                                            */
+/* ========================================================================== */
+
+test("23. hết nước không tưới được; múc đầy ở giếng và ở bờ ao", () => {
+  const store = mkStore(105);
+  walkTo(store, HOME.x, HOME.y);
+  eq(store.getState().water, BAL.startWater, "game mới có đúng balance.startWater");
+  eq(waterCapacity(store.getState(), content), content.tools.can.capacity, "sức chứa của bình đang có");
+
+  const p = PLOTS[1];
+  selectItem(store, "tool:hoe");
+  use(store, p.x, p.y);
+
+  setState(store, (s) => {
+    s.water = 0;
+  });
+  selectItem(store, "tool:can");
+  eq(canUseAt(store.getState(), content, p.x, p.y), null, "bình cạn thì UI không mời tưới nữa");
+  const e0 = store.getState().energy;
+  use(store, p.x, p.y);
+  ok(!tile(store, p.x, p.y).wet, "hết nước thì không tưới được");
+  eq(store.getState().energy, e0, "và cũng không tốn năng lượng");
+  ok(store.getState().log.some((l) => l.text === "Bình hết nước rồi."), "phải có toast báo hết nước");
+
+  // đứng giữa ruộng thì không múc được
+  store.dispatch({ t: "REFILL" });
+  eq(store.getState().water, 0, "xa nước thì không múc được");
+
+  // --- giếng ---
+  walkTo(store, 10, 8); // ô kề giếng 'G' ở (9,8)
+  store.dispatch({ t: "REFILL" });
+  eq(store.getState().water, content.tools.can.capacity, "múc ở giếng thì đầy bình");
+  eq(store.dispatch({ t: "REFILL" }), store.getState(), "bình đã đầy: REFILL trả về ĐÚNG state cũ");
+
+  // --- bờ ao ---
+  setState(store, (s) => {
+    s.water = 3;
+  });
+  walkTo(store, 3, 7); // ô cỏ ngay dưới mặt nước
+  store.dispatch({ t: "REFILL" });
+  eq(store.getState().water, content.tools.can.capacity, "múc ở bờ ao cũng đầy bình");
+
+  // tưới lại được, và trừ đúng một nước
+  walkTo(store, 10, 7); // vòng lên hàng 7: giếng ở (9,8) chặn ngang hàng 8
+  walkTo(store, HOME.x, HOME.y);
+  const w0 = store.getState().water;
+  selectItem(store, "tool:can");
+  use(store, p.x, p.y);
+  ok(tile(store, p.x, p.y).wet, "có nước thì tưới được");
+  eq(store.getState().water, w0 - 1, "mỗi ô tưới tốn 1 nước");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi múc nước");
+});
+
+/* ========================================================================== */
+/* 24. Chế tạo                                                                */
+/* ========================================================================== */
+
+/** Đưa nhân vật vào đứng cạnh bàn chế tạo trong nhà, đi bằng cửa như người chơi. */
+function goToBench(store) {
+  walkTo(store, 16, 4);
+  store.dispatch({ t: "PORTAL", x: 16, y: 3 });
+  walkTo(store, 9, 37); // ngay dưới bàn chế tạo 'C' ở (9,36)
+}
+
+test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì bị từ chối", () => {
+  const store = mkStore(106);
+  goToBench(store);
+
+  // --- thiếu nguyên liệu ---
+  ok(!canCraft(store.getState(), content, "axe"), "tay trắng thì chưa chế được rìu");
+  deepEq(
+    missingFor(store.getState(), content, "axe"),
+    [{ id: "item:wood", need: 4, have: 0 }, { id: "item:fiber", need: 4, have: 0 }],
+    "missingFor liệt kê đúng thứ còn thiếu",
+  );
+  store.dispatch({ t: "CRAFT", id: "axe" });
+  eq(countInv(store, "tool:axe"), 0, "thiếu nguyên liệu thì không chế ra gì");
+  ok(store.getState().log.some((l) => l.text.startsWith("Thiếu nguyên liệu")), "phải có toast báo thiếu");
+
+  // --- đủ nguyên liệu ---
+  store.dispatch({ t: "DEBUG", op: "materials" });
+  ok(canCraft(store.getState(), content, "axe"), "có vật liệu thì chế được");
+  deepEq(missingFor(store.getState(), content, "axe"), [], "không còn thiếu gì");
+  const wood0 = countInv(store, "item:wood");
+  const fiber0 = countInv(store, "item:fiber");
+  store.dispatch({ t: "CRAFT", id: "axe" });
+  eq(countInv(store, "tool:axe"), 1, "rìu gỗ vào túi");
+  eq(countInv(store, "item:wood"), wood0 - 4, "trừ đúng gỗ");
+  eq(countInv(store, "item:fiber"), fiber0 - 4, "trừ đúng sợi cỏ");
+
+  // --- công thức ăn cả CÔNG CỤ cũ ---
+  const stone0 = countInv(store, "item:stone");
+  store.dispatch({ t: "CRAFT", id: "axe2" });
+  eq(countInv(store, "tool:axe2"), 1, "có rìu thép");
+  eq(countInv(store, "tool:axe"), 0, "rìu gỗ bị công thức ăn mất");
+  eq(countInv(store, "item:stone"), stone0 - 12, "trừ đúng đá");
+
+  // --- công cụ ở hai ô cố định thì không bao giờ mất ---
+  store.dispatch({ t: "CRAFT", id: "can2" });
+  eq(countInv(store, "tool:can2"), 1, "chế được bình tưới lớn");
+  eq(store.getState().inv[1].id, "tool:can", "ô công cụ cố định vẫn còn nguyên bình tưới");
+  selectItem(store, "tool:can2");
+  eq(waterCapacity(store.getState(), content), content.tools.can2.capacity, "cầm bình lớn thì chứa nhiều hơn");
+
+  // --- xa bàn thì không chế được ---
+  walkTo(store, 6, 37);
+  store.dispatch({ t: "PORTAL", x: 6, y: 38 });
+  const before = store.getState();
+  store.dispatch({ t: "CRAFT", id: "pickaxe" });
+  eq(countInv(store, "tool:pickaxe"), 0, "đứng xa bàn chế tạo thì không chế được");
+  ok(store.getState() !== before, "vẫn đẩy toast giải thích");
+  ok(
+    store.getState().log.some((l) => l.text === "Phải đứng cạnh bàn chế tạo."),
+    "toast nhắc phải tới bàn chế tạo",
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi chế tạo");
+});
+
+/* ========================================================================== */
+/* 25-26. Tăng trưởng theo THỜI GIAN                                          */
+/* ========================================================================== */
+
+test("25. cây lớn theo thời gian: TICK trong ngày là đủ, không cần ngủ", () => {
+  const store = mkStore(107);
+  walkTo(store, HOME.x, HOME.y);
+  const p = PLOTS[1];
+  selectItem(store, "tool:hoe");
+  use(store, p.x, p.y);
+  selectItem(store, "seed:lettuce");
+  use(store, p.x, p.y);
+  selectItem(store, "tool:can");
+  use(store, p.x, p.y);
+  ok(tile(store, p.x, p.y).wet, "ô đã ướt");
+
+  // 60 giây thật = 60 * (10/realSecondsPerGameTenMinutes) phút game
+  const perSec = 10 / BAL.realSecondsPerGameTenMinutes;
+  const g0 = tile(store, p.x, p.y).crop.grow;
+  store.dispatch({ t: "TICK", dt: 60 });
+  eq(
+    tile(store, p.x, p.y).crop.grow,
+    g0 + 60 * perSec,
+    "grow cộng đúng số phút game vừa trôi",
+  );
+  eq(store.getState().day, 1, "vẫn đang cùng một ngày");
+
+  // đẩy sát ngưỡng rồi TICK tiếp → sang giai đoạn mới mà KHÔNG cần ngủ
+  const need = content.crops.lettuce.growthDays[0] * BAL.growthMinutesPerDay;
+  setState(store, (s) => {
+    setTile(s, p.x, p.y, { crop: { id: "lettuce", stage: 0, grow: need - 20, regrown: false } });
+  });
+  store.dispatch({ t: "TICK", dt: 30 / perSec }); // 30 phút game
+  eq(tile(store, p.x, p.y).crop.stage, 1, "đủ ngưỡng là lên giai đoạn ngay giữa ban ngày");
+  eq(tile(store, p.x, p.y).crop.grow, 10, "phần dư được mang sang giai đoạn sau");
+  eq(store.getState().day, 1, "không hề ngủ");
+
+  // --- trời tối thì ngừng lớn ---
+  setState(store, (s) => {
+    s.minutes = BAL.daylightEndMinutes + 10;
+    setTile(s, p.x, p.y, { wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+  });
+  store.dispatch({ t: "TICK", dt: 60 });
+  eq(tile(store, p.x, p.y).crop.grow, 0, "sau daylightEndMinutes thì cây đứng im");
+
+  // --- ô khô thì không lớn ---
+  setState(store, (s) => {
+    s.minutes = BAL.dayStartMinutes;
+    setTile(s, p.x, p.y, { wet: false, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+  });
+  store.dispatch({ t: "TICK", dt: 60 });
+  eq(tile(store, p.x, p.y).crop.grow, 0, "ô khô thì không lớn");
+});
+
+test("26. ngủ sớm không thiệt: ngủ lúc dậy và ngủ lúc chiều cho cùng tiến độ", () => {
+  const plant = (seed) => {
+    const store = mkStore(seed);
+    walkTo(store, HOME.x, HOME.y);
+    const p = PLOTS[1];
+    selectItem(store, "tool:hoe");
+    use(store, p.x, p.y);
+    selectItem(store, "seed:lettuce");
+    use(store, p.x, p.y);
+    selectItem(store, "tool:can");
+    use(store, p.x, p.y);
+    // đưa hai kịch bản về đúng cùng một mốc thời gian xuất phát
+    setState(store, (s) => {
+      s.minutes = BAL.dayStartMinutes;
+    });
+    return store;
+  };
+
+  const early = plant(108);
+  sleep(early);
+
+  const late = plant(108);
+  const perSec = 10 / BAL.realSecondsPerGameTenMinutes;
+  late.dispatch({ t: "TICK", dt: (1080 - BAL.dayStartMinutes) / perSec }); // tới 18:00
+  eq(Math.round(late.getState().minutes), 1080, "đã trôi tới 18:00");
+  sleep(late);
+
+  const a = tile(early, PLOTS[1].x, PLOTS[1].y).crop;
+  const b = tile(late, PLOTS[1].x, PLOTS[1].y).crop;
+  deepEq(a, b, "ngủ 6:00 và ngủ 18:00 cho tiến độ y hệt");
+
+  // Đo TỔNG tiến độ, không đo `crop.grow`: nếu con số cân bằng khiến cây vượt
+  // luôn một giai đoạn trong ngày thì `grow` bị trừ đi ngưỡng và phép so sẽ sai
+  // lệch đúng bằng ngưỡng đó — một cái bẫy rất dễ đọc nhầm thành lỗi game.
+  const total = totalGrow(early, PLOTS[1].x, PLOTS[1].y);
+  ok(
+    total >= DAYLIGHT_PER_DAY && total < DAYLIGHT_PER_DAY + 5,
+    `cả hai đều được trọn phần ban ngày (${DAYLIGHT_PER_DAY} phút), nhận ${total}`,
+  );
+});
+
+/* ========================================================================== */
+/* 27. Cỏ mọc lan / đất cày bỏ hoang                                          */
+/* ========================================================================== */
+
+test("27. cỏ dại lan ra theo đêm; đất cày bỏ không thì hoang trở lại", () => {
+  // --- cỏ lan ---
+  const a = mkStore(2211);
+  walkTo(a, HOME.x, HOME.y);
+  const blk = findOpenBlock(a.getState(), 5, 5);
+  setState(a, (s) => {
+    for (let i = 0; i < 5; i++) setTile(s, blk.x + i, blk.y + 2, { decor: "tuft" });
+  });
+  const countProps = (store) => {
+    let n = 0;
+    for (let y = blk.y; y < blk.y + 5; y++)
+      for (let x = blk.x; x < blk.x + 5; x++) if (tile(store, x, y).prop !== null) n++;
+    return n;
+  };
+  eq(countProps(a), 0, "khối đất bắt đầu sạch");
+  for (let i = 0; i < 12; i++) sleep(a);
+  const grown = countProps(a);
+  ok(grown > 0, `sau 12 đêm phải có cỏ dại mọc lên, nhận ${grown}`);
+  const one = propAt(a.getState(), content, blk.x, blk.y + 1);
+  ok(
+    countProps(a) === grown && (one === null || one.hits > 0),
+    "thứ mọc lên phải là vật thể phá được",
+  );
+  deepEq(checkInvariants(a.getState(), content), [], "bất biến sau khi cỏ mọc");
+
+  // --- đất cày bỏ không ---
+  const b = mkStore(2212);
+  walkTo(b, HOME.x, HOME.y);
+  const blk2 = findOpenBlock(b.getState(), 5, 5);
+  setState(b, (s) => {
+    for (let y = blk2.y; y < blk2.y + 5; y++)
+      for (let x = blk2.x; x < blk2.x + 5; x++) setTile(s, x, y, { tilled: true });
+    // một ô có cây: có cây thì không bao giờ hoang
+    setTile(s, blk2.x, blk2.y, {
+      tilled: true,
+      crop: { id: "lettuce", stage: 0, grow: 0, regrown: false },
+    });
+  });
+  const tilledCount = () => {
+    let n = 0;
+    for (let y = blk2.y; y < blk2.y + 5; y++)
+      for (let x = blk2.x; x < blk2.x + 5; x++) if (tile(b, x, y).tilled) n++;
+    return n;
+  };
+  eq(tilledCount(), 25, "25 ô đã cày");
+  for (let i = 0; i < 10; i++) sleep(b);
+  ok(tilledCount() < 25, `sau 10 đêm một số ô cày bỏ không phải hoang trở lại, còn ${tilledCount()}`);
+  ok(tile(b, blk2.x, blk2.y).tilled, "ô đang có cây thì không bao giờ hoang");
+  deepEq(checkInvariants(b.getState(), content), [], "bất biến sau khi đất hoang trở lại");
+});
+
+/* ========================================================================== */
+/* 28. Bảng gỡ lỗi                                                            */
+/* ========================================================================== */
+
+test("28. các lệnh DEBUG chạy đúng và không vỡ bất biến", () => {
+  const store = mkStore(3030);
+  walkTo(store, HOME.x, HOME.y);
+  const green = (what) => deepEq(checkInvariants(store.getState(), content), [], `bất biến sau ${what}`);
+
+  const m0 = store.getState().money;
+  store.dispatch({ t: "DEBUG", op: "money", n: 777 });
+  eq(store.getState().money, m0 + 777, "debug money cộng đúng");
+  green("money");
+
+  setState(store, (s) => {
+    s.energy = 3;
+    s.water = 0;
+  });
+  store.dispatch({ t: "DEBUG", op: "energy" });
+  eq(store.getState().energy, BAL.energyMax, "debug energy đổ đầy");
+  store.dispatch({ t: "DEBUG", op: "water" });
+  eq(store.getState().water, waterCapacity(store.getState(), content), "debug water đổ đầy bình");
+  green("energy/water");
+
+  const d0 = store.getState().day;
+  store.dispatch({ t: "DEBUG", op: "skipDay" });
+  eq(store.getState().day, d0 + 1, "debug skipDay sang ngày mới");
+  green("skipDay");
+
+  selectItem(store, "seed:lettuce");
+  store.dispatch({ t: "DEBUG", op: "plantAround" });
+  let planted = 0;
+  for (const p of PLOTS) if (tile(store, p.x, p.y).crop) planted++;
+  ok(planted >= 4, `plantAround phải gieo được quanh nhân vật, nhận ${planted}`);
+  green("plantAround");
+
+  store.dispatch({ t: "DEBUG", op: "growAll" });
+  for (const p of PLOTS) {
+    const t = tile(store, p.x, p.y);
+    if (t.crop) eq(t.crop.stage, content.crops[t.crop.id].growthDays.length, "growAll làm chín hết");
+  }
+  green("growAll");
+
+  const propsAround = () => {
+    let n = 0;
+    const s = store.getState();
+    for (let y = 4; y <= 12; y++) for (let x = 12; x <= 20; x++) if (tile(store, x, y).prop) n++;
+    return n;
+  };
+  const before = propsAround();
+  store.dispatch({ t: "DEBUG", op: "addGrass" });
+  store.dispatch({ t: "DEBUG", op: "addTrees" });
+  ok(propsAround() > before, "addGrass/addTrees có rắc thêm vật thể");
+  green("addGrass/addTrees");
+
+  store.dispatch({ t: "DEBUG", op: "unlockAll" });
+  for (const id of content.cropOrder)
+    ok(store.getState().unlocked.includes(`seed:${id}`), `unlockAll mở hạt ${id}`);
+  for (const id of content.buildingOrder)
+    ok(store.getState().unlocked.includes(id), `unlockAll mở công trình ${id}`);
+  green("unlockAll");
+
+  store.dispatch({ t: "DEBUG", op: "materials" });
+  for (const id of content.materialOrder)
+    ok(countInv(store, `item:${id}`) >= 50, `materials cho ít nhất 50 ${id}`);
+  green("materials");
+});
+
+/* ========================================================================== */
+/* 29. Migrate: save thiếu trường mới, content gỡ vật thể                     */
+/* ========================================================================== */
+
+test("29. migrate: save cũ thiếu hp/water/grow và content gỡ vật thể vẫn sống sót", () => {
+  // --- content mới bỏ hẳn cây gỗ nhỏ ---
+  const raw = rawPack();
+  raw.props = { ...raw.props, props: raw.props.props.filter((p) => p.id !== "sapling") };
+  raw.tiles = {
+    ...raw.tiles,
+    legend: { ...raw.tiles.legend, t: { ground: "grass" } },
+  };
+  const newContent = buildContent(raw);
+  ok(!newContent.props.sapling, "content mới không còn cây gỗ nhỏ");
+
+  const store = mkStore(4141);
+  setState(store, (s) => {
+    setTile(s, PLOTS[0].x, PLOTS[0].y, {
+      tilled: true,
+      crop: { id: "lettuce", stage: 1, grow: 400, regrown: false },
+    });
+    setTile(s, PLOTS[1].x, PLOTS[1].y, { prop: "sapling", hp: 2 });
+  });
+
+  // --- giả lập save v2: chưa có water / hp / grow ---
+  const old = clone(store.getState());
+  delete old.water;
+  for (const t of old.tiles) {
+    delete t.hp;
+    if (t.crop) {
+      t.crop.days = 2;
+      delete t.crop.grow;
+    }
+  }
+
+  let res;
+  try {
+    res = migrateForContent(old, newContent);
+  } catch (err) {
+    throw new Error(`migrateForContent đã NÉM LỖI: ${err}`);
+  }
+  eq(res.state.water, BAL.startWater, "thiếu water → rót đầy theo balance");
+  eq(res.state.tiles[idx(res.state.w, PLOTS[0].x, PLOTS[0].y)].crop.grow, 0, "thiếu grow → về 0");
+  eq(res.state.tiles[idx(res.state.w, PLOTS[1].x, PLOTS[1].y)].prop, null, "vật thể bị gỡ đã dọn sạch");
+
+  // mọi ô còn vật thể đều có hp đúng theo content
+  let checked = 0;
+  for (const t of res.state.tiles) {
+    if (t.prop === null) {
+      eq(t.hp, 0, "ô trống thì hp = 0");
+      continue;
+    }
+    const def = newContent.props[t.prop];
+    ok(def, `vật thể '${t.prop}' phải tồn tại trong content mới`);
+    eq(t.hp, def.hits ?? 0, `hp của '${t.prop}' được điền lại từ content`);
+    checked++;
+  }
+  ok(checked > 0, "phải có ít nhất một vật thể được điền hp");
+  deepEq(checkInvariants(res.state, newContent), [], "bất biến xanh với content mới");
+  ok(res.notes.length > 0, "phải có ghi chú migrate");
+
+  // --- cây đã chặt thì KHÔNG mọc lại sau migrate ---
+  const store2 = mkStore(4242);
+  let treeAt = null;
+  const s2 = store2.getState();
+  for (let i = 0; i < s2.tiles.length && !treeAt; i++)
+    if (s2.tiles[i].prop === "tree") treeAt = { x: i % s2.w, y: Math.floor(i / s2.w) };
+  ok(treeAt, "bản đồ phải có cây gỗ lớn");
+  setState(store2, (s) => setTile(s, treeAt.x, treeAt.y, { prop: null, hp: 0 }));
+  const again = migrateForContent(clone(store2.getState()), content);
+  eq(
+    again.state.tiles[idx(again.state.w, treeAt.x, treeAt.y)].prop,
+    null,
+    "mở game lần sau cây đã chặt không mọc lại",
+  );
+  deepEq(checkInvariants(again.state, content), [], "bất biến sau migrate cùng content");
+
+  // --- công thức không còn thì CRAFT chỉ là không-làm-gì ---
+  const before = store2.getState();
+  eq(store2.dispatch({ t: "CRAFT", id: "khong-ton-tai" }), before, "CRAFT id lạ trả về ĐÚNG state cũ");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

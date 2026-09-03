@@ -14,8 +14,10 @@
 import type {
   Content,
   GameState,
+  GroundDef,
   GroundKind,
   InteractKind,
+  PropDef,
   Tile,
 } from "./types.ts";
 
@@ -27,41 +29,79 @@ export const PLAYER_SPEED = 60;
 /** tầm với tính bằng SỐ Ô, đo từ tâm người chơi tới tâm ô */
 export const REACH_TILES = 1.6;
 
-/* ------------------------------------------------------------------ legend */
+/* -------------------------------------------------- tra cứu nền & vật thể */
 
-export interface LegendIndex {
-  solidProps: Set<string>;
-  solidGrounds: Set<GroundKind>;
-  interactByProp: Record<string, InteractKind>;
-  interactByGround: Record<string, InteractKind>;
+/* Trước đây tính "đặc"/"tương tác" được SUY từ legend của bản đồ. Giờ chúng là
+   DỮ LIỆU: nằm trong props.json (vật thể) và tiles.json > grounds (nền). Nhờ
+   vậy thêm một loại địa hình mới không phải sửa dòng code nào ở đây. */
+
+/** Tính chất của NỀN. Nền lạ (content mới, core cũ) trả null → không đặc. */
+export function groundDef(content: Content, g: GroundKind): GroundDef | null {
+  return content.tiles.grounds?.[g] ?? null;
 }
 
-const legendCache = new WeakMap<Content, LegendIndex>();
+/** Định nghĩa vật thể theo id. Vật thể LẠ trả null — nơi gọi phải coi nó là
+ *  đặc và không khai thác được, chứ không được sập. */
+export function propDef(content: Content, id: string | null): PropDef | null {
+  if (!id) return null;
+  return content.props[id] ?? null;
+}
 
-/** Bảng tra suy ra từ `content.tiles.legend`, có nhớ đệm theo tham chiếu Content.
- *  Cần thiết vì `Tile` không lưu lại ký tự legend gốc. */
-export function legendIndex(content: Content): LegendIndex {
-  const hit = legendCache.get(content);
-  if (hit) return hit;
-  const ix: LegendIndex = {
-    solidProps: new Set<string>(),
-    solidGrounds: new Set<GroundKind>(),
-    interactByProp: {},
-    interactByGround: {},
-  };
-  for (const entry of Object.values(content.tiles.legend)) {
-    if (!entry) continue;
-    if (entry.solid) {
-      if (entry.prop) ix.solidProps.add(entry.prop);
-      else ix.solidGrounds.add(entry.ground);
-    }
-    if (entry.interact) {
-      if (entry.prop) ix.interactByProp[entry.prop] = entry.interact;
-      else ix.interactByGround[entry.ground] = entry.interact;
-    }
+/** Vật thể đứng trên ô (x,y), null nếu ô trống / ngoài bản đồ / prop lạ. */
+export function propAt(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): PropDef | null {
+  const t = tileAt(state, x, y);
+  return t ? propDef(content, t.prop) : null;
+}
+
+/** Ô ĐÍCH của cửa dịch chuyển ở (x,y), null nếu ô này không phải cửa.
+ *  Đích luôn tra từ content — không ai dịch chuyển tới toạ độ tuỳ ý được. */
+export function portalAt(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): { x: number; y: number } | null {
+  const def = propAt(state, content, x, y);
+  const p = def?.portal;
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+  return { x: Math.floor(p.x), y: Math.floor(p.y) };
+}
+
+/** Vật thể "cỏ dại" dùng khi cỏ mọc lan ban đêm: vật thể khai thác được mà
+ *  TAY KHÔNG cũng phá được và không để lại gì. Lấy từ content nên đổi
+ *  props.json là đổi luôn thứ mọc lên, không phải sửa code. */
+export function weedProp(content: Content): PropDef | null {
+  for (const id of content.propOrder) {
+    const p = content.props[id];
+    if (p && p.hits && p.hits > 0 && !p.tool && !p.becomes) return p;
   }
-  legendCache.set(content, ix);
-  return ix;
+  return null;
+}
+
+/** Vật thể "cây gỗ nhỏ" (bảng gỡ lỗi rắc cây): cần rìu, cao một ô, phá là hết. */
+export function saplingProp(content: Content): PropDef | null {
+  for (const id of content.propOrder) {
+    const p = content.props[id];
+    if (p && p.hits && p.hits > 0 && p.tool === "CHOP" && !p.tall && !p.becomes) return p;
+  }
+  return null;
+}
+
+/** Ô này có vật thể khai thác được không (cây/đá/bụi cỏ). */
+export function harvestableAt(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): PropDef | null {
+  const def = propAt(state, content, x, y);
+  if (!def || !def.hits || def.hits <= 0) return null;
+  return def;
 }
 
 /* -------------------------------------------------------------- truy vấn ô */
@@ -92,14 +132,16 @@ export function buildFromMap(content: Content): { w: number; h: number; tiles: T
     for (let x = 0; x < w; x++) {
       const ch = row[x] ?? ".";
       const e = content.tiles.legend[ch];
+      const prop = e?.prop ?? null;
       tiles[idx(w, x, y)] = {
         g: e?.ground ?? "grass",
-        prop: e?.prop ?? null,
+        prop,
         decor: e?.decor ?? null,
         tilled: false,
         wet: false,
         crop: null,
         b: null,
+        hp: propDef(content, prop)?.hits ?? 0,
       };
     }
   }
@@ -122,9 +164,13 @@ export function isSolidTile(t: Tile, content: Content): boolean {
       if (def.kind === "floor") return false;
     }
   }
-  const ix = legendIndex(content);
-  if (t.prop && ix.solidProps.has(t.prop)) return true;
-  return ix.solidGrounds.has(t.g);
+  if (t.prop) {
+    const def = content.props[t.prop];
+    // Vật thể lạ (content mới thêm, core chưa biết) → coi như đặc cho an toàn.
+    if (!def) return true;
+    if (def.solid) return true;
+  }
+  return groundDef(content, t.g)?.solid === true;
 }
 
 /** Có cày được không (chưa xét năng lượng / tầm với). */
@@ -151,8 +197,7 @@ export function canPlaceBuilding(
   if (!def || !t) return false;
   if (t.b !== null) return false;
   if (t.prop !== null) return false;
-  const ix = legendIndex(content);
-  if (ix.solidGrounds.has(t.g)) return false; // không xây trên nước
+  if (groundDef(content, t.g)?.solid === true) return false; // không xây trên nước
   if (def.kind === "object" && t.crop !== null) return false;
   if (def.kind === "floor" && t.g !== "grass" && t.g !== "path") return false;
   if (def.solid && playerOverlapsTile(state, x, y)) return false;
@@ -230,15 +275,17 @@ export function interactAt(
 ): InteractKind | null {
   const t = tileAt(state, x, y);
   if (!t) return null;
-  const ix = legendIndex(content);
-  if (t.prop && ix.interactByProp[t.prop]) return ix.interactByProp[t.prop] ?? null;
-  return ix.interactByGround[t.g] ?? null;
+  const def = propDef(content, t.prop);
+  if (def?.interact) return def.interact;
+  return groundDef(content, t.g)?.interact ?? null;
 }
 
-/** Ô tương tác gần nhất trong tầm với — UI dùng để hiện gợi ý / mở modal. */
+/** Ô tương tác gần nhất trong tầm với — UI dùng để hiện gợi ý / mở modal.
+ *  `only` lọc theo một loại tương tác (bàn chế tạo, chỗ múc nước...). */
 export function nearbyInteract(
   state: GameState,
   content: Content,
+  only?: InteractKind,
 ): { kind: InteractKind; x: number; y: number } | null {
   const p = playerTile(state);
   const rad = Math.ceil(REACH_TILES);
@@ -250,6 +297,7 @@ export function nearbyInteract(
       if (!inReach(state, x, y)) continue;
       const kind = interactAt(state, content, x, y);
       if (!kind) continue;
+      if (only && kind !== only) continue;
       const d = distToTile(state, x, y);
       if (d < bestD) {
         bestD = d;
@@ -258,6 +306,26 @@ export function nearbyInteract(
     }
   }
   return best;
+}
+
+/** Đang đứng cạnh một ô tương tác loại này không (giếng, bàn chế tạo...). */
+export function hasNearbyInteract(
+  state: GameState,
+  content: Content,
+  kind: InteractKind,
+): boolean {
+  return nearbyInteract(state, content, kind) !== null;
+}
+
+/** Tầm với cho INTERACT/PORTAL: rộng hơn USE một chút.
+ *
+ *  Ngoài tầm với hình tròn, mọi ô KỀ (kể cả kề chéo) ô đang đứng đều tính là
+ *  với tới — nếu không thì đứng lệch vài pixel trong ô cạnh cửa là bấm E không
+ *  ăn, mà người chơi thì không thấy có gì khác. */
+export function inInteractRange(state: GameState, x: number, y: number): boolean {
+  if (inReach(state, x, y)) return true;
+  const p = playerTile(state);
+  return Math.abs(p.x - x) <= 1 && Math.abs(p.y - y) <= 1;
 }
 
 /* --------------------------------------------------------------- cây trồng */

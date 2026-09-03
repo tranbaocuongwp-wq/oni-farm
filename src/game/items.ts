@@ -12,7 +12,7 @@
 
 import type { Content, ItemKind, ItemRef } from "./types.ts";
 
-const KINDS: readonly string[] = ["tool", "seed", "crop", "build"];
+const KINDS: readonly string[] = ["tool", "seed", "crop", "build", "item"];
 
 /** 'seed:lettuce' -> { kind:'seed', ref:'lettuce' }; sai định dạng -> null */
 export function parseItem(id: string): ItemRef | null {
@@ -43,6 +43,7 @@ export function isKnownItem(id: string, content: Content): boolean {
     case "seed":
     case "crop": return Object.hasOwn(content.crops, it.ref);
     case "build": return Object.hasOwn(content.buildings, it.ref);
+    case "item": return Object.hasOwn(content.materials, it.ref);
   }
 }
 
@@ -55,14 +56,18 @@ export function itemName(id: string, content: Content): string {
     case "seed": return content.crops[it.ref]?.seedName ?? id;
     case "crop": return content.crops[it.ref]?.name ?? id;
     case "build": return content.buildings[it.ref]?.name ?? id;
+    case "item": return content.materials[it.ref]?.name ?? id;
   }
 }
 
-/** Giá BÁN cho người chơi (chỉ nông sản bán được). 0 = không bán được. */
+/** Giá BÁN cho người chơi. Nông sản và VẬT LIỆU (gỗ/đá/sợi) đều bán được ở
+ *  quầy thu mua; 0 = không bán được. */
 export function sellPriceOf(id: string, content: Content): number {
   const it = parseItem(id);
-  if (!it || it.kind !== "crop") return 0;
-  return content.crops[it.ref]?.sellPrice ?? 0;
+  if (!it) return 0;
+  if (it.kind === "crop") return content.crops[it.ref]?.sellPrice ?? 0;
+  if (it.kind === "item") return content.materials[it.ref]?.sellPrice ?? 0;
+  return 0;
 }
 
 /** Giá MUA ở cửa hàng. 0 = không mua được. Nhận cả 'sprinkler' lẫn 'build:sprinkler'. */

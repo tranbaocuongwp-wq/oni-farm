@@ -89,6 +89,29 @@ export function removeItem(inv: readonly InvSlot[], id: string, n: number): InvS
   return out;
 }
 
+/** Bớt khỏi túi CHO CHẾ TẠO — khác `removeItem` ở chỗ tiêu được cả CÔNG CỤ
+ *  (nâng cấp rìu ăn cái rìu cũ). Trả null nếu không đủ.
+ *
+ *  Hai ô công cụ đầu (cuốc/bình tưới) là VĨNH VIỄN: chúng vẫn được tính là có,
+ *  nhưng không bao giờ bị lấy đi — nếu không thì bất biến "ô 0/1 luôn là cuốc
+ *  và bình tưới" vỡ ngay khi chế bình tưới lớn. */
+export function removeForCraft(inv: readonly InvSlot[], id: string, n: number): InvSlot[] | null {
+  if (n <= 0) return inv.slice();
+  if (countItem(inv, id) < n) return null;
+  const out = inv.slice();
+  let left = n;
+  for (let i = TOOL_SLOTS; i < out.length && left > 0; i++) {
+    const s = out[i];
+    if (!s || s.id !== id) continue;
+    const take = Math.min(s.n, left);
+    left -= take;
+    out[i] = s.n - take > 0 ? { id, n: s.n - take } : null;
+  }
+  // `left > 0` nghĩa là phần còn lại nằm ở ô công cụ cố định — bỏ qua, coi như
+  // công cụ khởi đầu không mất.
+  return out;
+}
+
 /** Id vật phẩm đang chọn ở hotbar, null nếu slot trống. */
 export function selectedItemId(inv: readonly InvSlot[], sel: number): string | null {
   const s = inv[sel];

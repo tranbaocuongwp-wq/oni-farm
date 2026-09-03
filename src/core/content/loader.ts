@@ -19,7 +19,10 @@ import type {
   CropDef,
   Goal,
   MapData,
+  MaterialDef,
   ProgressionStage,
+  PropDef,
+  RecipeDef,
   Strings,
   TilesDef,
   ToolDef,
@@ -32,6 +35,8 @@ import {
   validateManifest,
   validateMap,
   validateProgression,
+  validateProps,
+  validateRecipes,
   validateStrings,
   validateTiles,
 } from "./schema.ts";
@@ -40,9 +45,11 @@ import {
 export interface RawPack {
   manifest: unknown;
   tiles: unknown;
+  props: unknown;
   crops: unknown;
   buildings: unknown;
   items: unknown;
+  recipes: unknown;
   balance: unknown;
   progression: unknown;
   strings: unknown;
@@ -63,7 +70,9 @@ export function validatePack(raw: RawPack): string[] {
   const errors: string[] = [
     ...validateManifest(raw.manifest),
     ...validateTiles(raw.tiles),
+    ...validateProps(raw.props),
     ...validateCrops(raw.crops),
+    ...validateRecipes(raw.recipes),
     ...validateBuildings(raw.buildings),
     ...validateItems(raw.items),
     ...validateBalance(raw.balance),
@@ -85,6 +94,10 @@ export function validatePack(raw: RawPack): string[] {
   const buildings = (raw.buildings as { buildings: BuildingDef[] }).buildings;
   const balance = raw.balance as Balance;
   const prog = raw.progression as { stages: ProgressionStage[]; goals: Goal[] };
+  const props = (raw.props as { props: PropDef[] }).props;
+  const items = raw.items as { tools: ToolDef[]; materials?: MaterialDef[] };
+  const recipes = (raw.recipes as { recipes: RecipeDef[] }).recipes;
+  const tilesDef = raw.tiles as TilesDef;
 
   const cropIds = new Set(crops.map((c) => c.id));
   const buildingIds = new Set(buildings.map((b) => b.id));
@@ -124,6 +137,49 @@ export function validatePack(raw: RawPack): string[] {
   for (const s of prog.stages) checkReq(`progression stage '${s.id}'`, s.require);
   for (const g of prog.goals) checkReq(`progression goal '${g.id}'`, g.require);
 
+  // ---- tham chiếu chéo cho địa hình / chế tạo ----
+  const propIds = new Set(props.map((x) => x.id));
+  const toolIds = new Set(items.tools.map((t) => t.id));
+  const matIds = new Set((items.materials ?? []).map((m) => m.id));
+  const buildingIdSet = buildingIds;
+
+  /** Vật phẩm này có thật không (tool: / seed: / crop: / build: / item:). */
+  const knownItem = (id: string): boolean => {
+    const i = id.indexOf(":");
+    if (i < 0) return false;
+    const kind = id.slice(0, i);
+    const ref = id.slice(i + 1);
+    if (kind === "tool") return toolIds.has(ref);
+    if (kind === "item") return matIds.has(ref);
+    if (kind === "seed" || kind === "crop") return cropIds.has(ref);
+    if (kind === "build") return buildingIdSet.has(ref);
+    return false;
+  };
+
+  for (const pr of props) {
+    if (pr.becomes && !propIds.has(pr.becomes))
+      errors.push(`props '${pr.id}': becomes '${pr.becomes}' không tồn tại`);
+    for (const d of pr.drops ?? [])
+      if (!knownItem(d.id)) errors.push(`props '${pr.id}': rơi ra '${d.id}' — không có vật phẩm này`);
+    if (pr.portal) {
+      const { x, y } = pr.portal;
+      const row = (raw.map as MapData).rows[y];
+      if (!row || x < 0 || x >= (raw.map as MapData).w)
+        errors.push(`props '${pr.id}': cửa dẫn ra ngoài bản đồ (${x},${y})`);
+    }
+  }
+
+  // Mọi prop dùng trong legend phải có định nghĩa, không thì ô đó thành vô hình.
+  for (const [ch, e] of Object.entries(tilesDef.legend))
+    if (e.prop && !propIds.has(e.prop))
+      errors.push(`tiles.legend '${ch}': prop '${e.prop}' không có trong props.json`);
+
+  for (const rc of recipes) {
+    if (!knownItem(rc.out.id)) errors.push(`recipes '${rc.id}': làm ra '${rc.out.id}' không tồn tại`);
+    for (const v of rc.in)
+      if (!knownItem(v.id)) errors.push(`recipes '${rc.id}': cần '${v.id}' không tồn tại`);
+  }
+
   // điện: nếu có thiết bị tiêu thụ điện thì phải có thiết bị sinh điện, không thì
   // người chơi mua về mà không bao giờ dùng được
   const produces = buildings.some((b) => b.power.produce > 0);
@@ -153,7 +209,11 @@ export function buildContent(raw: RawPack): Content {
   const manifest = raw.manifest as { contentVersion: string; requiresCore: string };
   const cropList = (raw.crops as { crops: CropDef[] }).crops;
   const buildingList = (raw.buildings as { buildings: BuildingDef[] }).buildings;
-  const toolList = (raw.items as { tools: ToolDef[] }).tools;
+  const itemsRaw = raw.items as { tools: ToolDef[]; materials?: MaterialDef[] };
+  const toolList = itemsRaw.tools;
+  const matList = itemsRaw.materials ?? [];
+  const propList = (raw.props as { props: PropDef[] }).props;
+  const recipeList = (raw.recipes as { recipes: RecipeDef[] }).recipes;
   const prog = raw.progression as { stages: ProgressionStage[]; goals: Goal[] };
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>
@@ -168,6 +228,11 @@ export function buildContent(raw: RawPack): Content {
     buildingOrder: buildingList.map((b) => b.id),
     tools: byId(toolList),
     toolOrder: toolList.map((t) => t.id),
+    props: byId(propList),
+    propOrder: propList.map((p) => p.id),
+    materials: byId(matList),
+    materialOrder: matList.map((m) => m.id),
+    recipes: recipeList,
     balance: { ...BALANCE_DEFAULTS, ...(raw.balance as Balance) } as Balance,
     tiles: raw.tiles as TilesDef,
     map: raw.map as MapData,

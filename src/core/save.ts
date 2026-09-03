@@ -118,9 +118,41 @@ export function migrateSave(data: SaveData): GameState | null {
   if (v === SAVE_VERSION) return data.state;
 
   let s = data.state;
+
   // v1 → v2: thêm `busy` (đồng hồ khoá thao tác). Save cũ không có trường này;
   // để nguyên thì mọi phép tính với nó ra NaN và bất biến vỡ ngay.
   if (s.save === 1) s = { ...s, busy: 0, save: 2 };
+
+  // v2 → v3: địa hình khai thác được (`Tile.hp`), bình tưới có hạn
+  // (`GameState.water`), và cây lớn theo THỜI GIAN (`crop.grow` phút) thay cho
+  // `crop.days` (số ngày).
+  //
+  // `hp` để 0 ở đây là cố ý: 0 nghĩa là "không khai thác được", còn giá trị
+  // đúng theo từng loại prop thì `migrateForContent` điền lại — nó mới là chỗ
+  // biết content hiện tại định nghĩa cây/đá cứng bao nhiêu nhát.
+  if (s.save === 2) {
+    const GROW_PER_DAY = 1200;
+    s = {
+      ...s,
+      save: 3,
+      water: 0,
+      tiles: s.tiles.map((t) => {
+        const old = t as unknown as { crop: ({ days?: number } & Record<string, unknown>) | null };
+        return {
+          ...t,
+          hp: 0,
+          crop: old.crop
+            ? {
+                id: String(old.crop["id"] ?? ""),
+                stage: Number(old.crop["stage"] ?? 0),
+                grow: Math.max(0, Number(old.crop.days ?? 0)) * GROW_PER_DAY,
+                regrown: Boolean(old.crop["regrown"]),
+              }
+            : null,
+        };
+      }),
+    };
+  }
 
   return s.save === SAVE_VERSION ? s : null;
 }

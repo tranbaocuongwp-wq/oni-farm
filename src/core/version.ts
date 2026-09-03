@@ -4,4 +4,4 @@ export const CORE_VERSION = "1.0.0";
 
 /** Phiên bản ĐỊNH DẠNG SAVE. Tăng khi cấu trúc GameState đổi, và thêm bước
  *  migration tương ứng trong src/core/save.ts. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;

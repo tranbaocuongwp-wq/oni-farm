@@ -12,10 +12,20 @@
 import type { Action, Content, GameState } from "./types.ts";
 import { applyProgression, commit, dPlayer, draft, toastKey, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
-import { useAt } from "./actions.ts";
-import { newDay } from "./newday.ts";
+import { craft, refill, useAt } from "./actions.ts";
+import { growCrops, newDay } from "./newday.ts";
+import { applyDebug } from "./debug.ts";
 import { buy, sell, sellAll } from "./economy.ts";
-import { inReach, interactAt, tileCenterX, tileCenterY } from "./world.ts";
+import {
+  blockedAt,
+  inInteractRange,
+  inReach,
+  interactAt,
+  nudgeOutOfSolid,
+  portalAt,
+  tileCenterX,
+  tileCenterY,
+} from "./world.ts";
 
 export function reduce(state: GameState, action: Action, content: Content): GameState {
   const d = draft(state);
@@ -44,7 +54,14 @@ export function reduce(state: GameState, action: Action, content: Content): Game
         // anim là đồng hồ tự do: MOVE chạy nó khi đang đi, TICK chạy nốt khi đứng yên
         s.player = { ...s.player, anim: s.player.anim + dt };
       }
-      s.minutes = s.minutes + dt * perSec;
+      const was = s.minutes;
+      s.minutes = was + dt * perSec;
+
+      // Cây lớn theo THỜI GIAN, và chỉ phần thời gian còn ban ngày mới tính.
+      // Cắt theo `daylightEndMinutes` ở đây (thay vì so sánh mốc một lần) để
+      // khung hình nào vắt qua lúc trời tối cũng không cộng dư một mẩu.
+      const dawn = bal.daylightEndMinutes;
+      growCrops(d, content, Math.max(0, Math.min(s.minutes, dawn) - Math.min(was, dawn)));
 
       if (s.minutes >= bal.dayEndMinutes) {
         newDay(d, content, { passedOut: true });
@@ -82,8 +99,12 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       // Chỉ khoá khi THẬT SỰ làm được gì đó. Không dùng `d.changed` được: một
       // thao tác HỤT vẫn đẩy toast báo lỗi, mà toast cũng là thay đổi state —
       // dùng nó thì bấm nhầm vào tảng đá cũng bị phạt đứng hình.
+      // Mọi việc THẬT SỰ làm được đều đụng vào lớp ô (cày/tưới/gieo/thu/xây/chặt),
+      // còn thao tác hụt thì cùng lắm chỉ đẩy toast. Vậy nên so tham chiếu mảng
+      // tiles là đủ và bắt được cả việc chặt cây (không có ô thống kê riêng).
       const st1 = d.s.stats;
       const didWork =
+        d.s.tiles !== state.tiles ||
         st1.tilled !== st0.tilled ||
         st1.planted !== st0.planted ||
         st1.watered !== st0.watered ||
@@ -96,10 +117,63 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     }
 
     case "INTERACT": {
-      const kind = interactAt(state, content, action.x | 0, action.y | 0);
-      if (kind !== "SLEEP") return state; // SHOP/SELL do UI mở modal, state không đổi
-      newDay(d, content, { passedOut: false });
-      toastKey(d, content, "sleep", "good");
+      const ix = action.x | 0;
+      const iy = action.y | 0;
+      const kind = interactAt(state, content, ix, iy);
+      if (!kind) return state;
+      if (!inInteractRange(state, ix, iy)) return state;
+      // SHOP/SELL/CRAFT do UI mở modal — state không đổi.
+      if (kind === "SLEEP") {
+        newDay(d, content, { passedOut: false });
+        toastKey(d, content, "sleep", "good");
+        return commit(d);
+      }
+      if (kind === "PORTAL") return reduce(state, { t: "PORTAL", x: ix, y: iy }, content);
+      if (kind === "REFILL") {
+        refill(d, content);
+        return commit(d);
+      }
+      return state;
+    }
+
+    case "PORTAL": {
+      const px = action.x | 0;
+      const py = action.y | 0;
+      if (!inInteractRange(state, px, py)) return state;
+      const dest = portalAt(state, content, px, py);
+      if (!dest) return state; // ô này không phải cửa: không làm gì
+
+      let x = tileCenterX(dest.x);
+      let y = tileCenterY(dest.y);
+      if (blockedAt(state, content, x, y)) {
+        const fixed = nudgeOutOfSolid(state, content, x, y);
+        x = fixed.x;
+        y = fixed.y;
+      }
+      if (blockedAt(state, content, x, y)) return state; // bí quá thì đứng yên còn hơn kẹt
+
+      const p = dPlayer(d);
+      p.x = x;
+      p.y = y;
+      p.moving = false;
+      return commit(d);
+    }
+
+    case "REFILL": {
+      refill(d, content);
+      return commit(d);
+    }
+
+    case "CRAFT": {
+      if (state.busy > 0) return state;
+      craft(d, content, action.id);
+      if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "DEBUG": {
+      applyDebug(d, content, action.op, action.n);
+      if (d.changed) applyProgression(d, content);
       return commit(d);
     }
 

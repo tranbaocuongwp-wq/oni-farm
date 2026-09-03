@@ -73,11 +73,62 @@ export interface BuildingDef {
   art: { body: string; dark: string; accent: string };
 }
 
+export type ToolAction = "TILL" | "WATER" | "CHOP" | "MINE";
+
 export interface ToolDef {
   id: string;
   name: string;
-  action: "TILL" | "WATER";
-  energy: number;
+  action: ToolAction;
+  /** Số nhát ăn được mỗi lần vung (rìu thép bổ 2). Mặc định 1. */
+  power?: number;
+  /** Sức chứa bình tưới, chỉ có nghĩa với action WATER. */
+  capacity?: number;
+}
+
+/** Vật liệu thô: gỗ, đá, sợi. Mang tiền tố `item:` trong túi đồ. */
+export interface MaterialDef {
+  id: string;
+  name: string;
+  sellPrice: number;
+}
+
+export interface RecipeInput {
+  id: string;
+  n: number;
+}
+
+export interface RecipeDef {
+  id: string;
+  name: string;
+  desc?: string;
+  out: RecipeInput;
+  /** Nguyên liệu — có thể là vật liệu, CÔNG CỤ (nâng cấp ăn cả cái cũ), hay gì tuỳ. */
+  in: RecipeInput[];
+}
+
+/**
+ * Vật thể đứng trên ô: cây, đá, giếng, giường, cửa…
+ *
+ * Gom hết tính chất về một chỗ (trước đây rải trong legend + code) nên thêm một
+ * loại địa hình mới chỉ là thêm một object trong props.json.
+ */
+export interface PropDef {
+  id: string;
+  name: string;
+  solid: boolean;
+  /** Cao 2 ô (cây lớn) — renderer vẽ tràn lên ô phía trên. */
+  tall?: boolean;
+  /** Số nhát chịu được. Không có = không khai thác được. */
+  hits?: number;
+  /** Công cụ cần dùng. Không có = tay không cũng phá được (bụi cỏ). */
+  tool?: ToolAction;
+  /** Phá xong để lại vật thể gì (cây lớn để lại gốc). */
+  becomes?: string;
+  drops?: { id: string; min: number; max: number }[];
+  interact?: InteractKind;
+  /** Cửa dịch chuyển: toạ độ Ô người chơi sẽ hiện ra. */
+  portal?: { x: number; y: number };
+  art?: { body: string; dark: string; accent: string };
 }
 
 export interface Balance {
@@ -90,6 +141,8 @@ export interface Balance {
     plant: number;
     harvest: number;
     build: number;
+    chop: number;
+    mine: number;
   };
   /** 360 = 6:00 sáng */
   dayStartMinutes: number;
@@ -112,20 +165,38 @@ export interface Balance {
   /** Thời gian KHOÁ sau mỗi thao tác. Đây là thứ bắt việc diễn ra TUẦN TỰ:
    *  đang vung cuốc thì chưa gieo hạt được, và bấm loạn cũng không nhanh hơn. */
   actionSeconds: number;
+
+  /** Bao nhiêu PHÚT GAME được tưới ẩm thì cây qua trọn một "ngày lớn".
+   *  Đây là thứ biến `crop.growthDays` thành tăng trưởng liên tục theo thời gian
+   *  thay vì nhảy cóc mỗi lần ngủ. */
+  growthMinutesPerDay: number;
+  /** Sau giờ này thì trời tối, cây ngừng lớn. */
+  daylightEndMinutes: number;
+  /** Xác suất mỗi đêm một ô cỏ trống mọc thêm cỏ dại từ ô cỏ dại kề bên. */
+  grassSpreadChance: number;
+  /** Xác suất mỗi đêm một ô đã cày mà bỏ không sẽ trở lại thành cỏ. */
+  tilledDecayChance: number;
+  /** Lượng nước có sẵn trong bình lúc bắt đầu. */
+  startWater: number;
 }
 
-export type GroundKind = "grass" | "path" | "water";
-export type InteractKind = "SLEEP" | "SHOP" | "SELL";
+export type GroundKind = "grass" | "path" | "water" | "wood" | "void";
+export type InteractKind = "SLEEP" | "SHOP" | "SELL" | "REFILL" | "CRAFT" | "PORTAL";
 
 export interface TileLegendEntry {
   ground: GroundKind;
   prop?: string;
   decor?: string;
+}
+
+/** Tính chất của NỀN (nước đi không qua và múc được nước, void là mép bản đồ). */
+export interface GroundDef {
   solid?: boolean;
   interact?: InteractKind;
 }
 
 export interface TilesDef {
+  grounds: Record<string, GroundDef>;
   legend: Record<string, TileLegendEntry>;
   spawn: { x: number; y: number };
 }
@@ -171,6 +242,11 @@ export interface Content {
   buildingOrder: string[];
   tools: Record<string, ToolDef>;
   toolOrder: string[];
+  props: Record<string, PropDef>;
+  propOrder: string[];
+  materials: Record<string, MaterialDef>;
+  materialOrder: string[];
+  recipes: RecipeDef[];
   balance: Balance;
   tiles: TilesDef;
   map: MapData;
@@ -185,7 +261,7 @@ export interface Content {
      tool:hoe · seed:lettuce · crop:tomato · build:sprinkler
 --------------------------------------------------------------------------- */
 
-export type ItemKind = "tool" | "seed" | "crop" | "build";
+export type ItemKind = "tool" | "seed" | "crop" | "build" | "item";
 
 export interface ItemRef {
   kind: ItemKind;
@@ -205,8 +281,10 @@ export interface CropInstance {
   id: string;
   /** 0..growthDays.length; chín khi stage === growthDays.length */
   stage: number;
-  /** số ngày đã tích trong giai đoạn hiện tại */
-  days: number;
+  /** Số PHÚT GAME đã tích trong giai đoạn hiện tại (chỉ tích khi ô ẩm và trời
+   *  còn sáng). Đủ `growthDays[stage] * growthMinutesPerDay` thì sang giai đoạn
+   *  sau — nhờ vậy cây lớn dần trông thấy trong ngày, không nhảy cóc lúc ngủ. */
+  grow: number;
   /** đã từng thu hoạch ít nhất một lần (cây mọc lại) */
   regrown: boolean;
 }
@@ -222,6 +300,8 @@ export interface Tile {
   crop: CropInstance | null;
   /** id công trình người chơi đã đặt, null nếu chưa có */
   b: string | null;
+  /** Số nhát còn chịu được của `prop`. 0 = vật thể không khai thác được. */
+  hp: number;
 }
 
 export type Dir = "down" | "up" | "left" | "right";
@@ -295,6 +375,9 @@ export interface GameState {
   /** Số giây còn lại của thao tác đang làm. > 0 nghĩa là đang bận: không thao
    *  tác tiếp và không di chuyển được. Đây là cơ chế bắt buộc làm việc tuần tự. */
   busy: number;
+
+  /** Nước còn trong bình tưới. Hết thì phải ra giếng hoặc bờ ao múc. */
+  water: number;
 }
 
 /* ---------------------------------------------------------------------------
@@ -318,8 +401,30 @@ export type Action =
   | { t: "SELL"; id: string; n: number }
   | { t: "SELL_ALL" }
   | { t: "SLEEP" }
+  /** Chế tạo theo công thức (phải đứng cạnh bàn chế tạo). */
+  | { t: "CRAFT"; id: string }
+  /** Múc đầy bình tưới ở giếng hoặc bờ nước. */
+  | { t: "REFILL" }
+  /** Dùng cửa dịch chuyển ở ô (x,y) — reducer tự tra đích trong props.json,
+   *  nên không ai dịch chuyển bừa tới toạ độ tuỳ ý được. */
+  | { t: "PORTAL"; x: number; y: number }
+  /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
+   *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
+  | { t: "DEBUG"; op: DebugOp; n?: number }
   /** UI đã hiển thị xong các toast có id <= tới */
   | { t: "LOG_SEEN"; upTo: number };
+
+export type DebugOp =
+  | "money"
+  | "energy"
+  | "water"
+  | "skipDay"
+  | "growAll"
+  | "plantAround"
+  | "addGrass"
+  | "addTrees"
+  | "unlockAll"
+  | "materials";
 
 /* ---------------------------------------------------------------------------
    PHẦN E — SAVE

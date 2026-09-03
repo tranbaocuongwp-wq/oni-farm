@@ -8,9 +8,11 @@
 
 import manifest from "../../content/manifest.json";
 import tiles from "../../content/tiles.json";
+import props from "../../content/props.json";
 import crops from "../../content/crops.json";
 import buildings from "../../content/buildings.json";
 import items from "../../content/items.json";
+import recipes from "../../content/recipes.json";
 import balance from "../../content/balance.json";
 import progression from "../../content/progression.json";
 import strings from "../../content/strings.vi.json";
@@ -20,7 +22,7 @@ import type { Content } from "../../game/types.ts";
 import { buildContent, type RawPack } from "./loader.ts";
 
 export function bundledRawPack(): RawPack {
-  return { manifest, tiles, crops, buildings, items, balance, progression, strings, map };
+  return { manifest, tiles, props, crops, buildings, items, recipes, balance, progression, strings, map };
 }
 
 /** Ném lỗi nếu content đóng kèm hỏng — đó là lỗi lập trình, phải nổ to lúc dev

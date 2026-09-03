@@ -42,9 +42,11 @@ interface CachedPack {
 /** Ánh xạ tên file trong manifest sang khoá của RawPack. */
 const FILE_TO_KEY: Record<string, keyof RawPack> = {
   "tiles.json": "tiles",
+  "props.json": "props",
   "crops.json": "crops",
   "buildings.json": "buildings",
   "items.json": "items",
+  "recipes.json": "recipes",
   "balance.json": "balance",
   "progression.json": "progression",
   "strings.vi.json": "strings",

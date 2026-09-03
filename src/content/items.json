@@ -1,7 +1,17 @@
 {
-  "$comment": "Chỉ khai báo CÔNG CỤ và vật phẩm rời. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) được sinh tự động từ crops.json — không khai báo lại ở đây.",
+  "$comment": "Công cụ và VẬT LIỆU. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) sinh tự động từ crops.json. Vật liệu mang tiền tố item:<id>.\n\ntool.action quyết định công cụ làm được gì; tool.power là số nhát ăn được mỗi lần vung (rìu thép bổ 2 nhát/lần); tool.capacity là sức chứa của bình tưới.",
   "tools": [
-    { "id": "hoe", "name": "Cuốc", "action": "TILL", "energy": 2 },
-    { "id": "can", "name": "Bình tưới", "action": "WATER", "energy": 2 }
+    { "id": "hoe", "name": "Cuốc", "action": "TILL" },
+    { "id": "can", "name": "Bình tưới", "action": "WATER", "capacity": 24 },
+    { "id": "can2", "name": "Bình tưới lớn", "action": "WATER", "capacity": 60 },
+    { "id": "axe", "name": "Rìu gỗ", "action": "CHOP", "power": 1 },
+    { "id": "axe2", "name": "Rìu thép", "action": "CHOP", "power": 2 },
+    { "id": "pickaxe", "name": "Cuốc chim", "action": "MINE", "power": 1 },
+    { "id": "pickaxe2", "name": "Cuốc chim thép", "action": "MINE", "power": 2 }
+  ],
+  "materials": [
+    { "id": "wood", "name": "Gỗ", "sellPrice": 5 },
+    { "id": "stone", "name": "Đá", "sellPrice": 8 },
+    { "id": "fiber", "name": "Sợi cỏ", "sellPrice": 3 }
   ]
 }

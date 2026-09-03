@@ -1,17 +1,30 @@
 {
-  "$comment": "LÀN NHANH — bảng chú giải cho bản đồ ASCII. Thêm loại ô mới = thêm một ký tự ở đây (miễn là 'prop'/'ground' đã có cách vẽ trong art/atlas.ts). Ô cày được = ground 'grass', không prop, không building.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, còn của nền nằm ở mục grounds dưới đây.",
+  "grounds": {
+    "water": { "solid": true, "interact": "REFILL" },
+    "void": { "solid": true }
+  },
   "legend": {
     ".": { "ground": "grass" },
     ",": { "ground": "grass", "decor": "tuft" },
     ":": { "ground": "path" },
-    "~": { "ground": "water", "solid": true },
-    "T": { "ground": "grass", "prop": "tree", "solid": true },
-    "o": { "ground": "grass", "prop": "rock", "solid": true },
-    "b": { "ground": "grass", "prop": "bush", "solid": true },
-    "H": { "ground": "path", "prop": "house", "solid": true },
-    "D": { "ground": "path", "prop": "door", "solid": true, "interact": "SLEEP" },
-    "S": { "ground": "path", "prop": "shop", "solid": true, "interact": "SHOP" },
-    "B": { "ground": "path", "prop": "counter", "solid": true, "interact": "SELL" }
+    "~": { "ground": "water" },
+    "T": { "ground": "grass", "prop": "tree" },
+    "t": { "ground": "grass", "prop": "sapling" },
+    "s": { "ground": "grass", "prop": "stump" },
+    "o": { "ground": "grass", "prop": "rock" },
+    "b": { "ground": "grass", "prop": "bush" },
+    "G": { "ground": "grass", "prop": "well" },
+    "H": { "ground": "path", "prop": "house" },
+    "D": { "ground": "path", "prop": "door" },
+    "S": { "ground": "path", "prop": "shop" },
+    "B": { "ground": "path", "prop": "counter" },
+    "W": { "ground": "wood", "prop": "wall" },
+    "_": { "ground": "wood" },
+    "E": { "ground": "wood", "prop": "bed" },
+    "C": { "ground": "wood", "prop": "bench" },
+    "d": { "ground": "wood", "prop": "door_in" },
+    "#": { "ground": "void" }
   },
   "spawn": { "x": 16, "y": 5 }
 }

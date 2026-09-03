@@ -21,11 +21,20 @@ const C = {
   grass: "#4a7c3f",
   path: "#a5875e",
   water: "#2f6fc4",
+  wood: "#a97d4e",
+  void: "#0d0b09",
   tree: "#24521f",
+  sapling: "#3d8a3f",
+  stump: "#6b4a2c",
   rock: "#8a8f98",
   bush: "#3f7a3a",
+  well: "#5aa9e6",
   house: "#e5e9f0",
+  wall: "#6b5540",
+  bed: "#c25b48",
+  bench: "#8a6440",
   door: "#f5c542",
+  door_in: "#f5c542",
   shop: "#88c0d0",
   counter: "#c98a3a",
   soil: "#6f4c30",
@@ -83,6 +92,8 @@ export function createMinimap(host: HTMLElement): Minimap {
         let c: string = C.grass;
         if (t.g === "water") c = C.water;
         else if (t.g === "path") c = C.path;
+        else if (t.g === "wood") c = C.wood;
+        else if (t.g === "void") c = C.void;
 
         if (t.tilled) c = t.wet ? C.soilWet : C.soil;
         if (t.b) {
@@ -95,15 +106,9 @@ export function createMinimap(host: HTMLElement): Minimap {
           const ripe = def ? t.crop.stage >= def.growthDays.length : false;
           c = ripe ? C.ripe : C.crop;
         }
-        switch (t.prop) {
-          case "tree": c = C.tree; break;
-          case "rock": c = C.rock; break;
-          case "bush": c = C.bush; break;
-          case "house": c = C.house; break;
-          case "door": c = C.door; break;
-          case "shop": c = C.shop; break;
-          case "counter": c = C.counter; break;
-        }
+        // Màu tra theo id prop; id lạ (content mới) vẫn hiện thành chấm xám để
+        // người chơi biết chỗ đó có VẬT GÌ ĐÓ, thay vì biến mất khỏi bản đồ.
+        if (t.prop) c = (C as Record<string, string>)[t.prop] ?? "#9aa0a6";
         tg.fillStyle = c;
         tg.fillRect(x, y, 1, 1);
       }

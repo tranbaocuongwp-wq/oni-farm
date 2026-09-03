@@ -42,6 +42,9 @@ export function checkInvariants(state: GameState, content: Content): string[] {
   if (!Number.isInteger(state.day) || state.day < 1) e.push(`day phải là số nguyên >= 1, nhận ${state.day}`);
   if (!Number.isFinite(state.seed) || state.seed < 0) e.push(`seed không hợp lệ: ${state.seed}`);
 
+  if (!Number.isFinite(state.water)) e.push(`water không hữu hạn: ${state.water}`);
+  else if (state.water < 0) e.push(`water âm: ${state.water}`);
+
   // ---- lưới ô ------------------------------------------------------------
   if (state.w !== content.map.w || state.h !== content.map.h)
     e.push(`kích thước lưới ${state.w}x${state.h} khác bản đồ ${content.map.w}x${content.map.h}`);
@@ -50,8 +53,11 @@ export function checkInvariants(state: GameState, content: Content): string[] {
 
   let cropOnUntilled = 0;
   let badStage = 0;
+  let badGrow = 0;
+  let badHp = 0;
   const missingCrop = new Set<string>();
   const missingBuild = new Set<string>();
+  const missingProp = new Set<string>();
   for (let i = 0; i < state.tiles.length; i++) {
     const t = state.tiles[i];
     if (!t) {
@@ -59,6 +65,8 @@ export function checkInvariants(state: GameState, content: Content): string[] {
       continue;
     }
     if (t.b !== null && !content.buildings[t.b]) missingBuild.add(t.b);
+    if (t.prop !== null && !content.props[t.prop]) missingProp.add(t.prop);
+    if (!Number.isFinite(t.hp) || t.hp < 0) badHp++;
     if (t.crop) {
       if (!t.tilled) cropOnUntilled++;
       const def = content.crops[t.crop.id];
@@ -69,12 +77,16 @@ export function checkInvariants(state: GameState, content: Content): string[] {
         t.crop.stage > def.growthDays.length
       )
         badStage++;
+      if (!Number.isFinite(t.crop.grow) || t.crop.grow < 0) badGrow++;
     }
   }
   if (cropOnUntilled) e.push(`${cropOnUntilled} ô có cây mà chưa cày`);
   if (badStage) e.push(`${badStage} ô có crop.stage ngoài [0, growthDays.length]`);
+  if (badGrow) e.push(`${badGrow} ô có crop.grow không hữu hạn hoặc âm`);
+  if (badHp) e.push(`${badHp} ô có hp không hữu hạn hoặc âm`);
   for (const id of missingCrop) e.push(`cây '${id}' không tồn tại trong content`);
   for (const id of missingBuild) e.push(`công trình '${id}' không tồn tại trong content`);
+  for (const id of missingProp) e.push(`vật thể '${id}' không tồn tại trong content`);
 
   // ---- túi đồ ------------------------------------------------------------
   if (state.inv.length !== bal.inventorySlots)
@@ -135,6 +147,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
 
     const droppedCrops = new Set<string>();
     const droppedBuilds = new Set<string>();
+    const droppedProps = new Set<string>();
     let lostToTerrain = 0;
 
     const tiles: Tile[] = new Array<Tile>(fresh.w * fresh.h);
@@ -144,13 +157,39 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
         const base = fresh.tiles[ni];
         const t: Tile = base
           ? { ...base }
-          : { g: "grass", prop: null, decor: null, tilled: false, wet: false, crop: null, b: null };
+          : { g: "grass", prop: null, decor: null, tilled: false, wet: false, crop: null, b: null, hp: 0 };
 
         const oi = x < state.w && y < state.h ? y * state.w + x : -1;
         const old = oi >= 0 ? state.tiles[oi] : undefined;
         if (old) {
           t.tilled = old.tilled === true;
           t.wet = old.wet === true;
+
+          // ---- vật thể: bản đồ lo phần CÔNG TRÌNH, người chơi lo phần KHAI THÁC
+          //
+          // Cây/đá/bụi cỏ là thứ người chơi chặt đi được, nên trạng thái của
+          // chúng thuộc về save chứ không phải bản đồ — nếu lấy lại từ bản đồ
+          // thì mở game lần sau là cả rừng mọc lại. Ngược lại nhà/tường/cửa
+          // không khai thác được: bản đồ mới nói sao thì theo vậy.
+          const freshDef = t.prop ? content.props[t.prop] : undefined;
+          const freshIsHarvestable = !!freshDef?.hits;
+          if (t.prop === null || freshIsHarvestable) {
+            const oldProp = typeof old.prop === "string" ? old.prop : null;
+            if (oldProp === null) {
+              t.prop = null;
+            } else if (content.props[oldProp]) {
+              t.prop = oldProp;
+            } else {
+              droppedProps.add(oldProp);
+              t.prop = null;
+            }
+          }
+          // hp: giữ nếu còn hợp lệ, không thì trả về đầy máu (save v2 không có
+          // trường này nên mọi ô về 0 — 0 ở đây phải hiểu là "chưa biết").
+          const propNow = t.prop ? content.props[t.prop] : undefined;
+          const full = Math.max(0, Math.floor(propNow?.hits ?? 0));
+          const keep = old.prop === t.prop && Number.isFinite(old.hp) && old.hp > 0;
+          t.hp = keep ? Math.min(Math.floor(old.hp), full) : full;
 
           if (old.b) {
             if (content.buildings[old.b]) t.b = old.b;
@@ -162,8 +201,9 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
               droppedCrops.add(old.crop.id);
             } else {
               const stage = Math.max(0, Math.min(def.growthDays.length, Math.floor(old.crop.stage) || 0));
-              const days = Math.max(0, Math.floor(old.crop.days) || 0);
-              t.crop = { id: old.crop.id, stage, days, regrown: old.crop.regrown === true };
+              const raw = Number(old.crop.grow);
+              const grow = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+              t.crop = { id: old.crop.id, stage, grow, regrown: old.crop.regrown === true };
             }
           }
 
@@ -183,6 +223,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
 
     for (const id of droppedCrops) notes.push(`gỡ cây '${id}' khỏi ruộng — content mới không còn`);
     for (const id of droppedBuilds) notes.push(`gỡ công trình '${id}' khỏi ruộng — content mới không còn`);
+    for (const id of droppedProps) notes.push(`gỡ vật thể '${id}' khỏi bản đồ — content mới không còn`);
     if (lostToTerrain) notes.push(`${lostToTerrain} ô bị địa hình mới đè lên, đã dọn sạch`);
 
     // ---- túi đồ ----------------------------------------------------------
@@ -219,6 +260,10 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
     const day = Number.isInteger(state.day) && state.day >= 1 ? state.day : 1;
     const sel = Math.max(0, Math.min(Math.max(1, bal.hotbarSlots | 0) - 1, Math.floor(state.sel) || 0));
     const seed = Number.isFinite(state.seed) && state.seed >= 0 ? state.seed >>> 0 : 1;
+    // save cũ (v2) không có bình tưới: rót cho đầy theo balance hiện tại
+    const water = Number.isFinite(state.water)
+      ? Math.max(0, Math.floor(state.water))
+      : Math.max(0, Math.floor(bal.startWater ?? 0));
 
     let next: GameState = {
       ...state,
@@ -241,6 +286,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       logSeq: Number.isInteger(state.logSeq) ? state.logSeq : 0,
       sleeping: false,
       busy: 0,
+      water,
     };
 
     // ---- người chơi không được kẹt trong tường ---------------------------

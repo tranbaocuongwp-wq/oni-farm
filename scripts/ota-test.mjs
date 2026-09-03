@@ -72,6 +72,25 @@ reject("hotbarSlots lớn hơn inventorySlots", (p) => (p.balance.hotbarSlots = 
 reject("dayEndMinutes <= dayStartMinutes", (p) => (p.balance.dayEndMinutes = 100));
 reject("contentVersion không phải semver", (p) => (p.manifest.contentVersion = "mới nhất"));
 reject("requiresCore không phải dải semver", (p) => (p.manifest.requiresCore = "core xịn"));
+reject("cửa dịch chuyển trỏ ra ngoài bản đồ", (p) => {
+  // Bẫy kinh điển khi đẩy OTA đổi map mà quên chỉnh cửa: người chơi bước vào
+  // cửa rồi rơi ra hư vô. Phải chặn từ lúc kiểm pack.
+  p.map = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };
+  p.tiles.spawn = { x: 2, y: 1 };
+});
+reject("vật thể rơi ra thứ không tồn tại", (p) => {
+  const tree = p.props.props.find((x) => x.id === "tree");
+  tree.drops = [{ id: "item:mythril", min: 1, max: 2 }];
+});
+reject("vật thể phá xong biến thành thứ không tồn tại", (p) => {
+  p.props.props.find((x) => x.id === "tree").becomes = "khongCo";
+});
+reject("công thức chế tạo cần nguyên liệu không tồn tại", (p) => {
+  p.recipes.recipes[0].in.push({ id: "item:mythril", n: 1 });
+});
+reject("legend dùng vật thể chưa định nghĩa", (p) => {
+  p.tiles.legend["T"] = { ground: "grass", prop: "khongCoLoaiNay" };
+});
 reject("có thiết bị tiêu điện nhưng không có nguồn điện", (p) => {
   for (const b of p.buildings.buildings) b.power.produce = 0;
 });
@@ -107,6 +126,9 @@ accept("gỡ bỏ một cây (kèm mọi tham chiếu tới nó)", (p) => {
 accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   p.map = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };
   p.tiles.spawn = { x: 2, y: 1 };
+  // Bản đồ nhỏ lại thì CỬA DỊCH CHUYỂN phải được chỉnh theo — đích cũ nằm ngoài
+  // bản đồ mới. Đây chính là việc mà một bản OTA đổi map thật sự phải làm.
+  for (const pr of p.props.props) if (pr.portal) pr.portal = { x: 2, y: 1 };
 });
 
 console.log("\n── Ghép pack: thiếu file thì dùng bản đóng kèm ──");

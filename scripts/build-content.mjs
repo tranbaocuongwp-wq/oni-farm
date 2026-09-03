@@ -44,9 +44,11 @@ console.log(`✓ maps/farm.json  ${map.w}×${map.h} ô`);
 const raw = {
   manifest: readJson("manifest.json"),
   tiles: readJson("tiles.json"),
+  props: readJson("props.json"),
   crops: readJson("crops.json"),
   buildings: readJson("buildings.json"),
   items: readJson("items.json"),
+  recipes: readJson("recipes.json"),
   balance: readJson("balance.json"),
   progression: readJson("progression.json"),
   strings: readJson("strings.vi.json"),
@@ -74,8 +76,10 @@ if (failed) {
 const content = buildContent(raw);
 console.log(
   `✓ ${content.cropOrder.length} cây · ${content.buildingOrder.length} công trình · ` +
-    `${content.stages.length} mốc · ${content.goals.length} mục tiêu`,
+    `${content.propOrder.length} địa hình · ${content.materialOrder.length} vật liệu · ` +
+    `${content.recipes.length} công thức · ${content.toolOrder.length} công cụ`,
 );
+console.log(`✓ ${content.stages.length} mốc mở khoá · ${content.goals.length} mục tiêu`);
 
 /* ---- 3. đóng gói cho OTA ------------------------------------------------ */
 const version = raw.manifest.contentVersion;

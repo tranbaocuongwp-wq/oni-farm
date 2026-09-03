@@ -8,12 +8,17 @@
    vẽ lại từ state mới. Một chiều duy nhất, nên không có chuyện UI và state lệch nhau.
 ============================================================================ */
 
-import type { Content, GameState } from "../game/types.ts";
+import type { Content, DebugOp, GameState } from "../game/types.ts";
 import type { Atlas } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
+  craft(id: string): void;
+  canCraft(id: string): boolean;
+  /** Còn thiếu gì để làm được công thức này. */
+  missingFor(id: string): { id: string; need: number; have: number }[];
+  debug(op: DebugOp, n?: number): void;
   sell(id: string, n: number): void;
   sellAll(): void;
   save(): void;
@@ -32,6 +37,8 @@ export interface Menus {
   close(): void;
   openShop(): void;
   openSell(): void;
+  openCraft(): void;
+  openDebug(): void;
   openPause(): void;
   openHelp(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
@@ -253,6 +260,129 @@ export function createMenus(
     foot.appendChild(all);
   }
 
+  /* ----------------------------------------------------------- CHẾ TẠO */
+  function openCraft() {
+    current = openCraft;
+    const s = getState();
+    const c = getContent();
+    const { body, foot } = shell(
+      "Bàn chế tạo",
+      "Ghép vật liệu và công cụ cũ thành đồ tốt hơn",
+    );
+
+    const label = (id: string) => {
+      const [kind, ref] = id.split(":") as [string, string];
+      if (kind === "item") return c.materials[ref]?.name ?? ref;
+      if (kind === "tool") return c.tools[ref]?.name ?? ref;
+      if (kind === "build") return c.buildings[ref]?.name ?? ref;
+      if (kind === "seed") return c.crops[ref]?.seedName ?? ref;
+      if (kind === "crop") return c.crops[ref]?.name ?? ref;
+      return id;
+    };
+
+    for (const rc of c.recipes) {
+      const missing = h.missingFor(rc.id);
+      const okNow = h.canCraft(rc.id);
+
+      const el = document.createElement("div");
+      el.className = `row${okNow ? "" : " locked"}`;
+      el.appendChild(icon(rc.out.id));
+
+      const info = document.createElement("div");
+      info.className = "info";
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = rc.name + (rc.out.n > 1 ? ` ×${rc.out.n}` : "");
+      const desc = document.createElement("div");
+      desc.className = "desc";
+      // Liệt kê từng nguyên liệu kèm số đang có — thiếu thì tô đỏ, để người chơi
+      // biết ngay còn phải đi kiếm gì chứ không chỉ thấy nút mờ đi.
+      desc.innerHTML = rc.in
+        .map((v) => {
+          const m = missing.find((x) => x.id === v.id);
+          const have = m ? m.have : v.n;
+          const short = !!m;
+          return `<span style="color:${short ? "var(--red)" : "var(--ink-dim)"}">${label(v.id)} ${have}/${v.n}</span>`;
+        })
+        .join(" · ");
+      if (rc.desc) {
+        const d2 = document.createElement("div");
+        d2.className = "desc";
+        d2.textContent = rc.desc;
+        d2.style.opacity = "0.75";
+        info.appendChild(d2);
+      }
+      info.insertBefore(desc, info.firstChild);
+      info.insertBefore(name, info.firstChild);
+      el.appendChild(info);
+
+      const b = document.createElement("button");
+      b.className = "primary";
+      b.textContent = "Chế tạo";
+      b.disabled = !okNow;
+      b.addEventListener("click", () => {
+        h.craft(rc.id);
+        openCraft();
+      });
+      el.appendChild(b);
+      body.appendChild(el);
+    }
+
+    const hint = document.createElement("div");
+    hint.className = "sub";
+    hint.textContent = "Gỗ từ chặt cây, đá từ đập đá, sợi từ phát bụi cỏ.";
+    foot.appendChild(hint);
+    void s;
+  }
+
+  /* ------------------------------------------------------------ GỠ LỖI */
+  function openDebug() {
+    current = openDebug;
+    const c = getContent();
+    const { body, foot } = shell("Bảng gỡ lỗi", "Công cụ thử nghiệm — không phải cách chơi thật");
+
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:6px";
+    const add = (label: string, op: DebugOp, n?: number) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        h.debug(op, n);
+        openDebug();
+      });
+      grid.appendChild(b);
+    };
+    add("+1.000đ", "money", 1000);
+    add("Đầy năng lượng", "energy");
+    add("Đầy bình nước", "water");
+    add("+50 mỗi vật liệu", "materials");
+    add("Mở khoá tất cả", "unlockAll");
+    add("Sang ngày mới", "skipDay");
+    add("Cho cây chín hết", "growAll");
+    add("Tự cày + gieo quanh đây", "plantAround");
+    add("Rắc cỏ quanh đây", "addGrass");
+    add("Rắc cây nhỏ quanh đây", "addTrees");
+    body.appendChild(grid);
+
+    const s = getState();
+    const stat = document.createElement("div");
+    stat.className = "sub";
+    stat.style.marginTop = "8px";
+    stat.innerHTML = [
+      `ngày ${s.day} · ${Math.floor(s.minutes)}′ · ${s.money}đ`,
+      `năng lượng ${Math.round(s.energy)}/${c.balance.energyMax} · nước ${Math.round(s.water)}`,
+      `ô: ${s.w}×${s.h} · vị trí ${Math.floor(s.player.x / 16)},${Math.floor(s.player.y / 16)}`,
+      `content ${c.contentVersion}`,
+    ].join("<br>");
+    body.appendChild(stat);
+
+    const close2 = document.createElement("button");
+    close2.className = "primary";
+    close2.textContent = "Đóng";
+    close2.addEventListener("click", close);
+    foot.appendChild(close2);
+  }
+
   /* ------------------------------------------------------------ TẠM DỪNG */
   function openPause() {
     current = openPause;
@@ -303,6 +433,7 @@ export function createMenus(
     }
 
     body.appendChild(mkBtn("Hướng dẫn chơi", () => openHelp()));
+    body.appendChild(mkBtn("Bảng gỡ lỗi", () => openDebug()));
     body.appendChild(
       mkBtn(
         c.strings.ui["newGame"] ?? "Chơi mới",
@@ -351,6 +482,20 @@ export function createMenus(
         <b style="color:var(--gold)">Làm từng việc một:</b> mỗi thao tác mất một nhịp mới xong,
         nên bấm loạn không nhanh hơn được. Đang vung tay thì chưa đi và chưa làm việc khác.
         <br><br>
+        <b style="color:var(--gold)">Khai thác địa hình:</b> chế <b>rìu</b> để chặt cây lớn,
+        cây nhỏ, gốc cây lấy <b>gỗ</b>; <b>cuốc chim</b> để đập đá lấy <b>đá</b>; bụi cỏ dại
+        thì tay không cũng phát được, ra <b>sợi</b>. Vạch vàng trên đầu vật thể cho biết còn
+        mấy nhát nữa là xong.
+        <br><br>
+        <b style="color:var(--gold)">Nước có hạn:</b> bình tưới cạn thì ra <b>giếng</b> hoặc
+        bờ ao bấm <kbd>E</kbd> múc đầy.
+        <br><br>
+        <b style="color:var(--gold)">Về nhà ngủ:</b> bấm <kbd>E</kbd> ở cửa để VÀO NHÀ, rồi
+        lên <b>giường</b> mới ngủ được. Trong nhà còn có <b>bàn chế tạo</b> để ghép công cụ.
+        <br><br>
+        <b style="color:var(--gold)">Cây lớn theo thời gian:</b> ô còn ẩm và trời còn sáng thì
+        cây lớn dần trông thấy, không phải đợi tới lúc ngủ. Cỏ dại cũng tự lan ra mỗi đêm.
+        <br><br>
         <b style="color:var(--gold)">Nông trại hiện đại:</b> đủ tiền sẽ mở vòi tưới tự động
         (khỏi tưới tay), sàn nhà kính (ô luôn ẩm), pin mặt trời (ra tiền + ra ĐIỆN) và
         drone thu hoạch (cần điện từ pin mặt trời).
@@ -367,6 +512,8 @@ export function createMenus(
     close,
     openShop,
     openSell,
+    openCraft,
+    openDebug,
     openPause,
     openHelp,
     refresh: () => current?.(),

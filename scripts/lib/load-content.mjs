@@ -19,9 +19,11 @@ export function rawPack() {
   return {
     manifest: readJson("manifest.json"),
     tiles: readJson("tiles.json"),
+    props: readJson("props.json"),
     crops: readJson("crops.json"),
     buildings: readJson("buildings.json"),
     items: readJson("items.json"),
+    recipes: readJson("recipes.json"),
     balance: readJson("balance.json"),
     progression: readJson("progression.json"),
     strings: readJson("strings.vi.json"),

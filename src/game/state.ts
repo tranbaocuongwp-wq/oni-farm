@@ -208,6 +208,8 @@ export function createNewGame(content: Content, seed = 1): GameState {
     logSeq: 0,
     sleeping: false,
     busy: 0,
+
+    water: Math.max(0, Math.floor(content.balance.startWater ?? 0)),
   };
 
   // Áp ngay mốc `start` (require rỗng) để cửa hàng có hàng từ giây đầu tiên.
