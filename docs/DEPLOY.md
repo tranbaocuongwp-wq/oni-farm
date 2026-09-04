@@ -1,49 +1,51 @@
 # Triển khai OniFarm
 
-Trang chạy trên **Cloudflare Pages**, project `oni-farm` → https://oni-farm.pages.dev
+**Tên miền chính: <https://oni-farm.pages.dev>**
+Cloudflare Pages · account `992bee08…c34f` · project `oni-farm` · production branch `main`
+· không có custom domain (danh sách `domains` chỉ chứa chính subdomain pages.dev).
 
 - Build: `npm run build` (chạy `content:build` rồi `vite build`)
-- Thư mục xuất bản: `dist/` (ở gốc repo, xem `vite.config.ts` → `build.outDir`)
-- Node: `22` (ghi trong `.node-version`, Cloudflare Pages đọc file này)
+- Thư mục xuất bản: `dist/` ở gốc repo (xem `vite.config.ts` → `build.outDir`)
+- Node: `22` (ghi trong `.node-version`)
 
-## Tự động deploy khi push (Pages ↔ GitHub)
+## Cách đang dùng: GitHub Actions (không cần máy cá nhân)
 
-Cloudflare **không cho gắn repo vào một Pages project kiểu Direct Upload đã tồn tại**
-(<https://developers.cloudflare.com/pages/configuration/git-integration/>).
-Project `oni-farm` ban đầu là Direct Upload, nên muốn có Git integration phải
-**xoá rồi tạo lại cùng tên** để giữ tên miền `oni-farm.pages.dev`.
+`.github/workflows/deploy.yml` chạy trên máy chủ GitHub mỗi khi push lên `main`:
 
-Các bước trên dashboard (chỉ làm một lần):
-
-1. <https://dash.cloudflare.com> → **Workers & Pages** → `oni-farm` → **Settings**
-   → cuối trang **Delete project**. (Mất lịch sử deploy cũ; tên miền
-   `oni-farm.pages.dev` được giải phóng để dùng lại ngay.)
-2. **Workers & Pages** → **Create application** → tab **Pages** → **Connect to Git**.
-3. **Add account** → cho phép app *Cloudflare Workers and Pages* truy cập repo
-   `tranbaocuongwp-wq/oni-farm` → chọn repo đó.
-4. Điền cấu hình build:
-   - Project name: `oni-farm`
-   - Production branch: `main`
-   - Framework preset: `None`
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: để trống (gốc repo)
-5. **Save and Deploy**. Từ đó mỗi `git push` lên `main` sẽ tự build + deploy;
-   push lên nhánh khác tạo preview deployment riêng.
-
-Sau khi bật, không cần chạy `npm run deploy` bằng tay nữa.
-
-## Deploy thủ công (dự phòng)
-
-```sh
-npm run build && npx wrangler pages deploy dist --project-name oni-farm --branch main
+```
+npm ci → npm run test:all → npm run build → wrangler pages deploy dist \
+    --project-name=oni-farm --branch=main --commit-dirty=true
 ```
 
-hoặc `npm run deploy`. Chỉ đẩy lại content pack OTA: `npm run deploy:content`.
+`--branch=main` trùng production branch của project ⇒ Cloudflare xếp bản deploy vào
+**Production**, nên `oni-farm.pages.dev` được cập nhật (không phải preview URL).
 
-## Ghi chú GitHub Actions
+Hai secret trong *Settings → Secrets and variables → Actions*:
 
-Đã từng thêm workflow Actions (`npm ci && npm run build && wrangler pages deploy`)
-ở commit `e301564` nhưng gỡ bỏ vì tài khoản GitHub đang bị khoá do vấn đề thanh
-toán nên job không khởi chạy được. Secret `CLOUDFLARE_ACCOUNT_ID` vẫn còn trong
-repo settings nếu sau này muốn khôi phục: `git show e301564 -- .github`.
+- `CLOUDFLARE_API_TOKEN` — cần quyền **Cloudflare Pages: Edit** trên account chứa project.
+- `CLOUDFLARE_ACCOUNT_ID` — `992bee08cd30f08fddd80b5a0cb4c34f`.
+
+Tạo lại token khi cần: dash.cloudflare.com → **My Profile → API Tokens → Create Token**
+→ *Create Custom Token* → Permissions: **Account · Cloudflare Pages · Edit** → giới hạn
+Account Resources vào đúng account trên. Rồi `gh secret set CLOUDFLARE_API_TOKEN` (dán
+qua stdin, đừng để lọt vào log).
+
+## Vì sao không dùng Git integration của Pages
+
+Cloudflare **không cho gắn repo vào Pages project kiểu Direct Upload đã tồn tại**
+(<https://developers.cloudflare.com/pages/configuration/git-integration/>). Project
+`oni-farm` là Direct Upload, muốn dùng Git integration phải xoá rồi tạo lại cùng tên —
+mất lịch sử deploy và có gián đoạn. GitHub Actions đạt cùng kết quả mà không phải xoá gì.
+
+## Deploy tay (đường lui)
+
+```sh
+npm run deploy          # build + đẩy cả site
+npm run deploy:content  # chỉ đẩy lại content pack OTA
+```
+
+## Sự cố đã gặp
+
+- **Job Actions chết sau ~3 giây, "your account is locked due to a billing issue"** —
+  khoá ở cấp tài khoản GitHub, không liên quan repo hay secret. Gỡ tại
+  <https://github.com/settings/billing>. Trong lúc chờ, deploy tay bằng lệnh trên.

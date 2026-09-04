@@ -39,6 +39,41 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 
 ---
 
+## Triển khai: sửa ở đâu cũng được, push là tự lên production
+
+**Tên miền chính: <https://oni-farm.pages.dev>** (Cloudflare Pages, project `oni-farm`,
+production branch `main`, không có custom domain).
+
+Quy trình thường ngày — **không cần MacBook, không cần cài gì**:
+
+1. Sửa code ở bất kỳ đâu (Claude Code trên cloud, GitHub web, máy khác…).
+2. `git push` lên nhánh `main`.
+3. GitHub Actions (`.github/workflows/deploy.yml`) tự chạy trên máy chủ GitHub:
+   `npm ci` → `npm run test:all` → `npm run build` → `wrangler pages deploy dist`.
+4. Vì deploy với `--branch=main` trùng production branch nên đây là **production
+   deployment**, `oni-farm.pages.dev` cập nhật ngay sau khi job xanh (~1–2 phút).
+
+Toàn bộ thông tin đăng nhập nằm ở 2 secret trong repo GitHub
+(*Settings → Secrets and variables → Actions*) — trên máy cá nhân không cần gì cả:
+
+| Secret | Dùng để |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Token API Cloudflare có quyền **Cloudflare Pages: Edit** |
+| `CLOUDFLARE_ACCOUNT_ID` | ID account Cloudflare chứa project `oni-farm` |
+
+Xem tiến độ: tab **Actions** của repo, hoặc `gh run watch`.
+
+Deploy tay chỉ là đường lui khi Actions hỏng:
+
+```sh
+npm run deploy          # build + đẩy cả site
+npm run deploy:content  # chỉ đẩy content pack OTA
+```
+
+Chi tiết và cách xử lý sự cố: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+---
+
 ## Chơi thế nào
 
 **Điện thoại / tablet**
