@@ -1469,33 +1469,52 @@ body[data-hand="left"] #abtn {
 
    Cụm dính vào GÓC MÀN HÌNH (theo camera), không dính vào nhân vật — nhân vật
    chạy khắp nơi, mà nút thì phải luôn nằm dưới ngón cái. */
+/* CẢM ỨNG / CHUỘT: một HÀNG NGANG, ba nút, cao đúng một nút.
+   Hình thoi chỉ có nghĩa khi có tay cầm — nó ở đó để KHỚP với mặt tay cầm. Bật
+   nó cho cảm ứng thì cụm cao gấp ba, đè lên hotbar trên màn hình nhỏ, và không
+   đổi lại được gì: ngón cái không có bốn vị trí cố định như tay cầm. */
 #abtn .btns {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+body[data-hand="left"] #abtn .btns {
+  flex-direction: row-reverse;
+}
+/* Nút BALO tròn CHỈ có ở chế độ tay cầm: cảm ứng đã có nút balo ngay cạnh
+   hotbar rồi, thêm một cái nữa là hai nút cùng việc chen nhau chỗ. */
+#abtn .btns .y {
+  display: none;
+}
+
+/* ---- CHỈ KHI CÓ TAY CẦM: xếp hình thoi y như mặt tay cầm ---- */
+body[data-input="pad"] #abtn .btns {
   display: grid;
-  /* Ba cột × ba hàng, bốn nút nằm ở bốn cạnh — chính giữa để trống. */
   grid-template-columns: repeat(3, auto);
   grid-template-rows: repeat(3, auto);
   align-items: center;
   justify-items: center;
   gap: 5px;
 }
-#abtn .btns .y {
+body[data-input="pad"] #abtn .btns .y {
+  display: grid;
   grid-area: 1 / 2;
 }
-#abtn .btns .auto {
+body[data-input="pad"] #abtn .btns .auto {
   grid-area: 2 / 1;
 }
-#abtn .btns .b {
+body[data-input="pad"] #abtn .btns .b {
   grid-area: 2 / 3;
 }
-#abtn .btns .a {
+body[data-input="pad"] #abtn .btns .a {
   grid-area: 3 / 2;
 }
 /* Tay trái: lật NGANG cụm, giữ nguyên trên–dưới. Nút chính vẫn ở dưới vì đó
    là chỗ ngón cái nghỉ, dù cầm máy tay nào. */
-body[data-hand="left"] #abtn .btns .auto {
+body[data-hand="left"][data-input="pad"] #abtn .btns .auto {
   grid-area: 2 / 3;
 }
-body[data-hand="left"] #abtn .btns .b {
+body[data-hand="left"][data-input="pad"] #abtn .btns .b {
   grid-area: 2 / 1;
 }
 #abtn button {
@@ -2421,4 +2440,54 @@ body[data-motion="reduce"] .selname.fade {
 .hud-bottom {
   flex-direction: column;
   align-items: center;
+}
+
+/* ==========================================================================
+   MÀN HÌNH NHỎ / KHÔNG CÓ TAY CẦM — giản lược lại.
+
+   Ảnh chụp trên iPhone trong Safari cho thấy chỗ hỏng rõ nhất: trình duyệt ăn
+   mất gần một phần ba chiều cao bằng thanh địa chỉ và thanh công cụ, nên phần
+   còn lại cho game chỉ khoảng 600px. Ở đó cụm nút, hotbar và dòng "vì sao
+   không làm được" chen nhau vào cùng một dải.
+
+   Nguyên tắc: chiều cao là thứ khan hiếm, nên cắt theo chiều cao — nút nhỏ lại,
+   khe hẹp lại, và dòng lý do phải NGẮN chứ không được xuống hai hàng.
+   ========================================================================== */
+@media (max-height: 700px) {
+  :root {
+    --btn-a: 62px;
+    --btn-b: 46px;
+    --hud-gap: 6px;
+  }
+  /* Cụm nút phải nằm HẲN dưới dải hotbar. Đo trên 375×600: cột cao 113px, đặt
+     cách đáy 14px thì đỉnh nó rơi vào 473 trong khi hotbar kết thúc ở 475 —
+     đúng hai pixel, đủ để nút XÂY đè lên góc nút balo. Hạ xuống 8px là hết. */
+  #abtn {
+    gap: 4px;
+    bottom: calc(8px + var(--sa-b));
+  }
+  #abtn .why {
+    /* Một hàng, cắt bớt nếu dài: dòng lý do xuống hai hàng là đẩy cả cụm nút
+       lên đè vào hotbar. */
+    max-width: 42vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 2px 8px;
+  }
+  #minimap {
+    width: clamp(70px, 15vw, 108px);
+  }
+}
+
+/* Màn hình RẤT nhỏ: bỏ luôn bản đồ nhỏ. Nó là tiện ích, còn hotbar và nút
+   hành động là thứ không có thì không chơi được. */
+@media (max-height: 560px) {
+  :root {
+    --btn-a: 56px;
+    --btn-b: 42px;
+  }
+  #minimap {
+    display: none;
+  }
 }
