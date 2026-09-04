@@ -405,8 +405,15 @@ export function validateActors(raw: unknown): string[] {
     k.enumStr(item, "housing", HOUSINGS);
     if (item["pen"] !== undefined && !isStr(item["pen"]))
       k.fail("pen", "phải là id một khu trong tiles.json:pens");
+    /* Nhận cả ba dạng: mảng (chuẩn), một chuỗi hoặc null (pack cũ trước khi
+       mỗi loài có nhiều món ăn). Loader chuẩn hoá về mảng. */
     const feed = item["feed"];
-    if (feed !== null && !isStr(feed)) k.fail("feed", "phải là id vật phẩm hoặc null");
+    if (feed !== undefined && feed !== null && !isStr(feed)) {
+      if (!Array.isArray(feed)) k.fail("feed", "phải là mảng id vật phẩm (hoặc một chuỗi / null cho pack cũ)");
+      else feed.forEach((v, j) => { if (!isStr(v)) k.fail(`feed[${j}]`, "phải là id vật phẩm"); });
+    }
+    if (item["pecks"] !== undefined && typeof item["pecks"] !== "boolean")
+      k.fail("pecks", "phải là boolean (true = mổ sâu trên nền cỏ thường)");
     k.num(item, "fedMinutes", 1, 100000);
     k.num(item, "matureDays", 0, 999);
     k.num(item, "starveDays", 0, 99999);
@@ -788,8 +795,11 @@ export function validateTiles(raw: unknown): string[] {
         // Ruột phải có thật: khu rộng 0 ô là khu mà không con nào về được.
         k.num(v, "w", 1, 1000);
         k.num(v, "h", 1, 1000);
-        if (v["feed"] !== undefined && !isStr(v["feed"]))
-          k.fail("feed", "phải là id vật phẩm mà máng trong khu này nhận");
+        const pf = v["feeds"];
+        if (pf !== undefined) {
+          if (!Array.isArray(pf)) k.fail("feeds", "phải là mảng id vật phẩm đổ được vào máng khu này");
+          else pf.forEach((q, j) => { if (!isStr(q)) k.fail(`feeds[${j}]`, "phải là id vật phẩm"); });
+        }
         if (v["swim"] !== undefined && typeof v["swim"] !== "boolean")
           k.fail("swim", "phải là boolean (true = khu dưới nước, ruột là ô nước)");
         c.merge(k);

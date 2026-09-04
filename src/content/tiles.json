@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feed` nói máng trong khu ăn thức ăn gì — loài nào có `feed` trùng thì dùng CHUNG máng đó, nên bò/dê/cừu chia nhau một máng rơm. Khu không có `feed` (gia cầm) thì không có máng: gà vịt mổ sâu trên cỏ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feeds` liệt kê MỌI thứ đổ được vào máng khu này — loài nào ăn một trong số đó thì dùng CHUNG cái máng, nên bò/dê/cừu chia nhau một máng. Khu DƯỚI NƯỚC (`swim`) cũng có `feeds` nhưng KHÔNG có máng: đứng bờ ao bấm CHO CÁ ĂN, chứ không đặt được cái máng giữa hồ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.",
   "grounds": {
     "water": {
       "solid": true,
@@ -166,7 +166,11 @@
       "y": 14,
       "w": 8,
       "h": 4,
-      "feed": "item:hay"
+      "feeds": [
+        "item:hay",
+        "item:fodder",
+        "item:feedmix"
+      ]
     },
     {
       "id": "pigpen",
@@ -176,7 +180,12 @@
       "y": 21,
       "w": 8,
       "h": 2,
-      "feed": "item:fodder"
+      "feeds": [
+        "item:fodder",
+        "item:feedmix",
+        "crop:radish",
+        "crop:carrot"
+      ]
     },
     {
       "id": "coop",
@@ -185,7 +194,11 @@
       "x": 29,
       "y": 26,
       "w": 8,
-      "h": 2
+      "h": 2,
+      "feeds": [
+        "item:feedmix",
+        "crop:corn"
+      ]
     },
     {
       "id": "pond",
@@ -195,7 +208,11 @@
       "y": 2,
       "w": 4,
       "h": 5,
-      "swim": true
+      "swim": true,
+      "feeds": [
+        "item:fishfeed",
+        "item:fodder"
+      ]
     }
   ]
 }

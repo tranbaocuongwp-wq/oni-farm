@@ -2080,6 +2080,34 @@ function makeMaterialIcon(id: string): HTMLCanvasElement {
     s.disc(6, 7, 2, "#a2a8b1");
     s.px(4, 9, "#6b7078");
     s.px(5, 6, "#ffffff");
+  } else if (id === "hay") {
+    // BÓ RƠM: vàng, buộc dây ngang. Phải khác hẳn "cỏ khô" — hai thứ này đứng
+    // cạnh nhau trong tab Thức ăn, mà cùng một hình thì tab đó vô dụng.
+    for (let i = 0; i < 6; i++) s.vline(2 + i * 2, 2 + (i % 2), 11, i % 2 ? "#d9b24a" : "#efd07a");
+    s.rect(2, 7, 12, 2, "#8a6440");
+    s.hline(2, 7, 12, "#a37c52");
+  } else if (id === "fodder") {
+    // CỎ KHÔ: bó thấp hơn, ngả xanh-ô-liu, buộc hai dây.
+    for (let i = 0; i < 5; i++) s.vline(3 + i * 2, 4 + (i % 2), 9, i % 2 ? "#6aa84f" : "#9ab86a");
+    s.rect(2, 7, 12, 1, "#6b4a2c");
+    s.rect(2, 10, 12, 1, "#6b4a2c");
+  } else if (id === "feedmix") {
+    // BAO CÁM: cái bao đứng, miệng gấp, có vệt hạt đổ ra.
+    s.rect(3, 4, 10, 10, "#c9a06a");
+    s.rect(4, 5, 8, 8, "#e0bd8a");
+    s.rect(3, 3, 10, 2, "#8a6440");
+    s.rect(5, 8, 6, 3, "#a3762f");
+    s.px(6, 9, "#efd07a");
+    s.px(9, 9, "#efd07a");
+    s.px(8, 10, "#efd07a");
+  } else if (id === "fishfeed") {
+    // CÁM CÁ: hộp xanh nước, viên tròn nổi bên trên.
+    s.rect(3, 6, 10, 8, "#2f6f8a");
+    s.rect(4, 7, 8, 6, "#4a9ab5");
+    s.rect(3, 5, 10, 2, "#1f4d61");
+    s.disc(6, 3, 1, "#efd07a");
+    s.disc(9, 3, 1, "#d9b24a");
+    s.px(8, 1, "#efd07a");
   } else {
     for (let i = 0; i < 5; i++) {
       const x = 3 + i * 2;

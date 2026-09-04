@@ -1,5 +1,5 @@
 {
-  "$comment": "Công cụ và VẬT LIỆU. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) sinh tự động từ crops.json. Vật liệu mang tiền tố item:<id>.\n\ntool.action quyết định công cụ làm được gì; tool.power là số nhát ăn được mỗi lần vung (rìu thép bổ 2 nhát/lần); tool.capacity là sức chứa của bình tưới.",
+  "$comment": "Công cụ và VẬT LIỆU. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) sinh tự động từ crops.json. Vật liệu mang tiền tố item:<id>.\n\ntool.action quyết định công cụ làm được gì; tool.power là số nhát ăn được mỗi lần vung (rìu thép bổ 2 nhát/lần); tool.capacity là sức chứa của bình tưới.\n\nbuyPrice: vật liệu MUA được ở cửa hàng (tab Thức ăn). Vắng = chỉ nhặt/chế được, không bán ra. Có nó thì việc nuôi không còn phụ thuộc hoàn toàn vào việc đi cắt cỏ: hết cỏ vẫn mua được cám, chỉ là tốn tiền hơn — một lựa chọn, chứ không phải một ngõ cụt.",
   "tools": [
     {
       "id": "hoe",
@@ -62,7 +62,8 @@
     {
       "id": "fodder",
       "name": "Cỏ khô",
-      "sellPrice": 4
+      "sellPrice": 4,
+      "buyPrice": 7
     },
     {
       "id": "medicine",
@@ -131,8 +132,21 @@
     },
     {
       "id": "hay",
-      "name": "Cỏ khô",
-      "sellPrice": 6
+      "name": "Rơm",
+      "sellPrice": 6,
+      "buyPrice": 10
+    },
+    {
+      "id": "feedmix",
+      "name": "Cám tổng hợp",
+      "sellPrice": 7,
+      "buyPrice": 16
+    },
+    {
+      "id": "fishfeed",
+      "name": "Cám cá",
+      "sellPrice": 8,
+      "buyPrice": 20
     }
   ]
 }

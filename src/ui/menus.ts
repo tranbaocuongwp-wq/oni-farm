@@ -118,7 +118,7 @@ export function createMenus(
 ): Menus {
   let current: (() => void) | null = null;
   /** tab đang chọn của cửa hàng — nhớ giữa các lần mở */
-  let shopTab: "seed" | "build" | "animal" | "worker" = "seed";
+  let shopTab: "seed" | "feed" | "build" | "animal" | "worker" = "seed";
   /** số lượng đang chọn ở quầy bán, theo id */
   const sellQty = new Map<string, number>();
 
@@ -399,6 +399,7 @@ export function createMenus(
       tabs.appendChild(b);
     };
     mkTab("seed", "Hạt giống");
+    mkTab("feed", "Thức ăn");
     mkTab("build", "Công trình");
     mkTab("animal", "Vật nuôi");
     mkTab("worker", "Người làm");
@@ -445,6 +446,45 @@ export function createMenus(
           sea
             ? `Mùa ${sea.name} — ${shown} loại hạt đang bán, còn ${left} ngày nữa sang mùa. Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.`
             : "Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.",
+        ),
+      );
+    } else if (shopTab === "feed") {
+      /* THỨC ĂN mua được. Có tab này vì nuôi mà chỉ trông vào việc đi cắt cỏ
+         là một ngõ cụt: hết cỏ quanh chuồng thì cả đàn chết dù trong túi đầy
+         tiền. Mua thì đắt hơn tự cắt — đó là chỗ đánh đổi, không phải chỗ
+         thay thế. Món nào loài nào ăn được thì ghi thẳng lên thẻ. */
+      const gf = cardGrid();
+      let coMon = 0;
+      for (const id of c.materialOrder) {
+        const m = c.materials[id]!;
+        const gia = m.buyPrice ?? 0;
+        if (gia <= 0) continue;
+        coMon++;
+        const mo = s.unlocked.includes(`item:${id}`);
+        const an = c.animalOrder
+          .filter((a) => c.animals[a]?.job !== "pest" && c.animals[a]?.feed.includes(`item:${id}`))
+          .map((a) => c.animals[a]!.name);
+        gf.appendChild(
+          buyCard({
+            art: `item:${id}`,
+            name: mo ? m.name : "???",
+            subs: [mo ? (an.length ? `cho ${an.join(", ")}` : "chưa loài nào ăn") : "chưa mở"],
+            price: money(gia),
+            locked: !mo,
+            disabled: !mo || s.money < gia,
+            onClick: () => {
+              h.buy(`item:${id}`, 1);
+              openShop();
+            },
+          }),
+        );
+      }
+      body.appendChild(gf);
+      foot.appendChild(
+        note(
+          coMon
+            ? "Đổ vào MÁNG trong khu chuồng để cả đàn ăn dần, hoặc đứng cạnh con vật bấm CHO ĂN. Cá thì đứng bờ ao bấm CHO CÁ ĂN."
+            : "Chưa có thức ăn nào bày bán.",
         ),
       );
     } else if (shopTab === "worker") {
@@ -519,7 +559,9 @@ export function createMenus(
             subs: mo
               ? [
                   sanPham || (thit ? `thịt: ${thit}` : ""),
-                  a.feed ? `ăn ${itemLabel(a.feed, c)}` : "tự kiếm ăn",
+                  a.feed.length
+                    ? `ăn ${a.feed.map((f) => itemLabel(f, c)).join(", ")}`
+                    : "tự kiếm ăn",
                   /* Nói TÊN KHU nó sẽ về, không nói "cần rào" nữa: nông trại
                      đã chia lô sẵn nên người chơi không phải chuẩn bị gì, chỉ
                      cần biết mua xong ra đâu mà tìm con vật. */

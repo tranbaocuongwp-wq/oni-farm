@@ -231,9 +231,9 @@ function animalCard(a) {
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>${ngay(a.matureDays)}</dd></div>
-              <div><dt>Ăn gì</dt><dd>${a.feed ? esc(itemName(a.feed)) : "Tự kiếm ăn"}</dd></div>
+              <div><dt>Ăn gì</dt><dd>${a.feed.length ? a.feed.map((f) => esc(itemName(f))).join(", ") : "Tự kiếm ăn"}${a.pecks ? " · mổ sâu trên cỏ" : ""}</dd></div>
               <div><dt>Về đâu</dt><dd>${penOf(a) ? `${esc(penOf(a).name)}${penOf(a).feed ? ", có máng" : ""}` : "Không có chuồng — đi khắp nông trại"}</dd></div>
-              <div><dt>Bỏ đói</dt><dd>${a.feed ? `Chết sau ${ngay(a.starveDays)} nhịn liên tiếp` : "Không chết đói"}</dd></div>
+              <div><dt>Bỏ đói</dt><dd>${a.pecks ? "Gần như không chết đói — còn cỏ là còn ăn" : `Chết sau ${ngay(a.starveDays)} nhịn liên tiếp`}</dd></div>
             </dl>
             ${sp || thit ? `<ul class="prods">${sp}${thit}</ul>` : ""}
           </div>
@@ -287,10 +287,37 @@ ${(content.tiles.pens ?? [])
             <h3>${esc(pen.name)}</h3>
             <p class="ent-sub">${pen.w}×${pen.h} ô${pen.swim ? " · dưới nước, không cần rào" : " · có rào, cổng mở ra đường"}</p>
             <p>${o.length ? `Nuôi: ${o.map((a) => esc(a.name)).join(", ")}.` : "Chưa loài nào ở đây."} ${
-              pen.feed
-                ? `Máng trong khu nhận ${esc(itemName(pen.feed))} — đứng cạnh máng, cầm ${esc(itemName(pen.feed))} rồi bấm ĐỔ MÁNG. Máng chứa ${content.balance.troughMax ?? 12} phần; con vật đói tự tới ăn, mỗi bữa một phần.`
-                : "Khu này không có máng: gà vịt mổ sâu trên cỏ nên không cần ai đổ gì."
+              (pen.feeds ?? []).length === 0
+                ? "Khu này không có máng."
+                : pen.swim
+                  ? `Không đặt được máng giữa hồ: đứng bờ ao, cầm ${(pen.feeds ?? []).map((f) => esc(itemName(f))).join(" hoặc ")} rồi bấm CHO CÁ ĂN — cả đàn đang đói ăn cùng lúc.`
+                  : `Máng trong khu nhận ${(pen.feeds ?? []).map((f) => esc(itemName(f))).join(", ")} — đứng cạnh máng, cầm một trong số đó rồi bấm ĐỔ MÁNG. Máng chứa ${content.balance.troughMax ?? 12} phần; con vật đói tự tới ăn, mỗi bữa một phần.`
             }</p>
+          </div>
+        </article>`;
+  })
+  .join("\n")}
+        </div>
+      </div>
+    </section>
+    <section>
+      <div class="wrap">
+        <h2>Thức ăn</h2>
+        <p class="lead">Mỗi loài ăn được vài món chứ không phải đúng một món — hết thứ này thì còn thứ kia. Cắt cỏ dày lấy rơm, bó sợi cỏ thành cỏ khô, hoặc mua thẳng ở tab <b>Thức ăn</b> trong cửa hàng: mua thì đắt hơn tự cắt, đó là chỗ đánh đổi.</p>
+        <div class="ents">
+${content.materialOrder
+  .map((id) => content.materials[id])
+  .filter((m) => (m.buyPrice ?? 0) > 0)
+  .map((m) => {
+    const an = content.animalOrder
+      .map((id) => content.animals[id])
+      .filter((a) => a && a.job !== "pest" && a.feed.includes(`item:${m.id}`));
+    return `        <article class="ent sm">
+          <div class="ent-art">${cx(`item:${m.id}`, 40, m.name)}</div>
+          <div class="ent-main">
+            <h3>${esc(m.name)}</h3>
+            <p class="ent-sub">Mua ${tien(m.buyPrice)}đ · bán ${tien(m.sellPrice)}đ</p>
+            <p>${an.length ? `Cho: ${an.map((a) => esc(a.name)).join(", ")}.` : "Chưa loài nào ăn."}</p>
           </div>
         </article>`;
   })

@@ -19,13 +19,13 @@ import type { Content, GameState, StoredMap, Tile } from "./types.ts";
 import {
   TILE,
   blockedAt,
+  blockedForActor,
   buildFromMap,
+  nudgeForActor,
   nudgeOutOfSolid,
   spawnMapId,
   tileCenterX,
   tileCenterY,
-  blockedAtBox,
-  blockedForActor,
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { parseItem } from "./items.ts";
@@ -518,8 +518,13 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
           h: grid.h,
           tiles: grid.tiles,
         };
-        if (box && blockedAtBox(probe, content, fixed.x, fixed.y, box.w, box.h)) {
-          const p = nudgeOutOfSolid(probe, content, fixed.x, fixed.y);
+        /* Hỏi theo ĐÚNG loài. Con cá bơi: nước là chỗ nó đứng được, bờ mới
+           là ô cấm. Dùng luật đi bộ ở đây thì mỗi lần nạp save (và mỗi lần đẩy
+           OTA) con cá lại bị "gỡ kẹt" từ dưới ao lên bãi cỏ — rồi chính
+           `checkInvariants` bên dưới tố cáo cái state mà hàm này vừa tạo ra. */
+        const boi = en.kind === "animal" && content.animals[en.def]?.housing === "water";
+        if (box && blockedForActor(probe, content, fixed.x, fixed.y, box.w, box.h, boi)) {
+          const p = nudgeForActor(probe, content, fixed.x, fixed.y, box.w, box.h, boi);
           fixed.x = p.x;
           fixed.y = p.y;
         }

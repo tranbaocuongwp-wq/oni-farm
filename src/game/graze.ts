@@ -32,13 +32,16 @@ import { TILE, idx, tileAt, tileIndexAt } from "./world.ts";
  *  bằng tay vẫn phải hơn hẳn việc tự gặm, nếu không thì máng cỏ vô nghĩa. */
 const GRAZE_FILL = 0.7;
 
-/** Bụi cỏ nào rụng ra `feedId`. Duyệt content chứ không liệt kê id bằng tay. */
-function propsDropping(content: Content, feedId: string): Set<string> {
+/** Bụi cỏ nào rụng ra MỘT TRONG các món loài này ăn. Duyệt content chứ không
+ *  liệt kê id bằng tay, nên thêm "cỏ ba lá" rụng rơm là bò tự biết ăn. */
+function propsDropping(content: Content, feeds: readonly string[]): Set<string> {
   const out = new Set<string>();
+  if (!feeds.length) return out;
+  const want = new Set(feeds);
   for (const id of content.propOrder) {
     const p = content.props[id];
     if (!p?.drops) continue;
-    for (const dr of p.drops) if (dr.id === feedId) out.add(id);
+    for (const dr of p.drops) if (want.has(dr.id)) out.add(id);
   }
   return out;
 }
@@ -56,12 +59,14 @@ export function grazeableAt(
   // Ruộng đã cày hay đang có cây thì KHÔNG phải bãi chăn — con bò gặm luống rau
   // là thứ người chơi sẽ nhớ rất lâu, theo nghĩa xấu.
   if (t.tilled || t.crop) return false;
-  if (def.feed) {
-    if (t.prop === null) return false;
-    return propsDropping(content, def.feed).has(t.prop);
-  }
-  // Gà vịt mổ sâu: chỉ cần nền cỏ trống.
-  return t.g === "grass" && t.prop === null && t.b === null;
+  /* Hai đường ăn tự nhiên, KHÔNG loại trừ nhau:
+       · bụi cỏ nào rụng ra thứ nó ăn được  → gặm bụi đó (bụi biến mất)
+       · `pecks` (gà, vịt)                  → mổ sâu trên nền cỏ trống
+     Trước đây gộp làm một qua `feed: null`, nên cho gà ăn cám được là lập tức
+     mất luôn khả năng tự kiếm ăn của nó. */
+  if (t.prop !== null) return propsDropping(content, def.feed).has(t.prop);
+  if (def.pecks) return t.g === "grass" && t.b === null;
+  return false;
 }
 
 /**
@@ -110,7 +115,13 @@ export function grazeHere(d: Draft, content: Content, i: number): boolean {
   const y = Math.floor(cur.y / TILE);
   if (!grazeableAt(d.s, content, def, x, y)) return false;
 
-  if (def.feed) {
+  /* Ăn BỤI thì bụi mất; mổ sâu trên nền cỏ trống thì không mất gì — sâu mọc
+     lại, còn bãi cỏ thì phải chờ mọc, và chính chỗ khác nhau đó là lý do nuôi
+     bò khó hơn nuôi gà. Điều kiện là "ô có bụi không", chứ không phải "loài
+     này có ăn được đồ cho ăn không": từ khi gà cũng ăn cám thì hai câu đó
+     không còn trùng nhau nữa. */
+  const t = tileAt(d.s, x, y);
+  if (t && t.prop !== null) {
     const ti = tileIndexAt(d.s, x, y);
     if (ti < 0) return false;
     const m = dTile(d, ti);

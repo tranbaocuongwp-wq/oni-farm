@@ -16,7 +16,7 @@ import type { Content, GameState, InteractKind } from "./types.ts";
 import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
-import { troughFeedAt, troughMax, troughStock } from "./pen.ts";
+import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { inReach, interactAt, isRipe, tileAt, propDef } from "./world.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
@@ -65,6 +65,7 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   lift: "NHẤC",
   putdown: "ĐẶT XUỐNG",
   pour: "ĐỔ MÁNG",
+  feedpond: "CHO CÁ ĂN",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -106,11 +107,19 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
     return "Không đặt xuống được ở đây";
   }
 
+  const ao = pondAt(state, content, x, y);
+  if (ao) {
+    const cam = selectedItemId(state.inv, state.sel);
+    if (!cam || !(ao.feeds ?? []).includes(cam))
+      return `Cầm ${(ao.feeds ?? []).map((f) => itemName(f, content)).join(" / ")} để cho cá ăn`;
+    return "Chưa con nào đói";
+  }
+
   if (t.prop === "trough") {
-    const feed = troughFeedAt(state, content, x, y);
-    if (!feed) return "Máng ngoài khu chuồng";
+    const feeds = troughFeedsAt(state, content, x, y);
+    if (!feeds.length) return "Máng ngoài khu chuồng";
     if (troughStock(state, x, y) >= troughMax(content)) return "Máng đã đầy";
-    return `Cầm ${itemName(feed, content)} để đổ`;
+    return `Cầm ${feeds.map((f) => itemName(f, content)).join(" / ")} để đổ`;
   }
   if (t.prop) {
     const def = propDef(content, t.prop);

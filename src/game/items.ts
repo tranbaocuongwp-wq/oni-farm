@@ -76,6 +76,9 @@ export function buyPriceOf(id: string, content: Content): number {
   if (!it) return content.buildings[id]?.price ?? 0;
   if (it.kind === "seed") return content.crops[it.ref]?.seedPrice ?? 0;
   if (it.kind === "build") return content.buildings[it.ref]?.price ?? 0;
+  // Vật liệu chỉ bày bán khi content khai `buyPrice`. Vắng = nhặt/chế được
+  // thôi, không mua được — nên không cần một danh sách "thứ bán được" riêng.
+  if (it.kind === "item") return content.materials[it.ref]?.buyPrice ?? 0;
   return 0;
 }
 
@@ -92,6 +95,8 @@ export function shopItemId(id: string, content: Content): string | null {
   if (it) {
     if (it.kind === "seed") return Object.hasOwn(content.crops, it.ref) ? id : null;
     if (it.kind === "build") return Object.hasOwn(content.buildings, it.ref) ? id : null;
+    if (it.kind === "item")
+      return (content.materials[it.ref]?.buyPrice ?? 0) > 0 ? id : null;
     return null;
   }
   return Object.hasOwn(content.buildings, id) ? `build:${id}` : null;

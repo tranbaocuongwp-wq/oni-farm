@@ -18,7 +18,7 @@
 import type { Content, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
-import { addItem, canAdd, countItem, removeItem } from "./inventory.ts";
+import { addItem, canAdd, countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
@@ -103,7 +103,8 @@ export interface AnimalStats {
   hungryDays: number;
   /** Nhịn thêm mấy ngày nữa thì chết. -1 = loài tự kiếm ăn, không chết đói. */
   daysToStarve: number;
-  feed: string | null;
+  /** Mọi món loài này ăn được. Rỗng = không cho ăn tay được. */
+  feed: string[];
   products: ProductLine[];
   /** Thịt bán được, hoặc null. */
   meat: { id: string; min: number; max: number } | null;
@@ -145,7 +146,7 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
     hungry: isHungry(e),
     hungryDays: e.animal.hungryDays,
     daysToStarve: Math.max(0, def.starveDays - e.animal.hungryDays),
-    feed: def.feed ?? null,
+    feed: def.feed,
     products,
     meat: def.meat ? { id: def.meat.id, min: def.meat.min, max: def.meat.max } : null,
   };
@@ -207,7 +208,7 @@ export function feedAnimal(d: Draft, content: Content, x: number, y: number): bo
   if (!e) return false;
   const def = animalDef(content, e.def);
   if (!def) return false;
-  if (!def.feed) {
+  if (!def.feed.length) {
     toastText(d, `${def.name} tự kiếm ăn quanh sân, không cần cho ăn.`, "info");
     return false;
   }
@@ -215,11 +216,23 @@ export function feedAnimal(d: Draft, content: Content, x: number, y: number): bo
     toastText(d, `${def.name} còn no.`, "info");
     return false;
   }
-  if (countItem(d.s.inv, def.feed) <= 0) {
-    toastText(d, `Không có ${itemName(def.feed, content)} trong túi.`, "bad");
+  /* Ưu tiên món ĐANG CẦM, nếu không thì lấy món đầu tiên trong túi mà nó ăn
+     được. Không ưu tiên món đang cầm thì cầm bó rơm bấm cho ăn lại thấy game
+     lẳng lặng tiêu mất cân cám đắt hơn trong balo. */
+  const cam = selectedItemId(d.s.inv, d.s.sel);
+  const mon =
+    cam && def.feed.includes(cam) && countItem(d.s.inv, cam) > 0
+      ? cam
+      : def.feed.find((f) => countItem(d.s.inv, f) > 0);
+  if (!mon) {
+    toastText(
+      d,
+      `Không có gì cho ${def.name} ăn — nó ăn ${def.feed.map((f) => itemName(f, content)).join(", ")}.`,
+      "bad",
+    );
     return false;
   }
-  const left = removeItem(d.s.inv, def.feed, 1);
+  const left = removeItem(d.s.inv, mon, 1);
   if (!left) return false;
   setInv(d, left);
 
@@ -228,7 +241,7 @@ export function feedAnimal(d: Draft, content: Content, x: number, y: number): bo
   if (!m) return false;
   m.animal.fed = def.fedMinutes;
   m.animal.hungryDays = 0;
-  toastText(d, `Đã cho ${def.name} ăn.`, "good");
+  toastText(d, `Đã cho ${def.name} ăn ${itemName(mon, content)}.`, "good");
   return true;
 }
 

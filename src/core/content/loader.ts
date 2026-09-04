@@ -133,6 +133,10 @@ export function validatePack(raw: RawPack): string[] {
     // tố vật phẩm: con vật sống không bao giờ vào túi đồ, nên nó không cần và
     // không được có mặt trong hệ vật phẩm.
     ...[...animalIds].map((id) => `animal:${id}`),
+    /* Vật liệu BÁN ĐƯỢC (có `buyPrice`) cũng phải qua mốc mở khoá, cùng luật
+       với hạt và công trình: bày bó rơm ở cửa hàng trước khi người chơi có con
+       bò nào là bày một món không dùng vào đâu. */
+    ...(items.materials ?? []).filter((m) => (m.buyPrice ?? 0) > 0).map((m) => `item:${m.id}`),
   ]);
 
   for (const key of Object.keys(balance.startSeeds ?? {})) {
@@ -159,6 +163,12 @@ export function validatePack(raw: RawPack): string[] {
   // Cây không nằm trong mốc nào thì vĩnh viễn không mua được ở cửa hàng: nó tồn
   // tại trong content, tốn công vẽ, nhưng người chơi không bao giờ chạm tới.
   // Đây là lỗi im lặng đúng kiểu dễ lọt khi bộ cây trồng phình to, nên chặn hẳn.
+  for (const m of items.materials ?? [])
+    if ((m.buyPrice ?? 0) > 0 && !unlockedAt.has(`item:${m.id}`))
+      errors.push(
+        `items.json: vật liệu '${m.id}' có buyPrice nhưng không mốc nào mở khoá — sẽ không bao giờ mua được`,
+      );
+
   for (const id of cropIds)
     if (!unlockedAt.has(`seed:${id}`))
       errors.push(
@@ -236,7 +246,8 @@ export function validatePack(raw: RawPack): string[] {
         if (!id) return;
         if (!knownItem(id)) errors.push(`actors '${a.id}': ${where} trỏ vào '${id}' không tồn tại`);
       };
-      check(a.feed, "feed");
+      for (const f of (Array.isArray(a.feed) ? a.feed : a.feed ? [a.feed] : []) as string[])
+        check(f, `feed '${f}'`);
       for (const p of a.products ?? []) check(p.id, `products '${p.id}'`);
       check(a.meat?.id, "meat");
       // Con vật KHÔNG sản phẩm mà cũng KHÔNG bán thịt được và cũng không có việc
@@ -294,8 +305,8 @@ export function validatePack(raw: RawPack): string[] {
       errors.push(`tiles.pens '${pen.id}': ruột khu tràn ra ngoài bản đồ '${pen.map}'`);
       continue;
     }
-    if (pen.feed && !knownItem(pen.feed))
-      errors.push(`tiles.pens '${pen.id}': feed '${pen.feed}' không có vật phẩm này`);
+    for (const f of pen.feeds ?? [])
+      if (!knownItem(f)) errors.push(`tiles.pens '${pen.id}': feeds có '${f}' — không có vật phẩm này`);
 
     /* Ruột khu phải ĐI ĐƯỢC và phải chứa MÁNG nếu khu có `feed`. Ô đặc lọt vào
        ruột (một gốc cây quên dọn) thì tính diện tích nói dối; khu có `feed` mà
@@ -311,10 +322,18 @@ export function validatePack(raw: RawPack): string[] {
           sai++;
       }
     const solid = sai;
-    if (pen.feed && troughs === 0)
-      errors.push(`tiles.pens '${pen.id}': khu ăn '${pen.feed}' nhưng trong ruột không có máng nào`);
-    if (!pen.feed && troughs > 0)
-      errors.push(`tiles.pens '${pen.id}': có máng nhưng khu không khai 'feed' — máng đó đổ gì cũng không vào`);
+    const coAn = (pen.feeds ?? []).length > 0;
+    /* Khu DƯỚI NƯỚC cố ý KHÔNG có máng: không đặt được cái máng giữa hồ, nên
+       cá được cho ăn từ bờ (nút CHO CÁ ĂN). Khu trên cạn thì ngược lại — khai
+       đồ ăn mà không có máng thì đổ vào đâu. */
+    if (pen.swim) {
+      if (troughs > 0)
+        errors.push(`tiles.pens '${pen.id}': khu dưới nước không đặt máng được — cho ăn từ bờ`);
+    } else if (coAn && troughs === 0) {
+      errors.push(`tiles.pens '${pen.id}': khu có đồ ăn nhưng trong ruột không có máng nào`);
+    } else if (!coAn && troughs > 0) {
+      errors.push(`tiles.pens '${pen.id}': có máng nhưng khu không khai 'feeds' — máng đó đổ gì cũng không vào`);
+    }
     if (solid > 0)
       errors.push(
         pen.swim
@@ -401,7 +420,16 @@ export function buildContent(raw: RawPack): Content {
   // Vật nuôi và sâu bọ dùng CHUNG một bảng: cùng cấu trúc, cùng bộ máy di
   // chuyển, chỉ khác `job`. Tách hai bảng chỉ tổ phải tra hai chỗ.
   const actorPack = (raw.actors ?? null) as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
-  const animalList = [...(actorPack?.animals ?? []), ...(actorPack?.pests ?? [])];
+  /* `feed` về MỘT dạng duy nhất — MẢNG — ngay tại cửa vào. Pack cũ viết một
+     chuỗi (hoặc null) vì hồi đó mỗi loài chỉ ăn đúng một món; để cả hai dạng
+     chạy sâu vào trong game là mỗi nơi đọc lại phải tự đoán, và chỗ nào quên
+     đoán thì hỏng âm thầm. */
+  const chuanFeed = (a: AnimalDef): AnimalDef => {
+    const f = a.feed as unknown;
+    const list = Array.isArray(f) ? f.filter((v) => typeof v === "string") : typeof f === "string" ? [f] : [];
+    return { ...a, feed: list as string[] };
+  };
+  const animalList = [...(actorPack?.animals ?? []), ...(actorPack?.pests ?? [])].map(chuanFeed);
   const vehicleList = (actorPack as { vehicles?: VehicleDef[] } | null)?.vehicles ?? [];
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>

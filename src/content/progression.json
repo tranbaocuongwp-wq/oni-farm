@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>. Mốc mở khoá chặn thứ được bán ở cửa hàng; mục tiêu chỉ dẫn dắt, không chặn gì.\\n\\nMỗi cây trong crops.json phải được mở khoá ở ĐÚNG MỘT mốc — scripts/build-content.mjs kiểm tra điều này, vì một cây không nằm trong mốc nào sẽ vĩnh viễn không mua được ở cửa hàng.",
+  "$comment": "LÀN NHANH — lộ trình người chơi. Mốc mở khoá còn mở cả THỨC ĂN mua được (item:<id> có buyPrice) — mở cùng lúc với loài ăn nó, để tab Thức ăn không bày một thứ chưa dùng vào đâu.\\n\\n'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>. Mốc mở khoá chặn thứ được bán ở cửa hàng; mục tiêu chỉ dẫn dắt, không chặn gì.\\n\\nMỗi cây trong crops.json phải được mở khoá ở ĐÚNG MỘT mốc — scripts/build-content.mjs kiểm tra điều này, vì một cây không nằm trong mốc nào sẽ vĩnh viễn không mua được ở cửa hàng.",
   "stages": [
     {
       "id": "start",
@@ -23,7 +23,8 @@
         "seed:radish",
         "seed:scallion",
         "animal:chicken",
-        "animal:duck"
+        "animal:duck",
+        "item:feedmix"
       ],
       "toast": "Vào nghề rồi! Cửa hàng mở thêm cải thìa, ngò rí, củ cải và hành lá."
     },
@@ -70,7 +71,8 @@
         "seed:chili",
         "seed:onion",
         "animal:goat",
-        "animal:pig"
+        "animal:pig",
+        "item:fodder"
       ],
       "toast": "Cơ giới hoá: vòi tưới, sàn nhà kính, kèm cà chua, ớt và hành tây."
     },
@@ -102,7 +104,8 @@
         "seed:greenbean",
         "seed:okra",
         "animal:cow",
-        "animal:sheep"
+        "animal:sheep",
+        "item:hay"
       ],
       "toast": "Hiện đại hoá: pin mặt trời, ngô, cà tím, đậu que và đậu bắp."
     },
@@ -133,7 +136,8 @@
         "seed:wintermelon",
         "seed:gourd",
         "animal:fish",
-        "animal:dog"
+        "animal:dog",
+        "item:fishfeed"
       ],
       "toast": "Có điện rồi! Drone thu hoạch, dưa hấu, bí đao và bầu đã mở khoá."
     },

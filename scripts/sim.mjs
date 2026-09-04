@@ -13,7 +13,8 @@ import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal } from "../src/game/world.ts";
-import { troughStock, troughMax, penGoal, eatFromTrough } from "../src/game/pen.ts";
+import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
+import { grazeableAt } from "../src/game/graze.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, interactHint, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
@@ -63,6 +64,11 @@ function mkStore(seed = 12345) {
 }
 
 /* --------------------------------------------------------------- tiện ích */
+
+/** State thô của store — đưa thẳng vào `migrateForContent` để thử đường NẠP SAVE. */
+function store0(store) {
+  return JSON.parse(JSON.stringify(store.getState()));
+}
 
 function setState(store, mutate) {
   const s = clone(store.getState());
@@ -235,6 +241,11 @@ function unlockAll(store) {
     const all = new Set(s.unlocked);
     for (const id of content.cropOrder) all.add(`seed:${id}`);
     for (const id of content.buildingOrder) all.add(id);
+    // Thức ăn bán được cũng qua mốc mở khoá, cùng luật với hạt và công trình.
+    for (const id of content.materialOrder)
+      if ((content.materials[id].buyPrice ?? 0) > 0) all.add(`item:${id}`);
+    for (const id of content.animalOrder)
+      if (content.animals[id]?.job !== "pest") all.add(`animal:${id}`);
     s.unlocked = [...all];
   });
 }
@@ -3786,8 +3797,9 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
         if (tileAt(s0, x, y)?.b === "fence") rao++;
     ok(rao >= 2 * (pen.w + pen.h), `khu '${pen.id}': viền phải là hàng rào, đếm được ${rao} ô`);
     // khu có `feed` thì phải có máng nằm trong ruột
-    if (pen.feed) ok(!!troughIn(s0, pen), `khu '${pen.id}' ăn ${pen.feed} thì phải có máng`);
-    else eq(troughIn(s0, pen), null, `khu '${pen.id}' không khai feed thì không được có máng`);
+    if ((pen.feeds ?? []).length)
+      ok(!!troughIn(s0, pen), `khu '${pen.id}' có đồ ăn thì phải có máng`);
+    else eq(troughIn(s0, pen), null, `khu '${pen.id}' không khai feeds thì không được có máng`);
   }
 
   /* ---- (b) mỗi loài về ĐÚNG khu, và loài cùng thức ăn dùng CHUNG máng - */
@@ -3795,8 +3807,14 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
   eq(khuCua("cow"), khuCua("goat"), "bò và dê chung một khu");
   eq(khuCua("cow"), khuCua("sheep"), "bò và cừu chung một khu");
   const khuBo = penById(content, khuCua("cow"));
-  eq(khuBo.feed, content.animals.cow.feed, "máng khu gia súc đúng thứ bò ăn");
-  eq(content.animals.goat.feed, khuBo.feed, "…và dê ăn đúng thứ đó, nên chung máng là hợp lý");
+  ok(
+    khuBo.feeds.some((f) => content.animals.cow.feed.includes(f)),
+    "máng khu gia súc nhận thứ bò ăn được",
+  );
+  ok(
+    khuBo.feeds.some((f) => content.animals.goat.feed.includes(f)),
+    "…và cả thứ dê ăn được, nên chung máng là hợp lý",
+  );
   ok(khuCua("pig") !== khuCua("cow"), "heo ăn thứ khác nên ở khu khác");
   eq(khuCua("dog"), null, "chó đi tuần, không nhốt khu nào");
 
@@ -3816,12 +3834,13 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
   const m = troughIn(store.getState(), khuBo);
   eq(troughStock(store.getState(), m.x, m.y), 0, "máng lúc đầu rỗng");
   walkTo(store, m.x, m.y + 1);
-  giveItem(store, khuBo.feed, 5);
-  selectItem(store, khuBo.feed);
+  const monBo = khuBo.feeds[0];
+  giveItem(store, monBo, 5);
+  selectItem(store, monBo);
   eq(canUseAt(store.getState(), content, m.x, m.y), "pour", "cầm đúng thức ăn → nút ĐỔ MÁNG");
   use(store, m.x, m.y);
   eq(troughStock(store.getState(), m.x, m.y), 5, "đổ hết 5 phần trong một lần bấm");
-  eq(countInv(store, khuBo.feed), 0, "…và trừ đúng 5 khỏi túi");
+  eq(countInv(store, monBo), 0, "…và trừ đúng 5 khỏi túi");
 
   // cầm thứ khác thì không đổ được, và nút nói đúng lý do
   selectItem(store, "tool:hoe");
@@ -3832,8 +3851,8 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
   );
 
   // trần sức chứa
-  giveItem(store, khuBo.feed, 99);
-  selectItem(store, khuBo.feed);
+  giveItem(store, monBo, 99);
+  selectItem(store, monBo);
   use(store, m.x, m.y);
   eq(troughStock(store.getState(), m.x, m.y), troughMax(content), "đổ tối đa tới trần sức chứa");
 
@@ -3965,6 +3984,160 @@ test("68. bảng gỡ lỗi thả vật nuôi cũng phải CÓ XE CHỞ TỚI, k
   }
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau chuyến giao hàng gỡ lỗi");
+});
+
+test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và cá được cho ăn từ bờ", () => {
+  const content = loadContent();
+
+  /* ---- (a) LỖI THẬT: nạp save là con cá bị đẩy từ dưới ao lên bãi cỏ ----
+     `migrateForContent` gỡ kẹt cho thực thể bằng luật của loài ĐI BỘ, mà với
+     loài bơi thì luật đó ngược hẳn: nước là chỗ nó đứng được, bờ mới là ô cấm.
+     Nên nó "cứu" một cái kẹt không có thật rồi tạo ra một cái kẹt có thật —
+     và chính `checkInvariants` tố cáo cái state mà nó vừa dựng. */
+  const st = mkStore(1601);
+  setState(st, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "fish", map: "farm",
+      x: 5 * TILE + 8, y: 4 * TILE + 8,
+      dir: "down", anim: 0, seed: 5,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 500, hungryDays: 0, prod: [0] },
+    }];
+  });
+  eq(tile(st, 5, 4).g, "water", "kịch bản dựng đúng: con cá đang ở giữa ao");
+  const sauMigrate = migrateForContent(store0(st), content).state;
+  const ca = sauMigrate.entities[0];
+  eq(
+    sauMigrate.tiles[idx(sauMigrate.w, Math.floor(ca.x / TILE), Math.floor(ca.y / TILE))].g,
+    "water",
+    "migrate KHÔNG được đẩy con cá lên bờ",
+  );
+  deepEq(checkInvariants(sauMigrate, content), [], "…và state sau migrate phải sạch bất biến");
+
+  /* ---- (b) mỗi loài NHIỀU món, loài chung khu thì chung ít nhất một món - */
+  for (const id of content.animalOrder) {
+    const a = content.animals[id];
+    if (a.job === "pest") continue;
+    ok(Array.isArray(a.feed), `feed của '${id}' phải là DANH SÁCH`);
+    ok(a.feed.length >= 1, `'${id}' phải ăn được ít nhất một món`);
+  }
+  ok(content.animals.cow.feed.length >= 2, "bò không bị khoá vào đúng một món");
+  ok(
+    content.animals.cow.feed.some((f) => content.animals.goat.feed.includes(f)),
+    "bò và dê chung khu thì phải có món ăn chung",
+  );
+
+  /* ---- (c) thức ăn MUA được ở cửa hàng --------------------------------- */
+  const banDuoc = content.materialOrder.filter((id) => (content.materials[id].buyPrice ?? 0) > 0);
+  ok(banDuoc.length >= 2, `có ít nhất 2 loại thức ăn bày bán, đang có ${banDuoc.length}`);
+  for (const id of banDuoc) {
+    const anDuoc = content.animalOrder.some((a) => content.animals[a]?.feed.includes(`item:${id}`));
+    ok(anDuoc, `'${id}' bày bán thì phải có loài nào đó ăn được`);
+  }
+  const store = mkStore(1602);
+  unlockAll(store);
+  const mon = `item:${banDuoc[0]}`;
+  const gia = content.materials[banDuoc[0]].buyPrice;
+  setState(store, (s) => { s.money = gia * 3; });
+  const co0 = countInv(store, mon);
+  store.dispatch({ t: "BUY", id: mon, n: 2 });
+  eq(countInv(store, mon), co0 + 2, "mua được thức ăn ở cửa hàng");
+  eq(store.getState().money, gia, "trừ đúng tiền");
+
+  /* ---- (d) cho ăn tay nhận BẤT KỲ món nào loài đó ăn ------------------- */
+  walkTo(store, HOME.x, HOME.y);
+  const p = store.getState().player;
+  const px = Math.floor(p.x / TILE), py = Math.floor(p.y / TILE);
+  const monSau = content.animals.cow.feed[content.animals.cow.feed.length - 1];
+  ok(monSau !== content.animals.cow.feed[0], "bò có ít nhất hai món để thử");
+  setState(store, (s) => {
+    for (const v of s.inv) if (v && content.animals.cow.feed.includes(v.id)) v.n = 0;
+    s.inv = s.inv.map((v) => (v && v.n === 0 ? null : v));
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 3,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 2, prod: [0] },
+    }];
+  });
+  giveItem(store, monSau, 2);                 // CHỈ có món CUỐI trong danh sách
+  store.dispatch({ t: "FEED", x: px + 1, y: py });
+  eq(
+    store.getState().entities[0].animal.fed,
+    content.animals.cow.fedMinutes,
+    "cho ăn được bằng món khác, không phải chỉ món đầu danh sách",
+  );
+  eq(countInv(store, monSau), 1, "trừ đúng một phần");
+
+  /* ---- (e) CHO CÁ ĂN từ bờ ao ----------------------------------------- */
+  const ao = content.tiles.pens.find((q) => q.swim);
+  const st2 = mkStore(1603);
+  const monCa = ao.feeds[0];
+  // đứng ở ô cạn kề mặt nước
+  let bo = null;
+  for (let y = ao.y; y < ao.y + ao.h && !bo; y++)
+    for (const x of [ao.x + ao.w, ao.x - 1]) {
+      if (isSolid(st2.getState(), content, x, y)) continue;
+      const wx = x > ao.x ? ao.x + ao.w - 1 : ao.x;
+      if (tile(st2, wx, y)?.g !== "water") continue;
+      bo = { x, y, wx, wy: y };
+      break;
+    }
+  ok(!!bo, "tìm được một ô bờ đứng được cạnh ao");
+  /* Đặt thẳng vị trí thay vì `walkTo`: bờ ao nằm sau một vạt cây, mà `walkTo`
+     chỉ biết đi thẳng theo trục — nó hỏng vì đường đi, không phải vì luật đang
+     kiểm ở đây. */
+  setState(st2, (s) => {
+    s.player.x = bo.x * TILE + TILE / 2;
+    s.player.y = bo.y * TILE + TILE / 2;
+  });
+  setState(st2, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "fish", map: "farm",
+      x: (ao.x + 1) * TILE + 8, y: (ao.y + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 9,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 1, prod: [0] },
+    }];
+  });
+  const oNuoc = { x: bo.wx, y: bo.wy };
+  ok(!!pondAt(st2.getState(), content, oNuoc.x, oNuoc.y), "ô nước này thuộc khu ao");
+  selectItem(st2, "tool:hoe");
+  eq(
+    canFeedPond(st2.getState(), content, oNuoc.x, oNuoc.y),
+    false,
+    "cầm cuốc thì không rắc được gì xuống hồ",
+  );
+  giveItem(st2, monCa, 3);
+  selectItem(st2, monCa);
+  eq(canUseAt(st2.getState(), content, oNuoc.x, oNuoc.y), "feedpond", "cầm cám cá → nút CHO CÁ ĂN");
+  use(st2, oNuoc.x, oNuoc.y);
+  eq(st2.getState().entities[0].animal.fed, content.animals.fish.fedMinutes, "con cá đã no");
+  eq(countInv(st2, monCa), 2, "trừ đúng một phần cho một con");
+  eq(canUseAt(st2.getState(), content, oNuoc.x, oNuoc.y), null, "không con nào đói thì nút tắt");
+
+  /* ---- (f) gà VẪN mổ sâu trên cỏ dù giờ đã ăn được cám ---------------- */
+  const ga = content.animals.chicken;
+  ok(ga.feed.length > 0, "gà giờ cho ăn tay được");
+  ok(ga.pecks === true, "…nhưng vẫn giữ cờ mổ sâu");
+  const st3 = mkStore(1604);
+  const o = findOpenBlock(st3.getState(), 1, 1);
+  setState(st3, (s) => {
+    const t = s.tiles[idx(s.w, o.x, o.y)];
+    t.g = "grass"; t.prop = null; t.b = null; t.crop = null; t.tilled = false;
+  });
+  ok(
+    grazeableAt(st3.getState(), content, ga, o.x, o.y),
+    "nền cỏ trống vẫn là chỗ ăn được của gà — nếu không thì cho gà ăn cám xong nó chết đói",
+  );
+  ok(
+    !grazeableAt(st3.getState(), content, content.animals.cow, o.x, o.y),
+    "…còn con bò thì không: nó cần BỤI cỏ, không mổ sâu được",
+  );
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -311,6 +311,35 @@ có `base` chứ không phải lớp nền, vì hàng rào phải che được n
 Từ core 1.8 hàng rào **không còn là thứ mua/chế/xây được**: nó mang `buildable: false` và chỉ
 do BẢN ĐỒ dựng, qua ô `build` trong legend. Xem mục "Khu chuồng dựng sẵn" bên dưới.
 
+### Thức ăn: mỗi loài vài món, mua được, và cho cá ăn từ bờ
+
+`AnimalDef.feed` là DANH SÁCH, không phải một món. Khoá một loài vào đúng một
+thứ thì người chơi không có lựa chọn nào, và hết đúng thứ đó là cả đàn chết dù
+kho đầy thứ khác. Loader nhận cả `null` lẫn một chuỗi (pack cũ) rồi chuẩn hoá
+về mảng ngay tại cửa vào — để cả hai dạng chạy sâu vào trong là mỗi nơi đọc lại
+phải tự đoán, và chỗ nào quên đoán thì hỏng âm thầm.
+
+Đi kèm là một cờ mới, `pecks`: "tự nó kiếm được gì" tách hẳn khỏi "đưa gì thì
+nó ăn". Trước đây gộp làm một qua `feed: null`, nên vừa cho gà ăn cám được là
+lập tức mất luôn khả năng mổ sâu của nó — hai câu khác nhau bị nhét vào một ô.
+
+Thức ăn **mua được**: `MaterialDef.buyPrice` bật một vật liệu lên kệ (tab Thức
+ăn), và nó phải qua mốc mở khoá đúng như hạt và công trình — `validatePack`
+chặn cả hai chiều (bày bán mà không mốc nào mở, hoặc mốc mở một thứ không bán).
+Mua đắt hơn tự cắt cỏ: đó là chỗ đánh đổi, không phải chỗ thay thế.
+
+**Cho cá ăn** đi qua nút DÙNG chứ không phải nút TƯƠNG TÁC, vì mặt nước đã nhận
+nút tương tác để MÚC nước rồi — gộp hai việc vào một nút thì một trong hai luôn
+bị nuốt. Đứng bờ, cầm cám cá, bấm: cả đàn đang đói ăn cùng lúc. Con cá không lên
+bờ được và cũng không đặt được cái máng giữa hồ, nên không có đường này thì nó
+là con vật duy nhất mua về rồi không cho ăn được.
+
+Một lỗi cùng họ đã sửa ở đây: `migrateForContent` gỡ kẹt cho thực thể bằng luật
+của loài ĐI BỘ, mà với loài bơi luật đó ngược hẳn — nước là chỗ nó đứng được,
+bờ mới là ô cấm. Nên mỗi lần nạp save, con cá bị "cứu" từ dưới ao lên bãi cỏ,
+rồi chính `checkInvariants` tố cáo cái state mà hàm đó vừa dựng. Giờ cả phép
+kiểm lẫn phép nhích đều hỏi theo đúng loài (`blockedForActor`/`nudgeForActor`).
+
 ### Khu chuồng dựng sẵn (core 1.8)
 
 Trước 1.8, "chuồng" chỉ là chữ `housing: "pen"` trong `AnimalDef` — không có gì trong game ứng
@@ -321,19 +350,19 @@ Giờ nông trại **chia lô sẵn**, và cả ba mảnh đều nằm trong con
 
 | Mảnh | Ở đâu | Nói gì |
 |---|---|---|
-| Ruột khu | `tiles.json:pens[]` | hình chữ nhật đi được bên trong rào, `feed` của máng |
+| Ruột khu | `tiles.json:pens[]` | hình chữ nhật đi được bên trong rào, `feeds` của máng |
 | Hàng rào | `maps/farm.ascii` ký tự `F` | legend `{ ground, build: "fence" }` |
 | Ai ở khu nào | `actors.json` ô `pen` | id khu, vắng = thả rông thật (con chó) |
 
-Bốn khu: **gia súc** (bò/dê/cừu — cùng ăn rơm nên **chung một máng**), **heo** (cỏ khô, máng
-riêng), **gia cầm** (gà/vịt `feed: null`, mổ sâu trên cỏ nên khu **cố ý không có máng**), và
-**ao cá** (`swim: true` — ruột là ô nước, không cần rào vì bờ ao đã là rào).
+Bốn khu: **gia súc** (bò/dê/cừu — có món ăn chung nên **chung một máng**), **heo** (máng
+riêng), **gia cầm** (gà/vịt, có máng cám nhưng vẫn mổ sâu trên cỏ), và **ao cá** (`swim: true`
+— ruột là ô nước, không rào vì bờ ao đã là rào, và không máng vì không đặt được máng giữa hồ).
 
 **Máng** (`src/game/pen.ts`) là chỗ thức ăn NẰM LẠI, không phải chỗ bấm cho ăn: đổ một lần,
 máng giữ tới `balance.troughMax` phần, con vật đói tự tới ăn một phần mỗi bữa. Vì thế đi vắng
 vài ngày vẫn có cái cho chúng ăn. Số phần nằm ở `Tile.trough` (tuỳ chọn, vắng = rỗng, cùng
 kiểu với `age`/`idle` nên save cũ không cần migration), còn LOẠI thức ăn thì không nằm ở ô mà
-ở `pen.feed` — một máng không thuộc khu nào thì không đổ được gì vào, cố ý.
+ở `pen.feeds` — một máng không thuộc khu nào thì không đổ được gì vào, cố ý.
 
 Một luật đáng nhớ: **đói mà máng cạn thì `penGoal` trả `null`**, chứ không gọi con vật về. Gọi
 về thì nó bỏ lại đúng vạt cỏ đang đứng để đi tới một cái máng rỗng rồi chết đói cạnh đó. Rào

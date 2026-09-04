@@ -22,7 +22,7 @@
   "sleepRestore": 1.0,
   "lateSleepPenalty": 0.35,
   "passOutEnergy": 0.5,
-  "inventorySlots": 24,
+  "inventorySlots": 28,
   "hotbarSlots": 10,
   "moveSpeed": 78,
   "runSpeed": 132,

@@ -156,17 +156,16 @@ reject("balance.diseaseChance > 1", (p) => (p.balance.diseaseChance = 2));
 reject("khu chuồng tràn ra ngoài bản đồ", (p) => (p.tiles.pens[0].x = 9000));
 reject("khu chuồng trỏ vào bản đồ không có", (p) => (p.tiles.pens[0].map = "hamMo"));
 reject("loài thuộc một khu không tồn tại", (p) => (p.actors.animals[0].pen = "khuMaQuai"));
-reject("khu ăn một thứ không phải vật phẩm", (p) => (p.tiles.pens[0].feed = "item:khongCoThat"));
-reject("khu khai feed nhưng trong ruột không có máng", (p) => {
-  const pen = p.tiles.pens.find((q) => q.feed);
+reject("khu khai feeds nhưng trong ruột không có máng", (p) => {
+  const pen = p.tiles.pens.find((q) => (q.feeds ?? []).length && !q.swim);
   for (let y = pen.y; y < pen.y + pen.h; y++) {
     const r = p.maps.farm.rows[y].split("");
     for (let x = pen.x; x < pen.x + pen.w; x++) if (r[x] === "M") r[x] = ".";
     p.maps.farm.rows[y] = r.join("");
   }
 });
-reject("có máng nhưng khu không khai feed", (p) => {
-  delete p.tiles.pens.find((q) => q.feed).feed;
+reject("có máng nhưng khu không khai feeds", (p) => {
+  delete p.tiles.pens.find((q) => (q.feeds ?? []).length && !q.swim).feeds;
 });
 reject("ô đặc lọt vào ruột khu chuồng", (p) => {
   const pen = p.tiles.pens.find((q) => !q.swim);
@@ -181,6 +180,19 @@ reject("khu dưới nước lại có ô cạn trong ruột", (p) => {
   p.maps.farm.rows[pen.y] = r.join("");
 });
 reject("legend dựng một công trình không có thật", (p) => (p.tiles.legend.F.build = "raoMaQuai"));
+
+/* THỨC ĂN — mỗi luật một cách làm hỏng ván chơi mà nhìn content thì không thấy. */
+reject("loài ăn một thứ không tồn tại", (p) => (p.actors.animals[0].feed = ["item:khongCoThat"]));
+reject("khu đổ được một thứ không tồn tại", (p) => (p.tiles.pens[0].feeds = ["item:khongCoThat"]));
+reject("thức ăn bày bán nhưng không mốc nào mở khoá", (p) => {
+  p.items.materials.push({ id: "camMaQuai", name: "Cám ma quái", sellPrice: 3, buyPrice: 9 });
+});
+reject("khu dưới nước lại đặt máng", (p) => {
+  const pen = p.tiles.pens.find((q) => q.swim);
+  const r = p.maps.farm.rows[pen.y].split("");
+  r[pen.x] = "M";
+  p.maps.farm.rows[pen.y] = r.join("");
+});
 
 console.log("\n── Sửa content HỢP LỆ thì phải được chấp nhận ──");
 const accept = (name, mutate) => {
@@ -239,6 +251,13 @@ accept("pack cũ không có các số cân bằng core 1.3 (loader điền mặc
   delete p.balance.energyCost.cure;
   delete p.balance.energyCost.pull;
   delete p.tiles.indoorMaps;
+});
+accept("pack CŨ khai feed là một chuỗi (trước khi mỗi loài có nhiều món)", (p) => {
+  for (const a of p.actors.animals) a.feed = a.feed.length ? a.feed[0] : null;
+  // …và khu thì chưa có `feeds`, nên cũng không được có máng nào
+  for (const pen of p.tiles.pens) delete pen.feeds;
+  for (let y = 0; y < p.maps.farm.rows.length; y++)
+    p.maps.farm.rows[y] = p.maps.farm.rows[y].replaceAll("M", ".");
 });
 accept("THÊM hẳn một bản đồ mới", (p) => {
   p.maps.hangDong = { w: 6, h: 4, rows: ["oooooo", "o::::o", "o::::o", "oooooo"] };

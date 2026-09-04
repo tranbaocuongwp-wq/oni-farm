@@ -16,7 +16,15 @@ import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch 
 import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { cureTile, pullTile } from "./disease.ts";
-import { canPourInto, pourIntoTrough, troughFeedAt, troughMax, troughStock } from "./pen.ts";
+import {
+  canFeedPond,
+  canPourInto,
+  feedPond,
+  pourIntoTrough,
+  troughFeedsAt,
+  troughMax,
+  troughStock,
+} from "./pen.ts";
 import { cropInSeason, currentSeason, tileAllSeason } from "./season.ts";
 import {
   anyEntityOverlapsTile,
@@ -462,6 +470,8 @@ export type UseKind =
   | "lift"
   /** đổ thức ăn đang cầm vào MÁNG của khu chuồng */
   | "pour"
+  /** rắc thức ăn xuống mặt hồ cho cá */
+  | "feedpond"
   /** đang vác thì ĐẶT xuống một ô trống */
   | "putdown"
   | null;
@@ -513,6 +523,12 @@ export function canUseAt(
      dưới sẽ trả null cho nó — tức là đứng trước máng, cầm bó rơm, mà nút bảo
      không làm được gì. */
   if (cur.prop === "trough" && canPourInto(state, content, x, y)) return "pour";
+
+  /* MẶT HỒ: đứng bờ rắc thức ăn xuống cho cá. Đi qua nút DÙNG chứ không phải
+     nút TƯƠNG TÁC, vì nước đã nhận nút tương tác để MÚC nước rồi — gộp hai
+     việc vào một nút thì một trong hai luôn bị nuốt, và cái bị nuốt là cái
+     người chơi đang cần. */
+  if (canFeedPond(state, content, x, y)) return "feedpond";
 
   // Vật thể trên ô chặn mọi việc khác: hoặc phá được nó, hoặc không làm gì.
   if (cur.prop !== null) {
@@ -631,16 +647,23 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
     return;
   }
 
+  // MẶT HỒ: rắc thức ăn cho cá. Cùng thứ tự với `canUseAt`.
+  if (canFeedPond(d.s, content, x, y)) {
+    feedPond(d, content, x, y);
+    return;
+  }
+
   // MÁNG ăn: đổ thức ăn đang cầm vào. Cùng thứ tự với `canUseAt`.
   if (cur.prop === "trough") {
     if (canPourInto(d.s, content, x, y)) {
       pourIntoTrough(d, content, x, y);
       return;
     }
-    const feed = troughFeedAt(d.s, content, x, y);
-    if (!feed) toastText(d, "Máng này không thuộc khu nào — không đổ được gì.", "bad");
+    const feeds = troughFeedsAt(d.s, content, x, y);
+    if (!feeds.length) toastText(d, "Máng này không thuộc khu nào — không đổ được gì.", "bad");
     else if (troughStock(d.s, x, y) >= troughMax(content)) toastText(d, "Máng đã đầy.", "info");
-    else toastText(d, `Cầm ${itemName(feed, content)} rồi đổ vào máng.`, "bad");
+    else
+      toastText(d, `Cầm ${feeds.map((f) => itemName(f, content)).join(" / ")} rồi đổ vào máng.`, "bad");
     return;
   }
 

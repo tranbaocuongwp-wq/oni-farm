@@ -227,9 +227,11 @@ function doWork(d: Draft, content: Content, index: number): void {
       tieuSuc();
       return;
     }
-    if (def?.feed && an.animal.fed <= 0) {
-      // Cho ăn bằng cỏ trong KHO — người làm không có túi riêng để mua thức ăn.
-      const có = d.s.store.findIndex((v) => v && v.id === def.feed);
+    if (def?.feed.length && an.animal.fed <= 0) {
+      /* Cho ăn bằng đồ trong KHO — người làm không có túi riêng để đi mua.
+         Lấy MÓN NÀO CÓ: từ khi mỗi loài ăn được vài món, khoá cứng vào một
+         món nghĩa là kho đầy cám mà người làm vẫn đứng nhìn con bò nhịn. */
+      const có = d.s.store.findIndex((v) => v && def.feed.includes(v.id));
       if (có >= 0) {
         const store = d.s.store.slice();
         const cur = store[có]!;

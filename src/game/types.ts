@@ -138,8 +138,26 @@ export interface AnimalDef {
   housing: Housing;
   /** KHU CHUỒNG loài này về (id trong `tiles.pens`). Vắng = thả rông thật. */
   pen?: string;
-  /** vật phẩm dùng làm thức ăn; null = tự đi kiếm cỏ quanh sân */
-  feed: string | null;
+  /**
+   * MỌI thứ loài này ăn được — cho ăn tay, đổ máng, hay tự gặm đều tra ở đây.
+   *
+   * Là DANH SÁCH chứ không phải một món: một con bò chỉ ăn đúng một thứ thì
+   * người chơi không có lựa chọn nào cả, và hết đúng thứ đó là cả đàn chết dù
+   * kho đầy thứ khác. Loader nhận cả `null` lẫn một chuỗi (pack cũ) rồi chuẩn
+   * hoá về mảng, nên pack đã cache vẫn nạp được.
+   *
+   * Mảng RỖNG = không cho ăn tay được (sâu bọ).
+   */
+  feed: string[];
+  /**
+   * MỔ SÂU trên nền cỏ thường (gà, vịt).
+   *
+   * Tách hẳn khỏi `feed` vì đây là hai câu khác nhau: `feed` nói "đưa gì thì
+   * nó ăn", còn cờ này nói "tự nó kiếm được cái gì". Trước đây gộp làm một
+   * (`feed: null` vừa nghĩa là không cho ăn được, vừa nghĩa là biết mổ sâu),
+   * nên cho gà ăn cám được thì lập tức mất luôn khả năng tự kiếm ăn.
+   */
+  pecks?: boolean;
   /** một lần ăn no được bao nhiêu PHÚT GAME */
   fedMinutes: number;
   /** bao nhiêu ngày thì trưởng thành (mới cho sản phẩm, mới bán thịt được) */
@@ -278,6 +296,13 @@ export interface MaterialDef {
   id: string;
   name: string;
   sellPrice: number;
+  /**
+   * Giá MUA ở cửa hàng. Vắng = không bán, chỉ nhặt hoặc chế được.
+   *
+   * Có nó thì việc nuôi không còn treo hoàn toàn vào việc đi cắt cỏ: hết cỏ
+   * vẫn mua được cám, chỉ là tốn tiền hơn — một lựa chọn, không phải ngõ cụt.
+   */
+  buyPrice?: number;
 }
 
 export interface RecipeInput {
@@ -455,8 +480,13 @@ export interface PenDef {
   y: number;
   w: number;
   h: number;
-  /** Máng trong khu ăn thức ăn gì. Vắng = khu không có máng (gà vịt mổ sâu). */
-  feed?: string;
+  /**
+   * MỌI thứ đổ được vào máng khu này. Vắng/rỗng = khu không có máng.
+   *
+   * Khu chứ không phải loài, nên loài nào ăn một trong số đó là dùng chung
+   * đúng cái máng ấy — bò, dê và cừu chia nhau một máng.
+   */
+  feeds?: string[];
   /**
    * Khu DƯỚI NƯỚC (cái ao). Ruột khu là ô nước — đặc với mọi loài đi bộ, đi
    * được với loài bơi — nên luật "ruột phải đi được" đảo ngược ở đây, và khu

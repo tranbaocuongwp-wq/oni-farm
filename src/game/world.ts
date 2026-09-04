@@ -138,10 +138,8 @@ export function weedProp(content: Content): PropDef | null {
  */
 export function youngGrassProp(content: Content): PropDef | null {
   const feeds = new Set<string>();
-  for (const id of content.animalOrder) {
-    const f = content.animals[id]?.feed;
-    if (f) feeds.add(f);
-  }
+  for (const id of content.animalOrder)
+    for (const f of content.animals[id]?.feed ?? []) feeds.add(f);
   for (const id of content.propOrder) {
     const p = content.props[id];
     if (!p?.grow || p.tool) continue;
@@ -638,14 +636,24 @@ export function isRipe(t: Tile | null, content: Content): boolean {
 
 /* ---------------------------------------------------------------- cứu kẹt */
 
-/** Vị trí hợp lệ gần nhất khi bị kẹt trong ô solid (dùng bởi migrate). */
-export function nudgeOutOfSolid(
+/**
+ * Vị trí hợp lệ gần nhất khi một THỰC THỂ bị kẹt trong ô nó không đứng được.
+ *
+ * Phải hỏi theo ĐÚNG loài: với con cá thì nước là chỗ đứng được còn bờ mới là
+ * ô cấm, ngược hẳn với mọi thứ khác. Dùng luật của loài đi bộ cho con cá thì
+ * mỗi lần nạp save nó bị "cứu" từ dưới ao lên bãi cỏ — vẫn đúng chữ "gỡ kẹt",
+ * nhưng là gỡ một cái kẹt không có thật rồi tạo ra một cái kẹt có thật.
+ */
+export function nudgeForActor(
   state: GameState,
   content: Content,
   x: number,
   y: number,
+  bw: number,
+  bh: number,
+  swims: boolean,
 ): { x: number; y: number } {
-  if (!blockedAt(state, content, x, y)) return { x, y };
+  if (!blockedForActor(state, content, x, y, bw, bh, swims)) return { x, y };
   const cx = Math.floor(x / TILE);
   const cy = Math.floor(y / TILE);
   for (let r = 0; r <= 24; r++) {
@@ -654,9 +662,19 @@ export function nudgeOutOfSolid(
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const px = (cx + dx + 0.5) * TILE;
         const py = (cy + dy + 0.5) * TILE;
-        if (!blockedAt(state, content, px, py)) return { x: px, y: py };
+        if (!blockedForActor(state, content, px, py, bw, bh, swims)) return { x: px, y: py };
       }
     }
   }
   return { x, y };
+}
+
+/** Vị trí hợp lệ gần nhất cho NGƯỜI CHƠI (đi bộ, hộp mặc định). */
+export function nudgeOutOfSolid(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  return nudgeForActor(state, content, x, y, PLAYER_W, PLAYER_H, false);
 }
