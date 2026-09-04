@@ -1127,6 +1127,15 @@ if (import.meta.env.PROD) {
         );
       },
       onRegisteredSW(_url, reg) {
+        /* Dọn cache của service worker VIẾT TAY đời trước. Workbox chỉ tự dọn
+           precache của chính nó, nên cái cũ sẽ nằm lại trên máy người chơi mãi
+           — không được đọc nữa, chỉ chiếm chỗ. */
+        void caches
+          .keys()
+          .then((ks) =>
+            Promise.all(ks.filter((k) => k.startsWith("oni-farm-")).map((k) => caches.delete(k))),
+          )
+          .catch(() => {});
         // Hỏi lại mỗi 30 phút. PWA mở suốt ngày thì không có lần "mở lại trang"
         // nào để phát hiện bản mới, nên phải chủ động hỏi.
         if (reg) setInterval(() => void reg.update().catch(() => {}), 30 * 60 * 1000);
