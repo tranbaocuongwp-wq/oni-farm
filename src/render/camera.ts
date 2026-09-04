@@ -341,10 +341,14 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       snap();
     },
 
+    /* Hai hàm chiếu dùng camera THỰC (x, y) chứ không dùng bản đã snap: renderer
+       đắp phần lẻ vào phép tịnh tiến cuối, nên thứ người chơi NHÌN THẤY nằm ở
+       vị trí camera thực. Chiếu bằng bản đã snap sẽ lệch tới nửa world px so
+       với hình đang hiện — chỗ bấm không đúng chỗ nhìn. */
     worldToScreen(wx, wy) {
       return {
-        x: vp.offX + (wx - rx) * vp.scale,
-        y: vp.offY + (wy - ry) * vp.scale,
+        x: vp.offX + (wx - x) * vp.scale,
+        y: vp.offY + (wy - y) * vp.scale,
       };
     },
 
@@ -353,7 +357,7 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       const ly = (sy - vp.offY) / vp.scale;
       // Ngoài khung nhìn (đang ở vùng letterbox) thì coi như không bấm trúng gì.
       if (lx < 0 || ly < 0 || lx >= vp.viewW || ly >= vp.viewH) return null;
-      return { x: lx + rx, y: ly + ry };
+      return { x: lx + x, y: ly + y };
     },
 
     visibleTiles(worldTilesX, worldTilesY) {

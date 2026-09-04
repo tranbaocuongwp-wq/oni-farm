@@ -31,6 +31,7 @@ export function statValue(state: GameState, key: string): number | undefined {
     case "harvested": return state.stats.harvested;
     case "sold": return state.stats.sold;
     case "earned": return state.stats.earned;
+    case "cured": return state.stats.cured ?? 0;
     default: break;
   }
   if (key.startsWith("built.")) return state.stats.built[key.slice(6)] ?? 0;

@@ -21,7 +21,9 @@
     "sellAll": "Bán tất cả",
     "locked": "Chưa mở khoá",
     "resume": "Tiếp tục",
-    "contentRevert": "Hoàn tác về bản đóng kèm"
+    "contentRevert": "Hoàn tác về bản đóng kèm",
+    "weather": "Thời tiết",
+    "forecast": "Ngày mai"
   },
   "msg": {
     "sleep": "Bạn đã ngủ. Sang ngày mới.",
@@ -40,6 +42,16 @@
     "droneNoPower": "Drone thiếu điện — cần thêm pin mặt trời.",
     "otaFound": "Có bản cập nhật nội dung mới. Khởi động lại để áp dụng.",
     "otaApplied": "Đã áp dụng nội dung phiên bản",
-    "otaReverted": "Đã quay về nội dung đóng kèm."
+    "otaReverted": "Đã quay về nội dung đóng kèm.",
+    "rainMorning": "Mưa rồi — ruộng ngoài trời tự ẩm cả.",
+    "stormMorning": "Đêm qua bão quét qua nông trại.",
+    "hotNoon": "Nắng gắt, đất khô nhanh — nhớ tưới lại.",
+    "fogMorning": "Sương sớm phủ khắp ruộng.",
+    "cropSick": "Có cây nhiễm bệnh — xịt thuốc hoặc nhổ bỏ.",
+    "cured": "Cây đã khỏi bệnh.",
+    "pulled": "Đã nhổ cây bệnh.",
+    "needMedicine": "Cần thuốc trừ sâu.",
+    "stormDamage": "Bão làm hỏng cây",
+    "stormFell": "Bão quật đổ cây con"
   }
 }

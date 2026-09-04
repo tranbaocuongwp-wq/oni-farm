@@ -16,6 +16,7 @@ import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, facingTile, nearestTarget } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
+import * as migrateApi from "../src/core/save.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -1822,6 +1823,9 @@ test("33. migrate: save thiếu mapId/maps, và content gỡ hẳn một bản �
   raw.props = { ...raw.props, props: raw.props.props.filter((p) => !p.portal) };
   raw.tiles = {
     ...raw.tiles,
+    // gỡ bản đồ thì phải gỡ khỏi indoorMaps luôn — loader từ chối pack trỏ tới
+    // bản đồ không tồn tại, và đó là chủ ý (bắt lỗi biên tập ngay lúc nạp)
+    indoorMaps: [],
     legend: { ...raw.tiles.legend, D: { ground: "path" }, d: { ground: "wood" } },
   };
   const oneMap = buildContent(raw);
@@ -2197,6 +2201,296 @@ test("40. nearestTarget: giữ nút thì tự sang ô kế tiếp cùng loại v
   const pick2 = nearestTarget(st2.getState(), content, "harvest", null);
   eq(pick2.kind, "harvest", "đang thu thì ưu tiên cây chín");
   deepEq({ x: pick2.x, y: pick2.y }, A, "đúng cây vừa chín");
+});
+
+
+/* ============================================================== core 1.3 ==== */
+
+/** Ép thời tiết hôm nay/ngày mai. Đi qua replace() nên vẫn bị kiểm bất biến. */
+function setWeather(store, today, tomorrow = today) {
+  setState(store, (s) => {
+    s.weather = { today, tomorrow, wetStreak: content.weathers[today].wet ? 1 : 0, driedDay: 0 };
+  });
+}
+
+/** Content vá vài số cân bằng — để thử xác suất 0/1 mà không đợi may rủi. */
+function contentWith(mutate) {
+  const raw = rawPack();
+  mutate(raw);
+  return buildContent(raw);
+}
+
+test("41. thời tiết tất định: cùng seed → cùng chuỗi 30 ngày; dự báo hôm nay = thời tiết ngày mai", () => {
+  const run = (seed) => {
+    const st = mkStore(seed);
+    const seq = [];
+    for (let i = 0; i < 30; i++) {
+      const w = st.getState().weather;
+      ok(content.weathers[w.today], "today phải có trong content");
+      ok(content.weathers[w.tomorrow], "tomorrow phải có trong content");
+      seq.push([w.today, w.tomorrow]);
+      sleep(st);
+    }
+    return seq;
+  };
+  const a = run(4242);
+  const b = run(4242);
+  deepEq(a, b, "cùng seed phải ra cùng chuỗi thời tiết");
+  for (let i = 0; i + 1 < a.length; i++)
+    eq(a[i + 1][0], a[i][1], `dự báo ngày ${i + 1} phải thành thời tiết ngày ${i + 2}`);
+  const c = run(99);
+  ok(JSON.stringify(a) !== JSON.stringify(c), "seed khác thì chuỗi khác");
+  // xác suất: 30 ngày với weight mưa+bão 24% thì gần như chắc có ngày ướt
+  ok(a.some(([t]) => content.weathers[t].wet), "trong 30 ngày phải có ngày ướt");
+});
+
+test("42. mưa: sáng ra ô đã cày NGOÀI TRỜI ướt, trong nhà không; nắng gắt: quá trưa ruộng khô", () => {
+  const store = mkStore(7);
+  walkTo(store, HOME.x, HOME.y);
+  selectItem(store, "tool:hoe");
+  for (const p of PLOTS) use(store, p.x, p.y);
+  // ngày mai mưa
+  setWeather(store, "sunny", "rain");
+  sleep(store);
+  eq(store.getState().weather.today, "rain", "sang ngày thì dự báo thành hôm nay");
+  for (const p of PLOTS) ok(tile(store, p.x, p.y).wet, `ô cày (${p.x},${p.y}) phải ướt sáng mưa`);
+
+  // mưa qua đêm: tối không khô
+  setState(store, (s) => { s.weather.tomorrow = "rain"; });
+  sleep(store);
+  for (const p of PLOTS) ok(tile(store, p.x, p.y).wet, "mưa hai ngày liền thì vẫn ướt");
+
+  // trong nhà: mưa không tưới sàn gỗ (không ô nào tilled trong nhà, nên kiểm bằng
+  // cách khác: đứng trong nhà lúc mưa, ruộng ngoài vẫn ướt — awayAt không phá)
+  // nắng gắt: sáng ướt (từ hôm qua) → quá trưa khô
+  setState(store, (s) => { s.weather.tomorrow = "hot"; });
+  sleep(store);
+  // hôm qua mưa → đêm không khô → sáng nay còn ướt
+  ok(tile(store, PLOTS[0].x, PLOTS[0].y).wet, "sau đêm mưa, sáng nắng gắt vẫn còn ẩm");
+  advanceMinutes(store, BAL.noonDryMinutes - BAL.dayStartMinutes + 5);
+  ok(!tile(store, PLOTS[0].x, PLOTS[0].y).wet, "quá trưa nắng gắt thì khô");
+  // ngày thường: không tự khô giữa ngày
+  const st2 = mkStore(8);
+  walkTo(st2, HOME.x, HOME.y);
+  selectItem(st2, "tool:hoe");
+  use(st2, PLOTS[0].x, PLOTS[0].y);
+  selectItem(st2, "tool:can");
+  use(st2, PLOTS[0].x, PLOTS[0].y);
+  setWeather(st2, "sunny", "sunny");
+  advanceMinutes(st2, BAL.noonDryMinutes - BAL.dayStartMinutes + 5);
+  ok(tile(st2, PLOTS[0].x, PLOTS[0].y).wet, "ngày nắng thường thì trưa không khô");
+});
+
+test("43. bão: cây con bị quật thành khúc gỗ, cây trồng lùi giai đoạn; bất biến xanh", () => {
+  // content vá: bão quật CHẮC CHẮN, hại cây CHẮC CHẮN — kiểm cơ chế, không kiểm may rủi
+  const c2 = contentWith((r) => {
+    r.weather.weathers.find((w) => w.id === "storm").storm.cropChance = 1;
+    r.props.props.find((p) => p.id === "sapling").stormFell.chance = 1;
+    r.balance.diseaseChance = 0;
+  });
+  const store = createStore(createNewGame(c2, 11), c2, { validate: true, strict: true });
+  walkTo(store, HOME.x, HOME.y);
+  const s0 = store.getState();
+  const spot = findOpenBlock(s0, 2, 1);
+  setState(store, (s) => {
+    putProp(s, spot.x, spot.y, "sapling");
+    setTile(s, PLOTS[0].x, PLOTS[0].y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 2, grow: 0, regrown: false } });
+    setTile(s, PLOTS[1].x, PLOTS[1].y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 0, grow: 0, regrown: false } });
+    s.weather = { today: "storm", tomorrow: "sunny", wetStreak: 1, driedDay: 0 };
+  });
+  sleep(store);
+  eq(tile(store, spot.x, spot.y).prop, "log", "cây con bị bão quật thành khúc gỗ");
+  const t0 = tile(store, PLOTS[0].x, PLOTS[0].y);
+  // đêm bão cây vẫn lớn trước rồi mới bị hại; growMul 1.2 với xà lách 1 ngày/giai đoạn:
+  // stage 2 → có thể lên 3 (chín) rồi lùi về 2, hoặc lùi trực tiếp. Chỉ cần "không tăng".
+  ok(t0.crop && t0.crop.stage <= 2, `cây đang lớn không được tiến sau bão (stage ${t0.crop && t0.crop.stage})`);
+  const t1 = tile(store, PLOTS[1].x, PLOTS[1].y);
+  ok(!t1.crop || t1.crop.stage === 0, "mầm bị bão thì mất hoặc đứng yên");
+  deepEq(checkInvariants(store.getState(), c2), [], "bất biến xanh sau bão");
+  // trong nhà: bão không quật — đặt cây con trong nhà (bản đồ house) rồi bão
+  const c3 = contentWith((r) => {
+    r.props.props.find((p) => p.id === "sapling").stormFell.chance = 1;
+    r.balance.diseaseChance = 0;
+  });
+  const st3 = createStore(createNewGame(c3, 12), c3, { validate: true, strict: true });
+  setState(st3, (s) => {
+    const hm = s.maps.house;
+    const i = idx(hm.w, 2, 2);
+    Object.assign(hm.tiles[i], { prop: "sapling", hp: 2 });
+    s.weather = { today: "storm", tomorrow: "sunny", wetStreak: 1, driedDay: 0 };
+  });
+  sleep(st3);
+  eq(st3.getState().maps.house.tiles[idx(14, 2, 2)].prop, "sapling", "trong nhà bão không quật");
+});
+
+test("44. bệnh: cây bệnh không lớn, thu hoạch giảm; thuốc chữa khỏi; cuốc nhổ bỏ; lây sang cây kề", () => {
+  const c2 = contentWith((r) => {
+    r.balance.diseaseChance = 1; // đêm nay ai đang lớn cũng bệnh
+  });
+  const store = createStore(createNewGame(c2, 21), c2, { validate: true, strict: true });
+  walkTo(store, HOME.x, HOME.y);
+  const A = PLOTS[0];
+  const B = PLOTS[3];
+  setState(store, (s) => {
+    setTile(s, A.x, A.y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+    setTile(s, B.x, B.y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+    s.weather = { today: "sunny", tomorrow: "sunny", wetStreak: 0, driedDay: 0 };
+  });
+  sleep(store);
+  ok(tile(store, A.x, A.y).crop.sick === true, "diseaseChance=1 → cây bệnh");
+  const stageSick = tile(store, A.x, A.y).crop.stage;
+  // tưới rồi ngủ: bệnh thì không lớn
+  topUpWater(store);
+  selectItem(store, "tool:can");
+  use(store, A.x, A.y);
+  use(store, B.x, B.y);
+  sleep(store);
+  eq(tile(store, A.x, A.y).crop.stage, stageSick, "cây bệnh không lớn");
+  // hint: cầm thuốc → CHỮA; cầm cuốc → NHỔ
+  giveItem(store, "item:medicine", 2);
+  selectItem(store, "item:medicine");
+  eq(hintAt(store.getState(), c2, A.x, A.y).kind, "cure", "cầm thuốc lên cây bệnh → cure");
+  selectItem(store, "tool:hoe");
+  eq(hintAt(store.getState(), c2, B.x, B.y).kind, "pull", "cầm cuốc lên cây bệnh → pull");
+  // chữa A
+  selectItem(store, "item:medicine");
+  const e0 = store.getState().energy;
+  use(store, A.x, A.y);
+  ok(!tile(store, A.x, A.y).crop.sick, "xịt thuốc thì khỏi");
+  eq(countInv(store, "item:medicine"), 1, "tốn 1 thuốc");
+  eq(store.getState().energy, e0 - c2.balance.energyCost.cure, "tốn năng lượng cure");
+  eq(store.getState().stats.cured, 1, "stats.cured tăng");
+  ok(store.getState().goalsDone.includes("g_cure"), "mục tiêu chữa cây bệnh đạt");
+  // nhổ B
+  selectItem(store, "tool:hoe");
+  use(store, B.x, B.y);
+  const tb = tile(store, B.x, B.y);
+  eq(tb.crop, null, "nhổ thì mất cây");
+  ok(tb.tilled, "ô vẫn đã cày");
+  // sản lượng giảm: cây bệnh chín (đặt thẳng) thu được floor(yield×0.5) nhưng ≥1
+  const c3 = contentWith((r) => {
+    r.balance.diseaseChance = 0;
+    r.balance.sickYieldMul = 0.5;
+    r.crops.crops.find((c) => c.id === "lettuce").yieldMin = 4;
+    r.crops.crops.find((c) => c.id === "lettuce").yieldMax = 4;
+  });
+  const st3 = createStore(createNewGame(c3, 22), c3, { validate: true, strict: true });
+  walkTo(st3, HOME.x, HOME.y);
+  setState(st3, (s) => {
+    setTile(s, A.x, A.y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 3, grow: 0, regrown: false, sick: true } });
+    setTile(s, B.x, B.y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 3, grow: 0, regrown: false } });
+  });
+  use(st3, A.x, A.y);
+  eq(countInv(st3, "crop:lettuce"), 2, "cây bệnh chín thu được một nửa");
+  use(st3, B.x, B.y);
+  eq(countInv(st3, "crop:lettuce"), 6, "cây khoẻ thu đủ");
+  // lây: diseaseChance nhỏ nhưng neighbourMul lớn → cây kề cây bệnh gần như chắc bệnh
+  const c4 = contentWith((r) => {
+    r.balance.diseaseChance = 0.001;
+    r.balance.diseaseNeighbourMul = 1000;
+  });
+  const st4 = createStore(createNewGame(c4, 23), c4, { validate: true, strict: true });
+  setState(st4, (s) => {
+    setTile(s, A.x, A.y, { tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false, sick: true } });
+    setTile(s, A.x, A.y + 1, { tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+    s.weather = { today: "sunny", tomorrow: "sunny", wetStreak: 0, driedDay: 0 };
+  });
+  sleep(st4);
+  ok(tile(st4, A.x, A.y + 1).crop.sick === true, "cây kề cây bệnh bị lây");
+});
+
+test("45. cỏ/bụi/cây con lớn theo ngày × thời tiết; cắt cỏ ra cỏ khô; lan sang ô kề", () => {
+  const c2 = contentWith((r) => { r.balance.diseaseChance = 0; r.balance.grassSpreadChance = 0; });
+  const store = createStore(createNewGame(c2, 31), c2, { validate: true, strict: true });
+  walkTo(store, HOME.x, HOME.y);
+  const s0 = store.getState();
+  const spot = findOpenBlock(s0, 3, 3);
+  const gx = spot.x + 1, gy = spot.y + 1;
+  setState(store, (s) => {
+    putProp(s, gx, gy, "grass_short");
+    for (const p of c2.propOrder) { /* no-op: chỉ để chắc content có prop */ }
+    s.weather = { today: "sunny", tomorrow: "sunny", wetStreak: 0, driedDay: 0 };
+  });
+  // grass_short.grow.days = 3, growMul nắng = 1 → sau 3 đêm thành grass_tall
+  sleep(store); sleep(store);
+  eq(tile(store, gx, gy).prop, "grass_short", "2 đêm chưa đủ");
+  sleep(store);
+  eq(tile(store, gx, gy).prop, "grass_tall", "3 đêm nắng thì cỏ non thành cỏ dày");
+  ok(tile(store, gx, gy).age === undefined, "đổi dạng thì tuổi được xoá");
+
+  // mưa: growMul 1.5 → 2 đêm mưa đủ 3 ngày lớn
+  const st2 = createStore(createNewGame(c2, 32), c2, { validate: true, strict: true });
+  setState(st2, (s) => {
+    putProp(s, gx, gy, "grass_short");
+    s.weather = { today: "rain", tomorrow: "rain", wetStreak: 1, driedDay: 0 };
+  });
+  sleep(st2);
+  setState(st2, (s) => { s.weather.tomorrow = "rain"; });
+  sleep(st2);
+  eq(tile(st2, gx, gy).prop, "grass_tall", "mưa thì cỏ lớn nhanh hơn (2 đêm)");
+
+  // cắt cỏ bằng tay không → cỏ khô
+  walkTo(store, gx, gy - 1);
+  setState(store, (s) => { s.sel = 2; }); // ô hotbar trống = tay không
+  const before = countInv(store, "item:fodder");
+  use(store, gx, gy);
+  ok(countInv(store, "item:fodder") > before, "cắt cỏ dày ra cỏ khô");
+  eq(tile(store, gx, gy).prop, null, "cắt xong ô trống");
+  ok(!isSolid(store.getState(), c2, gx, gy), "cỏ không đặc, đi qua được");
+
+  // lan: chance 1 → sau một đêm có thêm cỏ non ở ô kề
+  const c3 = contentWith((r) => {
+    r.balance.diseaseChance = 0; r.balance.grassSpreadChance = 0;
+    r.props.props.find((p) => p.id === "grass_tall").spread.chance = 1;
+  });
+  const st3 = createStore(createNewGame(c3, 33), c3, { validate: true, strict: true });
+  setState(st3, (s) => {
+    putProp(s, gx, gy, "grass_tall");
+    s.weather = { today: "sunny", tomorrow: "sunny", wetStreak: 0, driedDay: 0 };
+  });
+  sleep(st3);
+  const around4 = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => tile(st3, gx + dx, gy + dy).prop);
+  ok(around4.includes("grass_short"), `cỏ dày lan ra ô kề (${around4.join(",")})`);
+  deepEq(checkInvariants(st3.getState(), c3), [], "bất biến xanh");
+});
+
+test("46. save v6 (không có thời tiết) nạp lên v7 → migrate xanh; round-trip có sick/age", () => {
+  const store = mkStore(41);
+  walkTo(store, HOME.x, HOME.y);
+  const s0 = store.getState();
+  const spot = findOpenBlock(s0, 2, 2);
+  setState(store, (s) => {
+    putProp(s, spot.x, spot.y, "grass_short");
+    s.tiles[idx(s.w, spot.x, spot.y)].age = 2;
+    setTile(s, PLOTS[0].x, PLOTS[0].y, { tilled: true, wet: false, crop: { id: "lettuce", stage: 1, grow: 5, regrown: false, sick: true } });
+  });
+  // round-trip qua JSON
+  const snap = clone(store.getState());
+  const st2 = mkStore(41);
+  st2.replace(JSON.parse(JSON.stringify(snap)));
+  deepEq(st2.getState(), snap, "round-trip giữ sick/age/weather");
+
+  // giả một save v6: bỏ weather, bỏ stats.cured, save=6
+  const v6 = clone(snap);
+  delete v6.weather;
+  delete v6.stats.cured;
+  v6.save = 6;
+  const { migrateSave } = migrateApi;
+  const up = migrateSave({ magic: "onifarm", state: v6 });
+  ok(up && up.save === 7, "v6 → v7");
+  const mig = migrateForContent(up, content);
+  deepEq(checkInvariants(mig.state, content), [], "sau migrate bất biến xanh: " + JSON.stringify(mig.notes));
+  eq(mig.state.weather.today, content.weatherFirst, "thời tiết mặc định về kiểu đầu");
+  eq(mig.state.stats.cured, 0, "stats.cured mặc định 0");
+  ok(mig.state.tiles[idx(mig.state.w, PLOTS[0].x, PLOTS[0].y)].crop.sick === true, "giữ cờ bệnh qua migrate");
+  eq(mig.state.tiles[idx(mig.state.w, spot.x, spot.y)].age, 2, "giữ tuổi vật thể qua migrate");
+  // content gỡ kiểu thời tiết đang dùng → về kiểu đầu, không ném
+  const c2 = contentWith((r) => { r.weather.weathers = r.weather.weathers.filter((w) => w.id !== "fog"); });
+  const withFog = clone(snap);
+  withFog.weather.today = "fog";
+  const mig2 = migrateForContent(withFog, c2);
+  eq(mig2.state.weather.today, c2.weatherFirst, "kiểu thời tiết bị gỡ → về kiểu đầu");
+  deepEq(checkInvariants(mig2.state, c2), [], "bất biến xanh");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

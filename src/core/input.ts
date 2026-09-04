@@ -86,10 +86,15 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const queue: Intent[] = [];
   let ptr: { x: number; y: number } | null = null;
   let ptrAt = 0;
-  /** Lần chạm gần nhất, để nhận ra chạm kép. */
-  let lastTap = { t: 0, x: -1e9, y: -1e9 };
-  /** Hai cú chạm cách nhau dưới ngần này ms thì tính là chạm kép. */
-  const DOUBLE_MS = 350;
+  /** Lần chạm gần nhất, để nhận ra chạm kép. `tile` là ô THẾ GIỚI đã chạm. */
+  let lastTap = { t: 0, x: -1e9, y: -1e9, tx: -1e9, ty: -1e9 };
+  /** Hai cú chạm cách nhau dưới ngần này ms thì tính là chạm kép.
+   *
+   *  450 chứ không phải 350: chạm kép hai lần trúng một mục tiêu nhỏ trên điện
+   *  thoại chậm hơn hẳn chạm kép trên chuột, và cửa sổ hẹp làm cú thứ hai rơi
+   *  ra ngoài — người chơi thấy "bấm mãi không ăn" nên bấm dồn, mà mỗi cú bấm
+   *  lại huỷ chuyến đi đang chạy. Safari cũng lấy ~500ms cho chạm kép. */
+  const DOUBLE_MS = 450;
   /** …và phải trong khoảng này (CSS px) — ngón tay rung vài pixel là bình thường. */
   const DOUBLE_DIST = 44;
   /** Sau ngần này ms không cử động, con trỏ coi như "bỏ đó", nhường cho bàn phím. */
@@ -176,12 +181,22 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       ptr = p;
       ptrAt = now;
     }
+    // Hai phép đo, chấp nhận cú nào đúng cũng được:
+    //   · CÙNG MỘT Ô  — phép đo đúng nghĩa, và không phụ thuộc mức phóng. Ở
+    //     scale 5 một ô rộng 80 CSS px, nên hai cú chạm vào hai góc của CÙNG ô
+    //     cách nhau 113 px và ngưỡng 44 px sẽ trượt — chạm kép hỏng dù người
+    //     chơi làm đúng.
+    //   · KHOẢNG CÁCH — cứu trường hợp ngược lại: trên điện thoại ô chỉ rộng 32
+    //     px nên ngón tay lệch một chút là rơi sang ô bên cạnh.
+    const tx = Math.floor(p.x / 16);
+    const ty = Math.floor(p.y / 16);
     const isDouble =
       now - lastTap.t < DOUBLE_MS &&
-      Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_DIST;
+      ((tx === lastTap.tx && ty === lastTap.ty) ||
+        Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_DIST);
     // Sau một cú chạm kép thì đặt lại mốc, nếu không chạm lần thứ ba sẽ lại
     // được tính là kép và thao tác chạy hai lần liền.
-    lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY };
+    lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY, tx, ty };
     push({ t: "pointer", wx: p.x, wy: p.y, double: isDouble });
   };
 

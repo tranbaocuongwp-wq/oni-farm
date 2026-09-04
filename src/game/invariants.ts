@@ -34,6 +34,8 @@ function checkGrid(tiles: Tile[], content: Content, where: string, e: string[]):
   let badStage = 0;
   let badGrow = 0;
   let badHp = 0;
+  let badSick = 0;
+  let badAge = 0;
   const missingCrop = new Set<string>();
   const missingBuild = new Set<string>();
   const missingProp = new Set<string>();
@@ -58,13 +60,17 @@ function checkGrid(tiles: Tile[], content: Content, where: string, e: string[]):
       )
         badStage++;
       if (!Number.isFinite(t.crop.grow) || t.crop.grow < 0) badGrow++;
+      if (t.crop.sick !== undefined && t.crop.sick !== true) badSick++;
     }
+    if (t.age !== undefined && (!Number.isFinite(t.age) || t.age < 0)) badAge++;
   }
 
   if (cropOnUntilled) e.push(`${where}: ${cropOnUntilled} ô có cây mà chưa cày`);
   if (badStage) e.push(`${where}: ${badStage} ô có crop.stage ngoài [0, growthDays.length]`);
   if (badGrow) e.push(`${where}: ${badGrow} ô có crop.grow không hữu hạn hoặc âm`);
   if (badHp) e.push(`${where}: ${badHp} ô có hp không hữu hạn hoặc âm`);
+  if (badSick) e.push(`${where}: ${badSick} ô có crop.sick khác true/vắng`);
+  if (badAge) e.push(`${where}: ${badAge} ô có age không hữu hạn hoặc âm`);
   for (const id of missingCrop) e.push(`${where}: cây '${id}' không tồn tại trong content`);
   for (const id of missingBuild) e.push(`${where}: công trình '${id}' không tồn tại trong content`);
   for (const id of missingProp) e.push(`${where}: vật thể '${id}' không tồn tại trong content`);
@@ -99,6 +105,18 @@ export function checkInvariants(state: GameState, content: Content): string[] {
 
   if (!Number.isFinite(state.water)) e.push(`water không hữu hạn: ${state.water}`);
   else if (state.water < 0) e.push(`water âm: ${state.water}`);
+
+  // ---- thời tiết ---------------------------------------------------------
+  const wx = state.weather;
+  if (!wx || typeof wx !== "object") e.push("weather phải là object");
+  else {
+    if (!content.weathers[wx.today]) e.push(`weather.today '${String(wx.today)}' không có trong content`);
+    if (!content.weathers[wx.tomorrow]) e.push(`weather.tomorrow '${String(wx.tomorrow)}' không có trong content`);
+    if (!Number.isInteger(wx.wetStreak) || wx.wetStreak < 0) e.push(`weather.wetStreak không hợp lệ: ${wx.wetStreak}`);
+    if (!Number.isInteger(wx.driedDay) || wx.driedDay < 0) e.push(`weather.driedDay không hợp lệ: ${wx.driedDay}`);
+  }
+  if (!Number.isFinite(state.stats?.cured) || state.stats.cured < 0)
+    e.push(`stats.cured không hợp lệ: ${String(state.stats?.cured)}`);
 
   // ---- bản đồ đang chơi --------------------------------------------------
   const activeDef = typeof state.mapId === "string" ? content.maps?.[state.mapId] : undefined;
@@ -266,8 +284,12 @@ function mergeGrid(
             const raw = Number(prev.crop.grow);
             const grow = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
             t.crop = { id: prev.crop.id, stage, grow, regrown: prev.crop.regrown === true };
+            if (prev.crop.sick === true) t.crop.sick = true;
           }
         }
+        // tuổi vật thể: chỉ có nghĩa khi vẫn là đúng vật thể đó
+        if (t.prop !== null && prev.prop === t.prop && Number.isFinite(prev.age) && (prev.age as number) > 0)
+          t.age = Math.floor(prev.age as number);
 
         // địa hình mới có thể đã biến ô thành cây/đá/nước → dọn cho sạch
         if (t.prop !== null || t.g === "water") {
@@ -387,6 +409,21 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
     for (const [k, v] of Object.entries(state.stats.built ?? {})) {
       if (Number.isFinite(v) && v > 0) built[k] = Math.floor(v);
     }
+    const cured = Number.isFinite(state.stats.cured) && state.stats.cured > 0 ? Math.floor(state.stats.cured) : 0;
+
+    // ---- thời tiết: kiểu không còn trong content → về kiểu đầu tiên --------
+    const wxRaw = (state.weather ?? {}) as Partial<GameState["weather"]>;
+    const fixWx = (id: unknown, what: string): string => {
+      if (typeof id === "string" && content.weathers[id]) return id;
+      if (id) notes.push(`thời tiết ${what} '${String(id)}' không còn trong content — về '${content.weatherFirst}'`);
+      return content.weatherFirst;
+    };
+    const weather: GameState["weather"] = {
+      today: fixWx(wxRaw.today, "hôm nay"),
+      tomorrow: fixWx(wxRaw.tomorrow, "ngày mai"),
+      wetStreak: Number.isInteger(wxRaw.wetStreak) && (wxRaw.wetStreak as number) >= 0 ? (wxRaw.wetStreak as number) : 0,
+      driedDay: Number.isInteger(wxRaw.driedDay) && (wxRaw.driedDay as number) >= 0 ? (wxRaw.driedDay as number) : 0,
+    };
 
     // ---- các trường vô hướng --------------------------------------------
     const money = Number.isFinite(state.money) ? Math.max(0, state.money) : bal.startMoney;
@@ -422,7 +459,8 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       unlocked,
       stagesDone: [...state.stagesDone],
       goalsDone: [...state.goalsDone],
-      stats: { ...state.stats, built },
+      stats: { ...state.stats, built, cured },
+      weather,
       log: [...state.log],
       logSeq: Number.isInteger(state.logSeq) ? state.logSeq : 0,
       sleeping: false,

@@ -242,6 +242,13 @@
       }
     },
     {
+      "id": "g_cure",
+      "text": "Chữa một cây bệnh",
+      "require": {
+        "cured": 1
+      }
+    },
+    {
       "id": "g_sprinkler",
       "text": "Lắp vòi tưới tự động đầu tiên",
       "require": {

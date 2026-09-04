@@ -1,0 +1,69 @@
+{
+  "$comment": "LÀN NHANH — kiểu thời tiết. Mỗi ngày đúng MỘT kiểu, rút thăm theo weight từ seed của ván nên tái lập được; ngày mai được rút sẵn để HUD hiện dự báo. Mọi số là HỆ SỐ nhân lên luật có sẵn: wet = sáng ra mọi ô đã cày ngoài trời ẩm và đêm không khô; growMul nhân tốc độ lớn của cây trồng, cỏ, bụi, cây con; hot = quá balance.noonDryMinutes thì ô ẩm khô (trừ ô tự tưới) và cây chưa tưới trông héo; diseaseMul nhân balance.diseaseChance; streak = hôm sau có chance vẫn giữ kiểu này, tối đa max ngày liên tiếp (mưa dầm); storm.cropChance = mỗi cây có xác suất lùi một giai đoạn, và vật thể có stormFell bị quật; fogUntil = sương phủ tới phút này; wind chỉ để vẽ cây lay.",
+  "firstDay": "sunny",
+  "weathers": [
+    {
+      "id": "sunny",
+      "name": "Nắng",
+      "weight": 38,
+      "wet": false,
+      "growMul": 1,
+      "wind": 0.2,
+      "diseaseMul": 1
+    },
+    {
+      "id": "hot",
+      "name": "Nắng gắt",
+      "weight": 12,
+      "wet": false,
+      "growMul": 0.7,
+      "wind": 0.1,
+      "hot": true,
+      "diseaseMul": 0.6
+    },
+    {
+      "id": "overcast",
+      "name": "Âm u",
+      "weight": 18,
+      "wet": false,
+      "growMul": 1,
+      "wind": 0.4,
+      "diseaseMul": 1.2
+    },
+    {
+      "id": "rain",
+      "name": "Mưa",
+      "weight": 18,
+      "wet": true,
+      "growMul": 1.5,
+      "wind": 0.6,
+      "diseaseMul": 1.6,
+      "streak": {
+        "max": 3,
+        "chance": 0.5
+      }
+    },
+    {
+      "id": "storm",
+      "name": "Bão",
+      "weight": 6,
+      "wet": true,
+      "growMul": 1.2,
+      "wind": 1,
+      "diseaseMul": 1.4,
+      "storm": {
+        "cropChance": 0.08
+      }
+    },
+    {
+      "id": "fog",
+      "name": "Sương sớm",
+      "weight": 8,
+      "wet": false,
+      "growMul": 1.1,
+      "wind": 0.1,
+      "diseaseMul": 1.1,
+      "fogUntil": 540
+    }
+  ]
+}

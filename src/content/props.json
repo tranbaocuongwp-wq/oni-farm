@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — mọi vật thể đứng trên ô. Trước đây tính đặc/tương tác nằm rải trong tiles.json và code; giờ gom hết về đây. Thêm một loại địa hình mới = thêm một object, không sửa code (miễn là art/atlas.ts biết vẽ id đó, không thì nó vẽ hình mặc định).\n\nhits/tool/drops = khai thác được. becomes = sau khi phá thì để lại gì (cây lớn để lại gốc). interact = tương tác bằng phím E. portal = cửa dịch chuyển.",
+  "$comment": "LÀN NHANH — mọi vật thể đứng trên ô. Trước đây tính đặc/tương tác nằm rải trong tiles.json và code; giờ gom hết về đây. Thêm một loại địa hình mới = thêm một object, không sửa code (miễn là art/atlas.ts biết vẽ id đó, không thì nó vẽ hình mặc định).\n\nhits/tool/drops = khai thác được. becomes = sau khi phá thì để lại gì (cây lớn để lại gốc). interact = tương tác bằng phím E. portal = cửa dịch chuyển.\n\ngrow = sau `days` ngày lớn (nhân growMul của thời tiết) thì biến thành `to` — tiến độ ở Tile.age. spread = mỗi đêm có chance mọc thêm `into` lên ô cỏ trống kề bên. stormFell = đêm bão có chance bị quật thành `to`. Cỏ non/cỏ dày không đặc, tay không cũng cắt được, cho cỏ khô (item:fodder).",
   "props": [
     {
       "id": "tree",
@@ -39,6 +39,14 @@
         "body": "#3d8a3f",
         "dark": "#2b6b2e",
         "accent": "#5a3d24"
+      },
+      "grow": {
+        "to": "tree",
+        "days": 8
+      },
+      "stormFell": {
+        "to": "log",
+        "chance": 0.25
       }
     },
     {
@@ -207,6 +215,126 @@
         "body": "#5e81ac",
         "dark": "#2b313d",
         "accent": "#88c0d0"
+      }
+    },
+    {
+      "id": "log",
+      "name": "Khúc gỗ",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#8a5c34",
+        "dark": "#5a3b21",
+        "accent": "#c9a06a"
+      }
+    },
+    {
+      "id": "grass_short",
+      "name": "Cỏ non",
+      "solid": false,
+      "hits": 1,
+      "drops": [
+        {
+          "id": "item:fodder",
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "grow": {
+        "to": "grass_tall",
+        "days": 3
+      },
+      "spread": {
+        "chance": 0.12,
+        "into": "grass_short"
+      },
+      "art": {
+        "body": "#7cc25a",
+        "dark": "#4d9a3f",
+        "accent": "#a6e07a"
+      }
+    },
+    {
+      "id": "grass_tall",
+      "name": "Cỏ dày",
+      "solid": false,
+      "hits": 1,
+      "drops": [
+        {
+          "id": "item:fodder",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "spread": {
+        "chance": 0.08,
+        "into": "grass_short"
+      },
+      "art": {
+        "body": "#5fae4a",
+        "dark": "#3d7a33",
+        "accent": "#8fd06a"
+      }
+    },
+    {
+      "id": "bush_small",
+      "name": "Bụi cây nhỏ",
+      "solid": true,
+      "hits": 1,
+      "drops": [
+        {
+          "id": "item:fiber",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "grow": {
+        "to": "bush_big",
+        "days": 4
+      },
+      "stormFell": {
+        "to": "grass_short",
+        "chance": 0.3
+      },
+      "art": {
+        "body": "#4a8a3c",
+        "dark": "#31612a",
+        "accent": "#6fb35a"
+      }
+    },
+    {
+      "id": "bush_big",
+      "name": "Bụi cây lớn",
+      "solid": true,
+      "hits": 2,
+      "drops": [
+        {
+          "id": "item:fiber",
+          "min": 2,
+          "max": 4
+        },
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "spread": {
+        "chance": 0.03,
+        "into": "bush_small"
+      },
+      "art": {
+        "body": "#3f7a34",
+        "dark": "#284f22",
+        "accent": "#5fa04a"
       }
     }
   ]

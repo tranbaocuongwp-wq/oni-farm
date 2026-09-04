@@ -34,7 +34,10 @@ import {
   touch,
 } from "./state.ts";
 import { harvestTileIn } from "./actions.ts";
-import { idx, playerOverlapsTile, weedProp } from "./world.ts";
+import { idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
+import type { NightWeather } from "./weather.ts";
+import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
+import { diseaseNight } from "./disease.ts";
 
 /* ---------------------------------------------------------- tăng trưởng */
 
@@ -49,13 +52,15 @@ import { idx, playerOverlapsTile, weedProp } from "./world.ts";
  * Hiệu năng: chỉ đụng vào ô CÓ CÂY và chỉ copy ô thật sự đổi — không ô nào đổi
  * thì draft vẫn sạch và `reduce` trả về đúng state cũ.
  */
-export function growCropsIn(v: MapView, content: Content, minutes: number): void {
+export function growCropsIn(v: MapView, content: Content, minutes: number, growMul = 1): void {
   if (!Number.isFinite(minutes) || minutes <= 0) return;
+  minutes = minutes * Math.max(0, growMul);
+  if (minutes <= 0) return;
   const per = Math.max(1, content.balance.growthMinutesPerDay);
   const n = v.w * v.h;
   for (let i = 0; i < n; i++) {
     const t = v.tiles[i];
-    if (!t || !t.crop || !t.wet) continue;
+    if (!t || !t.crop || !t.wet || t.crop.sick) continue;
     const def = content.crops[t.crop.id];
     if (!def) continue;
     let stage = t.crop.stage;
@@ -81,7 +86,7 @@ export function growCropsIn(v: MapView, content: Content, minutes: number): void
 /** Tăng trưởng trên bản đồ ĐANG chơi. Đây là thứ TICK gọi mỗi khung hình —
  *  cố ý KHÔNG chạm tới bản đồ đã cất. */
 export function growCrops(d: Draft, content: Content, minutes: number): void {
-  growCropsIn(activeView(d), content, minutes);
+  growCropsIn(activeView(d), content, minutes, weatherDef(d.s, content).growMul);
 }
 
 /* --------------------------------------------- cỏ mọc / đất cày bỏ hoang */
@@ -95,13 +100,69 @@ export function growCrops(d: Draft, content: Content, minutes: number): void {
  * lên thì không mọc gì — không ai bị nhốt trong bụi cỏ lúc đang ngủ (chỉ có
  * nghĩa trên bản đồ đang chơi; ở bản đồ khác thì người chơi không ở đó).
  */
-function nightGround(d: Draft, content: Content, v: MapView): void {
+function nightGround(d: Draft, content: Content, v: MapView, growMul: number): void {
   const bal = content.balance;
   const spreadChance = Number.isFinite(bal.grassSpreadChance) ? bal.grassSpreadChance : 0;
   const decayChance = Number.isFinite(bal.tilledDecayChance) ? bal.tilledDecayChance : 0;
   const weed = weedProp(content);
   const w = v.w;
   const h = v.h;
+  const gm = Math.max(0, growMul);
+
+  // ---- vật thể LỚN theo ngày và LAN sang ô kề ----------------------------
+  // Chụp danh sách "ai lan" trước khi sửa, để cỏ vừa mọc đêm nay không lan
+  // tiếp ngay trong cùng đêm. Duyệt theo chỉ số tăng dần: tất định.
+  const spreaders: { x: number; y: number; into: string; chance: number }[] = [];
+  const n0 = w * h;
+  for (let i = 0; i < n0; i++) {
+    const t = v.tiles[i];
+    if (!t || !t.prop) continue;
+    const pd = propDef(content, t.prop);
+    if (!pd) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    if (pd.spread && pd.spread.chance > 0)
+      spreaders.push({ x, y, into: pd.spread.into, chance: Math.min(1, pd.spread.chance * gm) });
+    if (pd.grow) {
+      const age = (Number.isFinite(t.age) ? (t.age as number) : 0) + gm;
+      if (age >= pd.grow.days) {
+        const next = propDef(content, pd.grow.to);
+        const m = v.edit(i);
+        if (m) {
+          m.prop = next ? next.id : null;
+          m.hp = next ? Math.max(0, Math.floor(next.hits ?? 0)) : 0;
+          delete m.age;
+        }
+      } else {
+        const m = v.edit(i);
+        if (m) m.age = age;
+      }
+    }
+  }
+  for (const sp of spreaders) {
+    const into = propDef(content, sp.into);
+    if (!into) continue;
+    // một ô kề (4 hướng) ngẫu nhiên; ô đó phải là cỏ trống
+    const r = nextRandom(d.s.seed);
+    touch(d).seed = r.seed;
+    if (r.v >= sp.chance) continue;
+    const pick = nextRandom(d.s.seed);
+    touch(d).seed = pick.seed;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+    const [dx, dy] = dirs[Math.floor(pick.v * 4) % 4]!;
+    const nx = sp.x + dx;
+    const ny = sp.y + dy;
+    if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+    const j = idx(w, nx, ny);
+    const tt = v.tiles[j];
+    if (!tt || tt.g !== "grass" || tt.prop !== null || tt.b !== null || tt.crop !== null || tt.tilled) continue;
+    if (v.active && playerOverlapsTile(d.s, nx, ny)) continue;
+    const m = v.edit(j);
+    if (m) {
+      m.prop = into.id;
+      m.hp = Math.max(0, Math.floor(into.hits ?? 0));
+    }
+  }
 
   const hasTuftNeighbour = (x: number, y: number): boolean => {
     for (let ny = y - 1; ny <= y + 1; ny++) {
@@ -190,35 +251,31 @@ function collectPower(content: Content, v: MapView): { income: number; power: nu
 }
 
 /** Bước 3+4+5+5b cho một bản đồ: tưới tự động → cây lớn → làm khô → đêm xuống. */
-function nightOnMap(d: Draft, content: Content, v: MapView, daylightLeft: number): void {
-  const w = v.w;
-  const h = v.h;
-  const n = w * h;
+interface NightReport {
+  sick: number;
+  stormCrops: number;
+  felled: number;
+}
+
+/** Bước 3+4+5+5b cho một bản đồ: tưới tự động → cây lớn → bệnh/bão → làm khô → đêm xuống.
+ *
+ *  `yesterday` là thời tiết của ngày VỪA QUA (đêm nay nối tiếp nó): cây lớn
+ *  theo growMul của nó, bão của nó quật; còn `today` là ngày mới vừa rút —
+ *  mưa hôm nay làm ướt ruộng sáng nay. */
+function nightOnMap(
+  d: Draft,
+  content: Content,
+  v: MapView,
+  daylightLeft: number,
+  yesterday: NightWeather,
+  todayWet: boolean,
+  rep: NightReport,
+): void {
+  const n = v.w * v.h;
+  const outdoor = isOutdoor(content, v.id);
 
   // ---- 3. tưới tự động (đánh dấu trước khi cây lớn) ----------------------
-  const autoWet = new Set<number>();
-  for (let i = 0; i < n; i++) {
-    const t = v.tiles[i];
-    if (!t || !t.b) continue;
-    const def = content.buildings[t.b];
-    if (!def) continue;
-    if (def.effects.autoWet) autoWet.add(i);
-    const r = def.effects.waterRadius ?? 0;
-    if (r > 0) {
-      const bx = i % w;
-      const by = (i - bx) / w;
-      for (let y = by - r; y <= by + r; y++) {
-        for (let x = bx - r; x <= bx + r; x++) {
-          if (x < 0 || y < 0 || x >= w || y >= h) continue;
-          const j = idx(w, x, y);
-          const tt = v.tiles[j];
-          if (!tt) continue;
-          if (tt.prop !== null || tt.g === "water") continue;
-          autoWet.add(j);
-        }
-      }
-    }
-  }
+  const autoWet = autoWetSet(v, content);
   for (const i of autoWet) {
     const t = v.tiles[i];
     if (t && !t.wet) {
@@ -231,19 +288,39 @@ function nightOnMap(d: Draft, content: Content, v: MapView, daylightLeft: number
   // Trong ngày, TICK đã cộng dần từng phút cho ô ẩm của bản đồ đang chơi. Đi
   // ngủ là bỏ qua quãng còn lại tới lúc trời tối, nên cộng cho đủ ở đây — ngủ
   // sớm không bị thiệt, mà ban ngày vẫn thấy cây nhích lên trông thấy.
-  growCropsIn(v, content, daylightLeft);
+  growCropsIn(v, content, daylightLeft, yesterday.growMul);
 
-  // ---- 5. làm khô --------------------------------------------------------
-  for (let i = 0; i < n; i++) {
-    const t = v.tiles[i];
-    if (!t || !t.wet) continue;
-    if (autoWet.has(i)) continue;
-    const m = v.edit(i);
-    if (m) m.wet = false;
+  // ---- 4b. bệnh lan trong đêm; 4c. bão quật -----------------------------
+  rep.sick += diseaseNight(d, content, v, yesterday.diseaseMul);
+  if (yesterday.storm && outdoor) {
+    const got = stormNight(d, content, v, yesterday.storm);
+    rep.stormCrops += got.crops;
+    rep.felled += got.felled;
+  }
+
+  // ---- 5. làm khô — trừ khi đêm qua trời ướt (mưa qua đêm giữ ẩm) --------
+  if (!(yesterday.wet && outdoor)) {
+    for (let i = 0; i < n; i++) {
+      const t = v.tiles[i];
+      if (!t || !t.wet) continue;
+      if (autoWet.has(i)) continue;
+      const m = v.edit(i);
+      if (m) m.wet = false;
+    }
+  }
+
+  // ---- 5c. sáng nay mưa: mọi ô đã cày ngoài trời ẩm sẵn ------------------
+  if (todayWet && outdoor) {
+    for (let i = 0; i < n; i++) {
+      const t = v.tiles[i];
+      if (!t || !t.tilled || t.wet || t.prop !== null) continue;
+      const m = v.edit(i);
+      if (m) m.wet = true;
+    }
   }
 
   // ---- 5b. cỏ mọc lan, đất cày bỏ không thì hoang trở lại ----------------
-  nightGround(d, content, v);
+  nightGround(d, content, v, yesterday.growMul);
 }
 
 /** Bước 6 cho một bản đồ. `budget` là quỹ điện CHUNG của cả thế giới; trả về
@@ -303,6 +380,10 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   const sleptAt = d.s.minutes;
 
   // ---- 1. sang ngày mới -------------------------------------------------
+  // Thời tiết của ngày VỪA QUA quyết định đêm nay (cây lớn bao nhiêu, bão có
+  // quật không); rồi mới rút ngày mới, vì mưa sáng nay làm ướt ruộng sáng nay.
+  const yesterday = nightWeatherOf(d.s, content);
+
   const s0 = touch(d);
   s0.day = s0.day + 1;
   s0.minutes = bal.dayStartMinutes;
@@ -310,6 +391,10 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
   s0.busy = 0;
   s0.pending = null;
+
+  // ---- 1b. thời tiết hôm nay ---------------------------------------------
+  rollWeather(d, content);
+  const todayWet = weatherDef(d.s, content).wet;
 
   // Lấy cửa sổ cho MỌI bản đồ đúng một lần, theo thứ tự tất định.
   const views = mapViews(d, content);
@@ -331,10 +416,14 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   // lúc bị cất, nên phải tính từ `awayAt`. Dùng chung một mốc cho cả hai là
   // cách làm cho "ở lì trong nhà" âm thầm phạt cây ngoài ruộng.
   const dawn = bal.daylightEndMinutes;
+  const rep: NightReport = { sick: 0, stormCrops: 0, felled: 0 };
   for (const v of views) {
     const from = v.active ? sleptAt : (d.s.maps?.[v.id]?.awayAt ?? sleptAt);
-    nightOnMap(d, content, v, Math.max(0, dawn - Math.min(from, dawn)));
+    nightOnMap(d, content, v, Math.max(0, dawn - Math.min(from, dawn)), yesterday, todayWet, rep);
   }
+  if (rep.stormCrops > 0) toastKey(d, content, "stormDamage", "bad", `×${rep.stormCrops}`);
+  if (rep.felled > 0) toastKey(d, content, "stormFell", "bad", `×${rep.felled}`);
+  if (rep.sick > 0) toastKey(d, content, "cropSick", "bad");
 
   // Sang ngày mới thì đồng hồ vắng mặt đặt lại về bình minh: chưa ai bước vào
   // bản đồ đó hôm nay, nên cả ngày mai lại là thời gian vắng mặt.

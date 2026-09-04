@@ -69,6 +69,24 @@ export interface Cursor {
 /** Loại hiệu ứng hạt. Mỗi loại một màu và một kiểu chuyển động. */
 export type BurstKind = "dust" | "water" | "leaf" | "spark" | "stone" | "coin";
 
+/** Thời tiết đã rút gọn cho renderer — main tính từ content + state. */
+export interface WeatherFx {
+  /** 0..1 — cây lay mạnh tới đâu */
+  wind: number;
+  /** đang mưa (vệt mưa rơi) */
+  rain: boolean;
+  /** bão: tối trời + chớp */
+  storm: boolean;
+  /** âm u: tint xám nhẹ */
+  overcast: boolean;
+  /** nắng gắt: cây chưa tưới trông héo */
+  hot: boolean;
+  /** 0..1 độ dày sương (main tính theo giờ) */
+  fog: number;
+  /** bản đồ đang chơi ở ngoài trời không — trong nhà không vẽ mưa/sương */
+  outdoor: boolean;
+}
+
 export interface DrawOptions {
   /** Ô ĐÍCH đang đi tới (bấm-để-đi) — vẽ dấu vòng vàng. */
   navTarget: { x: number; y: number } | null;
@@ -76,6 +94,8 @@ export interface DrawOptions {
   fade: number;
   /** Tắt nhấp nháy/lấp lánh/hạt cho ai say chuyển động. */
   reduceMotion: boolean;
+  /** Thời tiết hôm nay (core 1.3). */
+  weather: WeatherFx;
 }
 
 export interface Renderer {
@@ -144,6 +164,13 @@ export function createRenderer(
   const particles: Particle[] = [];
   let lastTime = 0;
 
+  /** Ghim một toạ độ world về đúng lưới pixel THIẾT BỊ (mịn hơn world px đúng
+   *  bằng scale×dpr lần). Dùng cho những thứ DI CHUYỂN mượt: nhân vật, hạt. */
+  function snapDev(v: number): number {
+    const k = camera.viewport.scale * camera.viewport.dpr;
+    return k > 0 ? Math.round(v * k) / k : v;
+  }
+
   /** Canvas phủ kín khung chứa; khung nhìn được căn giữa bên trong bằng offset. */
   function applyViewport() {
     const vp = camera.viewport;
@@ -211,7 +238,7 @@ export function createRenderer(
       const k = 1 - p.life / p.ttl;
       g.globalAlpha = k < 0.3 ? k / 0.3 : 1;
       g.fillStyle = p.color;
-      g.fillRect(Math.round(p.x - rx), Math.round(p.y - ry), p.size, p.size);
+      g.fillRect(snapDev(p.x - rx), snapDev(p.y - ry), p.size, p.size);
     }
     g.globalAlpha = 1;
   }
@@ -339,9 +366,13 @@ export function createRenderer(
     lights: Light[],
     timeSec: number,
     reduceMotion: boolean,
+    wx: WeatherFx,
   ) {
     const { rx, ry } = camera;
     const sparkFrame = Math.floor(timeSec * 6) % 3;
+    // Gió: ngọn cây lệch theo sin, mỗi ô lệch pha theo toạ độ nên cả ruộng
+    // gợn sóng thay vì lắc đồng loạt. Tắt khi reduceMotion.
+    const wind = reduceMotion ? 0 : wx.wind;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
@@ -406,18 +437,45 @@ export function createRenderer(
           const frames = atlas.crops[t.crop.id];
           const def = content.crops[t.crop.id];
           const img = frames?.[Math.min(t.crop.stage, frames.length - 1)];
-          if (img) items.push({ base, run: () => g.drawImage(img, px, py + TILE - CROP_H) });
-          // Cây CHÍN lấp lánh: trên màn nhỏ quả 3px không đủ để nhận ra từ xa,
-          // chuyển động là thứ mắt bắt được. Mỗi ô lệch pha theo toạ độ để cả
-          // ruộng không nháy cùng lúc.
-          if (def && t.crop.stage >= def.growthDays.length && !reduceMotion) {
-            const phase = (x * 7 + y * 13) % 3;
-            const f = (sparkFrame + phase) % 3;
-            const beat = Math.floor(timeSec * 2 + phase) % 3 === 0;
-            if (beat) {
-              const sx = px + ((x * 5) % 8) + 2;
-              const sy = py - 4 + ((y * 3) % 5);
-              items.push({ base: base + 1, run: () => g.drawImage(atlas.sparkle[f]!, sx, sy) });
+          const ripe = !!def && t.crop.stage >= def.growthDays.length;
+          const sick = t.crop.sick === true;
+          // héo: nắng gắt, chưa tưới, chưa chín — cây rũ xuống 1px và ngả vàng
+          const wilt = wx.hot && wx.outdoor && !t.wet && !ripe && t.crop.stage > 0;
+          if (img) {
+            const cy = py + TILE - CROP_H + (wilt ? 1 : 0);
+            // lệch ngọn theo gió: cắt ảnh thành hai lát, lát trên dịch ngang
+            const sway = wind > 0 && t.crop.stage > 0
+              ? Math.round(Math.sin(timeSec * 2.2 + x * 0.9 + y * 0.4) * 1.5 * wind)
+              : 0;
+            items.push({
+              base,
+              run: () => {
+                if (sway === 0) g.drawImage(img, px, cy);
+                else {
+                  const split = CROP_H - 8;
+                  g.drawImage(img, 0, 0, TILE, split, px + sway, cy, TILE, split);
+                  g.drawImage(img, 0, split, TILE, CROP_H - split, px, cy + split, TILE, CROP_H - split);
+                }
+                if (wilt) g.drawImage(atlas.wiltOverlay, px, cy);
+                if (sick) g.drawImage(atlas.sickOverlay, px, cy);
+              },
+            });
+          }
+          // Cây CHÍN: dấu tới lứa cố định ở góc trên phải — thấy ngay từ xa,
+          // không phụ thuộc chuyển động. Lấp lánh chỉ là gia vị thêm.
+          if (ripe) {
+            const bx = px + 10;
+            const by = py - 6;
+            items.push({ base: base + 1, run: () => g.drawImage(atlas.ripeBadge, bx, by) });
+            if (!reduceMotion) {
+              const phase = (x * 7 + y * 13) % 3;
+              const f = (sparkFrame + phase) % 3;
+              const beat = Math.floor(timeSec * 2 + phase) % 3 === 0;
+              if (beat) {
+                const sx = px + ((x * 5) % 6) + 1;
+                const sy = py - 2 + ((y * 3) % 5);
+                items.push({ base: base + 1, run: () => g.drawImage(atlas.sparkle[f]!, sx, sy) });
+              }
             }
           }
         }
@@ -468,8 +526,11 @@ export function createRenderer(
     const f =
       s.busy > 0 ? (raising ? PLAYER_RAISE_FRAME : PLAYER_ACT_FRAME) : p.moving ? 1 + (Math.floor(p.anim * 8) % 4) : 0;
     const img = frames[f] ?? frames[0]!;
-    const px = Math.round(p.x - camera.rx) - TILE / 2;
-    const py = Math.round(p.y - camera.ry) - 11;
+    // Ghim theo lưới pixel THIẾT BỊ. Làm tròn về world px như trước thì nhân
+    // vật giật ±1 world px trên nền đã trôi mượt — đổi một kiểu giật lấy kiểu
+    // khác. Ở đây sai số còn dưới một pixel thiết bị, mắt không thấy.
+    const px = snapDev(p.x - camera.rx) - TILE / 2;
+    const py = snapDev(p.y - camera.ry) - 11;
 
     // Công cụ trong tay — chỉ khi đang vung. Giơ: trên đầu, hơi lệch về phía
     // sau; chạm: trước mặt theo hướng, thấp xuống. Nhấc dần theo pha cho có đà.
@@ -504,6 +565,65 @@ export function createRenderer(
     });
   }
 
+  /**
+   * Vệt mưa trong toạ độ THẾ GIỚI (trước g.restore) để cuốn theo camera. Vị trí
+   * từng vệt hash theo (chỉ số, nhịp) — không state, không Math.random, và cùng
+   * khung hình thì cùng hình.
+   */
+  function drawRain(timeSec: number, storm: boolean) {
+    const vp = camera.viewport;
+    const n = storm ? 110 : 60;
+    const beat = Math.floor(timeSec * 10);
+    const w = vp.viewW;
+    const h = vp.viewH;
+    for (let i = 0; i < n; i++) {
+      const hx = ((i * 73856093) ^ (beat * 19349663)) >>> 0;
+      const hy = ((i * 83492791) ^ (beat * 2654435761)) >>> 0;
+      const x = (hx % (w + 16)) - 8;
+      const y = ((hy % (h + 16)) - 8 + ((timeSec * 140) % 16)) % (h + 16);
+      const f = (i + beat) % 3;
+      g.drawImage(atlas.rainDrop[f]!, Math.round(x), Math.round(y));
+    }
+  }
+
+  /** Lớp phủ toàn màn: sương, tint âm u, tối bão + chớp. Sau lớp đêm. */
+  function drawWeatherScreen(timeSec: number, wx: WeatherFx, reduceMotion: boolean) {
+    if (!wx.outdoor) return;
+    let color = "";
+    let alpha = 0;
+    if (wx.storm) {
+      color = "#101828";
+      alpha = 0.22;
+    } else if (wx.overcast || wx.rain) {
+      color = "#3a4658";
+      alpha = 0.12;
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (alpha > 0) {
+      g.fillStyle = color;
+      g.globalAlpha = alpha;
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.globalAlpha = 1;
+    }
+    if (wx.fog > 0.001) {
+      g.fillStyle = "#e6ecf4";
+      g.globalAlpha = Math.min(0.5, 0.5 * wx.fog);
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      g.globalAlpha = 1;
+    }
+    if (wx.storm && !reduceMotion) {
+      // chớp: cứ ~7 giây loé một cái 2 khung, hash theo giây để tất định
+      const sec = Math.floor(timeSec);
+      const flash = (sec * 2654435761) % 7 === 0 && timeSec - sec < 0.12;
+      if (flash) {
+        g.fillStyle = "#ffffff";
+        g.globalAlpha = 0.35;
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        g.globalAlpha = 1;
+      }
+    }
+  }
+
   function drawNight(s: GameState, lights: Light[]) {
     const [color, alpha] = nightTint(s.minutes);
     if (alpha <= 0.001) return;
@@ -520,8 +640,10 @@ export function createRenderer(
 
     ng.globalCompositeOperation = "destination-out";
     for (const l of lights) {
-      const lx = (l.wx - camera.rx) * k;
-      const ly = (l.wy - camera.ry) * k;
+      // camera THỰC, không phải camera đã snap: lớp đêm được blit có làm mượt
+      // nên phải khớp với vị trí thế giới thật, không phải vị trí đã làm tròn.
+      const lx = (l.wx - camera.x) * k;
+      const ly = (l.wy - camera.y) * k;
       const lr = l.r * k;
       if (lx < -lr || lx > night.width + lr || ly < -lr || ly > night.height + lr) continue;
       const grad = ng.createRadialGradient(lx, ly, 0, lx, ly, lr);
@@ -556,18 +678,42 @@ export function createRenderer(
     else stepParticles(dt);
 
     const scale = vp.scale * vp.dpr;
-    const tx = Math.round(vp.offX * vp.dpr);
-    const ty = Math.round(vp.offY * vp.dpr);
+
+    /* ---- CHỐNG GIẬT: đắp phần LẺ của camera vào phép tịnh tiến ----------
+       Camera trôi ở toạ độ thực nhưng `rx/ry` snap về world px NGUYÊN — đó là
+       thứ giữ cho các hàng pixel không lăn tăn. Cái giá của nó: mỗi khung hình
+       thế giới chỉ dịch được một số NGUYÊN world px. Đi bộ 78 px/s ở 60 khung
+       hình là 1,3 px mỗi khung, làm tròn thành nhịp 1,2,1,1,2 — ở scale 5 tức
+       là 5 rồi 10 CSS px xen kẽ, tốc độ biểu kiến nhảy gấp đôi rồi lại về, 60
+       lần mỗi giây. Đó chính là cảm giác "giật giật".
+
+       Phần lẻ (`camera.x - camera.rx`, luôn trong [-0,5; 0,5]) được cộng vào
+       phép tịnh tiến CUỐI và làm tròn theo pixel THIẾT BỊ. Độ mịn của chuyển
+       động tăng từ 1 world px lên 1 device px — ở scale 5, dpr 2 là mịn gấp 10
+       lần. Mọi ô vẫn được vẽ ở offset world NGUYÊN so với nhau, và cả lớp chỉ
+       dời đi một số nguyên pixel thiết bị, nên không có pixel nào bị to nhỏ
+       không đều: độ nét giữ nguyên. */
+    const fx = camera.x - camera.rx;
+    const fy = camera.y - camera.ry;
+    const tx = Math.round(vp.offX * vp.dpr - fx * scale);
+    const ty = Math.round(vp.offY * vp.dpr - fy * scale);
 
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = LETTERBOX;
     g.fillRect(0, 0, canvas.width, canvas.height);
 
     g.save();
-    g.setTransform(scale, 0, 0, scale, tx, ty);
+    // Cắt trong không gian THIẾT BỊ, không phải không gian đã tịnh tiến: khung
+    // nhìn phải đứng yên đúng chỗ letterbox trong khi thế giới trượt bên trong.
     g.beginPath();
-    g.rect(0, 0, vp.viewW, vp.viewH);
+    g.rect(
+      Math.round(vp.offX * vp.dpr),
+      Math.round(vp.offY * vp.dpr),
+      Math.round(vp.viewW * scale),
+      Math.round(vp.viewH * scale),
+    );
     g.clip();
+    g.setTransform(scale, 0, 0, scale, tx, ty);
 
     g.fillStyle = WORLD_BG;
     g.fillRect(0, 0, vp.viewW, vp.viewH);
@@ -601,7 +747,7 @@ export function createRenderer(
 
     const items: Item[] = [];
     const lights: Light[] = [];
-    collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion);
+    collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion, opts.weather);
     drawPlayer(s, content, items);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 
@@ -609,10 +755,12 @@ export function createRenderer(
     for (const it of items) it.run();
 
     drawParticles();
+    if (opts.weather.outdoor && opts.weather.rain && !opts.reduceMotion) drawRain(timeSec, opts.weather.storm);
 
     g.restore();
 
     drawNight(s, lights);
+    drawWeatherScreen(timeSec, opts.weather, opts.reduceMotion);
 
     const fade = s.sleeping ? Math.max(opts.fade, 0.55) : opts.fade;
     if (fade > 0.001) {

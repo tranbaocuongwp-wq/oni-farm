@@ -15,6 +15,7 @@ import { dirFromVector, movePlayer } from "./player.ts";
 import { canUseAt, craft, refill, useAt } from "./actions.ts";
 import { swapSlots } from "./inventory.ts";
 import { growCrops, growCropsIn, newDay } from "./newday.ts";
+import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
@@ -79,6 +80,8 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       // khung hình nào vắt qua lúc trời tối cũng không cộng dư một mẩu.
       const dawn = bal.daylightEndMinutes;
       growCrops(d, content, Math.max(0, Math.min(s.minutes, dawn) - Math.min(was, dawn)));
+      // Nắng gắt: qua trưa là ruộng khô (một lần mỗi ngày).
+      weatherTick(d, content, was, s.minutes);
 
       if (s.minutes >= bal.dayEndMinutes) {
         newDay(d, content, { passedOut: true });

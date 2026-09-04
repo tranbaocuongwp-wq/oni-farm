@@ -145,6 +145,36 @@
           "n": 4
         }
       ]
+    },
+    {
+      "id": "medicine",
+      "name": "Thuốc trừ sâu",
+      "desc": "Xịt lên cây bệnh là khỏi. Làm từ sợi cỏ.",
+      "out": {
+        "id": "item:medicine",
+        "n": 2
+      },
+      "in": [
+        {
+          "id": "item:fiber",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "fodder",
+      "name": "Cỏ khô",
+      "desc": "Thức ăn cho gia súc. Bó từ sợi cỏ.",
+      "out": {
+        "id": "item:fodder",
+        "n": 2
+      },
+      "in": [
+        {
+          "id": "item:fiber",
+          "n": 4
+        }
+      ]
     }
   ]
 }

@@ -191,6 +191,20 @@ export function migrateSave(data: SaveData): GameState | null {
   // tác có diễn hoạt và độ trễ). Save cũ không có thao tác dở → null.
   if (s.save === 5) s = { ...s, pending: null, save: 6 };
 
+  // v6 → v7: thời tiết (core 1.3). Save cũ chưa có thời tiết nào → coi hôm nay
+  // và ngày mai đều là kiểu "đầu tiên" của content; `migrateForContent` sẽ
+  // đối chiếu lại với content thật lúc nạp. Thêm `stats.cured`.
+  if (s.save === 6) {
+    const stats = { ...(s.stats ?? {}) } as GameState["stats"];
+    if (!Number.isFinite(stats.cured)) stats.cured = 0;
+    s = {
+      ...s,
+      save: 7,
+      stats,
+      weather: { today: "", tomorrow: "", wetStreak: 0, driedDay: 0 },
+    };
+  }
+
   return s.save === SAVE_VERSION ? s : null;
 }
 

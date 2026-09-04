@@ -567,6 +567,8 @@ export function createMenus(
     add("Tự cày + gieo quanh đây", "plantAround");
     add("Rắc cỏ quanh đây", "addGrass");
     add("Rắc cây nhỏ quanh đây", "addTrees");
+    add("Đổi thời tiết", "weather");
+    add("Làm cây bệnh quanh đây", "sickAround");
     body.appendChild(grid);
 
     const s = getState();

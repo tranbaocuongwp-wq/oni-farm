@@ -51,6 +51,7 @@ import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
 import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
+import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
@@ -415,7 +416,12 @@ async function boot() {
       savedDay = s.day;
       void autosave();
       dayFadeAt = elapsed;
-      hud.dayBanner(s.day, passedOut ? "Bạn ngất giữa đồng — dậy muộn và mệt" : "Một ngày mới trên nông trại");
+      const wxNow = weatherDef(s, content).name;
+      const wxNext = forecastDef(s, content).name;
+      hud.dayBanner(
+        s.day,
+        (passedOut ? "Ngất giữa đồng — dậy muộn và mệt · " : "") + `${wxNow} · mai: ${wxNext}`,
+      );
     } else dirtySince++;
   });
   setInterval(() => {
@@ -703,9 +709,15 @@ async function boot() {
           const tx = snapped.x;
           const ty = snapped.y;
           aimed = { x: tx, y: ty };
-          nav.cancel();
 
           if (!it.double) {
+            // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
+            // Trước đây mọi cú chạm đều huỷ rồi tìm đường lại, nên người chơi
+            // sốt ruột bấm dồn là nhân vật dừng-chạy-dừng-chạy — đúng cảm giác
+            // "giật giật". Bấm lại chỗ cũ là XÁC NHẬN, không phải lệnh mới.
+            const cur = nav.target();
+            if (cur && cur.tx === tx && cur.ty === ty) break;
+            nav.cancel();
             if (!inReachOf(s, tx, ty))
               nav.goTo(s, content, tx, ty, {
                 act: false,
@@ -714,6 +726,7 @@ async function boot() {
             break;
           }
 
+          nav.cancel();
           if (tryInteract(s, tx, ty)) break;
           if (alignedTo(s, tx, ty) && tryUse(s, tx, ty)) break;
           if (
@@ -755,10 +768,22 @@ async function boot() {
       if (fade <= 0) dayFadeAt = 0;
     }
 
+    const wxDef = weatherDef(s, content);
+    const fogUntil = wxDef.fogUntil ?? 0;
     renderer.draw(s, content, cursor, elapsed, {
       navTarget: navT ? { x: navT.tx, y: navT.ty } : null,
       fade,
       reduceMotion: document.body.dataset["motion"] === "reduce",
+      weather: {
+        wind: wxDef.wind,
+        rain: wxDef.wet,
+        storm: !!wxDef.storm,
+        overcast: !wxDef.wet && wxDef.growMul >= 1 && wxDef.wind >= 0.4 && !wxDef.hot,
+        hot: !!wxDef.hot,
+        // sương tan dần trong 60 phút cuối trước mốc fogUntil
+        fog: fogUntil > 0 && s.minutes < fogUntil ? Math.min(1, (fogUntil - s.minutes) / 60) : 0,
+        outdoor: isOutdoor(content, s.mapId),
+      },
     });
 
     const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;

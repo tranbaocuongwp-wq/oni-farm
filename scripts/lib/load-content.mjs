@@ -27,6 +27,7 @@ export function rawPack() {
     balance: readJson("balance.json"),
     progression: readJson("progression.json"),
     strings: readJson("strings.vi.json"),
+    weather: readJson("weather.json"),
     maps: Object.fromEntries(
       (readJson("manifest.json").files
         .map((f) => /^maps\/(.+)\.json$/.exec(f)?.[1])

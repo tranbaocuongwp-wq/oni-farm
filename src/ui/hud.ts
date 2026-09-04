@@ -114,6 +114,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         </span>
         <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
         <span class="stat power" id="hud-power-line"><i class="ic" data-ic="power"></i><span id="hud-power">0</span></span>
+        <span class="stat weather" id="hud-wx-line" title="Thời tiết hôm nay · dự báo ngày mai"><i class="ic" id="hud-wx"></i><span id="hud-wx-name"></span><i class="ic next" id="hud-wx-next"></i></span>
       </div>
       <button class="goal-chip" id="goal-box" type="button" aria-label="Mục tiêu hiện tại">
         <i class="ic" data-ic="goal"></i><span id="goal">—</span>
@@ -158,6 +159,17 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elWaterLine = $("hud-water-line");
   const elGoal = $("goal");
   const elGoalBox = $("goal-box");
+  const elWx = $("hud-wx");
+  const elWxName = $("hud-wx-name");
+  const elWxNext = $("hud-wx-next");
+  const putIcon = (host: HTMLElement, src: HTMLCanvasElement) => {
+    host.innerHTML = "";
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext("2d")!.drawImage(src, 0, 0);
+    host.appendChild(c);
+  };
   const elHotbar = $("hotbar");
   const elTip = $("tip");
   const elBanner = $("day-banner");
@@ -169,7 +181,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   elBagBtn.addEventListener("click", () => bagFn());
   const prev = {
     money: -1, day: -1, clock: "", night: false, energy: -1, power: -1, water: -1, cap: -1,
-    goal: "", hotbar: "", hint: "", bag: -1,
+    goal: "", hotbar: "", hint: "", bag: -1, wx: "",
   };
 
   /* ---- mục tiêu: chip bấm để thu gọn ---- */
@@ -359,6 +371,19 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         elGoalBox.classList.remove("flash");
         void elGoalBox.offsetWidth;
         elGoalBox.classList.add("flash");
+      }
+
+      // thời tiết hôm nay + dự báo — icon từ atlas, tên từ content
+      const wxKey = `${s.weather?.today ?? ""}|${s.weather?.tomorrow ?? ""}`;
+      if (wxKey !== prev.wx) {
+        prev.wx = wxKey;
+        const today = s.weather?.today ?? "";
+        const next = s.weather?.tomorrow ?? "";
+        putIcon(elWx, atlas.weatherIcon(today));
+        putIcon(elWxNext, atlas.weatherIcon(next));
+        elWxName.textContent = content.weathers?.[today]?.name ?? "";
+        const line = $("hud-wx-line");
+        line.title = `Hôm nay: ${content.weathers?.[today]?.name ?? today} · Ngày mai: ${content.weathers?.[next]?.name ?? next}`;
       }
 
       renderHotbar(s, content);

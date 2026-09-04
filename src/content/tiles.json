@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.",
   "grounds": {
     "water": {
       "solid": true,
@@ -78,11 +78,34 @@
     "d": {
       "ground": "wood",
       "prop": "door_in"
+    },
+    "g": {
+      "ground": "grass",
+      "prop": "grass_short"
+    },
+    "w": {
+      "ground": "grass",
+      "prop": "grass_tall"
+    },
+    "u": {
+      "ground": "grass",
+      "prop": "bush_small"
+    },
+    "U": {
+      "ground": "grass",
+      "prop": "bush_big"
+    },
+    "L": {
+      "ground": "grass",
+      "prop": "log"
     }
   },
   "spawn": {
     "map": "farm",
     "x": 16,
     "y": 5
-  }
+  },
+  "indoorMaps": [
+    "house"
+  ]
 }

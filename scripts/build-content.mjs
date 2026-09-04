@@ -63,6 +63,7 @@ const raw = {
   balance: readJson("balance.json"),
   progression: readJson("progression.json"),
   strings: readJson("strings.vi.json"),
+  weather: readJson("weather.json"),
   maps,
 };
 

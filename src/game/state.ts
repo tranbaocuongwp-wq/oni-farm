@@ -316,6 +316,7 @@ export function createNewGame(content: Content, seed = 1): GameState {
       sold: 0,
       earned: 0,
       built: {},
+      cured: 0,
     },
 
     log: [],
@@ -325,6 +326,13 @@ export function createNewGame(content: Content, seed = 1): GameState {
     pending: null,
 
     water: Math.max(0, Math.floor(content.balance.startWater ?? 0)),
+
+    weather: {
+      today: content.weatherFirst,
+      tomorrow: content.weatherFirst,
+      wetStreak: content.weathers[content.weatherFirst]?.wet ? 1 : 0,
+      driedDay: 0,
+    },
   };
 
   // Áp ngay mốc `start` (require rỗng) để cửa hàng có hàng từ giây đầu tiên.

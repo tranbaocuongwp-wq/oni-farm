@@ -153,6 +153,16 @@ export interface PropDef {
   interact?: InteractKind;
   /** Cửa dịch chuyển: BẢN ĐỒ và toạ độ Ô người chơi sẽ hiện ra. */
   portal?: { map: string; x: number; y: number };
+  /**
+   * Vật thể LỚN theo ngày: sau `days` ngày (nhân với `growMul` của thời tiết)
+   * thì biến thành `to`. Cây con → cây lớn, cỏ non → cỏ dày, bụi nhỏ → bụi lớn.
+   * Tiến độ nằm ở `Tile.age`.
+   */
+  grow?: { to: string; days: number };
+  /** Mỗi đêm có `chance` (× growMul) mọc thêm một `into` lên ô cỏ trống kề bên. */
+  spread?: { chance: number; into: string };
+  /** Đêm bão có `chance` bị quật thành `to` (cây con → khúc gỗ). */
+  stormFell?: { to: string; chance: number };
   art?: { body: string; dark: string; accent: string };
 }
 
@@ -168,6 +178,10 @@ export interface Balance {
     build: number;
     chop: number;
     mine: number;
+    /** xịt thuốc cho cây bệnh (core 1.3) */
+    cure?: number;
+    /** nhổ cây bệnh (core 1.3) */
+    pull?: number;
   };
   /** 360 = 6:00 sáng */
   dayStartMinutes: number;
@@ -207,6 +221,16 @@ export interface Balance {
   tilledDecayChance: number;
   /** Lượng nước có sẵn trong bình lúc bắt đầu. */
   startWater: number;
+
+  /* ---- thời tiết & bệnh (core 1.3; thiếu thì loader điền mặc định) ---- */
+  /** Xác suất mỗi đêm một cây đang lớn nhiễm bệnh (trước khi nhân với thời tiết). */
+  diseaseChance?: number;
+  /** Nhân xác suất khi có cây bệnh kề bên. */
+  diseaseNeighbourMul?: number;
+  /** Cây bệnh thu hoạch được bao nhiêu phần sản lượng (0..1). */
+  sickYieldMul?: number;
+  /** Ngày nắng gắt: qua mốc phút này thì ô ẩm không tự tưới bị khô. */
+  noonDryMinutes?: number;
 }
 
 export type GroundKind = "grass" | "path" | "water" | "wood";
@@ -229,6 +253,45 @@ export interface TilesDef {
   legend: Record<string, TileLegendEntry>;
   /** Bản đồ và ô bắt đầu ván mới. */
   spawn: { map: string; x: number; y: number };
+  /** Bản đồ TRONG NHÀ: mưa không tưới, bão không quật. Thiếu = mọi bản đồ ngoài trời. */
+  indoorMaps?: string[];
+}
+
+/**
+ * Một KIỂU thời tiết. Mỗi ngày đúng một kiểu, chọn theo `weight` từ seed.
+ * Mọi con số là HỆ SỐ nhân lên luật sẵn có, nên thêm kiểu mới không cần sửa core.
+ */
+export interface WeatherDef {
+  id: string;
+  name: string;
+  /** trọng số rút thăm; 0 = không bao giờ tự xuất hiện (chỉ do streak/debug) */
+  weight: number;
+  /** trời ướt: sáng ra mọi ô đã cày ngoài trời đều ẩm, và không khô đi trong đêm */
+  wet: boolean;
+  /** nhân tốc độ lớn của cây trồng, cỏ, bụi, cây con (1 = bình thường) */
+  growMul: number;
+  /** 0..1 — gió, chỉ dùng để vẽ cây lay */
+  wind: number;
+  /** nắng gắt: quá `noonDryMinutes` thì ô ẩm khô, cây chưa tưới trông héo */
+  hot?: boolean;
+  /** nhân xác suất nhiễm bệnh */
+  diseaseMul?: number;
+  /** mưa dầm: hôm sau có `chance` vẫn mưa, tối đa `max` ngày liên tiếp */
+  streak?: { max: number; chance: number };
+  /** bão: mỗi cây có `cropChance` bị hại; vật thể có `stormFell` bị quật với chance riêng */
+  storm?: { cropChance: number };
+  /** sương sớm: phủ mờ tới phút này */
+  fogUntil?: number;
+}
+
+/** Thời tiết trong state: hôm nay, dự báo ngày mai, và chuỗi ngày ướt liên tiếp. */
+export interface WeatherState {
+  today: string;
+  tomorrow: string;
+  /** số ngày ướt liên tiếp tính cả hôm nay */
+  wetStreak: number;
+  /** ngày đã làm "khô trưa" rồi (để TICK không làm lại mỗi khung) */
+  driedDay: number;
 }
 
 /** Bản đồ đã biên dịch. `rows` là mảng chuỗi ký tự legend, mỗi chuỗi dài `w`. */
@@ -292,6 +355,10 @@ export interface Content {
   stages: ProgressionStage[];
   goals: Goal[];
   strings: Strings;
+  weathers: Record<string, WeatherDef>;
+  weatherOrder: string[];
+  /** kiểu thời tiết ngày đầu tiên */
+  weatherFirst: string;
 }
 
 /* ---------------------------------------------------------------------------
@@ -326,6 +393,8 @@ export interface CropInstance {
   grow: number;
   /** đã từng thu hoạch ít nhất một lần (cây mọc lại) */
   regrown: boolean;
+  /** Đang bệnh: không lớn, thu hoạch giảm. Vắng = khoẻ (save không phình). */
+  sick?: true;
 }
 
 export interface Tile {
@@ -341,6 +410,8 @@ export interface Tile {
   b: string | null;
   /** Số nhát còn chịu được của `prop`. 0 = vật thể không khai thác được. */
   hp: number;
+  /** Số "ngày lớn" vật thể đã tích (prop có `grow`). Vắng = 0. */
+  age?: number;
 }
 
 export type Dir = "down" | "up" | "left" | "right";
@@ -364,6 +435,8 @@ export interface Stats {
   earned: number;
   /** số công trình đã xây theo id: built.solar, built.sprinkler... */
   built: Record<string, number>;
+  /** số cây bệnh đã chữa (core 1.3) */
+  cured: number;
 }
 
 /** Thông điệp cho UI. Reducer đẩy vào đây; UI đọc rồi xoá. */
@@ -451,6 +524,9 @@ export interface GameState {
 
   /** Nước còn trong bình tưới. Hết thì phải ra giếng hoặc bờ ao múc. */
   water: number;
+
+  /** Thời tiết hôm nay + dự báo (core 1.3). */
+  weather: WeatherState;
 }
 
 /* ---------------------------------------------------------------------------
@@ -502,7 +578,11 @@ export type DebugOp =
   | "addTrees"
   | "unlockAll"
   | "materials"
-  | "harvestAll";
+  | "harvestAll"
+  /** đổi thời tiết hôm nay sang kiểu kế tiếp trong content (n = chỉ số cụ thể) */
+  | "weather"
+  /** làm mọi cây đang lớn quanh nhân vật nhiễm bệnh */
+  | "sickAround";
 
 /* ---------------------------------------------------------------------------
    PHẦN E — SAVE

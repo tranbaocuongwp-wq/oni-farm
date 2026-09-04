@@ -15,6 +15,7 @@ import type { Draft, MapView } from "./state.ts";
 import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
+import { cureTile, pullTile } from "./disease.ts";
 import {
   canPlaceBuilding,
   hasNearbyInteract,
@@ -123,7 +124,10 @@ export function harvestTileIn(
   }
 
   const roll = randInt(d.s.seed, def.yieldMin, def.yieldMax);
-  const amount = Math.max(0, roll.v);
+  // Cây bệnh cho ít hơn — làm tròn xuống nhưng không dưới 1 (vẫn có gì đó để
+  // khỏi thấy vô nghĩa khi cố thu).
+  const sickMul = cur.crop.sick ? Math.max(0, Math.min(1, content.balance.sickYieldMul ?? 1)) : 1;
+  const amount = Math.max(cur.crop.sick ? 1 : 0, Math.floor(Math.max(0, roll.v) * sickMul));
   const s = touch(d);
   s.seed = roll.seed;
 
@@ -326,7 +330,13 @@ function breakProp(d: Draft, content: Content, i: number, cur: Tile, def: PropDe
 /* ----------------------------------------------------------- kiểm tra USE */
 
 /** Kiểm tra nhanh cho UI: bấm vào ô này bây giờ có làm được gì không. */
-export type UseKind = "harvest" | "till" | "water" | "plant" | "build" | "chop" | "mine" | null;
+export type UseKind =
+  | "harvest" | "till" | "water" | "plant" | "build" | "chop" | "mine"
+  /** xịt thuốc cho cây bệnh (cầm item:medicine) */
+  | "cure"
+  /** nhổ cây bệnh (cầm cuốc) */
+  | "pull"
+  | null;
 
 /**
  * Ô này làm được việc gì với vật phẩm đang cầm?
@@ -361,6 +371,13 @@ export function canUseAt(
   const held = selectedItemId(state.inv, state.sel);
   const it = held ? parseItem(held) : null;
   if (!it) return null;
+
+  // Cây bệnh: thuốc thì chữa, cuốc thì nhổ. Xét trước công cụ thường vì cuốc
+  // lên ô có cây vốn "không làm được gì".
+  if (cur.crop?.sick) {
+    if (it.kind === "item" && it.ref === "medicine") return "cure";
+    if (it.kind === "tool" && content.tools[it.ref]?.action === "TILL") return "pull";
+  }
 
   if (it.kind === "tool") {
     const tool = content.tools[it.ref];
@@ -412,6 +429,17 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
   if (!held) return;
   const it = parseItem(held);
   if (!it) return;
+
+  if (cur.crop?.sick) {
+    if (it.kind === "item" && it.ref === "medicine") {
+      cureTile(d, content, activeView(d), i, true);
+      return;
+    }
+    if (it.kind === "tool" && content.tools[it.ref]?.action === "TILL") {
+      pullTile(d, content, activeView(d), i, true);
+      return;
+    }
+  }
 
   switch (it.kind) {
     case "tool": {

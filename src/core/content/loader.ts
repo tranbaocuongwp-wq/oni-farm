@@ -26,6 +26,7 @@ import type {
   Strings,
   TilesDef,
   ToolDef,
+  WeatherDef,
 } from "../../game/types.ts";
 import {
   validateBalance,
@@ -39,6 +40,7 @@ import {
   validateRecipes,
   validateStrings,
   validateTiles,
+  validateWeather,
 } from "./schema.ts";
 
 /** Các file JSON thô của một content pack, chưa qua kiểm tra. */
@@ -53,6 +55,8 @@ export interface RawPack {
   balance: unknown;
   progression: unknown;
   strings: unknown;
+  /** Thời tiết (core 1.3). Pack cũ không có → ota.ts ghép từ bản đóng kèm. */
+  weather: unknown;
   /** Mỗi bản đồ một lưới riêng, tra theo tên: { farm: {...}, house: {...} }. */
   maps: Record<string, unknown>;
 }
@@ -79,6 +83,7 @@ export function validatePack(raw: RawPack): string[] {
     ...validateBalance(raw.balance),
     ...validateProgression(raw.progression),
     ...validateStrings(raw.strings),
+    ...validateWeather(raw.weather),
   ];
 
   // map cần legend nên phải kiểm sau tiles
@@ -142,7 +147,7 @@ export function validatePack(raw: RawPack): string[] {
 
   // require chỉ được dùng khoá mà progression.ts biết đọc
   const statKeys = new Set([
-    "money", "day", "tilled", "planted", "watered", "harvested", "sold", "earned",
+    "money", "day", "tilled", "planted", "watered", "harvested", "sold", "earned", "cured",
   ]);
   const checkReq = (where: string, req: Record<string, number>) => {
     for (const k of Object.keys(req)) {
@@ -181,6 +186,12 @@ export function validatePack(raw: RawPack): string[] {
   for (const pr of props) {
     if (pr.becomes && !propIds.has(pr.becomes))
       errors.push(`props '${pr.id}': becomes '${pr.becomes}' không tồn tại`);
+    if (pr.grow && !propIds.has(pr.grow.to))
+      errors.push(`props '${pr.id}': grow.to '${pr.grow.to}' không tồn tại`);
+    if (pr.spread && !propIds.has(pr.spread.into))
+      errors.push(`props '${pr.id}': spread.into '${pr.spread.into}' không tồn tại`);
+    if (pr.stormFell && !propIds.has(pr.stormFell.to))
+      errors.push(`props '${pr.id}': stormFell.to '${pr.stormFell.to}' không tồn tại`);
     for (const d of pr.drops ?? [])
       if (!knownItem(d.id)) errors.push(`props '${pr.id}': rơi ra '${d.id}' — không có vật phẩm này`);
     if (pr.portal) {
@@ -193,6 +204,9 @@ export function validatePack(raw: RawPack): string[] {
         errors.push(`props '${pr.id}': cửa dẫn ra ngoài bản đồ '${map}' (${x},${y})`);
     }
   }
+
+  for (const id of tilesDef.indoorMaps ?? [])
+    if (!maps?.[id]) errors.push(`tiles.indoorMaps: bản đồ '${id}' không tồn tại`);
 
   const spawn = tilesDef.spawn;
   const spawnMap = maps?.[spawn.map];
@@ -231,6 +245,11 @@ const BALANCE_DEFAULTS = {
   runSpeed: 132,
   actionSeconds: 0.34,
   actionImpact: 0.5,
+  // core 1.3 — thời tiết & bệnh
+  diseaseChance: 0.02,
+  diseaseNeighbourMul: 3,
+  sickYieldMul: 0.5,
+  noonDryMinutes: 780,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */
@@ -247,6 +266,7 @@ export function buildContent(raw: RawPack): Content {
   const propList = (raw.props as { props: PropDef[] }).props;
   const recipeList = (raw.recipes as { recipes: RecipeDef[] }).recipes;
   const prog = raw.progression as { stages: ProgressionStage[]; goals: Goal[] };
+  const weatherRaw = raw.weather as { weathers: WeatherDef[]; firstDay: string };
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>
     Object.fromEntries(list.map((x) => [x.id, x]));
@@ -272,6 +292,9 @@ export function buildContent(raw: RawPack): Content {
     stages: prog.stages,
     goals: prog.goals,
     strings: raw.strings as Strings,
+    weathers: byId(weatherRaw.weathers),
+    weatherOrder: weatherRaw.weathers.map((w) => w.id),
+    weatherFirst: weatherRaw.firstDay,
   }) as Content;
 }
 

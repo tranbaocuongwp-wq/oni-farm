@@ -246,6 +246,7 @@ export function validateItems(raw: unknown): string[] {
       k.str(m, "id");
       k.str(m, "name");
       k.num(m, "sellPrice", 0);
+      if (m["buyPrice"] !== undefined) k.num(m, "buyPrice", 0);
       c.merge(k);
     });
   return c.errors;
@@ -308,10 +309,89 @@ export function validateProps(raw: unknown): string[] {
     if (item["interact"] === "PORTAL" && portal === undefined)
       k.fail("interact", "PORTAL thì phải khai portal {x,y}");
 
+    // ---- lớn theo ngày / lan / bị bão quật (core 1.3) ----
+    const grow = item["grow"];
+    if (grow !== undefined) {
+      if (!isObj(grow)) k.fail("grow", "phải là object {to, days}");
+      else {
+        if (!isStr(grow["to"])) k.fail("grow.to", "phải là chuỗi id prop");
+        if (!isNum(grow["days"]) || grow["days"] < 1) k.fail("grow.days", "phải là số >= 1");
+      }
+    }
+    const spread = item["spread"];
+    if (spread !== undefined) {
+      if (!isObj(spread)) k.fail("spread", "phải là object {chance, into}");
+      else {
+        if (!isStr(spread["into"])) k.fail("spread.into", "phải là chuỗi id prop");
+        if (!isNum(spread["chance"]) || spread["chance"] < 0 || spread["chance"] > 1)
+          k.fail("spread.chance", "phải nằm trong [0, 1]");
+      }
+    }
+    const fell = item["stormFell"];
+    if (fell !== undefined) {
+      if (!isObj(fell)) k.fail("stormFell", "phải là object {to, chance}");
+      else {
+        if (!isStr(fell["to"])) k.fail("stormFell.to", "phải là chuỗi id prop");
+        if (!isNum(fell["chance"]) || fell["chance"] < 0 || fell["chance"] > 1)
+          k.fail("stormFell.chance", "phải nằm trong [0, 1]");
+      }
+    }
+
     const art = k.obj(item, "art");
     if (art) colors(k, art, ["body", "dark", "accent"], "art");
     c.merge(k);
   });
+  return c.errors;
+}
+
+export function validateWeather(raw: unknown): string[] {
+  const c = new Check("weather.json");
+  if (!isObj(raw)) return ["weather.json: phải là object"];
+  const list = c.arr(raw, "weathers");
+  if (!list) return c.errors;
+  if (list.length === 0) c.fail("weathers", "phải có ít nhất một kiểu thời tiết");
+  const seen = new Set<string>();
+  let totalWeight = 0;
+  list.forEach((item, i) => {
+    const k = new Check(`weathers[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`weathers[${i}]`, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    const w = k.num(item, "weight", 0);
+    if (w !== null) totalWeight += w;
+    if (typeof item["wet"] !== "boolean") k.fail("wet", "phải là boolean");
+    k.num(item, "growMul", 0, 10);
+    k.num(item, "wind", 0, 1);
+    if (item["hot"] !== undefined && typeof item["hot"] !== "boolean") k.fail("hot", "phải là boolean");
+    if (item["diseaseMul"] !== undefined) k.num(item, "diseaseMul", 0, 20);
+    if (item["fogUntil"] !== undefined) k.num(item, "fogUntil", 0, 2880);
+    const streak = item["streak"];
+    if (streak !== undefined) {
+      if (!isObj(streak)) k.fail("streak", "phải là object {max, chance}");
+      else {
+        if (!isNum(streak["max"]) || streak["max"] < 1) k.fail("streak.max", "phải là số >= 1");
+        if (!isNum(streak["chance"]) || streak["chance"] < 0 || streak["chance"] > 1)
+          k.fail("streak.chance", "phải nằm trong [0, 1]");
+      }
+    }
+    const storm = item["storm"];
+    if (storm !== undefined) {
+      if (!isObj(storm)) k.fail("storm", "phải là object {cropChance}");
+      else if (!isNum(storm["cropChance"]) || storm["cropChance"] < 0 || storm["cropChance"] > 1)
+        k.fail("storm.cropChance", "phải nằm trong [0, 1]");
+    }
+    c.merge(k);
+  });
+  if (list.length > 0 && !(totalWeight > 0)) c.fail("weathers", "tổng weight phải > 0, không thì không rút thăm được");
+  const first = c.str(raw, "firstDay");
+  if (first && !seen.has(first)) c.fail("firstDay", `'${first}' không có trong weathers`);
   return c.errors;
 }
 
@@ -373,10 +453,26 @@ export function validateBalance(raw: unknown): string[] {
     c.fail("hotbarSlots", "không được lớn hơn inventorySlots");
 
   const cost = c.obj(raw, "energyCost");
-  if (cost)
+  if (cost) {
     c.merge(
       numsIn(cost, ["till", "water", "plant", "harvest", "build", "chop", "mine"], "energyCost"),
     );
+    for (const k of ["cure", "pull"])
+      if (cost[k] !== undefined && (!isNum(cost[k]) || (cost[k] as number) < 0))
+        c.fail(`energyCost.${k}`, "phải là số >= 0");
+  }
+  // core 1.3 — tuỳ chọn, có thì phải hợp lệ
+  for (const [k, min, max] of [
+    ["diseaseChance", 0, 1],
+    // Trần rộng tay: xác suất cuối đã bị kẹp về 1, nên số lớn chỉ có nghĩa
+    // "kề cây bệnh là chắc chắn lây". Với diseaseChance nhỏ (0,001) thì phải
+    // tới ba chữ số mới diễn đạt được ý đó — chặn ở 50 là chặn nhầm thiết kế
+    // hợp lệ. Vẫn đủ để bắt lỗi gõ nhầm kiểu 1e9.
+    ["diseaseNeighbourMul", 0, 1000],
+    ["sickYieldMul", 0, 1],
+    ["noonDryMinutes", 0, 2880],
+  ] as [string, number, number][])
+    if (raw[k] !== undefined) c.num(raw, k, min, max);
 
   // Ba trường dưới đây được thêm ở core 1.1: cho phép THIẾU để pack cũ đã cache
   // vẫn dùng được (loader sẽ điền giá trị mặc định), nhưng có thì phải hợp lệ.
@@ -434,6 +530,11 @@ export function validateTiles(raw: unknown): string[] {
   }
   const spawn = c.obj(raw, "spawn");
   if (spawn) c.merge(numsIn(spawn, ["x", "y"], "spawn"));
+  const indoor = raw["indoorMaps"];
+  if (indoor !== undefined) {
+    if (!Array.isArray(indoor)) c.fail("indoorMaps", "phải là mảng tên bản đồ");
+    else indoor.forEach((v, i) => { if (!isStr(v)) c.fail(`indoorMaps[${i}]`, "phải là chuỗi"); });
+  }
   return c.errors;
 }
 

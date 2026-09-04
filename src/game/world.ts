@@ -80,7 +80,7 @@ export function portalAt(
 export function weedProp(content: Content): PropDef | null {
   for (const id of content.propOrder) {
     const p = content.props[id];
-    if (p && p.hits && p.hits > 0 && !p.tool && !p.becomes) return p;
+    if (p && p.hits && p.hits > 0 && !p.tool && !p.becomes && !p.grow && !p.spread) return p;
   }
   return null;
 }
@@ -89,7 +89,7 @@ export function weedProp(content: Content): PropDef | null {
 export function saplingProp(content: Content): PropDef | null {
   for (const id of content.propOrder) {
     const p = content.props[id];
-    if (p && p.hits && p.hits > 0 && p.tool === "CHOP" && !p.tall && !p.becomes) return p;
+    if (p && p.hits && p.hits > 0 && p.tool === "CHOP" && !p.tall && !p.becomes && !p.spread) return p;
   }
   return null;
 }

@@ -81,6 +81,30 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       return;
     }
 
+    case "weather": {
+      const order = content.weatherOrder;
+      if (!order.length) return;
+      const cur = order.indexOf(d.s.weather.today);
+      const next = Number.isFinite(n) ? ((n as number) % order.length + order.length) % order.length : (cur + 1) % order.length;
+      const id = order[next]!;
+      const s = touch(d);
+      s.weather = { ...s.weather, today: id, driedDay: 0 };
+      toastText(d, `[debug] thời tiết: ${content.weathers[id]?.name ?? id}`, "info");
+      return;
+    }
+
+    case "sickAround": {
+      around(d, AROUND, (i) => {
+        const cur = d.s.tiles[i];
+        if (!cur || !cur.crop || cur.crop.sick) return;
+        const def = content.crops[cur.crop.id];
+        if (!def || cur.crop.stage >= def.growthDays.length) return;
+        const m = dTile(d, i);
+        if (m && m.crop) m.crop.sick = true;
+      });
+      return;
+    }
+
     case "growAll": {
       const tiles = d.s.tiles;
       for (let i = 0; i < tiles.length; i++) {

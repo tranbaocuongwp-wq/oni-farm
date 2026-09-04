@@ -46,6 +46,8 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   build: "ĐẶT",
   chop: "CHẶT",
   mine: "ĐẬP",
+  cure: "CHỮA",
+  pull: "NHỔ",
   shop: "MUA",
   sell: "BÁN",
   craft: "CHẾ",
@@ -93,6 +95,7 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
   const it = held ? parseItem(held) : null;
   if (!it) return "Chọn vật phẩm ở hotbar";
   const growing = !!t.crop && !isRipe(t, content);
+  if (t.crop?.sick) return "Cây bệnh — cần thuốc hoặc cuốc";
   if (it.kind === "tool") {
     const tool = content.tools[it.ref];
     if (!tool) return null;

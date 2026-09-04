@@ -637,6 +637,75 @@ function makeCounter(): HTMLCanvasElement {
   return outline(s).c;
 }
 
+/* --- địa hình tự nhiên mới (core 1.3): khúc gỗ, cỏ non/dày, bụi nhỏ/lớn --- */
+
+function makeLog(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 6, 1.8);
+  // thân nằm ngang, hai đầu lộ vân gỗ
+  s.rect(2, 8, 12, 5, art.body);
+  s.rect(2, 8, 12, 1, art.accent);
+  s.rect(2, 12, 12, 1, art.dark);
+  s.disc(2, 10, 2, art.accent);
+  s.px(2, 10, art.dark);
+  s.disc(13, 10, 2, art.body);
+  s.px(13, 10, art.dark);
+  s.px(6, 10, art.dark);
+  s.px(9, 9, art.dark);
+  s.px(11, 11, art.dark);
+  return outline(s).c;
+}
+
+function makeGrassProp(art: PropArt, tall: boolean): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(tall ? 0x6a2d : 0x3c19);
+  const blades = tall ? 11 : 7;
+  for (let i = 0; i < blades; i++) {
+    const x = 2 + Math.floor(rnd() * 12);
+    const h = (tall ? 5 : 3) + Math.floor(rnd() * 3);
+    const lean = rnd() > 0.5 ? 1 : -1;
+    for (let k = 0; k < h; k++) {
+      const xx = x + (k > h - 2 ? lean : 0);
+      s.px(xx, 14 - k, k === h - 1 ? art.accent : k === 0 ? art.dark : art.body);
+    }
+  }
+  // cỏ dày có vài bông cỏ khô nhạt
+  if (tall) for (let i = 0; i < 3; i++) s.px(3 + Math.floor(rnd() * 10), 7 + Math.floor(rnd() * 3), "#d8d08a");
+  // KHÔNG viền: cỏ là nền mềm, viền đen sẽ thành mảng bẩn trên bãi cỏ
+  return s.c;
+}
+
+function makeBushSmall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x22b7);
+  s.shadow(8, 14, 4, 1.5);
+  s.disc(8, 11, 3, art.body);
+  s.disc(6, 10, 2, art.accent);
+  s.px(10, 12, art.dark);
+  for (let i = 0; i < 8; i++) {
+    const x = 4 + Math.floor(rnd() * 8);
+    const y = 8 + Math.floor(rnd() * 6);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, rnd() > 0.5 ? art.dark : art.accent);
+  }
+  return outline(s).c;
+}
+
+function makeBushBig(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x77c3);
+  s.shadow(8, 14, 6.5, 2);
+  s.disc(8, 9, 6, art.body);
+  s.disc(5, 8, 3, art.accent);
+  s.disc(11, 10, 3, art.dark);
+  s.disc(8, 5, 2, art.accent);
+  for (let i = 0; i < 24; i++) {
+    const x = 1 + Math.floor(rnd() * 14);
+    const y = 3 + Math.floor(rnd() * 11);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, pick([art.dark, art.body, art.accent] as const, rnd()));
+  }
+  return outline(s).c;
+}
+
 /**
  * Vẽ một vật thể theo id. Đây là chỗ DUY NHẤT ánh xạ id trong props.json sang
  * hình. Id lạ (content mới đẩy qua OTA, core chưa biết vẽ) vẫn ra một hình cọc
@@ -656,6 +725,11 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "door_in": return makeDoorIn(art);
     case "shop": return makeShop();
     case "counter": return makeCounter();
+    case "log": return makeLog(art);
+    case "grass_short": return makeGrassProp(art, false);
+    case "grass_tall": return makeGrassProp(art, true);
+    case "bush_small": return makeBushSmall(art);
+    case "bush_big": return makeBushBig(art);
     default: {
       const s = surface(TILE, TILE);
       s.rect(2, 3, 12, 11, art.dark);
@@ -1401,6 +1475,96 @@ function makeUiIcon(name: UiIcon): HTMLCanvasElement {
 }
 
 /* ---------------------------------------------------------------------------
+   THỜI TIẾT & TÌNH TRẠNG CÂY (core 1.3)
+--------------------------------------------------------------------------- */
+
+/** Dấu "đã tới lứa" 7×7 cố định trên cây chín — không nhấp nháy, thấy ngay. */
+function makeRipeBadge(): HTMLCanvasElement {
+  const s = surface(7, 7);
+  s.disc(3, 3, 3, P.outline);
+  s.disc(3, 3, 2, P.gold);
+  // dấu tick
+  s.px(2, 3, "#ffffff");
+  s.px(3, 4, "#ffffff");
+  s.px(4, 3, "#ffffff");
+  s.px(5, 2, "#ffffff");
+  return s.c;
+}
+
+/** Đốm bệnh phủ lên cây 16×24: chấm nâu rải ở tán. */
+function makeSickOverlay(): HTMLCanvasElement {
+  const s = surface(TILE, CROP_H);
+  const rnd = mulberry32(0x5e11);
+  for (let i = 0; i < 9; i++) {
+    const x = 3 + Math.floor(rnd() * 10);
+    const y = 6 + Math.floor(rnd() * 14);
+    s.px(x, y, "#6b3f1a");
+    if (rnd() > 0.5) s.px(x + 1, y, "#8a5a2a");
+  }
+  return s.c;
+}
+
+/** Lớp ngả vàng cho cây héo (nắng gắt chưa tưới), alpha thấp. */
+function makeWiltOverlay(): HTMLCanvasElement {
+  const s = surface(TILE, CROP_H);
+  s.g.globalAlpha = 0.35;
+  s.rect(0, 0, TILE, CROP_H, "#c9a23a");
+  s.g.globalAlpha = 1;
+  return s.c;
+}
+
+/** Vệt mưa 3 khung: cao 6px, nghiêng nhẹ. */
+function makeRainDrop(frame: number): HTMLCanvasElement {
+  const s = surface(3, 7);
+  const c = frame === 1 ? "#dbeeff" : "#a8d4ff";
+  for (let k = 0; k < 5; k++) s.px(k < 2 ? 2 : k < 4 ? 1 : 0, k + 1, c);
+  if (frame === 2) s.px(1, 6, "#ffffff");
+  return s.c;
+}
+
+/** Icon 12×12 cho HUD theo id thời tiết. Id lạ (content mới) → mặt trời. */
+function makeWeatherIcon(id: string): HTMLCanvasElement {
+  const s = surface(12, 12);
+  const cloud = (x: number, y: number, col: string, dark: string) => {
+    s.disc(x + 3, y + 3, 2, col);
+    s.disc(x + 6, y + 2, 3, col);
+    s.disc(x + 9, y + 3, 2, col);
+    s.rect(x + 1, y + 3, 10, 3, col);
+    s.hline(x + 1, y + 6, 10, dark);
+  };
+  switch (id) {
+    case "hot":
+      s.disc(6, 6, 4, "#f59e0b");
+      s.disc(6, 6, 2, "#fff4b0");
+      s.px(6, 0, "#f59e0b"); s.px(6, 11, "#f59e0b"); s.px(0, 6, "#f59e0b"); s.px(11, 6, "#f59e0b");
+      s.px(2, 2, "#f59e0b"); s.px(9, 2, "#f59e0b"); s.px(2, 9, "#f59e0b"); s.px(9, 9, "#f59e0b");
+      break;
+    case "overcast":
+      cloud(0, 3, "#b8c2d0", "#7f8a9a");
+      break;
+    case "rain":
+      cloud(0, 1, "#9fb0c4", "#6f7d90");
+      s.px(3, 9, "#7fb6ec"); s.px(6, 10, "#7fb6ec"); s.px(9, 9, "#7fb6ec");
+      s.px(3, 10, "#3b82e0"); s.px(6, 11, "#3b82e0"); s.px(9, 10, "#3b82e0");
+      break;
+    case "storm":
+      cloud(0, 0, "#6b7486", "#3f4756");
+      s.px(6, 6, P.gold); s.px(5, 7, P.gold); s.px(6, 8, P.gold); s.px(5, 9, P.gold); s.px(4, 10, P.gold);
+      s.px(2, 9, "#7fb6ec"); s.px(9, 9, "#7fb6ec");
+      break;
+    case "fog":
+      s.hline(1, 3, 10, "#dfe6f0"); s.hline(2, 5, 8, "#cfd8e6"); s.hline(1, 7, 10, "#dfe6f0"); s.hline(3, 9, 7, "#cfd8e6");
+      break;
+    default: // sunny và id lạ
+      s.disc(6, 6, 3, P.gold);
+      s.px(6, 0, P.gold); s.px(6, 11, P.gold); s.px(0, 6, P.gold); s.px(11, 6, P.gold);
+      s.px(2, 2, P.gold); s.px(9, 2, P.gold); s.px(2, 9, P.gold); s.px(9, 9, P.gold);
+      s.px(5, 5, "#fff4b0");
+  }
+  return s.c;
+}
+
+/* ---------------------------------------------------------------------------
    API
 --------------------------------------------------------------------------- */
 
@@ -1443,6 +1607,16 @@ export interface Atlas {
   icon(id: string): HTMLCanvasElement | null;
   /** icon 12×12 cho HUD */
   ui(name: UiIcon): HTMLCanvasElement;
+  /** dấu "tới lứa" 7×7 trên cây chín */
+  ripeBadge: HTMLCanvasElement;
+  /** đốm bệnh 16×24 phủ lên cây */
+  sickOverlay: HTMLCanvasElement;
+  /** lớp ngả vàng 16×24 cho cây héo */
+  wiltOverlay: HTMLCanvasElement;
+  /** vệt mưa, 3 khung */
+  rainDrop: HTMLCanvasElement[];
+  /** icon 12×12 theo id thời tiết (id lạ → mặt trời) */
+  weatherIcon(id: string): HTMLCanvasElement;
 }
 
 function houseKey(n: Neighbors, door: boolean): string {
@@ -1637,6 +1811,15 @@ export function buildAtlas(content: Content): Atlas {
     }
     return c;
   };
+  const wxIcons = new Map<string, HTMLCanvasElement>();
+  const weatherIcon = (id: string) => {
+    let c = wxIcons.get(id);
+    if (!c) {
+      c = makeWeatherIcon(id);
+      wxIcons.set(id, c);
+    }
+    return c;
+  };
 
   return {
     grass, path, soil, soilWet, soilEdge, water, shore, wood,
@@ -1656,6 +1839,11 @@ export function buildAtlas(content: Content): Atlas {
     icon: (id) => icons.get(id) ?? null,
     ui,
     held,
+    ripeBadge: makeRipeBadge(),
+    sickOverlay: makeSickOverlay(),
+    wiltOverlay: makeWiltOverlay(),
+    rainDrop: [0, 1, 2].map(makeRainDrop),
+    weatherIcon,
   };
 }
 

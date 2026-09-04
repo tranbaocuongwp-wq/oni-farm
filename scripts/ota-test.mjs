@@ -124,6 +124,22 @@ reject("thêm cây mà quên mốc mở khoá — cây sẽ không bao giờ mua
 reject("một cây được mở khoá ở HAI mốc khác nhau", (p) => {
   p.progression.stages[3].unlocks.push("seed:lettuce");
 });
+reject("weather: tổng weight = 0 thì không rút thăm được", (p) => {
+  for (const w of p.weather.weathers) w.weight = 0;
+});
+reject("weather: firstDay không tồn tại", (p) => (p.weather.firstDay = "tuyet"));
+reject("weather: wind ngoài [0,1]", (p) => (p.weather.weathers[0].wind = 3));
+reject("props: grow.to trỏ vào vật thể không có", (p) => {
+  p.props.props.find((x) => x.id === "sapling").grow = { to: "khongCo", days: 2 };
+});
+reject("props: spread.into trỏ vào vật thể không có", (p) => {
+  p.props.props.find((x) => x.id === "grass_short").spread = { chance: 0.1, into: "khongCo" };
+});
+reject("props: stormFell.chance > 1", (p) => {
+  p.props.props.find((x) => x.id === "sapling").stormFell = { to: "log", chance: 7 };
+});
+reject("tiles.indoorMaps trỏ vào bản đồ không có", (p) => (p.tiles.indoorMaps = ["hamMo"]));
+reject("balance.diseaseChance > 1", (p) => (p.balance.diseaseChance = 2));
 
 console.log("\n── Sửa content HỢP LỆ thì phải được chấp nhận ──");
 const accept = (name, mutate) => {
@@ -165,6 +181,18 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   for (const pr of p.props.props)
     if (pr.portal) pr.portal = { map: pr.portal.map === "farm" ? "farm" : "house", x: 2, y: 1 };
   p.maps.house = { w: 5, h: 3, rows: ["WWWWW", "W___W", "WWWWW"] };
+});
+accept("thêm một kiểu thời tiết mới", (p) => {
+  p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });
+});
+accept("pack cũ không có các số cân bằng core 1.3 (loader điền mặc định)", (p) => {
+  delete p.balance.diseaseChance;
+  delete p.balance.diseaseNeighbourMul;
+  delete p.balance.sickYieldMul;
+  delete p.balance.noonDryMinutes;
+  delete p.balance.energyCost.cure;
+  delete p.balance.energyCost.pull;
+  delete p.tiles.indoorMaps;
 });
 accept("THÊM hẳn một bản đồ mới", (p) => {
   p.maps.hangDong = { w: 6, h: 4, rows: ["oooooo", "o::::o", "o::::o", "oooooo"] };
