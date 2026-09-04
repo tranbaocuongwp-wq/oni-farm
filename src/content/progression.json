@@ -22,7 +22,9 @@
         "seed:bokchoy",
         "seed:coriander",
         "seed:radish",
-        "seed:scallion"
+        "seed:scallion",
+        "animal:chicken",
+        "animal:duck"
       ],
       "toast": "Vào nghề rồi! Cửa hàng mở thêm cải thìa, ngò rí, củ cải và hành lá."
     },
@@ -67,7 +69,9 @@
         "greenhouse",
         "seed:tomato",
         "seed:chili",
-        "seed:onion"
+        "seed:onion",
+        "animal:goat",
+        "animal:pig"
       ],
       "toast": "Cơ giới hoá: vòi tưới, sàn nhà kính, kèm cà chua, ớt và hành tây."
     },
@@ -97,7 +101,9 @@
         "seed:corn",
         "seed:eggplant",
         "seed:greenbean",
-        "seed:okra"
+        "seed:okra",
+        "animal:cow",
+        "animal:sheep"
       ],
       "toast": "Hiện đại hoá: pin mặt trời, ngô, cà tím, đậu que và đậu bắp."
     },
@@ -126,7 +132,9 @@
         "drone",
         "seed:watermelon",
         "seed:wintermelon",
-        "seed:gourd"
+        "seed:gourd",
+        "animal:fish",
+        "animal:dog"
       ],
       "toast": "Có điện rồi! Drone thu hoạch, dưa hấu, bí đao và bầu đã mở khoá."
     },

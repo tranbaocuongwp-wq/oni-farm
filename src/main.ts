@@ -54,6 +54,7 @@ import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/act
 import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
+import { animalNear, readyProduct } from "./game/animals.ts";
 import { canPlaceBuilding } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
 
@@ -278,6 +279,7 @@ async function boot() {
     storeTake: (slot, n) => store.dispatch({ t: "STORE_TAKE", slot, n }),
     storePutAll: () => store.dispatch({ t: "STORE_PUT_ALL" }),
     storeSellAll: () => store.dispatch({ t: "STORE_SELL_ALL" }),
+    buyAnimal: (def) => store.dispatch({ t: "BUY_ANIMAL", def }),
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
     install: async () => {
@@ -714,8 +716,31 @@ async function boot() {
     return nav.goTo(s, content, far.x, far.y, { avoidStandingOn: holdingSolidBuilding(s) });
   }
 
+  /**
+   * Con vật ở ô này: tới lứa thì THU, đói thì CHO ĂN.
+   *
+   * Đứng trước cả `tryInteract` và `tryUse` — người chơi nhìn thấy con bò chứ
+   * không nhìn thấy nền đất dưới chân nó, nên cú bấm phải nói về con bò.
+   */
+  function tryAnimal(s: GameState, tx: number, ty: number): boolean {
+    if (!inReachOf(s, tx, ty)) return false;
+    const e = animalNear(s, tx, ty);
+    if (!e) return false;
+    const def = content.animals[e.def];
+    if (!def) return false;
+    if (readyProduct(e, content) >= 0) {
+      store.dispatch({ t: "GATHER", x: tx, y: ty });
+      return true;
+    }
+    if (def.feed && e.animal.fed <= 0) {
+      store.dispatch({ t: "FEED", x: tx, y: ty });
+      return true;
+    }
+    return false;
+  }
+
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
-    return tryInteract(s, tx, ty) || tryUse(s, tx, ty);
+    return tryAnimal(s, tx, ty) || tryInteract(s, tx, ty) || tryUse(s, tx, ty);
   }
 
   const deny = () => {
@@ -854,6 +879,9 @@ async function boot() {
           }
           if (c && !inReachOf(s, c.x, c.y)) c = targetTile(s, true);
           if (c && inReachOf(s, c.x, c.y)) {
+            // Con vật trước tiên — nếu không thì nhãn nút ghi THU mà bấm vào lại
+            // đi cày, tức là nút nói một đằng làm một nẻo.
+            if (tryAnimal(s, c.x, c.y)) break;
             // Với công trình gần đó (cửa hàng, giường…) nút chính cũng tương tác
             // được — người chơi không phải phân biệt DÙNG với E.
             if (nearbyInteract(s, c.x, c.y)) {

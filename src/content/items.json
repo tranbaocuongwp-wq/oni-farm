@@ -68,6 +68,66 @@
       "id": "medicine",
       "name": "Thuốc trừ sâu",
       "sellPrice": 10
+    },
+    {
+      "id": "milk",
+      "name": "Sữa bò",
+      "sellPrice": 42
+    },
+    {
+      "id": "goatmilk",
+      "name": "Sữa dê",
+      "sellPrice": 58
+    },
+    {
+      "id": "egg",
+      "name": "Trứng gà",
+      "sellPrice": 26
+    },
+    {
+      "id": "duckegg",
+      "name": "Trứng vịt",
+      "sellPrice": 38
+    },
+    {
+      "id": "wool",
+      "name": "Lông cừu",
+      "sellPrice": 70
+    },
+    {
+      "id": "beef",
+      "name": "Thịt bò",
+      "sellPrice": 180
+    },
+    {
+      "id": "pork",
+      "name": "Thịt heo",
+      "sellPrice": 140
+    },
+    {
+      "id": "chickenmeat",
+      "name": "Thịt gà",
+      "sellPrice": 70
+    },
+    {
+      "id": "duckmeat",
+      "name": "Thịt vịt",
+      "sellPrice": 85
+    },
+    {
+      "id": "mutton",
+      "name": "Thịt cừu",
+      "sellPrice": 165
+    },
+    {
+      "id": "fishmeat",
+      "name": "Cá thịt",
+      "sellPrice": 95
+    },
+    {
+      "id": "hay",
+      "name": "Cỏ khô",
+      "sellPrice": 6
     }
   ]
 }

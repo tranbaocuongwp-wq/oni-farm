@@ -38,6 +38,8 @@ export interface MenuHandlers {
   storeTake(slot: number, n: number): void;
   storePutAll(): void;
   storeSellAll(): void;
+  /** Mua một con vật — nó được giao tới điểm giao cố định. */
+  buyAnimal(def: string): void;
   sell(id: string, n: number): void;
   sellAll(): void;
   save(): void;
@@ -100,7 +102,7 @@ export function createMenus(
 ): Menus {
   let current: (() => void) | null = null;
   /** tab đang chọn của cửa hàng — nhớ giữa các lần mở */
-  let shopTab: "seed" | "build" = "seed";
+  let shopTab: "seed" | "build" | "animal" = "seed";
   /** số lượng đang chọn ở quầy bán, theo id */
   const sellQty = new Map<string, number>();
 
@@ -236,6 +238,7 @@ export function createMenus(
     };
     mkTab("seed", "Hạt giống");
     mkTab("build", "Công trình");
+    mkTab("animal", "Vật nuôi");
     body.appendChild(tabs);
 
     const mk = (id: string, name: string, desc: string, price: number) => {
@@ -281,6 +284,46 @@ export function createMenus(
           sea
             ? `Mùa ${sea.name} — ${shown} loại hạt đang bán, còn ${left} ngày nữa sang mùa. Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.`
             : "Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.",
+        ),
+      );
+    } else if (shopTab === "animal") {
+      for (const id of c.animalOrder) {
+        const a = c.animals[id]!;
+        if (a.job === "pest") continue; // chuột sóc không phải hàng bán
+        const mo = s.unlocked.includes(`animal:${id}`);
+        const sanPham = a.products.map((p) => itemLabel(p.id, c)).join(", ");
+        const thit = a.meat ? itemLabel(a.meat.id, c) : null;
+        const mota = [
+          sanPham ? `thu lặp lại: ${sanPham}` : null,
+          thit ? `bán thịt: ${thit}` : null,
+          a.feed ? `ăn ${itemLabel(a.feed, c)}` : "tự kiếm ăn",
+          a.housing === "pen" ? "phải nhốt trong rào" : a.housing === "water" ? "sống dưới nước" : "thả rông",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        body.appendChild(
+          row({
+            id: `animal:${id}`,
+            name: mo ? a.name : "???",
+            desc: mo ? mota : "Chưa mở khoá",
+            price: money(a.price),
+            action: {
+              label: "Mua",
+              disabled: !mo || s.money < a.price,
+              onClick: () => {
+                h.buyAnimal(id);
+                openShop();
+              },
+            },
+          }),
+        );
+      }
+      const drop = c.tiles.dropoff;
+      foot.appendChild(
+        note(
+          drop
+            ? `Mua xong con vật được giao tới ĐIỂM GIAO cố định cạnh quầy — ô (${drop.x}, ${drop.y}), cuối con đường nhựa. Ra đó đón.`
+            : "Mua xong con vật được thả ở điểm giao.",
         ),
       );
     } else {

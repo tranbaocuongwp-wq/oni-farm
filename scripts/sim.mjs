@@ -106,10 +106,20 @@ function walkTo(store, tx, ty) {
 }
 
 function selectItem(store, id) {
-  const s = store.getState();
-  const slot = s.inv.findIndex((v) => v && v.id === id);
+  let s = store.getState();
+  let slot = s.inv.findIndex((v) => v && v.id === id);
   ok(slot >= 0, `không có '${id}' trong túi`);
-  ok(slot < BAL.hotbarSlots, `'${id}' nằm ngoài hotbar (slot ${slot})`);
+  // Nằm trong BALO thì đổi lên hotbar trước — đúng cái người chơi làm. Từ khi
+  // có vật nuôi, danh sách nguyên liệu dài hơn hotbar nên món vừa chế tạo rất
+  // hay rơi xuống balo; bắt test đỏ vì chuyện đó là bắt nhầm.
+  if (slot >= BAL.hotbarSlots) {
+    const trong = s.inv.findIndex((v, i) => i >= 2 && i < BAL.hotbarSlots && v === null);
+    const dich = trong >= 0 ? trong : BAL.hotbarSlots - 1;
+    store.dispatch({ t: "SWAP", a: slot, b: dich });
+    s = store.getState();
+    slot = s.inv.findIndex((v) => v && v.id === id);
+    ok(slot >= 0 && slot < BAL.hotbarSlots, `đổi '${id}' lên hotbar thất bại`);
+  }
   store.dispatch({ t: "SELECT", slot });
 }
 
@@ -2944,6 +2954,205 @@ test("54. kho tập trung: cất/lấy giữ nguyên tổng số món, bán từ
   const st2 = mkStore(909);
   st2.replace(JSON.parse(JSON.stringify(snap)));
   deepEq(st2.getState().store, snap.store, "kho đi qua save/load nguyên vẹn");
+});
+
+/* ========================================================================== */
+/* 55-58. HỆ THỰC THỂ: vật nuôi, sâu bọ                                       */
+/* ========================================================================== */
+
+test("55. TICK không bao giờ đụng state.seed — dây bẫy của tính tất định", () => {
+  /* Đây là kịch bản quan trọng nhất của cả hệ thực thể.
+
+     Trước khi có con vật, đường TICK không rút một hạt ngẫu nhiên nào; seed chỉ
+     bị rút theo SỰ KIỆN. Nếu 20 con vật cùng rút seed toàn cục mỗi khung hình
+     thì SỐ LẦN rút phụ thuộc số khung hình — mà số khung hình phụ thuộc fps và
+     cả việc có mở modal hay không. Bất biến "cùng seed + cùng chuỗi action =
+     state y hệt" vỡ ngay, và vỡ ÂM THẦM: game vẫn chạy, chỉ là replay không còn
+     khớp và save của người chơi không tái lập được.
+
+     Mỗi con mang hạt riêng chính là để tránh chuyện đó. Test này canh đúng chỗ. */
+  const store = mkStore(920);
+  walkTo(store, HOME.x, HOME.y);
+  const s0 = store.getState();
+  const spot = findOpenBlock(s0, 6, 5);
+
+  setState(store, (s) => {
+    s.money = 999999;
+    for (const id of ["chicken", "duck", "goat", "pig", "cow", "sheep"])
+      if (!s.unlocked.includes(`animal:${id}`)) s.unlocked.push(`animal:${id}`);
+  });
+  // thả 20 con quanh một khoảng đất trống
+  setState(store, (s) => {
+    let n = 0;
+    for (let j = 0; j < 5 && n < 20; j++)
+      for (let i = 0; i < 6 && n < 20; i++) {
+        n++;
+        s.entSeq = n;
+        s.entities.push({
+          id: n,
+          kind: "animal",
+          def: ["chicken", "duck", "goat", "pig"][n % 4],
+          map: "farm",
+          x: (spot.x + i) * TILE + 8,
+          y: (spot.y + j) * TILE + 8,
+          dir: "down",
+          anim: 0,
+          seed: 1000 + n,
+          ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+          animal: { age: 1, fed: 500, hungryDays: 0, prod: [0] },
+        });
+      }
+  });
+  eq(store.getState().entities.length, 20, "đã thả 20 con");
+
+  const seedTruoc = store.getState().seed;
+  for (let i = 0; i < 3000; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(store.getState().seed, seedTruoc, "3000 khung hình TICK không đổi state.seed một lần nào");
+  ok(store.getState().entities.length === 20, "không con nào biến mất");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau 3000 khung hình có 20 con vật");
+});
+
+test("56. thực thể tất định: cùng seed + cùng chuỗi action → state y hệt", () => {
+  const chay = (dts) => {
+    const st = mkStore(921);
+    walkTo(st, HOME.x, HOME.y);
+    const spot = findOpenBlock(st.getState(), 4, 4);
+    setState(st, (s) => {
+      for (let n = 1; n <= 8; n++) {
+        s.entSeq = n;
+        s.entities.push({
+          id: n, kind: "animal", def: "chicken", map: "farm",
+          x: (spot.x + (n % 4)) * TILE + 8, y: (spot.y + ((n / 4) | 0)) * TILE + 8,
+          dir: "down", anim: 0, seed: 500 + n,
+          ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+          animal: { age: 1, fed: 400, hungryDays: 0, prod: [0] },
+        });
+      }
+    });
+    for (const dt of dts) st.dispatch({ t: "TICK", dt });
+    return clone(st.getState());
+  };
+  const a = chay(new Array(600).fill(1 / 60));
+  const b = chay(new Array(600).fill(1 / 60));
+  deepEq(b.entities, a.entities, "hai lần chạy giống hệt nhau cho ra cùng vị trí và cùng trạng thái");
+  eq(b.actStep, a.actStep, "cùng số bước quyết định");
+
+  /* Nhịp khung hình KHÁC nhau, tổng thời gian bằng nhau → số bước gần như bằng.
+     Cố ý CHỈ đòi lệch tối đa 1: 600×(1/60) và 300×(1/30) bằng nhau về toán học
+     nhưng cộng dồn dấu phẩy động thì không, nên `minutes` có thể rơi hai bên một
+     mốc nửa phút. Thứ PHẢI khớp tuyệt đối là replay cùng chuỗi dt — đó là cái
+     save và test dựa vào, và nó đã được kiểm ở trên. Đòi 30fps khớp từng bước
+     với 60fps là đòi một thứ không hệ nào có số thực làm được. */
+  const c = chay(new Array(300).fill(1 / 30));
+  ok(
+    Math.abs(c.actStep - a.actStep) <= 1,
+    `30 fps và 60 fps lệch tối đa một bước: ${c.actStep} vs ${a.actStep}`,
+  );
+});
+
+test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới lứa thì thu được", () => {
+  const store = mkStore(922);
+  walkTo(store, HOME.x, HOME.y);
+  const p = store.getState().player;
+  const px = Math.floor(p.x / TILE), py = Math.floor(p.y / TILE);
+
+  const tha = (def, dx, dy, over) => {
+    setState(store, (s) => {
+      const n = s.entSeq + 1;
+      s.entSeq = n;
+      s.entities.push({
+        id: n, kind: "animal", def, map: "farm",
+        x: (px + dx) * TILE + 8, y: (py + dy) * TILE + 8,
+        dir: "down", anim: 0, seed: 77 + n,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 400, hungryDays: 0, prod: [0], ...(over ?? {}) },
+      });
+    });
+    return store.getState().entSeq;
+  };
+
+  // --- bò tới lứa: vắt được sữa ---
+  const idBo = tha("cow", 1, 0, { prod: [99999] });
+  const sua0 = countInv(store, "item:milk");
+  store.dispatch({ t: "GATHER", x: px + 1, y: py });
+  ok(countInv(store, "item:milk") > sua0, "vắt được sữa khi tới lứa");
+  const bo = store.getState().entities.find((e) => e.id === idBo);
+  eq(bo.animal.prod[0], 0, "đồng hồ sản phẩm chạy lại từ đầu");
+  ok(store.getState().stats.gathered > 0, "thống kê 'gathered' tăng");
+
+  // --- vắt lần hai ngay lập tức thì không được ---
+  const sua1 = countInv(store, "item:milk");
+  store.dispatch({ t: "GATHER", x: px + 1, y: py });
+  eq(countInv(store, "item:milk"), sua1, "chưa tới lứa thì không vắt được nữa");
+
+  // --- đói lâu thì CHẾT, và có báo trước bằng mấy ngày đói ---
+  const st2 = mkStore(923);
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => {
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "pig", map: "farm",
+      x: (px + 1) * TILE + 8, y: (py + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 5,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [] },
+    });
+  });
+  const doi = content.animals.pig.starveDays;
+  for (let i = 0; i < doi - 1; i++) sleep(st2);
+  ok(st2.getState().entities.length === 1, `còn sống sau ${doi - 1} ngày đói`);
+  const truoc = st2.getState().entities[0].animal.hungryDays;
+  ok(truoc >= doi - 1, `đếm đúng số ngày đói: ${truoc}`);
+  sleep(st2);
+  eq(st2.getState().entities.length, 0, `đói đủ ${doi} ngày thì chết`);
+  deepEq(checkInvariants(st2.getState(), content), [], "bất biến sau khi con vật chết");
+
+  // --- gà thả rông KHÔNG chết đói: tự kiếm ăn ---
+  const st3 = mkStore(924);
+  walkTo(st3, HOME.x, HOME.y);
+  setState(st3, (s) => {
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "chicken", map: "farm",
+      x: (px + 1) * TILE + 8, y: (py + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 6,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+    });
+  });
+  for (let i = 0; i < 12; i++) sleep(st3);
+  eq(st3.getState().entities.length, 1, "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống");
+});
+
+test("58. mua vật nuôi: giao tới ĐIỂM GIAO cố định, chưa mở khoá thì không mua được", () => {
+  const store = mkStore(925);
+  walkTo(store, HOME.x, HOME.y);
+  const drop = content.tiles.dropoff;
+  ok(drop, "content có khai điểm giao cố định");
+
+  // chưa mở khoá → không mua được, không trừ tiền
+  setState(store, (s) => { s.money = 99999; });
+  const tien0 = store.getState().money;
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  eq(store.getState().entities.length, 0, "chưa mở khoá thì không có con nào");
+  eq(store.getState().money, tien0, "và không trừ tiền");
+
+  // mở khoá rồi thì mua được, và con vật xuất hiện ĐÚNG điểm giao
+  setState(store, (s) => { s.unlocked.push("animal:cow"); });
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  const s1 = store.getState();
+  eq(s1.entities.length, 1, "mua được một con");
+  eq(s1.money, tien0 - content.animals.cow.price, "trừ đúng giá");
+  const e = s1.entities[0];
+  eq(Math.floor(e.x / TILE), drop.x, "giao đúng CỘT của điểm giao");
+  eq(Math.floor(e.y / TILE), drop.y, "giao đúng HÀNG của điểm giao");
+  eq(e.map, drop.map, "và đúng bản đồ");
+  deepEq(checkInvariants(s1, content), [], "bất biến sau khi mua");
+
+  // không đủ tiền
+  setState(store, (s) => { s.money = 0; });
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  eq(store.getState().entities.length, 1, "không đủ tiền thì không thêm con nào");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

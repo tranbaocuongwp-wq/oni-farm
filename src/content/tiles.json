@@ -121,5 +121,10 @@
   },
   "indoorMaps": [
     "house"
-  ]
+  ],
+  "dropoff": {
+    "map": "farm",
+    "x": 26,
+    "y": 12
+  }
 }

@@ -24,10 +24,12 @@ import {
   spawnMapId,
   tileCenterX,
   tileCenterY,
+  blockedAtBox,
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { parseItem } from "./items.ts";
 import { normalizeStore, storeErrors } from "./storage.ts";
+import { MAX_ENTITIES, MAX_PATH, pruneEntities, capEntities } from "./entities.ts";
 
 /** Kiểm mọi ô của MỘT lưới. `where` chỉ để ghi vào thông điệp lỗi. */
 function checkGrid(tiles: Tile[], content: Content, where: string, e: string[]): void {
@@ -185,6 +187,61 @@ export function checkInvariants(state: GameState, content: Content): string[] {
 
   // kho tập trung
   e.push(...storeErrors(state, content));
+
+  /* ---- thực thể ---------------------------------------------------------
+     Hàm này chạy sau MỌI dispatch khi bật validate, và test sim chạy strict —
+     nên một con vật bị đẩy vào tường sẽ NÉM LỖI ngay tại action gây ra nó, chứ
+     không lặng lẽ trôi vào save. Đó là chốt chặn quan trọng nhất của cả hệ
+     thực thể. */
+  if (!Array.isArray(state.entities)) e.push("entities phải là mảng");
+  else {
+    if (state.entities.length > MAX_ENTITIES)
+      e.push(`entities.length = ${state.entities.length}, vượt trần ${MAX_ENTITIES}`);
+    const ids = new Set<number>();
+    for (const en of state.entities) {
+      if (!en || typeof en !== "object") {
+        e.push("entities có phần tử không phải object");
+        continue;
+      }
+      if (!Number.isInteger(en.id) || en.id < 1) e.push(`thực thể id = ${en.id} không hợp lệ`);
+      else if (ids.has(en.id)) e.push(`trùng id thực thể ${en.id}`);
+      else ids.add(en.id);
+      if (en.id > state.entSeq) e.push(`thực thể ${en.id} có id lớn hơn entSeq ${state.entSeq}`);
+      if (!content.animals[en.def]) e.push(`thực thể ${en.id}: loài '${en.def}' không có trong content`);
+      if (!content.maps[en.map]) e.push(`thực thể ${en.id}: bản đồ '${en.map}' không có trong content`);
+      if (!Number.isFinite(en.x) || !Number.isFinite(en.y))
+        e.push(`thực thể ${en.id}: toạ độ không hữu hạn`);
+      else if (en.map === state.mapId) {
+        const def = content.animals[en.def];
+        if (def && blockedAtBox(state, content, en.x, en.y, def.box.w, def.box.h))
+          e.push(
+            `thực thể ${en.id} ('${en.def}') nằm trong ô solid tại ` +
+              `(${(en.x / 16).toFixed(2)}, ${(en.y / 16).toFixed(2)})`,
+          );
+      }
+      if (!Array.isArray(en.ai?.path)) e.push(`thực thể ${en.id}: ai.path phải là mảng`);
+      else {
+        if (en.ai.path.length > MAX_PATH)
+          e.push(`thực thể ${en.id}: ai.path dài ${en.ai.path.length}, vượt trần ${MAX_PATH}`);
+        for (const i of en.ai.path)
+          if (!Number.isInteger(i) || i < 0)
+            e.push(`thực thể ${en.id}: ai.path có chỉ số ô không hợp lệ ${i}`);
+      }
+      for (const [k, v] of [
+        ["ai.until", en.ai?.until],
+        ["animal.age", en.animal?.age],
+        ["animal.fed", en.animal?.fed],
+        ["animal.hungryDays", en.animal?.hungryDays],
+        ["seed", en.seed],
+      ] as [string, unknown][])
+        if (!Number.isFinite(v as number) || (v as number) < 0)
+          e.push(`thực thể ${en.id}: ${k} phải là số >= 0 (đang là ${String(v)})`);
+    }
+  }
+  if (!Number.isInteger(state.entSeq) || state.entSeq < 0)
+    e.push(`entSeq = ${state.entSeq}, phải là số nguyên >= 0`);
+  if (!Number.isInteger(state.actStep) || state.actStep < 0)
+    e.push(`actStep = ${state.actStep}, phải là số nguyên >= 0`);
 
   if (!Number.isInteger(state.sel) || state.sel < 0 || state.sel >= bal.hotbarSlots)
     e.push(`sel = ${state.sel}, phải nằm trong [0, ${bal.hotbarSlots})`);
@@ -397,6 +454,41 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       notes.push(`đổi kích thước túi ${state.inv.length} → ${invRes.inv.length} ô`);
     for (const id of new Set(invRes.dropped)) notes.push(`bỏ vật phẩm '${id}' khỏi túi — content mới không còn`);
 
+    // ---- thực thể --------------------------------------------------------
+    // Bỏ con vật mà content mới không còn (giống cách cây/công trình bị gỡ), rồi
+    // XOÁ SẠCH đường đi: lưới vừa được dựng lại nên chỉ số ô cũ có thể trỏ vào
+    // chỗ vô nghĩa. Và đẩy con nào đang kẹt trong tường ra ngoài, đúng như đang
+    // làm cho người chơi.
+    const entRaw = Array.isArray(state.entities) ? state.entities : [];
+    const entPruned = pruneEntities(entRaw, content);
+    for (const id of new Set(entPruned.dropped))
+      notes.push(`bỏ con vật '${id}' — content mới không còn`);
+    const entities = capEntities(entPruned.list).map((en) => {
+      const def = content.animals[en.def]!;
+      const fixed = { ...en, ai: { ...en.ai, path: [] as number[] } };
+      const grid = en.map === mapId ? active : rebuilt[en.map];
+      if (grid) {
+        const probe: GameState = {
+          ...state,
+          mapId: en.map,
+          w: grid.w,
+          h: grid.h,
+          tiles: grid.tiles,
+        };
+        if (blockedAtBox(probe, content, fixed.x, fixed.y, def.box.w, def.box.h)) {
+          const p = nudgeOutOfSolid(probe, content, fixed.x, fixed.y);
+          fixed.x = p.x;
+          fixed.y = p.y;
+        }
+      }
+      return fixed;
+    });
+    const entSeq = Math.max(
+      Number.isFinite(state.entSeq) ? Math.floor(state.entSeq) : 0,
+      ...entities.map((e) => e.id),
+      0,
+    );
+
     // ---- kho tập trung ---------------------------------------------------
     // Nong/cắt về đúng số ô content quy định, và bỏ ô hỏng. Đồ thừa khi kho bị
     // thu nhỏ thì mất — có ghi chú, không im lặng.
@@ -469,6 +561,10 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       maps,
       inv: invRes.inv,
       store,
+      entities,
+      entSeq,
+      actStep: Number.isFinite(state.actStep) ? Math.max(0, Math.floor(state.actStep)) : 0,
+      planCursor: Number.isFinite(state.planCursor) ? Math.max(0, Math.floor(state.planCursor)) : 0,
       sel,
       unlocked,
       stagesDone: [...state.stagesDone],

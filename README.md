@@ -322,6 +322,51 @@ chỗ người làm thuê sẽ đổ hàng về.
 "Cất hết" chỉ cất nông sản và nguyên liệu — **không** cất công cụ và hạt giống, vì cất mất cái
 cuốc thì lần sau ra ruộng lại phải chạy về lấy.
 
+### Vật nuôi và hệ thực thể
+
+Tám loài: bò, dê (sữa + thịt) · heo (thịt) · gà, vịt (trứng + thịt, trứng vịt đắt hơn) ·
+cừu (lông + thịt) · cá (thịt) · chó (tuần tra đuổi chuột/sóc). "Vừa lấy cái này vừa lấy cái
+kia" chính là con có CẢ `products` (thu lặp lại) lẫn `meat` (thu một lần).
+
+**Thêm loài mới = thêm một object trong `actors.json`, không một dòng `.ts`.** `art.form` chọn
+một trong bốn dáng (`quadruped` / `bird` / `fish` / `critter`) rồi bộ sinh pixel dựng hình từ
+tham số — đúng mô hình cây trồng đang dùng, cố ý KHÔNG bắt chước vật thể (vốn `switch (id)`
+với mười mấy case cứng). Lý do: cái giếng và cái ghế băng không chia sẻ giải phẫu nào nên
+switch là hợp lý, còn tám loài vật thì cùng một bộ xương, và số loài sẽ còn phình ra.
+
+Bỏ đói thì **chết** — nhưng có báo trước: đói là hiện ngay lớp phủ trên con vật, và phải đói
+liên tiếp `starveDays` ngày mới chết. Loài `feed: null` (gà, vịt) tự kiếm ăn nên không bao giờ
+chết đói; đi vắng ba ngày mà về thấy gà chết thì vô lý.
+
+Mua xong con vật được **giao tới điểm giao CỐ ĐỊNH** cạnh quầy bán, cuối con đường nhựa —
+không hiện ra dưới chân người chơi.
+
+#### Hai luật giữ tính tất định
+
+Đây là phần dễ hỏng nhất của cả dự án, nên viết rõ:
+
+**`state.seed` là bất khả xâm phạm trong đường TICK.** Trước khi có thực thể, TICK không rút
+một hạt ngẫu nhiên nào — seed chỉ bị rút theo SỰ KIỆN. Nếu 20 con vật cùng rút seed toàn cục
+mỗi khung hình thì *số lần* rút phụ thuộc fps, và bất biến "cùng seed + cùng chuỗi action =
+state y hệt" vỡ âm thầm: game vẫn chạy, chỉ là replay không khớp và save không tái lập được.
+Nên **mỗi con mang hạt riêng**, advance cục bộ. Kịch bản sim 55 canh đúng chỗ này.
+
+**Di chuyển mỗi khung hình, quyết định theo nhịp giờ game.** Nhích theo đường đi thì làm mỗi
+khung hình (mượt, không rút số nào); còn *chọn làm gì* chỉ chạy mỗi 0,5 phút game. Số bước là
+hàm của `minutes`, mà `minutes` là hàm của tổng `dt` — nên máy 30fps và 120fps cho cùng kết
+quả (lệch tối đa một bước do cộng dồn số thực; replay cùng chuỗi `dt` thì khớp tuyệt đối).
+
+Ngân sách: tối đa 2 lần tìm đường mỗi bước cho TOÀN BỘ actor, xoay vòng theo `planCursor` —
+nên chi phí A\* là hằng số, 20 con hay 60 con cũng thế. Trần 64 con, A\* của actor bị siết
+xuống 900 nút và có dây xích 20 ô.
+
+#### Sâu bọ
+
+Chuột và sóc sinh về ĐÊM, số lượng tỉ lệ với số cây đang chín — ruộng trống thì không có con
+nào, ruộng đầy cây chín bỏ đó qua đêm thì trả giá. Chúng ăn lùi cây một giai đoạn chứ không
+xoá sạch: mất một đêm công chăm, không mất cả vụ. Chó tuần tra đuổi được chúng trong bán kính
+8 ô. Toàn bộ chạy lúc sang ngày, nên TICK không phải gánh thêm gì.
+
 ### Hiển thị & camera
 
 `src/render/camera.ts` là chỗ **duy nhất** trong dự án biết màn hình to nhỏ ra sao.

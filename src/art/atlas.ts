@@ -28,7 +28,7 @@
       lên; đất cày nâu đỏ tách hẳn khỏi lối đi vàng nhạt.
 ============================================================================ */
 
-import type { Content, CropArt, CropDef } from "../game/types.ts";
+import type { AnimalArt, Content, CropArt, CropDef } from "../game/types.ts";
 import { hash2, mulberry32 } from "../core/rng.ts";
 
 export const TILE = 16;
@@ -1648,6 +1648,8 @@ export interface Atlas {
   props: Record<string, HTMLCanvasElement>;
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
+  /** vật nuôi: dựng LƯỜI ở lần dùng đầu tiên để thời gian khởi động không đổi */
+  animal(defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
@@ -1842,6 +1844,146 @@ function makeToolIcon(id: string, action: string): HTMLCanvasElement {
   return outline(s).c;
 }
 
+/* ============================================================================
+   VẬT NUÔI — sinh hoàn toàn từ tham số, KHÔNG switch theo id.
+
+   Đây là điểm khác nhau giữa cây trồng và vật thể trong file này: cây trồng đọc
+   `art.form` rồi gọi hàm vẽ theo DÁNG, nên thêm cây mới là thêm một object JSON;
+   vật thể thì `switch (id)` với mười mấy case cứng, nên thêm vật thể mới là thêm
+   code. Vật nuôi đi theo cây trồng.
+
+   Lý do không bắt chước vật thể: cái giếng và cái ghế băng không chia sẻ giải
+   phẫu nào nên switch là hợp lý, còn tám loài vật thì cùng một bộ xương — thân,
+   đầu, chân, đuôi. Mà số loài sẽ còn phình ra (thỏ, ngựa, ong), và 8 loài × 4
+   hướng × 3 khung đã là 96 canvas: vẽ tay từng con là không bảo trì nổi, và mỗi
+   loài mới lại thành một lần phát hành core thay vì một lần đẩy OTA.
+============================================================================ */
+
+const ANIMAL_FRAMES = 3;
+
+/** Bốn hướng × ba khung (0 đứng, 1-2 bước chân). */
+function makeAnimal(art: AnimalArt, dir: PlayerDir, frame: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const side = dir === "left" || dir === "right";
+  const flip = dir === "left";
+  // nhún theo khung: chân trước/chân sau đổi nhau, thân nhấp nhô 1px
+  const bob = frame === 2 ? 1 : 0;
+  const w = Math.max(3, Math.min(14, Math.round(art.w * (side ? 1 : 0.72))));
+  const h = Math.max(3, Math.min(12, Math.round(art.h)));
+  const legLen = art.form === "fish" ? 0 : art.form === "bird" ? 2 : 3;
+
+  const bodyY = TILE - 1 - legLen - h + bob;
+  const bodyX = Math.round((TILE - w) / 2);
+
+  if (art.form !== "fish") s.shadow(8, TILE - 1, w / 2 + 0.5, 1.4);
+
+  // ---- chân ----
+  if (legLen > 0) {
+    const feet: number[] =
+      art.form === "bird"
+        ? [bodyX + Math.round(w * 0.35), bodyX + Math.round(w * 0.65)]
+        : side
+          ? [bodyX + 1, bodyX + Math.round(w * 0.34), bodyX + Math.round(w * 0.66), bodyX + w - 2]
+          : [bodyX + 1, bodyX + w - 2];
+    feet.forEach((fx, i) => {
+      const lift = frame === 0 ? 0 : (i + frame) % 2;
+      s.vline(fx, bodyY + h - lift, legLen + lift, art.bodyDark);
+    });
+  }
+
+  // ---- thân ----
+  s.rect(bodyX, bodyY, w, h, art.body);
+  s.hline(bodyX, bodyY, w, art.bodyDark);
+  s.hline(bodyX, bodyY + h - 1, w, art.bodyDark);
+  // bụng sáng
+  if (h >= 4) s.hline(bodyX + 1, bodyY + h - 2, Math.max(1, w - 2), art.belly);
+
+  // ---- xù lông (cừu) ----
+  const fluff = art.fluff ?? 0;
+  if (fluff > 0) {
+    const rnd = mulberry32(0x51e + Math.round(fluff * 977));
+    for (let i = 0; i < Math.round(w * h * 0.5 * fluff); i++) {
+      const px = bodyX + Math.floor(rnd() * w);
+      const py = bodyY + Math.floor(rnd() * h);
+      s.px(px, py, rnd() > 0.5 ? art.belly : art.body);
+    }
+    // viền bông trên lưng
+    for (let x = bodyX; x < bodyX + w; x += 2) s.px(x, bodyY - 1, art.belly);
+  }
+
+  // ---- đốm (bò sữa) ----
+  const patch = art.patch ?? 0;
+  if (patch > 0) {
+    const rnd = mulberry32(0x9a2 + Math.round(patch * 613));
+    for (let i = 0; i < Math.round(w * h * 0.35 * patch); i++) {
+      const px = bodyX + 1 + Math.floor(rnd() * Math.max(1, w - 2));
+      const py = bodyY + 1 + Math.floor(rnd() * Math.max(1, h - 2));
+      s.px(px, py, art.bodyDark);
+      if (rnd() > 0.6) s.px(px + 1, py, art.bodyDark);
+    }
+  }
+
+  // ---- đầu ----
+  const headSize = Math.max(3, Math.round(h * 0.8));
+  let hx: number;
+  let hy: number;
+  if (art.form === "fish") {
+    hx = flip ? bodyX : bodyX + w - headSize;
+    hy = bodyY + 1;
+  } else if (side) {
+    hx = flip ? bodyX - 1 : bodyX + w - headSize + 1;
+    hy = bodyY - Math.round(headSize * 0.5);
+  } else {
+    hx = bodyX + Math.round((w - headSize) / 2);
+    hy = dir === "up" ? bodyY - 1 : bodyY + h - Math.round(headSize * 0.6);
+  }
+  if (art.form !== "fish") {
+    s.rect(hx, hy, headSize, headSize, art.body);
+    s.hline(hx, hy, headSize, art.bodyDark);
+  }
+
+  // ---- mỏ / mũi / sừng ----
+  if (art.form === "bird") {
+    const bx = side ? (flip ? hx - 1 : hx + headSize) : hx + Math.round(headSize / 2);
+    s.px(bx, hy + Math.round(headSize / 2), art.accent);
+    s.px(bx, hy + Math.round(headSize / 2) + 1, art.accent);
+    // mào
+    s.px(hx + Math.round(headSize / 2), hy - 1, art.accent);
+  } else if (art.form === "fish") {
+    // vây đuôi ở phía sau
+    const tx = flip ? bodyX + w : bodyX - 2;
+    s.vline(tx, bodyY, h, art.bodyDark);
+    s.px(tx + (flip ? 1 : -1), bodyY - 1, art.bodyDark);
+    s.px(tx + (flip ? 1 : -1), bodyY + h, art.bodyDark);
+    s.px(flip ? bodyX + 1 : bodyX + w - 2, bodyY + 1, art.accent);
+  } else {
+    const horn = art.horn ?? 0;
+    for (let i = 0; i < horn; i++) {
+      s.px(hx + i, hy - 1, art.accent);
+      s.px(hx + headSize - 1 - i, hy - 1, art.accent);
+    }
+  }
+
+  // ---- mắt: chỉ vẽ khi KHÔNG quay lưng, nếu không con vật thành có mắt sau gáy
+  if (dir !== "up" && art.form !== "fish") {
+    const ey = hy + Math.round(headSize * 0.45);
+    if (side) s.px(flip ? hx + 1 : hx + headSize - 2, ey, "#1b1410");
+    else {
+      s.px(hx + 1, ey, "#1b1410");
+      s.px(hx + headSize - 2, ey, "#1b1410");
+    }
+  }
+
+  // ---- đuôi (loài critter: đuôi to là nét nhận diện) ----
+  if (art.form === "critter" && side) {
+    const tx = flip ? bodyX + w : bodyX - 1;
+    s.vline(tx, bodyY - 2, h, art.bodyDark);
+    s.px(tx + (flip ? 1 : -1), bodyY - 3, art.bodyDark);
+  }
+
+  return outline(s).c;
+}
+
 export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3, 4, 5].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
@@ -1879,6 +2021,23 @@ export function buildAtlas(content: Content): Atlas {
     const def = content.crops[id]!;
     crops[id] = Array.from({ length: def.growthDays.length + 1 }, (_, st) => makeCrop(def, st));
   }
+
+  /* Vật nuôi dựng LƯỜI: 10 loài × 4 hướng × 3 khung = 120 canvas, dựng hết lúc
+     khởi động thì màn hình chờ dài thêm mà phần lớn không dùng tới (ván mới
+     chưa có con nào). Dựng lần đầu cần đến rồi nhớ luôn. */
+  const animalCache = new Map<string, HTMLCanvasElement>();
+  const animalOf = (defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null => {
+    const def = content.animals[defId];
+    if (!def) return null;
+    const f = ((frame % ANIMAL_FRAMES) + ANIMAL_FRAMES) % ANIMAL_FRAMES;
+    const key = `${defId}|${dir}|${f}`;
+    let c = animalCache.get(key);
+    if (!c) {
+      c = makeAnimal(def.art, dir, f);
+      animalCache.set(key, c);
+    }
+    return c;
+  };
 
   const buildings: Record<string, HTMLCanvasElement> = {};
   const autotiles: Record<string, Map<string, HTMLCanvasElement>> = {};
@@ -1952,6 +2111,7 @@ export function buildAtlas(content: Content): Atlas {
   return {
     grass, path, asphalt, soil, soilWet, soilEdge, water, shore, wood,
     autotiles,
+    animal: animalOf,
     tuft: makeTuft(),
     voidOut: [0, 1, 2, 3].map((v) => makeVoid(v, false)),
     voidIn: [0, 1].map((v) => makeVoid(v, true)),

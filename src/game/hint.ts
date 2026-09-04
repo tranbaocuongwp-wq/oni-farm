@@ -17,6 +17,7 @@ import { canUseAt, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { parseItem } from "./items.ts";
 import { inReach, interactAt, isRipe, tileAt, propDef } from "./world.ts";
+import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
   | UseKind
@@ -24,6 +25,8 @@ export type HintKind =
   | "sell"
   | "craft"
   | "store"
+  | "gather"
+  | "feed"
   | "sleep"
   | "refill"
   | "enter";
@@ -56,6 +59,8 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   refill: "MÚC",
   enter: "VÀO",
   store: "KHO",
+  gather: "THU",
+  feed: "CHO ĂN",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -130,6 +135,20 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
  *   3. không có gì → lý do
  */
 export function hintAt(state: GameState, content: Content, x: number, y: number): Hint {
+  /* Con vật đứng ĐÈ LÊN ô được ưu tiên hơn mọi thứ khác trên ô đó: người chơi
+     nhìn thấy con bò chứ không nhìn thấy nền đất dưới chân nó, nên nút phải nói
+     về con bò. */
+  const an = animalNear(state, x, y);
+  if (an) {
+    const def = content.animals[an.def];
+    if (def) {
+      if (readyProduct(an, content) >= 0)
+        return { kind: "gather", label: LABEL.gather, ready: inReach(state, x, y), why: null };
+      if (def.feed && an.animal.fed <= 0)
+        return { kind: "feed", label: LABEL.feed, ready: inReach(state, x, y), why: null };
+    }
+  }
+
   const ik = interactNear(state, content, x, y);
   if (ik) {
     const kind = INTERACT_KIND[ik];

@@ -15,6 +15,7 @@
 
 import type {
   Content,
+  Entity,
   GameState,
   InvSlot,
   LogEntry,
@@ -213,6 +214,43 @@ export function mapViews(d: Draft, content: Content): MapView[] {
   return out;
 }
 
+/* ------------------------------------------------------------- thực thể ---
+   Cùng khuôn ba tầng với `dTiles`/`dTile`: mảng → phần tử → object lồng. Chỉ
+   clone khi THẬT SỰ ghi, nên khung hình nào không con nào đổi gì thì store so
+   tham chiếu và bỏ qua render.
+--------------------------------------------------------------------------- */
+
+export function dEntities(d: Draft): Entity[] {
+  if (d.s.entities === d.base.entities) d.s.entities = d.base.entities.slice();
+  d.changed = true;
+  return d.s.entities;
+}
+
+/** Bản sao sửa được của thực thể thứ `i`. null nếu chỉ số sai. */
+export function dEntity(d: Draft, i: number): Entity | null {
+  if (i < 0 || i >= d.base.entities.length) return null;
+  const list = dEntities(d);
+  const cur = list[i];
+  if (!cur) return null;
+  if (cur === d.base.entities[i]) {
+    const copy: Entity = {
+      ...cur,
+      ai: { ...cur.ai, path: cur.ai.path.slice() },
+      animal: { ...cur.animal, prod: cur.animal.prod.slice() },
+    };
+    list[i] = copy;
+    return copy;
+  }
+  return cur;
+}
+
+/** Thay cả danh sách (thêm/bớt con) — mảng đổi độ dài không hợp với khuôn
+ *  "clone tại chỗ theo chỉ số". */
+export function setEntities(d: Draft, list: Entity[]): void {
+  d.s.entities = list;
+  d.changed = true;
+}
+
 export function dInv(d: Draft): InvSlot[] {
   if (d.s.inv === d.base.inv) d.s.inv = d.base.inv.slice();
   d.changed = true;
@@ -320,6 +358,7 @@ export function createNewGame(content: Content, seed = 1): GameState {
       harvested: 0,
       sold: 0,
       earned: 0,
+      gathered: 0,
       built: {},
       cured: 0,
     },
@@ -333,6 +372,11 @@ export function createNewGame(content: Content, seed = 1): GameState {
     water: Math.max(0, Math.floor(content.balance.startWater ?? 0)),
 
     store: new Array<InvSlot>(storeSize(content)).fill(null),
+
+    entities: [],
+    entSeq: 0,
+    actStep: 0,
+    planCursor: 0,
 
     weather: {
       today: content.weatherFirst,

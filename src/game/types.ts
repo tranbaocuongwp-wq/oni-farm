@@ -82,6 +82,72 @@ export interface CropDef {
   art: CropArt;
 }
 
+/* ---------------------------------------------------------------------------
+   THỰC THỂ — vật nuôi, sâu bọ, (sau này) người làm thuê và xe.
+
+   Tất cả đều là actor TỰ DI CHUYỂN, khác hẳn mọi thứ trước đó vốn gắn chặt vào
+   một ô lưới. Định nghĩa loài nằm ở content nên thêm loài mới là thêm JSON.
+--------------------------------------------------------------------------- */
+
+/** Dáng vẽ — chia theo BÓNG DÁNG chứ không theo loài, để 4 dáng phủ được 8+ loài. */
+export type AnimalForm = "quadruped" | "bird" | "fish" | "critter";
+
+/** Ở đâu: trong hàng rào, thả rông, hay dưới nước. */
+export type Housing = "pen" | "free" | "water";
+
+export interface AnimalArt {
+  form: AnimalForm;
+  body: string;
+  bodyDark: string;
+  belly: string;
+  /** mỏ / sừng / mào / mũi */
+  accent: string;
+  /** rộng × cao của thân, px trong ô 16×16 */
+  w: number;
+  h: number;
+  /** 0..1 — độ xù lông (cừu = 1) */
+  fluff?: number;
+  /** 0..1 — mật độ đốm (bò sữa) */
+  patch?: number;
+  /** 0..3 — sừng */
+  horn?: number;
+}
+
+/** Sản phẩm thu LẶP LẠI (sữa, trứng, lông). */
+export interface AnimalProduct {
+  /** id vật phẩm, dạng `item:` */
+  id: string;
+  /** cứ bao nhiêu NGÀY thì tới lứa */
+  every: number;
+  min: number;
+  max: number;
+}
+
+export interface AnimalDef {
+  id: string;
+  name: string;
+  price: number;
+  housing: Housing;
+  /** vật phẩm dùng làm thức ăn; null = tự đi kiếm cỏ quanh sân */
+  feed: string | null;
+  /** một lần ăn no được bao nhiêu PHÚT GAME */
+  fedMinutes: number;
+  /** bao nhiêu ngày thì trưởng thành (mới cho sản phẩm, mới bán thịt được) */
+  matureDays: number;
+  /** đói liên tiếp quá ngần này NGÀY thì chết */
+  starveDays: number;
+  /** thu lặp lại */
+  products: AnimalProduct[];
+  /** thu MỘT LẦN khi bán thịt; null = không bán thịt được (chó) */
+  meat: { id: string; min: number; max: number } | null;
+  /** "patrol" = đi tuần bắt sâu bọ; "pest" = phá hoại mùa màng */
+  job?: "patrol" | "pest";
+  /** world px mỗi giây */
+  speed: number;
+  box: { w: number; h: number };
+  art: AnimalArt;
+}
+
 /** Một mùa. `weather` ghi đè trọng số trong weather.json cho riêng mùa này —
  *  đó là chỗ mùa được CẢM THẤY chứ không chỉ đọc trên HUD. */
 export interface SeasonDef {
@@ -296,6 +362,14 @@ export interface TilesDef {
   legend: Record<string, TileLegendEntry>;
   /** Bản đồ và ô bắt đầu ván mới. */
   spawn: { map: string; x: number; y: number };
+  /**
+   * ĐIỂM GIAO HÀNG — chỗ vật nuôi và (sau này) xe được thả xuống.
+   *
+   * CỐ ĐỊNH và nằm cạnh quầy bán, đúng như Cường yêu cầu: người chơi luôn biết
+   * ra đâu mà đón, và không phải đi tìm con bò vừa mua ở một góc bản đồ nào đó.
+   * Thiếu thì rơi về ô spawn.
+   */
+  dropoff?: { map: string; x: number; y: number };
   /** Bản đồ TRONG NHÀ: mưa không tưới, bão không quật. Thiếu = mọi bản đồ ngoài trời. */
   indoorMaps?: string[];
 }
@@ -398,6 +472,8 @@ export interface Content {
   stages: ProgressionStage[];
   goals: Goal[];
   strings: Strings;
+  animals: Record<string, AnimalDef>;
+  animalOrder: string[];
   seasons: Record<string, SeasonDef>;
   /** thứ tự các mùa trong năm — chính là vòng quay */
   seasonOrder: string[];
@@ -485,6 +561,8 @@ export interface Stats {
   built: Record<string, number>;
   /** số cây bệnh đã chữa (core 1.3) */
   cured: number;
+  /** số sản phẩm vật nuôi đã thu — sữa, trứng, lông (core 1.6) */
+  gathered: number;
 }
 
 /** Thông điệp cho UI. Reducer đẩy vào đây; UI đọc rồi xoá. */
@@ -509,6 +587,60 @@ export interface StoredMap {
    * một lần duy nhất lúc quay lại (hoặc lúc sang ngày mới), thay vì cộng dần.
    */
   awayAt: number;
+}
+
+export type EntityKind = "animal" | "pest";
+
+/** Máy trạng thái của một actor. Nằm TRONG save: tải lại mà con vật quên mình
+ *  đang đi đâu là một lỗi thấy được. */
+export interface AiState {
+  /** giai đoạn hành vi: idle | wander | seekFood | eat | flee | patrol */
+  phase: string;
+  /** phút game còn lại của giai đoạn này */
+  until: number;
+  /** ô đích; -1 = chưa có */
+  tx: number;
+  ty: number;
+  /** đường đi còn lại, MẢNG CHỈ SỐ Ô (JSON thuần, gọn) */
+  path: number[];
+  /** phút game của lần tính đường gần nhất — để nguội replan */
+  planAt: number;
+}
+
+export interface AnimalState {
+  /** ngày tuổi */
+  age: number;
+  /** còn NO bao nhiêu phút game; 0 = đói */
+  fed: number;
+  /** đói liên tiếp bao nhiêu ngày */
+  hungryDays: number;
+  /** đồng hồ tới lứa cho từng `products[i]`, tính bằng PHÚT GAME */
+  prod: number[];
+}
+
+export interface Entity {
+  id: number;
+  kind: EntityKind;
+  /** id trong `content.animals` */
+  def: string;
+  /** bản đồ nó đang đứng */
+  map: string;
+  /** TÂM hộp va chạm, world px — cùng quy ước với người chơi */
+  x: number;
+  y: number;
+  dir: Dir;
+  anim: number;
+  /**
+   * PRNG RIÊNG của con này.
+   *
+   * Đường TICK tuyệt đối KHÔNG được đụng `state.seed`: số lần rút sẽ phụ thuộc
+   * số khung hình, và bất biến "cùng seed + cùng chuỗi action = state y hệt" vỡ
+   * ngay. Mỗi con mang hạt riêng, advance cục bộ; thêm hay bớt một con không
+   * làm lệch chuỗi số của con khác.
+   */
+  seed: number;
+  ai: AiState;
+  animal: AnimalState;
 }
 
 export interface GameState {
@@ -577,6 +709,34 @@ export interface GameState {
   weather: WeatherState;
 
   /**
+   * MỌI THỰC THỂ tự di chuyển — vật nuôi, sâu bọ, và sau này người làm thuê, xe.
+   *
+   * Một mảng PHẲNG TOÀN CỤC, mỗi phần tử mang trường `map`. Không nhét vào
+   * `StoredMap.entities`, và lý do là bất biến `mapId ∉ maps`: bản đồ ĐANG chơi
+   * cố ý không nằm trong `maps`, nên entity của nó sẽ phải có một nhà riêng, và
+   * đoạn PORTAL — chỗ tinh vi nhất của reduce.ts — phải tráo thêm một mảng nữa
+   * đúng thứ tự "cất rồi lấy". Mảng toàn cục xoá bỏ chỗ đó bằng không dòng code;
+   * cái giá là TICK phải lọc `e.map === s.mapId`, tức vài chục phép so mỗi khung
+   * hình, rẻ hơn một lần `blockedAt`.
+   */
+  entities: Entity[];
+  /** Bộ đếm cấp id cho thực thể — không bao giờ dùng lại số cũ. */
+  entSeq: number;
+  /**
+   * Số BƯỚC ACTOR đã chạy xong.
+   *
+   * Actor DI CHUYỂN mỗi khung hình (mượt, không rút số ngẫu nhiên nào) nhưng
+   * chỉ QUYẾT ĐỊNH mỗi `ACTOR_STEP_MINUTES` phút game. Số bước là hàm của
+   * `minutes`, mà `minutes` là hàm của tổng `dt` đã dispatch — nên replay cùng
+   * chuỗi action cho cùng số bước, bất kể máy chạy 30 hay 120 khung hình/giây.
+   * Dùng CHỈ SỐ NGUYÊN chứ không phải bộ tích luỹ float: không trôi qua save.
+   */
+  actStep: number;
+  /** Con trỏ xoay vòng cho ngân sách tìm đường — mỗi bước chỉ vài actor được
+   *  tính đường mới, đến lượt ai thì con trỏ này quyết. */
+  planCursor: number;
+
+  /**
    * KHO TẬP TRUNG — kho chung của cả nông trại, tách khỏi túi đồ.
    *
    * MỘT kho duy nhất dù nhà kho chiếm bao nhiêu ô, cùng tinh thần với "lưới
@@ -628,6 +788,14 @@ export type Action =
   | { t: "STORE_PUT_ALL" }
   /** Bán sạch nông sản đang nằm trong kho. */
   | { t: "STORE_SELL_ALL" }
+  /** Mua và thả một con vật xuống (x,y) của bản đồ đang chơi. */
+  | { t: "BUY_ANIMAL"; def: string }
+  /** Cho con vật gần ô (x,y) ăn. */
+  | { t: "FEED"; x: number; y: number }
+  /** Thu sữa/trứng/lông của con vật gần ô (x,y). */
+  | { t: "GATHER"; x: number; y: number }
+  /** Bán con vật gần ô (x,y) lấy thịt. */
+  | { t: "SLAUGHTER"; x: number; y: number }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
   | { t: "DEBUG"; op: DebugOp; n?: number }

@@ -22,6 +22,7 @@ import type {
   MaterialDef,
   ProgressionStage,
   PropDef,
+  AnimalDef,
   RecipeDef,
   SeasonDef,
   Strings,
@@ -37,6 +38,7 @@ import {
   validateManifest,
   validateMap,
   validateProgression,
+  validateActors,
   validateProps,
   validateRecipes,
   validateSeasons,
@@ -61,6 +63,8 @@ export interface RawPack {
   weather: unknown;
   /** Bốn mùa (core 1.4). Thiếu = content không có mùa, cây gieo quanh năm. */
   seasons?: unknown;
+  /** Vật nuôi + sâu bọ (core 1.6). Thiếu = chưa có loài nào. */
+  actors?: unknown;
   /** Mỗi bản đồ một lưới riêng, tra theo tên: { farm: {...}, house: {...} }. */
   maps: Record<string, unknown>;
 }
@@ -89,6 +93,7 @@ export function validatePack(raw: RawPack): string[] {
     ...validateStrings(raw.strings),
     ...validateWeather(raw.weather),
     ...(raw.seasons === undefined ? [] : validateSeasons(raw.seasons)),
+    ...(raw.actors === undefined ? [] : validateActors(raw.actors)),
   ];
 
   // map cần legend nên phải kiểm sau tiles
@@ -115,9 +120,17 @@ export function validatePack(raw: RawPack): string[] {
 
   const cropIds = new Set(crops.map((c) => c.id));
   const buildingIds = new Set(buildings.map((b) => b.id));
+  const actorsRaw = (raw.actors ?? null) as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
+  const animalIds = new Set(
+    [...(actorsRaw?.animals ?? []), ...(actorsRaw?.pests ?? [])].map((a) => a.id),
+  );
   const known = new Set<string>([
     ...[...cropIds].map((id) => `seed:${id}`),
     ...buildingIds,
+    // Vật nuôi mở khoá bằng tiền tố `animal:` — CỐ Ý không phải một trong 5 tiền
+    // tố vật phẩm: con vật sống không bao giờ vào túi đồ, nên nó không cần và
+    // không được có mặt trong hệ vật phẩm.
+    ...[...animalIds].map((id) => `animal:${id}`),
   ]);
 
   for (const key of Object.keys(balance.startSeeds ?? {})) {
@@ -152,7 +165,7 @@ export function validatePack(raw: RawPack): string[] {
 
   // require chỉ được dùng khoá mà progression.ts biết đọc
   const statKeys = new Set([
-    "money", "day", "tilled", "planted", "watered", "harvested", "sold", "earned", "cured",
+    "money", "day", "tilled", "planted", "watered", "harvested", "sold", "earned", "cured", "gathered",
   ]);
   const checkReq = (where: string, req: Record<string, number>) => {
     for (const k of Object.keys(req)) {
@@ -212,6 +225,24 @@ export function validatePack(raw: RawPack): string[] {
 
   for (const id of tilesDef.indoorMaps ?? [])
     if (!maps?.[id]) errors.push(`tiles.indoorMaps: bản đồ '${id}' không tồn tại`);
+
+  // ---- vật nuôi: mọi vật phẩm nhắc tới phải có thật ------------------------
+  if (raw.actors !== undefined) {
+    const ar = raw.actors as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
+    for (const a of [...(ar?.animals ?? []), ...(ar?.pests ?? [])]) {
+      const check = (id: string | null | undefined, where: string) => {
+        if (!id) return;
+        if (!knownItem(id)) errors.push(`actors '${a.id}': ${where} trỏ vào '${id}' không tồn tại`);
+      };
+      check(a.feed, "feed");
+      for (const p of a.products ?? []) check(p.id, `products '${p.id}'`);
+      check(a.meat?.id, "meat");
+      // Con vật KHÔNG sản phẩm mà cũng KHÔNG bán thịt được và cũng không có việc
+      // gì làm thì nuôi để làm gì — gần như chắc chắn là sót lúc biên tập.
+      if (!a.job && (a.products ?? []).length === 0 && !a.meat)
+        errors.push(`actors '${a.id}': không có sản phẩm, không bán thịt được, cũng không có job`);
+    }
+  }
 
   // ---- mùa: tên mùa phải có thật, và không mùa nào được trống trơn ---------
   if (raw.seasons !== undefined) {
@@ -292,6 +323,10 @@ export function buildContent(raw: RawPack): Content {
   const weatherRaw = raw.weather as { weathers: WeatherDef[]; firstDay: string };
   const seasonRaw = (raw.seasons ?? null) as { daysPerSeason: number; seasons: SeasonDef[] } | null;
   const seasonList = seasonRaw?.seasons ?? [];
+  // Vật nuôi và sâu bọ dùng CHUNG một bảng: cùng cấu trúc, cùng bộ máy di
+  // chuyển, chỉ khác `job`. Tách hai bảng chỉ tổ phải tra hai chỗ.
+  const actorPack = (raw.actors ?? null) as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
+  const animalList = [...(actorPack?.animals ?? []), ...(actorPack?.pests ?? [])];
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>
     Object.fromEntries(list.map((x) => [x.id, x]));
@@ -317,6 +352,8 @@ export function buildContent(raw: RawPack): Content {
     stages: prog.stages,
     goals: prog.goals,
     strings: raw.strings as Strings,
+    animals: byId(animalList),
+    animalOrder: animalList.map((a) => a.id),
     seasons: byId(seasonList),
     seasonOrder: seasonList.map((s) => s.id),
     daysPerSeason: Math.max(1, Math.floor(seasonRaw?.daysPerSeason ?? 1)),

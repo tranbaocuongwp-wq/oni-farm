@@ -20,17 +20,14 @@
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
+import { findPath, lineOfSightBox, walkableTile } from "../game/pathfind.ts";
 import {
   REACH_TILES,
   TILE,
-  blockedAt,
   distToTile,
   idx,
-  isSolid,
   tileCenterX,
   tileCenterY,
-  speedMulAt,
-  maxSpeedMul,
 } from "../game/world.ts";
 
 /** Tầm coi là "đã tới nơi" khi đi để LÀM VIỆC.
@@ -80,7 +77,6 @@ const STUCK_SECONDS = 0.6;
 const STUCK_DISTANCE = 3;
 
 /** Trần số ô A* được phép mở, chặn trường hợp đích bị vây kín. */
-const MAX_NODES = 4000;
 
 export interface NavTarget {
   tx: number;
@@ -111,132 +107,6 @@ export interface Navigator {
 
 /* -------------------------------------------------------------------------- */
 
-/** Hệ số tốc độ của Ô (x,y) — dùng cho chi phí bước của A*. */
-function stepSpeed(state: GameState, content: Content, x: number, y: number): number {
-  return speedMulAt(state, content, x * TILE + TILE / 2, y * TILE + TILE / 2);
-}
-
-/** Nhân vật có đi qua được ô này không (dùng cho A*, ở mức Ô). */
-function walkable(state: GameState, content: Content, x: number, y: number): boolean {
-  if (x < 0 || y < 0 || x >= state.w || y >= state.h) return false;
-  return !isSolid(state, content, x, y);
-}
-
-/**
- * Đường ngắm thẳng: nhân vật đi thẳng từ (ax,ay) tới (bx,by) có va vào gì không.
- * Kiểm bằng chính hộp va chạm của nhân vật (`blockedAt`) chứ không phải một
- * điểm — nếu không, đường sẽ "lách" qua khe hẹp mà thân nhân vật không lọt.
- */
-function lineOfSight(
-  state: GameState,
-  content: Content,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-): boolean {
-  const dist = Math.hypot(bx - ax, by - ay);
-  const steps = Math.ceil(dist / 4);
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    if (blockedAt(state, content, ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
-  }
-  return true;
-}
-
-/** A* 8 hướng. `goals` là tập chỉ số ô được coi là tới nơi. */
-function findPath(
-  state: GameState,
-  content: Content,
-  sx: number,
-  sy: number,
-  goals: Set<number>,
-): NavTarget[] | null {
-  const w = state.w;
-  const start = idx(w, sx, sy);
-  if (goals.has(start)) return [];
-
-  const gScore = new Map<number, number>();
-  const cameFrom = new Map<number, number>();
-  // Hàng đợi ưu tiên đơn giản: mảng + lấy phần tử nhỏ nhất. Với ~1200 ô thì
-  // đây còn nhanh hơn dựng heap, và ít code sai hơn nhiều.
-  const open: { i: number; f: number }[] = [];
-
-  /* Chi phí một bước được CHIA cho hệ số tốc độ của ô đích: đi trên đường nhựa
-     rẻ hơn đi trên cỏ, nên A* tự vòng qua đường mà không cần luật riêng nào.
-
-     Hệ quả BẮT BUỘC: heuristic cũng phải chia cho hệ số LỚN NHẤT của content.
-     Heuristic chỉ đúng khi nó không bao giờ ước lượng THỪA chi phí thật; có ô
-     rẻ hơn 1 mà vẫn ước lượng theo giá 1 là ước lượng thừa, và A* mất tính tối
-     ưu — nó sẽ trả về một đường hợp lệ nhưng không phải đường ngắn nhất, âm
-     thầm, không crash, rất khó thấy. */
-  const invMax = 1 / Math.max(1, maxSpeedMul(content));
-
-  // Heuristic: khoảng cách chéo (8 hướng), không bao giờ ước lượng thừa.
-  const heur = (i: number) => {
-    const x = i % w;
-    const y = (i / w) | 0;
-    let best = Infinity;
-    for (const g of goals) {
-      const gx = g % w;
-      const gy = (g / w) | 0;
-      const dx = Math.abs(x - gx);
-      const dy = Math.abs(y - gy);
-      const d = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
-      if (d < best) best = d;
-    }
-    return best * invMax;
-  };
-
-  gScore.set(start, 0);
-  open.push({ i: start, f: heur(start) });
-
-  let expanded = 0;
-  while (open.length && expanded < MAX_NODES) {
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) if (open[i]!.f < open[bi]!.f) bi = i;
-    const cur = open.splice(bi, 1)[0]!.i;
-    expanded++;
-
-    if (goals.has(cur)) {
-      const path: NavTarget[] = [];
-      let node: number | undefined = cur;
-      while (node !== undefined && node !== start) {
-        path.push({ tx: node % w, ty: (node / w) | 0, act: false });
-        node = cameFrom.get(node);
-      }
-      path.reverse();
-      return path;
-    }
-
-    const cx = cur % w;
-    const cy = (cur / w) | 0;
-    const g0 = gScore.get(cur) ?? 0;
-
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (!walkable(state, content, nx, ny)) continue;
-        // Cấm cắt góc: đi chéo thì hai ô kề cũng phải trống, nếu không nhân vật
-        // sẽ kẹt cứng ở góc tường vì thân nó rộng hơn một điểm.
-        if (dx !== 0 && dy !== 0) {
-          if (!walkable(state, content, cx + dx, cy)) continue;
-          if (!walkable(state, content, cx, cy + dy)) continue;
-        }
-        const ni = idx(w, nx, ny);
-        const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-        const g1 = g0 + step / stepSpeed(state, content, nx, ny);
-        if (g1 >= (gScore.get(ni) ?? Infinity)) continue;
-        gScore.set(ni, g1);
-        cameFrom.set(ni, cur);
-        open.push({ i: ni, f: g1 + heur(ni) });
-      }
-    }
-  }
-  return null;
-}
 
 /* -------------------------------------------------------------------------- */
 
@@ -288,16 +158,16 @@ export function createNavigator(): Navigator {
       // Chạy A* theo từng nhóm thay vì gộp một tập: A* với tập gộp sẽ vớ lấy ô
       // nào GẦN NHẤT, mà ô chéo thường gần hơn ô thẳng — đúng cái ta muốn tránh.
       const groups: number[][] = [];
-      const ortho = ORTHO.filter(([dx, dy]) => walkable(state, content, tx + dx, ty + dy)).map(
+      const ortho = ORTHO.filter(([dx, dy]) => walkableTile(state, content, tx + dx, ty + dy)).map(
         ([dx, dy]) => at(tx + dx, ty + dy),
       );
       if (ortho.length) groups.push(ortho);
 
-      const selfOk = !avoidStandingOn && walkable(state, content, tx, ty);
+      const selfOk = !avoidStandingOn && walkableTile(state, content, tx, ty);
       // Khi đi thuần tuý thì đích là chính ô đó, nên nó phải được xét TRƯỚC.
       if (selfOk) groups[act ? "push" : "unshift"]([at(tx, ty)]);
 
-      const diag = DIAG.filter(([dx, dy]) => walkable(state, content, tx + dx, ty + dy)).map(
+      const diag = DIAG.filter(([dx, dy]) => walkableTile(state, content, tx + dx, ty + dy)).map(
         ([dx, dy]) => at(tx + dx, ty + dy),
       );
       if (diag.length) groups.push(diag);
@@ -305,14 +175,16 @@ export function createNavigator(): Navigator {
 
       const px = Math.floor(state.player.x / TILE);
       const py = Math.floor(state.player.y / TILE);
-      let found: NavTarget[] | null = null;
+      let found: number[] | null = null;
       for (const gset of groups) {
         found = findPath(state, content, px, py, new Set(gset));
         if (found) break;
       }
       if (!found) return false;
 
-      path = found;
+      // `findPath` trả CHỈ SỐ Ô (định dạng gọn để lưu được vào save của thực
+      // thể); người chơi thì vẫn dùng danh sách điểm mốc như cũ.
+      path = found.map((i) => ({ tx: i % state.w, ty: (i / state.w) | 0, act: false }));
       goal = { tx, ty, act };
       lastX = state.player.x;
       lastY = state.player.y;
@@ -355,7 +227,7 @@ export function createNavigator(): Navigator {
       let skipped = 0;
       while (path.length > 1 && skipped < 8) {
         const next = path[1]!;
-        if (!lineOfSight(state, content, px, py, tileCenterX(next.tx), tileCenterY(next.ty))) break;
+        if (!lineOfSightBox(state, content, px, py, tileCenterX(next.tx), tileCenterY(next.ty))) break;
         path.shift();
         skipped++;
       }

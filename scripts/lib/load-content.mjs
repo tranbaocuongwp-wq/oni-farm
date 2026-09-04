@@ -29,6 +29,7 @@ export function rawPack() {
     strings: readJson("strings.vi.json"),
     weather: readJson("weather.json"),
     seasons: readJson("seasons.json"),
+    actors: readJson("actors.json"),
     maps: Object.fromEntries(
       (readJson("manifest.json").files
         .map((f) => /^maps\/(.+)\.json$/.exec(f)?.[1])

@@ -1,0 +1,337 @@
+{
+  "$comment": "LÀN NHANH — mọi loài vật đều là DỮ LIỆU. Thêm loài mới = thêm một object ở đây, KHÔNG một dòng .ts nào: art.form chọn dáng vẽ (quadruped/bird/fish/critter) rồi bộ sinh pixel dựng hình từ tham số, đúng như cây trồng đang làm.\n\nproducts = thu LẶP LẠI (sữa/trứng/lông), every tính bằng ngày. meat = thu MỘT LẦN khi bán thịt; null nghĩa là không bán thịt được (chó). Con vật 'vừa lấy cái này vừa lấy cái kia' chính là con có cả products lẫn meat.\n\nhousing: pen = phải ở trong hàng rào · free = thả rông tự kiếm ăn · water = sống dưới nước. feed null = tự đi kiếm cỏ quanh sân.\n\njob: patrol = đi tuần đuổi sâu bọ (chó) · pest = phá hoại mùa màng (chuột, sóc).",
+  "animals": [
+    {
+      "id": "cow",
+      "name": "Bò",
+      "price": 800,
+      "housing": "pen",
+      "feed": "item:hay",
+      "fedMinutes": 700,
+      "matureDays": 6,
+      "starveDays": 4,
+      "products": [
+        {
+          "id": "item:milk",
+          "every": 1,
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "meat": {
+        "id": "item:beef",
+        "min": 2,
+        "max": 3
+      },
+      "speed": 22,
+      "box": {
+        "w": 12,
+        "h": 9
+      },
+      "art": {
+        "form": "quadruped",
+        "body": "#f2eee6",
+        "bodyDark": "#b9b0a2",
+        "belly": "#ffffff",
+        "accent": "#e0a0a0",
+        "w": 12,
+        "h": 8,
+        "patch": 0.4,
+        "horn": 1
+      }
+    },
+    {
+      "id": "goat",
+      "name": "Dê",
+      "price": 520,
+      "housing": "pen",
+      "feed": "item:hay",
+      "fedMinutes": 700,
+      "matureDays": 5,
+      "starveDays": 4,
+      "products": [
+        {
+          "id": "item:goatmilk",
+          "every": 1,
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "meat": {
+        "id": "item:mutton",
+        "min": 1,
+        "max": 2
+      },
+      "speed": 28,
+      "box": {
+        "w": 10,
+        "h": 8
+      },
+      "art": {
+        "form": "quadruped",
+        "body": "#d8cfc0",
+        "bodyDark": "#9e9384",
+        "belly": "#efe9df",
+        "accent": "#8a7a68",
+        "w": 10,
+        "h": 7,
+        "horn": 2
+      }
+    },
+    {
+      "id": "pig",
+      "name": "Heo",
+      "price": 460,
+      "housing": "pen",
+      "feed": "item:fodder",
+      "fedMinutes": 600,
+      "matureDays": 6,
+      "starveDays": 3,
+      "products": [],
+      "meat": {
+        "id": "item:pork",
+        "min": 2,
+        "max": 4
+      },
+      "speed": 24,
+      "box": {
+        "w": 11,
+        "h": 8
+      },
+      "art": {
+        "form": "quadruped",
+        "body": "#f0b6bd",
+        "bodyDark": "#c07f88",
+        "belly": "#ffd6db",
+        "accent": "#d98c96",
+        "w": 11,
+        "h": 7
+      }
+    },
+    {
+      "id": "sheep",
+      "name": "Cừu",
+      "price": 700,
+      "housing": "pen",
+      "feed": "item:hay",
+      "fedMinutes": 700,
+      "matureDays": 7,
+      "starveDays": 4,
+      "products": [
+        {
+          "id": "item:wool",
+          "every": 3,
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "meat": {
+        "id": "item:mutton",
+        "min": 2,
+        "max": 3
+      },
+      "speed": 20,
+      "box": {
+        "w": 11,
+        "h": 9
+      },
+      "art": {
+        "form": "quadruped",
+        "body": "#f5f2ec",
+        "bodyDark": "#c8c2b6",
+        "belly": "#ffffff",
+        "accent": "#3a3128",
+        "w": 11,
+        "h": 8,
+        "fluff": 1
+      }
+    },
+    {
+      "id": "chicken",
+      "name": "Gà",
+      "price": 140,
+      "housing": "free",
+      "feed": null,
+      "fedMinutes": 500,
+      "matureDays": 3,
+      "starveDays": 5,
+      "products": [
+        {
+          "id": "item:egg",
+          "every": 1,
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "meat": {
+        "id": "item:chickenmeat",
+        "min": 1,
+        "max": 1
+      },
+      "speed": 30,
+      "box": {
+        "w": 7,
+        "h": 7
+      },
+      "art": {
+        "form": "bird",
+        "body": "#f4e6c8",
+        "bodyDark": "#c6ab7e",
+        "belly": "#fffaf0",
+        "accent": "#e0913a",
+        "w": 7,
+        "h": 7
+      }
+    },
+    {
+      "id": "duck",
+      "name": "Vịt",
+      "price": 190,
+      "housing": "free",
+      "feed": null,
+      "fedMinutes": 500,
+      "matureDays": 3,
+      "starveDays": 5,
+      "products": [
+        {
+          "id": "item:duckegg",
+          "every": 1,
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "meat": {
+        "id": "item:duckmeat",
+        "min": 1,
+        "max": 1
+      },
+      "speed": 26,
+      "box": {
+        "w": 8,
+        "h": 7
+      },
+      "art": {
+        "form": "bird",
+        "body": "#e8eaee",
+        "bodyDark": "#a9b0ba",
+        "belly": "#ffffff",
+        "accent": "#e8b13a",
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "id": "fish",
+      "name": "Cá",
+      "price": 90,
+      "housing": "water",
+      "feed": "item:fodder",
+      "fedMinutes": 800,
+      "matureDays": 5,
+      "starveDays": 6,
+      "products": [],
+      "meat": {
+        "id": "item:fishmeat",
+        "min": 1,
+        "max": 2
+      },
+      "speed": 26,
+      "box": {
+        "w": 8,
+        "h": 6
+      },
+      "art": {
+        "form": "fish",
+        "body": "#7fb6d8",
+        "bodyDark": "#4a7fa6",
+        "belly": "#dcecf6",
+        "accent": "#f0c05a",
+        "w": 8,
+        "h": 5
+      }
+    },
+    {
+      "id": "dog",
+      "name": "Chó",
+      "price": 600,
+      "housing": "free",
+      "feed": "item:fodder",
+      "fedMinutes": 700,
+      "matureDays": 2,
+      "starveDays": 6,
+      "products": [],
+      "meat": null,
+      "job": "patrol",
+      "speed": 52,
+      "box": {
+        "w": 9,
+        "h": 8
+      },
+      "art": {
+        "form": "quadruped",
+        "body": "#b98a52",
+        "bodyDark": "#7d5a31",
+        "belly": "#e6cfae",
+        "accent": "#33291f",
+        "w": 9,
+        "h": 7
+      }
+    }
+  ],
+  "pests": [
+    {
+      "id": "rat",
+      "name": "Chuột",
+      "price": 0,
+      "housing": "free",
+      "feed": null,
+      "fedMinutes": 9999,
+      "matureDays": 0,
+      "starveDays": 9999,
+      "products": [],
+      "meat": null,
+      "job": "pest",
+      "speed": 44,
+      "box": {
+        "w": 6,
+        "h": 5
+      },
+      "art": {
+        "form": "critter",
+        "body": "#8d8578",
+        "bodyDark": "#5e594f",
+        "belly": "#c3bcae",
+        "accent": "#d7a0a0",
+        "w": 6,
+        "h": 4
+      }
+    },
+    {
+      "id": "squirrel",
+      "name": "Sóc",
+      "price": 0,
+      "housing": "free",
+      "feed": null,
+      "fedMinutes": 9999,
+      "matureDays": 0,
+      "starveDays": 9999,
+      "products": [],
+      "meat": null,
+      "job": "pest",
+      "speed": 48,
+      "box": {
+        "w": 6,
+        "h": 5
+      },
+      "art": {
+        "form": "critter",
+        "body": "#b06a3a",
+        "bodyDark": "#7b4726",
+        "belly": "#e8c8a8",
+        "accent": "#3a2a1c",
+        "w": 6,
+        "h": 4
+      }
+    }
+  ]
+}

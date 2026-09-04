@@ -360,6 +360,93 @@ export function validateProps(raw: unknown): string[] {
  * seasons.json — bốn mùa. TUỲ CHỌN ở cấp pack (pack cũ đã cache không có file
  * này vẫn nạp được, loader sẽ coi như "không có mùa"), nhưng có thì phải đủ.
  */
+const ANIMAL_FORMS = ["quadruped", "bird", "fish", "critter"] as const;
+const HOUSINGS = ["pen", "free", "water"] as const;
+const JOBS = ["patrol", "pest"] as const;
+
+/**
+ * actors.json — vật nuôi và sâu bọ. TUỲ CHỌN ở cấp pack (pack cũ đã cache không
+ * có file này vẫn nạp được, chỉ là chưa có con vật nào).
+ */
+export function validateActors(raw: unknown): string[] {
+  const c = new Check("actors.json");
+  if (!isObj(raw)) return ["actors.json: phải là object"];
+  const seen = new Set<string>();
+
+  const one = (item: unknown, where: string) => {
+    const k = new Check(where);
+    if (!isObj(item)) {
+      c.fail(where, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    k.num(item, "price", 0);
+    k.enumStr(item, "housing", HOUSINGS);
+    const feed = item["feed"];
+    if (feed !== null && !isStr(feed)) k.fail("feed", "phải là id vật phẩm hoặc null");
+    k.num(item, "fedMinutes", 1, 100000);
+    k.num(item, "matureDays", 0, 999);
+    k.num(item, "starveDays", 0, 99999);
+    k.num(item, "speed", 1, 400);
+    if (item["job"] !== undefined) k.enumStr(item, "job", JOBS);
+
+    const box = k.obj(item, "box");
+    if (box) {
+      k.num(box as Record<string, unknown>, "w", 1, 64);
+      k.num(box as Record<string, unknown>, "h", 1, 64);
+    }
+
+    const prods = k.arr(item, "products");
+    if (prods)
+      prods.forEach((p, j) => {
+        if (!isObj(p)) {
+          k.fail(`products[${j}]`, "phải là object");
+          return;
+        }
+        if (!isStr(p["id"])) k.fail(`products[${j}].id`, "phải là chuỗi");
+        k.num(p, "every", 1, 999);
+        k.num(p, "min", 0);
+        k.num(p, "max", 0);
+      });
+
+    const meat = item["meat"];
+    if (meat !== null && meat !== undefined) {
+      if (!isObj(meat)) k.fail("meat", "phải là object hoặc null");
+      else {
+        if (!isStr(meat["id"])) k.fail("meat.id", "phải là chuỗi");
+        k.num(meat, "min", 0);
+        k.num(meat, "max", 0);
+      }
+    }
+
+    const art = k.obj(item, "art");
+    if (art) {
+      k.enumStr(art as Record<string, unknown>, "form", ANIMAL_FORMS);
+      for (const key of ["body", "bodyDark", "belly", "accent"])
+        if (!isStr(art[key]) || !/^#[0-9a-fA-F]{6}$/.test(art[key] as string))
+          k.fail(`art.${key}`, "phải là mã màu #rrggbb");
+      k.num(art as Record<string, unknown>, "w", 1, 16);
+      k.num(art as Record<string, unknown>, "h", 1, 16);
+      for (const key of ["fluff", "patch"])
+        if (art[key] !== undefined) k.num(art as Record<string, unknown>, key, 0, 1);
+      if (art["horn"] !== undefined) k.num(art as Record<string, unknown>, "horn", 0, 3);
+    }
+    c.merge(k);
+  };
+
+  for (const group of ["animals", "pests"] as const) {
+    const list = c.arr(raw, group);
+    if (!list) continue;
+    list.forEach((item, i) => one(item, `${group}[${i}]`));
+  }
+  return c.errors;
+}
+
 export function validateSeasons(raw: unknown): string[] {
   const c = new Check("seasons.json");
   if (!isObj(raw)) return ["seasons.json: phải là object"];

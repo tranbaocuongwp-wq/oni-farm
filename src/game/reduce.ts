@@ -18,6 +18,8 @@ import { growCrops, growCropsIn, newDay } from "./newday.ts";
 import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
 import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.ts";
+import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
+import { feedAnimal, gatherFrom, slaughter } from "./animals.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
   blockedAt,
@@ -75,6 +77,12 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       }
       const was = s.minutes;
       s.minutes = was + dt * perSec;
+
+      // Thực thể: NHÍCH mỗi khung hình (không rút hạt ngẫu nhiên nào), còn
+      // QUYẾT ĐỊNH thì theo nhịp giờ game. Xem đầu file entities.ts — đây là
+      // chỗ tính tất định sống hay chết.
+      moveActors(d, content, dt);
+      runActorSteps(d, content);
 
       // Cây lớn theo THỜI GIAN, và chỉ phần thời gian còn ban ngày mới tính.
       // Cắt theo `daylightEndMinutes` ở đây (thay vì so sánh mốc một lần) để
@@ -189,6 +197,9 @@ export function reduce(state: GameState, action: Action, content: Content): Game
         if (away > 0) {
           const tv = storedView(d, dest.map);
           if (tv) growCropsIn(tv, content, away);
+          // Con vật trên bản đồ vắng mặt cũng phải đói thêm và ra sữa thêm —
+          // chỉ ĐỒNG HỒ, không bao giờ vị trí. Xem catchUpEntities.
+          catchUpEntities(d, content, dest.map, away);
         }
         // đọc lại: growCropsIn có thể đã nhân bản lưới đích
         const target = d.s.maps?.[dest.map] ?? stored;
@@ -268,6 +279,55 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       if (state.busy > 0) return state;
       sellStore(d, content);
       if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "BUY_ANIMAL": {
+      if (state.busy > 0) return state;
+      const def = content.animals[action.def];
+      if (!def) return state;
+      if (!state.unlocked.includes(`animal:${action.def}`)) return state; // chưa mở khoá
+      if (state.money < def.price) {
+        toastKey(d, content, "noMoney", "bad");
+        return commit(d);
+      }
+      /* Thả ở ĐIỂM GIAO cố định cạnh quầy bán, không phải dưới chân người chơi.
+         Con vật mua xong bụp một cái hiện ra giữa ruộng thì mất hết tính tự
+         nhiên; giao tới một chỗ CỐ ĐỊNH thì người chơi biết ra đâu mà đón, và
+         mốc xe sau này chỉ việc cho xe tải chạy tới đúng điểm này. */
+      const drop = content.tiles.dropoff ?? content.tiles.spawn;
+      if (drop.map !== state.mapId) {
+        toastKey(d, content, "deliverElsewhere", "info");
+        return commit(d);
+      }
+      const cx = tileCenterX(drop.x);
+      const cy = tileCenterY(drop.y);
+      const id = spawnEntity(d, content, { def: action.def, map: drop.map, x: cx, y: cy });
+      if (id === null) {
+        toastKey(d, content, "tooMany", "bad");
+        return commit(d);
+      }
+      touch(d).money = d.s.money - def.price;
+      toastKey(d, content, "bought", "good", def.name);
+      applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "FEED": {
+      if (state.busy > 0) return state;
+      feedAnimal(d, content, action.x | 0, action.y | 0);
+      return commit(d);
+    }
+
+    case "GATHER": {
+      if (state.busy > 0) return state;
+      if (gatherFrom(d, content, action.x | 0, action.y | 0)) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "SLAUGHTER": {
+      if (state.busy > 0) return state;
+      slaughter(d, content, action.x | 0, action.y | 0);
       return commit(d);
     }
 

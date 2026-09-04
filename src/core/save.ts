@@ -209,6 +209,16 @@ export function migrateSave(data: SaveData): GameState | null {
   // `migrateForContent` sẽ nong đúng số ô mà content quy định.
   if (s.save === 7) s = { ...s, save: 8, store: [] };
 
+  // v8 → v9: HỆ THỰC THỂ. Save cũ chưa có con vật nào. Cố ý khai đủ cả bốn
+  // trường ngay bây giờ, kể cả `planCursor` chưa dùng tới mấy — mốc người làm
+  // thuê và mốc xe sau này chỉ thêm trường TUỲ CHỌN vào `Entity`, nên sẽ không
+  // phải tăng SAVE_VERSION lần nữa.
+  if (s.save === 8) {
+    const st = { ...(s.stats ?? {}) } as GameState["stats"];
+    if (!Number.isFinite(st.gathered)) st.gathered = 0;
+    s = { ...s, save: 9, entities: [], entSeq: 0, actStep: 0, planCursor: 0, stats: st };
+  }
+
   return s.save === SAVE_VERSION ? s : null;
 }
 

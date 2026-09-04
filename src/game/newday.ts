@@ -30,6 +30,7 @@ import {
   dStoredMap,
   mapViews,
   nextRandom,
+  randInt,
   toastKey,
   touch,
 } from "./state.ts";
@@ -38,6 +39,8 @@ import { idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
 import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
+import { animalNight, patrolNight, pestNight } from "./animals.ts";
+import { spawnEntity } from "./entities.ts";
 import {
   cropInSeason,
   isLastDayOfSeason,
@@ -420,6 +423,57 @@ function dronesOnMap(
   return left;
 }
 
+/** Trần số sâu bọ cùng lúc — đủ để thấy đau, không đủ để thành dịch. */
+const MAX_PESTS = 8;
+
+/**
+ * Sinh chuột/sóc về đêm, TỈ LỆ THUẬN với số cây đang chín ngoài ruộng.
+ *
+ * Ruộng trống thì không có con nào — không ai muốn bị quấy khi chưa trồng gì.
+ * Ruộng đầy cây chín mà bỏ đó qua đêm thì trả giá, và đó là lý do để nuôi chó.
+ * Rút từ `state.seed` (SỰ KIỆN, một lần mỗi đêm) chứ không phải mỗi khung hình.
+ */
+function spawnPests(d: Draft, content: Content): void {
+  const loai = content.animalOrder.filter((id) => content.animals[id]?.job === "pest");
+  if (!loai.length) return;
+
+  const dangCo = d.s.entities.filter((e) => content.animals[e.def]?.job === "pest").length;
+  if (dangCo >= MAX_PESTS) return;
+
+  // đếm cây chín trên bản đồ đang chơi
+  let chin = 0;
+  for (const t of d.s.tiles) {
+    if (!t.crop) continue;
+    const cd = content.crops[t.crop.id];
+    if (cd && t.crop.stage >= cd.growthDays.length) chin++;
+  }
+  if (chin < 3) return;
+
+  const muon = Math.min(MAX_PESTS - dangCo, Math.floor(chin / 6) + 1);
+  for (let k = 0; k < muon; k++) {
+    const r1 = nextRandom(d.s.seed);
+    touch(d).seed = r1.seed;
+    if (r1.v > 0.5) continue; // không phải đêm nào cũng có
+
+    const r2 = randInt(d.s.seed, 0, loai.length - 1);
+    touch(d).seed = r2.seed;
+    const rx = randInt(d.s.seed, 1, d.s.w - 2);
+    touch(d).seed = rx.seed;
+    const ry = randInt(d.s.seed, 1, d.s.h - 2);
+    touch(d).seed = ry.seed;
+
+    const i = idx(d.s.w, rx.v, ry.v);
+    const t = d.s.tiles[i];
+    if (!t || t.prop || t.b) continue;
+    spawnEntity(d, content, {
+      def: loai[r2.v]!,
+      map: d.s.mapId,
+      x: rx.v * 16 + 8,
+      y: ry.v * 16 + 8,
+    });
+  }
+}
+
 export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   const bal = content.balance;
   const sleptAt = d.s.minutes;
@@ -481,6 +535,22 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
     const next = seasonOfDay(d.s.day + 1, content);
     if (next) toastKey(d, content, "seasonLast", "info", next.name);
   }
+
+  // ---- 5d. sâu bọ phá đêm, rồi chó tuần tra đuổi -------------------------
+  // Đặt SAU cỏ dại (5b) và TRƯỚC drone (6): chuột ăn cây chín trước khi drone
+  // ra gặt, nếu không thì con chuột chẳng bao giờ kịp phá gì.
+  const anPha = pestNight(d, content);
+  const daDuoi = patrolNight(d, content);
+  if (anPha > 0) toastKey(d, content, "pestDamage", "bad", `×${anPha}`);
+  if (daDuoi > 0) toastKey(d, content, "pestChased", "good", `×${daDuoi}`);
+
+  // ---- 4d. vật nuôi: già thêm một ngày, tiêu phần no, đói lâu thì chết ----
+  const thu = animalNight(d, content, bal.dayEndMinutes - bal.dayStartMinutes);
+  if (thu.starved > 0) toastKey(d, content, "animalStarved", "bad", `×${thu.starved}`);
+  else if (thu.hungry > 0) toastKey(d, content, "animalHungry", "bad", `×${thu.hungry}`);
+
+  // ---- 5e. sinh sâu bọ mới nếu ruộng có cây chín --------------------------
+  spawnPests(d, content);
 
   if (rep.stormCrops > 0) toastKey(d, content, "stormDamage", "bad", `×${rep.stormCrops}`);
   if (rep.felled > 0) toastKey(d, content, "stormFell", "bad", `×${rep.felled}`);

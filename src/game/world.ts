@@ -350,9 +350,24 @@ export function playerOverlapsTile(state: GameState, x: number, y: number): bool
   return r.r > l && r.l < l + TILE && r.b > t && r.t < t + TILE;
 }
 
-/** Hitbox tại (cx,cy) có đè lên ô solid nào không. */
+/** Hitbox tại (cx,cy) có đè lên ô solid nào không. Vỏ mỏng cho kích thước
+ *  người chơi — mọi nơi gọi cũ không phải sửa gì. */
 export function blockedAt(state: GameState, content: Content, cx: number, cy: number): boolean {
-  const r = playerRect(cx, cy);
+  return blockedAtBox(state, content, cx, cy, PLAYER_W, PLAYER_H);
+}
+
+/** Hộp va chạm KÍCH THƯỚC BẤT KỲ tại (cx,cy) có đè lên ô đặc nào không.
+ *  Xe tải rộng hơn người, con gà hẹp hơn — dùng chung một hộp cố định thì xe
+ *  sẽ tìm ra đường mà thân nó không lọt. */
+export function blockedAtBox(
+  state: GameState,
+  content: Content,
+  cx: number,
+  cy: number,
+  bw: number,
+  bh: number,
+): boolean {
+  const r = { l: cx - bw / 2, t: cy - bh / 2, r: cx + bw / 2, b: cy + bh / 2 };
   const EPS = 1e-6;
   const x0 = Math.floor(r.l / TILE);
   const x1 = Math.floor((r.r - EPS) / TILE);

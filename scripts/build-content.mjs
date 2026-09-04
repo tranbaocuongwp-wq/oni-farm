@@ -65,6 +65,7 @@ const raw = {
   strings: readJson("strings.vi.json"),
   weather: readJson("weather.json"),
   seasons: readJson("seasons.json"),
+  actors: readJson("actors.json"),
   maps,
 };
 

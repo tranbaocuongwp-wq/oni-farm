@@ -543,6 +543,35 @@ export function createRenderer(
     return { kind: "hand", steel: false };
   }
 
+  /**
+   * Vật nuôi và sâu bọ. Đẩy vào cùng danh sách `items` với người chơi và dùng
+   * ĐÚNG công thức `base` (`round(y) + 5`), nên con bò đi trước mặt thì che
+   * nhân vật, đi sau lưng thì bị che — không cần luật riêng nào.
+   */
+  function drawActors(s: GameState, content: Content, items: Item[]) {
+    for (const e of s.entities) {
+      if (e.map !== s.mapId) continue;
+      const def = content.animals[e.def];
+      if (!def) continue;
+      const moving = e.ai.path.length > 0;
+      const frame = moving ? 1 + (Math.floor(e.anim * 5) % 2) : 0;
+      const img = atlas.animal(e.def, e.dir, frame);
+      if (!img) continue;
+      const px = snapDev(e.x - camera.rx) - TILE / 2;
+      const py = snapDev(e.y - camera.ry) - TILE + 3;
+      const doi = e.animal.fed <= 0;
+      items.push({
+        base: Math.round(e.y) + 5,
+        run: () => {
+          g.drawImage(img, px, py);
+          // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
+          // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
+          if (doi) g.drawImage(atlas.sickOverlay, px, py);
+        },
+      });
+    }
+  }
+
   function drawPlayer(s: GameState, content: Content, items: Item[]) {
     const p = s.player;
     const dir = p.dir as PlayerDir;
@@ -815,6 +844,7 @@ export function createRenderer(
     const items: Item[] = [];
     const lights: Light[] = [];
     collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion, opts.weather);
+    drawActors(s, content, items);
     drawPlayer(s, content, items);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 

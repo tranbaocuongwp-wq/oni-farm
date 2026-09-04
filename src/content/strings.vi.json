@@ -60,6 +60,12 @@
     "tooFar": "Xa quá, lại gần hơn đi.",
     "storeFull": "Kho đầy rồi.",
     "nothingToStore": "Túi không có gì để cất.",
-    "nothingToSell": "Kho không có nông sản nào."
+    "nothingToSell": "Kho không có nông sản nào.",
+    "tooMany": "Nông trại đông quá rồi.",
+    "pestDamage": "Chuột bọ phá mất cây:",
+    "pestChased": "Chó đuổi được sâu bọ:",
+    "animalStarved": "Vật nuôi chết đói:",
+    "animalHungry": "Vật nuôi đang đói:",
+    "deliverElsewhere": "Hàng được giao ngoài nông trại — ra đó nhận."
   }
 }
