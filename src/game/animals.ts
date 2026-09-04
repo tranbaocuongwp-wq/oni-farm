@@ -72,6 +72,77 @@ export function animalNear(
   return best;
 }
 
+/* ------------------------------------------------------------- bảng thông tin */
+
+/** Một dòng sản phẩm trên bảng: tên, còn bao lâu nữa, đã tới lứa chưa. */
+export interface ProductLine {
+  id: string;
+  name: string;
+  ready: boolean;
+  /** Phút game còn lại tới lứa sau. 0 khi đã tới lứa. */
+  minutesLeft: number;
+}
+
+/** Mọi thứ người chơi cần biết về một con vật, ở dạng DỮ LIỆU thuần. */
+export interface AnimalStats {
+  def: string;
+  name: string;
+  mature: boolean;
+  /** Còn mấy ngày nữa thì lớn. 0 nếu đã lớn. */
+  daysToMature: number;
+  ageDays: number;
+  /** 0..1 — phần no còn lại. */
+  fed: number;
+  hungry: boolean;
+  hungryDays: number;
+  /** Nhịn thêm mấy ngày nữa thì chết. -1 = loài tự kiếm ăn, không chết đói. */
+  daysToStarve: number;
+  feed: string | null;
+  products: ProductLine[];
+  /** Thịt bán được, hoặc null. */
+  meat: { id: string; min: number; max: number } | null;
+}
+
+/**
+ * Bảng thống kê của một con vật.
+ *
+ * Thuần và ở tầng `game/` chứ không dựng thẳng trong HUD, vì hai lý do: nó phải
+ * đọc đúng những con số mà `animalNight` dùng để quyết định sống chết (nếu HUD
+ * tự diễn giải lại thì sớm muộn hai bên lệch nhau, và bảng sẽ nói dối), và như
+ * thế thì test được thẳng trong Node.
+ */
+export function animalStats(e: Entity, content: Content): AnimalStats | null {
+  const def = animalDef(content, e.def);
+  if (!def) return null;
+  const mature = isMature(e, content);
+  const products: ProductLine[] = def.products.map((p, i) => {
+    const need = p.every * 1440;
+    const has = e.animal.prod[i] ?? 0;
+    return {
+      id: p.id,
+      name: itemName(p.id, content),
+      // Chưa lớn hoặc đang đói thì KHÔNG tới lứa, dù đồng hồ đã đủ — đúng cùng
+      // luật với `readyProduct`, chứ không phải một cách tính thứ hai.
+      ready: mature && !isHungry(e) && has >= need,
+      minutesLeft: Math.max(0, need - has),
+    };
+  });
+  return {
+    def: e.def,
+    name: def.name,
+    mature,
+    daysToMature: Math.max(0, def.matureDays - e.animal.age),
+    ageDays: e.animal.age,
+    fed: def.fedMinutes > 0 ? Math.max(0, Math.min(1, e.animal.fed / def.fedMinutes)) : 1,
+    hungry: isHungry(e),
+    hungryDays: e.animal.hungryDays,
+    daysToStarve: def.feed === null ? -1 : Math.max(0, def.starveDays - e.animal.hungryDays),
+    feed: def.feed ?? null,
+    products,
+    meat: def.meat ? { id: def.meat.id, min: def.meat.min, max: def.meat.max } : null,
+  };
+}
+
 /* ------------------------------------------------------------------ cho ăn */
 
 /**

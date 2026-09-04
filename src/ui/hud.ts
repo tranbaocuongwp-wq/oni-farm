@@ -28,6 +28,7 @@ import type { Content, GameState } from "../game/types.ts";
 import { currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Atlas } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
+import type { AnimalStats } from "../game/animals.ts";
 
 export interface Hud {
   update(s: GameState, content: Content, hint: Hint | null): void;
@@ -37,6 +38,14 @@ export interface Hud {
   onBag(fn: () => void): void;
   /** Hiện thẻ "Ngày N" khi sang ngày mới. */
   dayBanner(day: number, note?: string): void;
+  /**
+   * Bảng thống kê con vật đang đứng cạnh. `null` = ẩn đi.
+   *
+   * Người chơi bấm vào con bò và chỉ nhận được một dòng toast "chưa tới lứa" —
+   * mà không biết còn bao lâu, no hay đói, đã lớn chưa. Bảng này trả lời cả ba
+   * mà không tốn thêm một cú bấm nào: đứng gần là hiện.
+   */
+  showAnimal(st: AnimalStats | null): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -123,7 +132,10 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       <div id="toasts" aria-live="polite"></div>
     </div>
     <div class="hud-mid">
-      <div id="minimap" class="minimap"><canvas></canvas></div>
+      <div class="mid-col">
+        <div id="animal-card" class="animal-card" hidden></div>
+        <div id="minimap" class="minimap"><canvas></canvas></div>
+      </div>
     </div>
     <div class="hud-bottom">
       <div class="hotbar-wrap">
@@ -294,7 +306,75 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
   let bannerTimer = 0;
 
+  /* ---- bảng thống kê con vật ---------------------------------------------
+     Vẽ lại BẰNG CHUỖI mỗi lần đổi, nhưng chỉ khi chuỗi thật sự khác: thẻ này
+     cập nhật mỗi khung hình, mà đặt lại `innerHTML` mỗi khung hình thì con trỏ
+     chuột nhấp nháy và trình duyệt dựng lại DOM 60 lần một giây cho một thứ
+     đứng yên. */
+  const elAnimal = root.querySelector<HTMLElement>("#animal-card")!;
+  let animalKey = "";
+
+  /** "còn 3 giờ" / "còn 2 ngày" — người chơi nghĩ bằng giờ với ngày, không
+   *  bằng phút game. */
+  const wait = (minutes: number): string => {
+    if (minutes <= 0) return "sẵn sàng";
+    if (minutes < 60) return `còn ${Math.ceil(minutes)} phút`;
+    if (minutes < 1440) return `còn ${Math.ceil(minutes / 60)} giờ`;
+    return `còn ${Math.ceil(minutes / 1440)} ngày`;
+  };
+
   return {
+    showAnimal(st) {
+      if (!st) {
+        if (animalKey !== "") {
+          animalKey = "";
+          elAnimal.hidden = true;
+          elAnimal.innerHTML = "";
+        }
+        return;
+      }
+      const key = JSON.stringify(st);
+      if (key === animalKey) return;
+      animalKey = key;
+
+      const rows: string[] = [];
+      rows.push(
+        st.mature
+          ? `<div class="row"><span>Tuổi</span><b>${st.ageDays} ngày · đã lớn</b></div>`
+          : `<div class="row"><span>Tuổi</span><b>${st.ageDays} ngày · lớn sau ${st.daysToMature} ngày</b></div>`,
+      );
+      const doi = st.hungry
+        ? st.daysToStarve < 0
+          ? "đang kiếm ăn"
+          : `ĐÓI · chết sau ${st.daysToStarve} ngày`
+        : `${Math.round(st.fed * 100)}%`;
+      rows.push(
+        `<div class="row"><span>No</span><b class="${st.hungry && st.daysToStarve >= 0 ? "bad" : ""}">${doi}</b></div>` +
+          `<div class="bar"><i style="width:${Math.round(st.fed * 100)}%"></i></div>`,
+      );
+      for (const p of st.products)
+        rows.push(
+          `<div class="row"><span>${p.name}</span><b class="${p.ready ? "good" : ""}">${
+            p.ready ? "tới lứa" : !st.mature ? "chờ lớn" : st.hungry ? "đang đói" : wait(p.minutesLeft)
+          }</b></div>`,
+        );
+      if (st.meat)
+        rows.push(
+          `<div class="row"><span>Thịt</span><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}${st.mature ? "" : " (chưa lớn)"}</b></div>`,
+        );
+
+      elAnimal.innerHTML = `<div class="hd"><i class="pic"></i><b>${st.name}</b></div>${rows.join("")}`;
+      const pic = elAnimal.querySelector<HTMLElement>(".pic");
+      const src = atlas.animal(st.def, "down", 0);
+      if (pic && src) {
+        const c = document.createElement("canvas");
+        c.width = src.width;
+        c.height = src.height;
+        c.getContext("2d")!.drawImage(src, 0, 0);
+        pic.appendChild(c);
+      }
+      elAnimal.hidden = false;
+    },
     update(s, content, hint) {
       if (s.money !== prev.money) {
         const up = prev.money >= 0 && s.money > prev.money;

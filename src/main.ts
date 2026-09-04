@@ -51,18 +51,29 @@ import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
+import { autoJob, facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
-import { animalNear, readyProduct } from "./game/animals.ts";
-import { canPlaceBuilding } from "./game/world.ts";
+import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
+import { canPlaceBuilding, inReach } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
 const CONTENT_URL = "https://oni-farm.pages.dev";
 
-/** Tầm với: người chơi chỉ thao tác được ô cách tâm mình dưới ngần này pixel. */
-const REACH = TILE * 1.8;
+/**
+ * Tầm với dùng cho việc NGẮM và cho lối vào cửa hàng/quầy — rộng hơn tầm THAO
+ * TÁC một chút, để con trỏ bắt được ô mà ngón tay chỉ vào hụt vài pixel.
+ *
+ * ⚠️ TUYỆT ĐỐI không dùng con số này để hỏi "làm được chưa": luật thật là
+ * `inReach()` trong game/world.ts (1,6 ô). Trước đây chỗ này hỏi bằng 1,8 ô, và
+ * hai con số lệch nhau đúng 0,2 ô đã đẻ ra một lỗi rất khó thấy: ô nằm trong
+ * khoảng đó được nút báo "làm được", nhưng reducer từ chối trong im lặng —
+ * không toast, không khoá `busy`, không có gì. Bấm tay thì tưởng máy đơ; bật
+ * "tự động làm" thì nó dispatch USE mỗi khung hình vào đúng ô đó cho tới khi
+ * đồng hồ "không tiến triển" tự tắt chế độ.
+ */
+const AIM_REACH = TILE * 1.8;
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -186,6 +197,8 @@ async function boot() {
     strict: false,
     historyLimit: 0,
   });
+
+
 
   /* ---- 4. hệ thống hiển thị ---- */
   const canvas = $<HTMLCanvasElement>("#game");
@@ -481,8 +494,9 @@ async function boot() {
     return { x: tx, y: ty, ok: tileActionable(s, tx, ty) };
   }
 
+  /** MỘT nguồn sự thật: hỏi thẳng luật của game, không tự tính lại. */
   function inReachOf(s: GameState, tx: number, ty: number): boolean {
-    return Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y) <= REACH;
+    return inReach(s, tx, ty);
   }
 
   /* ---- 9. bấm-để-đi ---- */
@@ -624,7 +638,7 @@ async function boot() {
   let autoMiss = 0;
   /** Ô đang đi tới ĐỂ LÀM VIỆC (không phải do người chơi chạm). Tới nơi thì chỉ
    *  dùng công cụ, không mở hộp thoại nào. */
-  let workGoal: { x: number; y: number } | null = null;
+  let workGoal: { x: number; y: number; refill?: boolean } | null = null;
   /** Bao lâu rồi không có việc nào THÀNH CÔNG, tính bằng giây. */
   let autoIdle = 0;
   let autoMark = "";
@@ -640,7 +654,9 @@ async function boot() {
    * hỏng cùng một lúc: hết năng lượng, túi đầy, hết hạt, kẹt đường.
    */
   const progressMark = (s: GameState): string =>
-    `${s.stats.tilled}|${s.stats.planted}|${s.stats.watered}|${s.stats.harvested}|${s.stats.cured}`;
+    // `water` nằm trong dấu vân tay vì MÚC NƯỚC cũng là tiến triển: không có nó
+    // thì một chuyến đi múc dài là bốn giây "không tiến triển" và tự tắt.
+    `${s.stats.tilled}|${s.stats.planted}|${s.stats.watered}|${s.stats.harvested}|${s.stats.cured}|${s.water}`;
 
   const stopAuto = (s: GameState) => {
     setAuto(false);
@@ -680,9 +696,22 @@ async function boot() {
    * Không tự đi xa: hết ô quanh chân thì dừng, người chơi chạm chỗ khác.
    * Trả về true nếu đã bắt đầu một nhát mới.
    */
-  /** Bán kính tự đi tới việc, tính bằng Ô. Đủ để dọn một luống mà không lang
-   *  thang sang tận đầu kia nông trại. */
+  /** Bán kính "giữ nút DÙNG thì làm tiếp ô kế bên" — cố ý HẸP: giữ nút là ý
+   *  định làm nốt chỗ đang đứng, không phải lệnh đi khắp nông trại. */
   const AUTO_RADIUS = 12;
+
+  /**
+   * Bán kính của chế độ TỰ ĐỘNG: cả bản đồ.
+   *
+   * Từng để 12 ô, và đo được đúng cái hỏng: dọn sạch khu quanh chân xong là nó
+   * tự tắt trong khi 14 cây chín còn đứng ở đầu kia ruộng. "Tự động làm" mà bỏ
+   * lại việc thì người chơi vẫn phải đi kiểm tra — tức là không tự động.
+   *
+   * Quét cả lưới đắt hơn, nhưng chỉ chạy lúc vừa xong một việc và đang rảnh, và
+   * thứ tự ưu tiên vẫn chọn ô GẦN NHẤT trong mỗi bậc — nên nó vẫn dọn quanh
+   * chân trước, chỉ là hết việc gần thì đi tiếp thay vì bỏ cuộc.
+   */
+  const autoRadius = (s: GameState) => Math.max(s.w, s.h);
 
   /**
    * Làm tiếp việc kế tiếp. Ba nấc, ưu tiên từ gần ra xa:
@@ -717,6 +746,83 @@ async function boot() {
     // lúc đang tự động làm, và thế giới đứng hình cho tới khi người chơi tắt nó.
     workGoal = { x: far.x, y: far.y };
     return nav.goTo(s, content, far.x, far.y, { avoidStandingOn: holdingSolidBuilding(s) });
+  }
+
+  /**
+   * Ô MÚC NƯỚC gần nhất (ao, giếng) trên CẢ bản đồ.
+   *
+   * Cố ý không giới hạn trong `AUTO_RADIUS` như các việc khác. Việc trên ruộng
+   * thì có ở khắp nơi nên bán kính 12 ô là đúng — đi xa hơn chỉ là lang thang.
+   * Nhưng nguồn nước thì CÓ MỘT CHỖ: đo được lúc thử, người chơi đứng ở (33,25)
+   * còn cái ao ở góc (5,4), tức 28 ô — ngoài bán kính, nên nó không đi múc và
+   * cày tiếp cho tới lúc kiệt sức trong khi 83 ô đang khô.
+   *
+   * Quét cả lưới 40×30 chỉ tốn 1200 phép so, và chỉ chạy đúng lúc bình cạn.
+   */
+  function nearestRefill(s: GameState): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let y = 0; y < s.h; y++)
+      for (let x = 0; x < s.w; x++) {
+        if (interactAt(s, content, x, y) !== "REFILL") continue;
+        const d = Math.hypot(x * TILE + TILE / 2 - s.player.x, y * TILE + TILE / 2 - s.player.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { x, y };
+        }
+      }
+    return best;
+  }
+
+  /**
+   * MỘT bước của chế độ tự động.
+   *
+   * Khác `continueWork` ở đúng một điểm, nhưng là điểm quyết định: nó tự ĐỔI
+   * TAY. `continueWork` chỉ biết thứ đang cầm, nên bật tự động lúc đang cầm
+   * cuốc là cày cả nông trại rồi dừng — không gieo, không tưới, không thu.
+   * Ở đây `autoJob` chọn việc trước rồi mới nói phải cầm ô hotbar nào.
+   *
+   * Đổi tay tốn đúng một khung hình (dispatch SELECT rồi trả về true): khung
+   * sau `s.busy` vẫn bằng 0 nên nó vào lại đây và ra tay ngay. Cố ý không gộp
+   * hai việc vào một khung — hotbar phải kịp vẽ lại, nếu không người chơi thấy
+   * nhân vật cày bằng cái bình tưới.
+   */
+  function autoStep(s: GameState): boolean {
+    const job = autoJob(s, content, autoRadius(s));
+
+    /* MÚC NƯỚC nằm giữa TƯỚI và CÀY trong thứ tự ưu tiên, không phải ở cuối.
+       Bình cạn thì `canUseAt` bảo không tưới được, nên `autoJob` tụt xuống bậc
+       CÀY và cày mãi cho tới hết sức — đúng thứ đã đo được: 51 ô cày thêm,
+       0 ô tưới, ruộng vẫn khô. Đi múc mới là việc đáng làm lúc đó. */
+    if (
+      (!job || job.kind === "till") &&
+      s.water <= 0 &&
+      needsWater(s)
+    ) {
+      const w = nearestRefill(s);
+      if (w) {
+        workGoal = { x: w.x, y: w.y, refill: true };
+        aimed = { x: w.x, y: w.y };
+        return nav.goTo(s, content, w.x, w.y, {});
+      }
+    }
+    if (!job) return false;
+
+    if (job.slot !== s.sel) {
+      store.dispatch({ t: "SELECT", slot: job.slot });
+      return true;
+    }
+    aimed = { x: job.x, y: job.y };
+    lastKind = job.kind;
+    if (inReachOf(s, job.x, job.y)) return tryUse(s, job.x, job.y);
+    workGoal = { x: job.x, y: job.y };
+    return nav.goTo(s, content, job.x, job.y, { avoidStandingOn: holdingSolidBuilding(s) });
+  }
+
+  /** Còn ô đã cày mà khô không? Nếu không thì đừng bắt nhân vật lội bộ đi múc. */
+  function needsWater(s: GameState): boolean {
+    for (const t of s.tiles) if (t?.tilled && !t.wet) return true;
+    return false;
   }
 
   /**
@@ -788,14 +894,22 @@ async function boot() {
       const arrived = nav.takeArrival();
       if (arrived) {
         aimed = { x: arrived.tx, y: arrived.ty };
-        const forWork =
-          workGoal !== null && workGoal.x === arrived.tx && workGoal.y === arrived.ty;
+        const goal =
+          workGoal !== null && workGoal.x === arrived.tx && workGoal.y === arrived.ty
+            ? workGoal
+            : null;
         workGoal = null;
         if (arrived.act) {
           const st = store.getState();
-          const done = forWork
-            ? tryUse(st, arrived.tx, arrived.ty)
-            : actOnTile(st, arrived.tx, arrived.ty);
+          /* Chuyến đi MÚC NƯỚC là ngoại lệ duy nhất được phép tương tác: nó
+             phải mở được cái giếng. Mọi chuyến đi làm việc khác vẫn chỉ được
+             `tryUse` — đi cày một ô cạnh quầy thu mua mà bật hộp thoại bán hàng
+             giữa lúc tự động làm là thế giới đứng hình cho tới khi tắt nó đi. */
+          const done = goal?.refill
+            ? tryInteract(st, arrived.tx, arrived.ty)
+            : goal
+              ? tryUse(st, arrived.tx, arrived.ty)
+              : actOnTile(st, arrived.tx, arrived.ty);
           if (!done) deny();
         }
       }
@@ -809,11 +923,16 @@ async function boot() {
         if (mark !== autoMark) {
           autoMark = mark;
           autoIdle = 0;
+        } else if (nav.target()) {
+          /* Đang ĐI TỚI chỗ làm thì không tính là đứng không. Bán kính tự động
+             là 12 ô, mà đi hết 12 ô còn lâu hơn ngưỡng bốn giây — không loại
+             trừ thì cứ mỗi lần việc ở xa là tự tắt giữa đường. */
+          autoIdle = 0;
         } else if ((autoIdle += dt) > AUTO_IDLE_LIMIT) {
           stopAuto(s);
         }
         if (autoWork && s.busy <= 0 && !nav.target()) {
-          if (!continueWork(s)) autoMiss++;
+          if (!autoStep(s)) autoMiss++;
           else autoMiss = 0;
           if (autoMiss >= 2) stopAuto(store.getState());
         }
@@ -1023,6 +1142,16 @@ async function boot() {
 
     const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;
     hud.update(s, content, hint);
+
+    /* Bảng vật nuôi: hiện con vật ở ô ĐANG NGẮM, không có thì con đứng ngay
+       dưới chân. Đọc theo ô ngắm chứ không theo "con gần nhất trong bán kính":
+       giữa một đàn thì phải là con người chơi đang chỉ vào, nếu không thì bảng
+       nhảy qua nhảy lại giữa hai con mỗi khi nhân vật nhích nửa ô. */
+    const cursorAnimal = cursor ? animalNear(s, cursor.x, cursor.y) : null;
+    const px = Math.floor(s.player.x / TILE);
+    const py = Math.floor(s.player.y / TILE);
+    const shown = modal ? null : (cursorAnimal ?? animalNear(s, px, py));
+    hud.showAnimal(shown ? animalStats(shown, content) : null);
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
     devPanel.update(s, content);
@@ -1038,7 +1167,7 @@ async function boot() {
           (x + dx) * TILE + TILE / 2 - s.player.x,
           (y + dy) * TILE + TILE / 2 - s.player.y,
         );
-        if (dist <= REACH + TILE) return { kind: k, x: x + dx, y: y + dy };
+        if (dist <= AIM_REACH + TILE) return { kind: k, x: x + dx, y: y + dy };
       }
     }
     return null;

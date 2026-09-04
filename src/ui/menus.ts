@@ -241,6 +241,86 @@ export function createMenus(
     return el;
   }
 
+
+  /* --------------------------------------------------------- LƯỚI THẺ mua
+     Cửa hàng dùng LƯỚI cho mọi tab, không dùng danh sách dòng.
+
+     Danh sách dòng đọc được khi có năm mục. Cửa hàng này có tới bốn mươi loại
+     hạt trong một mùa, tám loài vật, sáu công trình — xếp dọc thì phải cuộn để
+     xem hết, và cuộn thì không so sánh được hai thứ với nhau. Lưới cho thấy
+     tất cả cùng lúc, và mỗi thẻ có HÌNH nên nhận ra bằng mắt chứ không phải
+     bằng cách đọc tên.
+  */
+
+  /** Một thẻ mua: cả thẻ là nút bấm. */
+  function buyCard(o: {
+    art: string;
+    name: string;
+    subs: string[];
+    price: string;
+    locked?: boolean;
+    disabled?: boolean;
+    onClick: () => void;
+  }): HTMLElement {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `shop-card${o.locked ? " locked" : ""}`;
+    card.disabled = !!o.disabled;
+    card.appendChild(icon(o.art, 22));
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = o.name;
+    card.appendChild(nm);
+    for (const t of o.subs) {
+      if (!t) continue;
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = t;
+      card.appendChild(sub);
+    }
+    const pr = document.createElement("div");
+    pr.className = "pr";
+    pr.textContent = o.price;
+    card.appendChild(pr);
+    card.addEventListener("click", o.onClick);
+    return card;
+  }
+
+  /** Thẻ có NHIỀU nút (người làm: đổi việc / cho nghỉ). Không thể là <button>
+   *  vì nút lồng trong nút là HTML không hợp lệ và bấm sẽ trúng cả hai. */
+  function infoCard(o: {
+    art: string;
+    name: string;
+    subs: string[];
+    buttons: { label: string; onClick: () => void; cls?: string }[];
+  }): HTMLElement {
+    const card = document.createElement("div");
+    card.className = "shop-card wide";
+    card.appendChild(icon(o.art, 22));
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = o.name;
+    card.appendChild(nm);
+    for (const t of o.subs) {
+      if (!t) continue;
+      const sub = document.createElement("div");
+      sub.className = "sub";
+      sub.textContent = t;
+      card.appendChild(sub);
+    }
+    const bar = document.createElement("div");
+    bar.className = "acts";
+    for (const b of o.buttons) bar.appendChild(mkBtn(b.label, b.onClick, b.cls));
+    card.appendChild(bar);
+    return card;
+  }
+
+  const cardGrid = (): HTMLElement => {
+    const g = document.createElement("div");
+    g.className = "shop-grid";
+    return g;
+  };
+
   /* ------------------------------------------------------------ CỬA HÀNG */
   function openShop() {
     current = openShop;
@@ -269,28 +349,6 @@ export function createMenus(
     mkTab("worker", "Người làm");
     body.appendChild(tabs);
 
-    const mk = (id: string, name: string, desc: string, price: number) => {
-      const unlocked = s.unlocked.includes(id);
-      const itemId = id.startsWith("seed:") ? id : `build:${id}`;
-      body.appendChild(
-        row({
-          id: itemId,
-          name,
-          desc: unlocked ? desc : "Chưa mở khoá — chơi tiếp để mở",
-          price: money(price),
-          locked: !unlocked,
-          action: {
-            label: "Mua",
-            disabled: !unlocked || s.money < price,
-            onClick: () => {
-              h.buy(id, 1);
-              openShop();
-            },
-          },
-        }),
-      );
-    };
-
     if (shopTab === "seed") {
       // Chỉ bày hạt GIEO ĐƯỢC HÔM NAY. Bày cả 61 loại rồi để người chơi mua
       // nhầm hạt trái mùa là bẫy tiền — mà danh sách 61 dòng cũng không ai đọc
@@ -299,38 +357,29 @@ export function createMenus(
       /* LƯỚI THẺ chứ không phải danh sách dòng. Một mùa có tới 40 loại hạt;
          bốn mươi dòng chữ xếp dọc thì không ai đọc hết, mà cũng không so sánh
          được với nhau. Thẻ có ẢNH CÂY ĐÃ CHÍN nên nhìn là biết đang mua gì. */
-      const grid = document.createElement("div");
-      grid.className = "shop-grid";
+      const grid = cardGrid();
       let shown = 0;
       for (const id of c.cropOrder) {
         if (!cropInSeason(id, s.day, c)) continue;
         const crop = c.crops[id]!;
         const mo = s.unlocked.includes(`seed:${id}`);
         const days = crop.growthDays.reduce((a, b) => a + b, 0);
-
-        const card = document.createElement("button");
-        card.type = "button";
-        card.className = `shop-card${mo ? "" : " locked"}`;
-        card.disabled = !mo || s.money < crop.seedPrice;
-        card.appendChild(icon(`plant:${id}`, 22));
-
-        const nm = document.createElement("div");
-        nm.className = "nm";
-        nm.textContent = mo ? crop.name : "???";
-        const sub = document.createElement("div");
-        sub.className = "sub";
-        sub.textContent = mo
-          ? `${days}n · ${money(crop.sellPrice)}${crop.regrowDays ? " ↻" : ""}`
-          : "chưa mở";
-        const pr = document.createElement("div");
-        pr.className = "pr";
-        pr.textContent = money(crop.seedPrice);
-        card.append(nm, sub, pr);
-        card.addEventListener("click", () => {
-          h.buy(`seed:${id}`, 1);
-          openShop();
-        });
-        grid.appendChild(card);
+        grid.appendChild(
+          buyCard({
+            art: `plant:${id}`,
+            name: mo ? crop.name : "???",
+            subs: [
+              mo ? `${days}n · ${money(crop.sellPrice)}${crop.regrowDays ? " ↻" : ""}` : "chưa mở",
+            ],
+            price: money(crop.seedPrice),
+            locked: !mo,
+            disabled: !mo || s.money < crop.seedPrice,
+            onClick: () => {
+              h.buy(`seed:${id}`, 1);
+              openShop();
+            },
+          }),
+        );
         shown++;
       }
       body.appendChild(grid);
@@ -363,55 +412,73 @@ export function createMenus(
       body.appendChild(grid);
 
       body.appendChild(note(dsach.length ? `Đang thuê ${dsach.length} người` : "Chưa thuê ai."));
+      const gw = cardGrid();
       for (const e of dsach) {
         const w = e.worker!;
         const deo = w.carry.reduce((n, v) => n + (v ? v.n : 0), 0);
-        body.appendChild(
-          row({
-            id: `worker:${e.id}`,
-            name: `${w.name} · ${w.job === "crops" ? "chăm cây" : "chăn nuôi"}`,
-            desc: `sức ${Math.round(w.energy)}/${cfg.energyMax} · đeo ${deo}/${cfg.carryMax} · trả lương ngày ${w.paidDay + cfg.wageEveryDays}`,
-            price: "",
-            extra: mkBtn("Đổi việc", () => {
-              h.assign(e.id, w.job === "crops" ? "livestock" : "crops");
-              openShop();
-            }),
-            action: { label: "Cho nghỉ", disabled: false, onClick: () => { h.fire(e.id); openShop(); } },
+        gw.appendChild(
+          infoCard({
+            art: `worker:${e.id}`,
+            name: w.name,
+            subs: [
+              w.job === "crops" ? "chăm cây" : "chăn nuôi",
+              `sức ${Math.round(w.energy)}/${cfg.energyMax}`,
+              `đeo ${deo}/${cfg.carryMax}`,
+              `lương ngày ${w.paidDay + cfg.wageEveryDays}`,
+            ],
+            buttons: [
+              {
+                label: "Đổi việc",
+                onClick: () => {
+                  h.assign(e.id, w.job === "crops" ? "livestock" : "crops");
+                  openShop();
+                },
+              },
+              {
+                label: "Cho nghỉ",
+                cls: "dim",
+                onClick: () => {
+                  h.fire(e.id);
+                  openShop();
+                },
+              },
+            ],
           }),
         );
       }
+      if (dsach.length) body.appendChild(gw);
     } else if (shopTab === "animal") {
+      const ga = cardGrid();
       for (const id of c.animalOrder) {
         const a = c.animals[id]!;
         if (a.job === "pest") continue; // chuột sóc không phải hàng bán
         const mo = s.unlocked.includes(`animal:${id}`);
         const sanPham = a.products.map((p) => itemLabel(p.id, c)).join(", ");
         const thit = a.meat ? itemLabel(a.meat.id, c) : null;
-        const mota = [
-          sanPham ? `thu lặp lại: ${sanPham}` : null,
-          thit ? `bán thịt: ${thit}` : null,
-          a.feed ? `ăn ${itemLabel(a.feed, c)}` : "tự kiếm ăn",
-          a.housing === "pen" ? "phải nhốt trong rào" : a.housing === "water" ? "sống dưới nước" : "thả rông",
-        ]
-          .filter(Boolean)
-          .join(" · ");
-        body.appendChild(
-          row({
-            id: `animal:${id}`,
+        ga.appendChild(
+          buyCard({
+            art: `animal:${id}`,
             name: mo ? a.name : "???",
-            desc: mo ? mota : "Chưa mở khoá",
+            // Trên thẻ hẹp thì mỗi dòng phải NGẮN. Gộp hết vào một dòng dài như
+            // bản danh sách cũ là chữ tràn ra ba dòng và lưới cao thấp lởm chởm.
+            subs: mo
+              ? [
+                  sanPham || (thit ? `thịt: ${thit}` : ""),
+                  a.feed ? `ăn ${itemLabel(a.feed, c)}` : "tự kiếm ăn",
+                  a.housing === "pen" ? "cần rào" : a.housing === "water" ? "dưới ao" : "thả rông",
+                ]
+              : ["chưa mở"],
             price: money(a.price),
-            action: {
-              label: "Mua",
-              disabled: !mo || s.money < a.price,
-              onClick: () => {
-                h.buyAnimal(id);
-                openShop();
-              },
+            locked: !mo,
+            disabled: !mo || s.money < a.price,
+            onClick: () => {
+              h.buyAnimal(id);
+              openShop();
             },
           }),
         );
       }
+      body.appendChild(ga);
       const drop = c.tiles.dropoff;
       foot.appendChild(
         note(
@@ -421,10 +488,26 @@ export function createMenus(
         ),
       );
     } else {
+      const gb = cardGrid();
       for (const id of c.buildingOrder) {
         const b = c.buildings[id]!;
-        mk(id, b.name, b.desc, b.price);
+        const mo = s.unlocked.includes(id);
+        gb.appendChild(
+          buyCard({
+            art: `build:${id}`,
+            name: mo ? b.name : "???",
+            subs: [mo ? b.desc : "chưa mở khoá"],
+            price: money(b.price),
+            locked: !mo,
+            disabled: !mo || s.money < b.price,
+            onClick: () => {
+              h.buy(id, 1);
+              openShop();
+            },
+          }),
+        );
       }
+      body.appendChild(gb);
       foot.appendChild(note("Chọn ở hotbar rồi bấm ĐẶT lên ô trống. Hàng khoá sẽ mở theo tiến trình."));
     }
   }

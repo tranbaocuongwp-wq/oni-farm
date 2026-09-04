@@ -262,3 +262,129 @@ export function facingTile(state: GameState, tile = 16): { x: number; y: number 
   const oy = d === "up" ? -1 : d === "down" ? 1 : 0;
   return { x: Math.floor(state.player.x / tile) + ox, y: Math.floor(state.player.y / tile) + oy };
 }
+
+/* ============================================================================
+   TỰ ĐỘNG LÀM — chọn CẢ việc lẫn thứ phải cầm trên tay.
+
+   `nearestTarget` chỉ trả lời được "với thứ đang cầm thì làm được gì ở đâu".
+   Nên bật tự động lúc đang cầm cuốc thì nó cày cả nông trại rồi dừng — không
+   gieo, không tưới, không thu. Đúng là một cái máy cày, không phải một nông dân.
+
+   Ở đây làm ngược lại: đi theo THỨ TỰ VIỆC trước, rồi mới tìm ô hotbar nào cho
+   phép làm việc đó. Trả về cả `slot` để nơi gọi đổi tay trước khi ra tay.
+============================================================================ */
+
+/**
+ * Thứ tự ưu tiên của một nông dân, và mỗi bậc đều có lý do:
+ *
+ *   1. THU     — cây đã chín là giá trị đã xong; để qua đêm là mời chuột và bão.
+ *   2. CHỮA    — cây bệnh đứng yên không lớn, mỗi đêm chậm là mất trọn một ngày.
+ *   3. GIEO    — ô đất trống là ô đất đang phí.
+ *   4. TƯỚI    — tưới SAU khi gieo, để lứa vừa gieo được tính ngay đêm nay.
+ *   5. CÀY     — mở thêm đất, việc ít gấp nhất.
+ *
+ * Cố ý KHÔNG có CHẶT và ĐẬP: bật tự động rồi quay đi một lúc mà về thấy sạch
+ * bóng cây với đá trên cả nông trại là một thứ không hoàn tác được, và không ai
+ * yêu cầu nó. Muốn dọn thì bấm tay.
+ */
+export const AUTO_ORDER: Exclude<UseKind, null>[] = ["harvest", "cure", "plant", "water", "till"];
+
+export interface AutoJob {
+  x: number;
+  y: number;
+  kind: Exclude<UseKind, null>;
+  /** Ô hotbar phải cầm để làm được việc này. */
+  slot: number;
+}
+
+/**
+ * Những ô hotbar có thể làm ra `kind`.
+ *
+ * Lọc trước theo LOẠI VẬT PHẨM thay vì thử từng ô trên từng ô đất: 10 ô hotbar
+ * × 5 loại việc × 625 ô quét là hai vạn lần hỏi mỗi lần chọn việc. Lọc trước
+ * thì mỗi loại việc chỉ còn một hai ô ứng viên.
+ *
+ * "harvest" trả về ô đang chọn: `canUseAt` xét cây chín TRƯỚC khi nhìn tay, nên
+ * thu hoạch được với bất cứ thứ gì đang cầm.
+ */
+function slotsFor(state: GameState, content: Content, kind: Exclude<UseKind, null>): number[] {
+  if (kind === "harvest") return [state.sel];
+  const n = Math.max(0, content.balance.hotbarSlots | 0);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const id = state.inv[i]?.id;
+    if (!id) continue;
+    const it = parseItem(id);
+    if (!it) continue;
+    if (kind === "cure" && it.kind === "item" && it.ref === "medicine") out.push(i);
+    else if (kind === "plant" && it.kind === "seed") out.push(i);
+    else if (kind === "water" && it.kind === "tool" && content.tools[it.ref]?.action === "WATER")
+      out.push(i);
+    else if (kind === "till" && it.kind === "tool" && content.tools[it.ref]?.action === "TILL")
+      out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Việc kế tiếp cho chế độ tự động, kèm ô hotbar phải cầm.
+ *
+ * Quét theo vòng từ chân ra, y hệt `nearestTarget`, nhưng cho từng cặp
+ * (việc, ô hotbar) và chỉ nhận đúng loại việc đang xét. Bậc ưu tiên là TUYỆT
+ * ĐỐI: còn một cây chín ở cuối ruộng thì vẫn đi thu trước khi cày ô ngay dưới
+ * chân. Nếu không thì cây chín nằm đó cả ngày trong khi nhân vật cày vòng
+ * quanh, và đó đúng là thứ trông như hỏng.
+ */
+export function autoJob(
+  state: GameState,
+  content: Content,
+  radius: number,
+): AutoJob | null {
+  const px = state.player.x;
+  const py = state.player.y;
+  const cx = Math.floor(px / 16);
+  const cy = Math.floor(py / 16);
+  const R = Math.max(0, Math.floor(radius));
+
+  for (const kind of AUTO_ORDER) {
+    const slots = slotsFor(state, content, kind);
+    if (!slots.length) continue;
+
+    let best: AutoJob | null = null;
+    let bestScore = Infinity;
+
+    const consider = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= state.w || y >= state.h) return;
+      for (const slot of slots) {
+        if (canUseAt(state, content, x, y, true, slot) !== kind) continue;
+        const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
+        if (d < bestScore) {
+          bestScore = d;
+          best = { x, y, kind, slot };
+        }
+        break; // ô nào cũng làm được thì lấy ô đầu — chúng cho ra cùng việc
+      }
+    };
+
+    for (let r = 0; r <= R; r++) {
+      if (r === 0) consider(cx, cy);
+      else {
+        for (let dx = -r; dx <= r; dx++) {
+          consider(cx + dx, cy - r);
+          consider(cx + dx, cy + r);
+        }
+        for (let dy = -r + 1; dy <= r - 1; dy++) {
+          consider(cx - r, cy + dy);
+          consider(cx + r, cy + dy);
+        }
+      }
+      /* Cùng cận đã chứng minh ở `nearestTarget`, và ở đây nó CHẶT vì điểm số
+         chỉ là khoảng cách: ô ở vòng r+1 trở ra cách ít nhất (r+1)*16-8 px.
+         Dừng ngay khi vừa tìm thấy thì SAI: một ô CHÉO ở vòng 5 xa ~113px, còn
+         một ô THẲNG ở vòng 6 chỉ 96px — vòng ngoài vẫn có thể gần hơn. */
+      if (best !== null && bestScore <= (r + 1) * 16 - 8) break;
+    }
+    if (best) return best;
+  }
+  return null;
+}

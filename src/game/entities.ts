@@ -174,6 +174,30 @@ export function removeEntity(d: Draft, id: number): boolean {
   return true;
 }
 
+/** Bán kính con vật ĐỨNG LẠI khi người chơi tới gần, tính bằng ô.
+ *  Rộng hơn tầm tương tác (`animalNear` dùng 1,4 ô) một chút, để lúc bấm được
+ *  thì con vật đã đứng yên rồi chứ không phải đang nhích ra khỏi tầm. */
+export const CALM_TILES = 2;
+
+/**
+ * Con vật này có đang đứng yên vì người chơi tới gần không?
+ *
+ * Lý do có hàm này: con bò đi lang thang liên tục, mà tầm với chỉ hơn một ô.
+ * Người chơi nhắm vào nó, bấm, thì trong nửa giây giữa lúc nhắm và lúc tay chạm
+ * tới, con bò đã nhích ra ngoài tầm — thao tác trượt, và trượt vì một lý do
+ * không nhìn thấy được. Đứng lại khi có người tới là hành vi vừa tự nhiên vừa
+ * sửa đúng chỗ đó.
+ *
+ * KHÔNG áp cho sâu bọ (chúng phải chạy), cho người làm thuê (đứng cạnh nhau mà
+ * cả hai đứng đực ra thì việc không xong) và cho xe.
+ */
+export function calmedByPlayer(s: GameState, content: Content, e: Entity): boolean {
+  if (e.kind !== "animal") return false;
+  if (animalDef(content, e.def)?.job === "pest") return false;
+  if (e.map !== s.mapId) return false;
+  return Math.hypot(e.x - s.player.x, e.y - s.player.y) <= CALM_TILES * TILE;
+}
+
 /* ------------------------------------------------------------- di chuyển */
 
 function dirOf(dx: number, dy: number, cur: Dir): Dir {
@@ -197,6 +221,11 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
     const cur = s.entities[i]!;
     if (cur.map !== s.mapId) continue;
     if (!cur.ai.path.length) continue;
+    /* Đứng lại cho người chơi bấm. Cố ý GIỮ NGUYÊN đường đi thay vì xoá: xoá
+       thì bước quyết định kế tiếp lại tính đường mới, và cứ mỗi lần người chơi
+       đi ngang qua chuồng là cả đàn tiêu sạch ngân sách A*. Giữ lại thì bước ra
+       xa một cái là con vật đi tiếp đúng chỗ nó đang đi. */
+    if (calmedByPlayer(s, content, cur)) continue;
 
     const def = actorShape(content, cur);
     if (!def) continue;
@@ -314,6 +343,8 @@ export function actorStep(d: Draft, content: Content): void {
 
     // Còn đường để đi thì cứ đi, không phải nghĩ gì.
     if (cur.ai.path.length) continue;
+    // Người chơi đang đứng sát: đừng lập đường mới, để nó yên mà bấm.
+    if (calmedByPlayer(s, content, cur)) continue;
 
     // Người làm thuê có bộ não riêng (workers.ts). Trả về true nghĩa là họ đã
     // tự lo xong lượt này — vật nuôi mới đi tiếp nhánh lang thang bên dưới.
@@ -449,7 +480,9 @@ export function pruneEntities(list: Entity[], content: Content): { list: Entity[
     // Người làm thuê không nằm trong bảng loài — họ có bảng cấu hình riêng, nên
     // đừng đem `content.animals` ra hỏi rồi xoá sạch họ lúc cập nhật content.
     if (e.kind === "vehicle") {
-      if (!content.vehicles[e.def]) {
+      // Thiếu khối `veh` là xe hỏng — bỏ đi lúc migrate, nếu không save cũ sẽ
+      // ném lỗi bất biến sau mỗi tick cho tới hết đời.
+      if (!content.vehicles[e.def] || !e.veh) {
         dropped.push(e.def);
         return false;
       }

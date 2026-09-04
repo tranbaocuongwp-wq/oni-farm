@@ -29,9 +29,10 @@ import {
 
 /* ------------------------------------------------------- công cụ đang cầm */
 
-/** Công cụ đang cầm ở hotbar, null nếu đang cầm thứ khác / tay không. */
-export function heldTool(state: GameState, content: Content): ToolDef | null {
-  const held = selectedItemId(state.inv, state.sel);
+/** Công cụ đang cầm ở hotbar, null nếu đang cầm thứ khác / tay không.
+ *  `sel` cho phép hỏi về một ô hotbar khác — xem `canUseAt`. */
+export function heldTool(state: GameState, content: Content, sel = state.sel): ToolDef | null {
+  const held = selectedItemId(state.inv, sel);
   const it = held ? parseItem(held) : null;
   if (!it || it.kind !== "tool") return null;
   return content.tools[it.ref] ?? null;
@@ -438,6 +439,14 @@ export function canUseAt(
   x: number,
   y: number,
   ignoreReach = false,
+  /**
+   * Ô hotbar GIẢ ĐỊNH đang cầm. Mặc định là ô đang chọn thật.
+   *
+   * Có tham số này để "tự động làm" hỏi được câu "nếu tôi cầm cái cuốc thì ô
+   * này có việc không?" mà KHÔNG phải đổi ô chọn thật rồi đổi lại — đổi thật
+   * nghĩa là hotbar nhấp nháy và mỗi lần thử là một dispatch vào state.
+   */
+  sel = state.sel,
 ): UseKind {
   const i = tileIndexAt(state, x, y);
   if (i < 0) return null;
@@ -450,12 +459,12 @@ export function canUseAt(
   if (cur.prop !== null) {
     const def = propDef(content, cur.prop);
     if (!def) return null; // vật thể lạ → coi như không khai thác được
-    const tool = heldTool(state, content);
+    const tool = heldTool(state, content, sel);
     if (!canBreakWith(def, tool)) return null;
     return breakAction(def, tool) === "MINE" ? "mine" : "chop";
   }
 
-  const held = selectedItemId(state.inv, state.sel);
+  const held = selectedItemId(state.inv, sel);
   const it = held ? parseItem(held) : null;
   if (!it) return null;
 

@@ -14,7 +14,7 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { hintAt, facingTile, nearestTarget } from "../src/game/hint.ts";
+import { hintAt, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -3284,6 +3284,118 @@ test("60. người làm tự làm việc: thu cây chín rồi đem về KHO, m�
   const seed0 = store.getState().seed;
   for (let i = 0; i < 1200; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
   eq(store.getState().seed, seed0, "TICK vẫn không đụng state.seed dù người làm đang làm việc");
+});
+
+
+test("61. TỰ ĐỘNG LÀM tự đổi tay: thứ tự THU → CHỮA → GIEO → TƯỚI → CÀY", () => {
+  const content = loadContent();
+  const store = createStore(createNewGame(content, 2024), content, { validate: true, strict: true });
+
+  /* Bày đủ bốn loại việc quanh nhân vật, mỗi loại một ô, rồi hỏi `autoJob` xem
+     nó chọn cái nào. Đây là bài kiểm ĐÚNG chỗ dễ vỡ nhất: bản trước chỉ biết
+     thứ đang cầm, nên bật tự động lúc cầm cuốc là cày cả nông trại mà không
+     bao giờ thu một cây nào. */
+  const cay = "lettuce";
+  setState(store, (s) => {
+    s.inv[0] = { id: "tool:hoe", n: 1 };
+    s.inv[1] = { id: "tool:can", n: 1 };
+    s.inv[2] = { id: `seed:${cay}`, n: 9 };
+    s.sel = 0;
+    s.water = 20;
+    s.day = 1; // xuân — xà lách gieo được
+    const px = Math.floor(s.player.x / TILE);
+    const py = Math.floor(s.player.y / TILE);
+    const o = (dx, dy) => s.tiles[idx(s.w, px + dx, py + dy)];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const t = o(dx, dy);
+      t.prop = null; t.b = null; t.hp = 0; t.crop = null; t.tilled = false; t.wet = false;
+    }
+    // ô kề phải: cây CHÍN            → phải thu trước
+    const a = o(1, 0);
+    a.tilled = true;
+    a.crop = { id: cay, stage: content.crops[cay].growthDays.length, grow: 0, regrown: false };
+    // ô kề trái: đã cày, trống       → gieo
+    o(-1, 0).tilled = true;
+    // ô kề dưới: đã cày, khô         → tưới
+    const w = o(0, 1);
+    w.tilled = true;
+    w.crop = { id: cay, stage: 0, grow: 0, regrown: false };
+    // ô kề trên: cỏ chưa cày         → cày
+    o(0, -1).tilled = false;
+  });
+
+  const R = Math.max(store.getState().w, store.getState().h);
+  const j1 = autoJob(store.getState(), content, R);
+  eq(j1 && j1.kind, "harvest", "bậc 1: cây chín được thu trước mọi thứ");
+
+  // bỏ cây chín đi → tới lượt GIEO (trước TƯỚI, để lứa mới kịp tính đêm nay)
+  setState(store, (s) => {
+    const px = Math.floor(s.player.x / TILE);
+    const py = Math.floor(s.player.y / TILE);
+    s.tiles[idx(s.w, px + 1, py)].crop = null;
+    s.tiles[idx(s.w, px + 1, py)].tilled = false;
+  });
+  const j2 = autoJob(store.getState(), content, R);
+  eq(j2 && j2.kind, "plant", "bậc 2: gieo trước tưới");
+  eq(j2.slot, 2, "và nó chỉ đúng ô hotbar có HẠT, dù tay đang cầm cuốc");
+
+  // hết hạt → tưới
+  setState(store, (s) => {
+    s.inv[2] = null;
+  });
+  const j3 = autoJob(store.getState(), content, R);
+  eq(j3 && j3.kind, "water", "bậc 3: hết hạt thì tưới");
+  eq(j3.slot, 1, "cầm bình tưới");
+
+  // ruộng ẩm hết → cày
+  setState(store, (s) => {
+    for (const t of s.tiles) if (t.tilled) t.wet = true;
+  });
+  const j4 = autoJob(store.getState(), content, R);
+  eq(j4 && j4.kind, "till", "bậc 4: hết việc trên luống thì mở thêm đất");
+  eq(j4.slot, 0, "cầm cuốc");
+
+  ok(!AUTO_ORDER.includes("chop") && !AUTO_ORDER.includes("mine"),
+    "tự động KHÔNG chặt cây đập đá — đó là thứ không hoàn tác được");
+});
+
+test("62. con vật ĐỨNG LẠI khi người chơi tới gần, đi xa thì đi tiếp", () => {
+  const content = loadContent();
+  const store = createStore(createNewGame(content, 777), content, { validate: true, strict: true });
+
+  /* Con bò đi lang thang mà tầm với chỉ 1,6 ô: nhắm vào nó rồi bấm thì trong
+     nửa giây nó đã nhích ra ngoài tầm, và thao tác trượt vì một lý do không
+     nhìn thấy được. */
+  setState(store, (s) => {
+    const id = (s.entSeq || 0) + 1;
+    s.entSeq = id;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: s.mapId,
+      x: s.player.x + TILE, y: s.player.y,
+      dir: "down", anim: 0, seed: 4242,
+      ai: { phase: "wander", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 900, hungryDays: 0, prod: [0] },
+    });
+  });
+
+  const bo = () => store.getState().entities[0];
+  const x0 = bo().x;
+  const y0 = bo().y;
+  for (let i = 0; i < 600; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(bo().x, x0, "người chơi đứng sát: con bò không nhích ngang");
+  eq(bo().y, y0, "…cũng không nhích dọc");
+
+  // đẩy người chơi ra xa: con bò được đi tiếp
+  setState(store, (s) => {
+    s.player.x = s.player.x + 12 * TILE;
+  });
+  let dichuyen = false;
+  for (let i = 0; i < 3000 && !dichuyen; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (bo().x !== x0 || bo().y !== y0) dichuyen = true;
+  }
+  ok(dichuyen, "người chơi đi xa thì con bò lang thang trở lại");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến vẫn sạch");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

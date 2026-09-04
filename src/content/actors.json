@@ -339,7 +339,7 @@
     "wage": 220,
     "wageEveryDays": 3,
     "carryMax": 24,
-    "energyMax": 100,
+    "energyMax": 150,
     "energyPerTask": 4,
     "restBelow": 15,
     "restMinutes": 90,

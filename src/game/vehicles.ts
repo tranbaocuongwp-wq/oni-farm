@@ -113,10 +113,17 @@ export function sendVehicle(
   if (id === null) return null;
   const i = d.s.entities.findIndex((e) => e.id === id);
   const e = dEntity(d, i);
-  if (e) {
-    e.veh = { role: errand?.kind === "buy" ? "buyer" : "delivery", cargo: [], errand, wait: 0, done: false };
-    e.ai.phase = "in";
+  if (!e) {
+    /* Không gắn được khối `veh` thì PHẢI bỏ luôn chiếc xe.
+       Một chiếc xe không có khối việc là thực thể chết: `vehicleStep` bỏ qua nó
+       nên nó đứng im mãi mãi, mà `checkInvariants` thì ném lỗi sau MỖI tick —
+       tức một dòng lỗi đỏ mỗi khung hình, và save đó hỏng vĩnh viễn. Thà không
+       có chuyến giao hàng còn hơn. */
+    removeEntity(d, id);
+    return null;
   }
+  e.veh = { role: errand?.kind === "buy" ? "buyer" : "delivery", cargo: [], errand, wait: 0, done: false };
+  e.ai.phase = "in";
   return id;
 }
 

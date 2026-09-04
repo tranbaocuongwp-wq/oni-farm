@@ -317,9 +317,92 @@ body.touch[data-hand="left"] .hud-top {
   flex: 1;
   min-height: 0;
 }
+
+/* Cột giữa: bảng vật nuôi NẰM TRÊN bản đồ nhỏ. Cả cột đổi bên theo tay thuận
+   cùng lúc với nút hành động — hai thứ luôn ở hai phía đối diện, nên không bao
+   giờ phải viết luật tránh nhau. */
+.mid-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+body[data-hand="left"] .mid-col {
+  align-items: flex-end;
+}
+
+/* ---- bảng thống kê con vật đang đứng cạnh ---- */
+.animal-card {
+  pointer-events: none;
+  width: clamp(150px, 42vw, 214px);
+  padding: 7px 9px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-sm);
+  animation: toast-in var(--anim) ease-out;
+}
+.animal-card .hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--panel-3);
+}
+.animal-card .hd b {
+  color: var(--gold);
+}
+.animal-card .pic canvas {
+  display: block;
+  width: 24px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.animal-card .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.5;
+}
+.animal-card .row span {
+  color: var(--ink-mute);
+  flex: none;
+}
+.animal-card .row b {
+  color: var(--ink);
+  text-align: right;
+  font-weight: 600;
+  min-width: 0;
+}
+.animal-card .row b.good {
+  color: var(--green);
+}
+.animal-card .row b.bad {
+  color: var(--red);
+}
+/* Thanh no: cùng ngôn ngữ với thanh năng lượng trên đầu màn hình. */
+.animal-card .bar {
+  height: 4px;
+  margin: 3px 0 4px;
+  background: var(--panel-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.animal-card .bar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
 /* ---- cửa hàng dạng LƯỚI THẺ: 40 loại hạt xếp dọc thì không ai đọc hết ---- */
 .shop-grid {
   display: grid;
+  /* `auto-fill` + `minmax` chọn số cột theo bề ngang THẬT của tấm sheet, nên
+     điện thoại dọc ra 3 cột, tablet ra 6, không cần một điểm ngắt nào. */
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 6px;
   margin: 6px 0;
@@ -358,6 +441,25 @@ body.touch[data-hand="left"] .hud-top {
 }
 .shop-card:disabled {
   opacity: 0.5;
+}
+
+/* Thẻ NGƯỜI LÀM rộng gấp đôi: nó có bốn dòng thông tin và hai nút, nhồi vào
+   một ô 88px thì chữ vỡ vụn. */
+.shop-card.wide {
+  grid-column: span 2;
+  padding-bottom: 7px;
+}
+.shop-card .acts {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  width: 100%;
+}
+.shop-card .acts button {
+  flex: 1;
+  min-height: 32px;
+  padding: 4px 6px;
+  font-size: calc(var(--fs-sm) * 0.9);
 }
 
 /* ---- thanh báo bản mới ---- */

@@ -4,7 +4,7 @@
   "startSeeds": {
     "seed:lettuce": 8
   },
-  "energyMax": 100,
+  "energyMax": 150,
   "energyCost": {
     "till": 2,
     "water": 2,
