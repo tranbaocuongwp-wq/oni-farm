@@ -220,12 +220,28 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
   for (let i = 0; i < s.entities.length; i++) {
     const cur = s.entities[i]!;
     if (cur.map !== s.mapId) continue;
+
+    /* Người chơi tới gần: ĐỨNG LẠI và NGƯỚC NHÌN.
+       Phải xét TRƯỚC cái `continue` của "không có đường đi" bên dưới — con vật
+       đang đứng yên chính là con hay bị bấm nhất, mà nó lại là con duy nhất
+       không bao giờ chạy tới được nhánh này nếu xét sau.
+       Giữ nguyên `path` thay vì xoá: xoá thì bước quyết định kế tiếp lại tính
+       đường mới, và mỗi lần đi ngang qua chuồng là cả đàn tiêu sạch ngân sách
+       A*. Giữ lại thì bước ra xa một cái là nó đi tiếp đúng chỗ đang đi. */
+    if (calmedByPlayer(s, content, cur)) {
+      /* Quay đầu nhìn là chi tiết rẻ nhất trong cả file mà đổi cảm giác nhiều
+         nhất: tới gần con bò mà nó ngoái lại thì nó là một con vật; đứng trơ
+         một hướng thì nó là hình dán. Suy thẳng từ vị trí người chơi nên vẫn
+         tất định, không rút hạt ngẫu nhiên nào. */
+      const look = dirOf(s.player.x - cur.x, s.player.y - cur.y, cur.dir);
+      if (look !== cur.dir) {
+        const m = dEntity(d, i);
+        if (m) m.dir = look;
+      }
+      continue;
+    }
+
     if (!cur.ai.path.length) continue;
-    /* Đứng lại cho người chơi bấm. Cố ý GIỮ NGUYÊN đường đi thay vì xoá: xoá
-       thì bước quyết định kế tiếp lại tính đường mới, và cứ mỗi lần người chơi
-       đi ngang qua chuồng là cả đàn tiêu sạch ngân sách A*. Giữ lại thì bước ra
-       xa một cái là con vật đi tiếp đúng chỗ nó đang đi. */
-    if (calmedByPlayer(s, content, cur)) continue;
 
     const def = actorShape(content, cur);
     if (!def) continue;

@@ -39,13 +39,15 @@ export interface Hud {
   /** Hiện thẻ "Ngày N" khi sang ngày mới. */
   dayBanner(day: number, note?: string): void;
   /**
-   * Bảng thống kê con vật đang đứng cạnh. `null` = ẩn đi.
+   * Bảng thống kê một con vật. `null` = ẩn đi.
    *
-   * Người chơi bấm vào con bò và chỉ nhận được một dòng toast "chưa tới lứa" —
-   * mà không biết còn bao lâu, no hay đói, đã lớn chưa. Bảng này trả lời cả ba
-   * mà không tốn thêm một cú bấm nào: đứng gần là hiện.
+   * CHỈ hiện khi người chơi CHẠM vào con vật — không tự bật khi đi ngang qua.
+   * Bản đầu tự hiện mỗi lần đứng gần, và trên điện thoại nó che mất một phần
+   * tư màn hình đúng lúc đang cần nhìn ruộng.
    */
   showAnimal(st: AnimalStats | null): void;
+  /** Người chơi bấm × trên bảng vật nuôi. */
+  onAnimalClose(fn: () => void): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -313,6 +315,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
      đứng yên. */
   const elAnimal = root.querySelector<HTMLElement>("#animal-card")!;
   let animalKey = "";
+  let onClose: () => void = () => {};
 
   /** "còn 3 giờ" / "còn 2 ngày" — người chơi nghĩ bằng giờ với ngày, không
    *  bằng phút game. */
@@ -324,6 +327,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   };
 
   return {
+    onAnimalClose(fn) {
+      onClose = fn;
+    },
     showAnimal(st) {
       if (!st) {
         if (animalKey !== "") {
@@ -340,8 +346,8 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       const rows: string[] = [];
       rows.push(
         st.mature
-          ? `<div class="row"><span>Tuổi</span><b>${st.ageDays} ngày · đã lớn</b></div>`
-          : `<div class="row"><span>Tuổi</span><b>${st.ageDays} ngày · lớn sau ${st.daysToMature} ngày</b></div>`,
+          ? `<div class="row"><span>Tuổi</span><b>${st.ageDays}n · đã lớn</b></div>`
+          : `<div class="row"><span>Tuổi</span><b>${st.ageDays}n · lớn sau ${st.daysToMature}n</b></div>`,
       );
       const doi = st.hungry
         ? st.daysToStarve < 0
@@ -358,12 +364,21 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
             p.ready ? "tới lứa" : !st.mature ? "chờ lớn" : st.hungry ? "đang đói" : wait(p.minutesLeft)
           }</b></div>`,
         );
-      if (st.meat)
+      // Dòng thịt chỉ có nghĩa khi con vật đã lớn — hiện sớm thì nó chỉ chiếm
+      // chỗ để nói "chưa được đâu", thứ mà dòng Tuổi ngay trên đã nói rồi.
+      if (st.meat && st.mature)
         rows.push(
-          `<div class="row"><span>Thịt</span><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}${st.mature ? "" : " (chưa lớn)"}</b></div>`,
+          `<div class="row"><span>Thịt</span><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
         );
 
-      elAnimal.innerHTML = `<div class="hd"><i class="pic"></i><b>${st.name}</b></div>${rows.join("")}`;
+      elAnimal.innerHTML =
+        `<div class="hd"><i class="pic"></i><b>${st.name}</b>` +
+        `<button type="button" class="ax" aria-label="Đóng bảng vật nuôi">×</button></div>` +
+        rows.join("");
+      elAnimal.querySelector<HTMLElement>(".ax")!.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClose();
+      });
       const pic = elAnimal.querySelector<HTMLElement>(".pic");
       const src = atlas.animal(st.def, "down", 0);
       if (pic && src) {

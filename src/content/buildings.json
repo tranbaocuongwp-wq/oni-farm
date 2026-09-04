@@ -87,6 +87,7 @@
       "name": "Đường nhựa",
       "desc": "Đi trên đường nhanh hơn hẳn. Người và xe đều tự chọn đường mà đi.",
       "price": 18,
+      "drag": true,
       "kind": "floor",
       "solid": false,
       "effects": {
@@ -107,6 +108,7 @@
       "name": "Hàng rào",
       "desc": "Phân lô và nhốt vật nuôi. Tự nối liền với hàng rào bên cạnh.",
       "price": 14,
+      "drag": true,
       "kind": "object",
       "solid": true,
       "autotile": "fence",

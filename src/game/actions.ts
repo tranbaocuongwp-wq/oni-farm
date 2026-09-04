@@ -288,12 +288,14 @@ export function buildLine(
   y0: number,
   x1: number,
   y1: number,
+  /** Bỏ kiểm tầm với — xem ghi chú của action BUILD_LINE. */
+  far = false,
 ): { placed: number; wanted: number } {
   const out = { placed: 0, wanted: 0 };
   const def = content.buildings[id];
   if (!def) return out;
   if (selectedItemId(d.s.inv, d.s.sel) !== `build:${id}`) return out;
-  if (!inReach(d.s, x0, y0)) {
+  if (!far && !inReach(d.s, x0, y0)) {
     toastKey(d, content, "tooFar", "bad");
     return out;
   }

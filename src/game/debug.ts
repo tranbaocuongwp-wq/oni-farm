@@ -16,6 +16,8 @@ import { parseItem } from "./items.ts";
 import { harvestTileIn, waterCapacity } from "./actions.ts";
 import { newDay } from "./newday.ts";
 import {
+  TILE,
+  blockedAtBox,
   idx,
   isTillableTile,
   playerOverlapsTile,
@@ -23,6 +25,9 @@ import {
   saplingProp,
   weedProp,
 } from "./world.ts";
+import { removeEntity, spawnEntity } from "./entities.ts";
+import { hireWorker } from "./workers.ts";
+import { sendVehicle } from "./vehicles.ts";
 
 /** Bán kính (số ô) cho các lệnh "quanh nhân vật". */
 const AROUND = 3;
@@ -38,6 +43,38 @@ function seedToPlant(d: Draft, content: Content): string | null {
     if (p && p.kind === "seed" && content.crops[p.ref]) return p.ref;
   }
   return content.cropOrder[0] ?? null;
+}
+
+/**
+ * Duyệt MỌI ô của bản đồ đang chơi.
+ *
+ * Có hàm riêng chứ không gọi `around()` với bán kính khổng lồ: bán kính khổng
+ * lồ vẫn quét hình vuông quanh nhân vật, nên đứng ở góc bản đồ thì nửa số vòng
+ * lặp rơi ra ngoài lưới, và tên gọi thì nói dối về việc nó làm.
+ */
+function everyTile(d: Draft, fn: (i: number, x: number, y: number) => void): void {
+  for (let y = 0; y < d.s.h; y++)
+    for (let x = 0; x < d.s.w; x++) fn(idx(d.s.w, x, y), x, y);
+}
+
+/** Ô trống gần nhân vật để thả một thực thể xuống, hoặc null. */
+function spotNear(d: Draft, content: Content, box: { w: number; h: number }): { x: number; y: number } | null {
+  const p = playerTile(d.s);
+  for (let r = 1; r <= 6; r++)
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = p.x + dx;
+        const y = p.y + dy;
+        if (x < 1 || y < 1 || x >= d.s.w - 1 || y >= d.s.h - 1) continue;
+        const cx = x * TILE + TILE / 2;
+        const cy = y * TILE + TILE / 2;
+        // Thả vào tường thì bất biến vỡ NGAY ở dispatch kế tiếp — kiểm ở đây
+        // rẻ hơn nhiều so với đi tìm xem con vật nào làm sập cả ván.
+        if (blockedAtBox(d.s, content, cx, cy, box.w, box.h)) continue;
+        return { x: cx, y: cy };
+      }
+  return null;
 }
 
 /** Duyệt các ô quanh nhân vật theo thứ tự cố định (trên→dưới, trái→phải). */
@@ -222,6 +259,149 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       }
       setInv(d, inv);
       toastText(d, `[debug] +${add} mỗi loại vật liệu`, "good");
+      return;
+    }
+
+    /* ================================================== lệnh TOÀN BẢN ĐỒ */
+
+    case "tillMap": {
+      let n2 = 0;
+      everyTile(d, (i) => {
+        const cur = d.s.tiles[i];
+        if (!cur || cur.tilled) return;
+        if (cur.prop !== null || cur.b !== null || cur.crop !== null) return;
+        if (!isTillableTile(cur, content)) return;
+        const m = dTile(d, i);
+        if (!m) return;
+        m.tilled = true;
+        n2++;
+      });
+      toastText(d, `[debug] cày ${n2} ô`, "good");
+      return;
+    }
+
+    case "waterMap": {
+      let n2 = 0;
+      everyTile(d, (i) => {
+        const cur = d.s.tiles[i];
+        if (!cur || !cur.tilled || cur.wet) return;
+        const m = dTile(d, i);
+        if (!m) return;
+        m.wet = true;
+        n2++;
+      });
+      toastText(d, `[debug] tưới ${n2} ô`, "good");
+      return;
+    }
+
+    case "plantMap": {
+      const cropId = seedToPlant(d, content);
+      if (!cropId) return;
+      let n2 = 0;
+      everyTile(d, (i) => {
+        const cur = d.s.tiles[i];
+        if (!cur || !cur.tilled || cur.crop || cur.prop !== null) return;
+        const m = dTile(d, i);
+        if (!m) return;
+        m.crop = { id: cropId, stage: 0, grow: 0, regrown: false };
+        m.wet = true;
+        n2++;
+      });
+      toastText(d, `[debug] gieo ${content.crops[cropId]?.name ?? cropId} ×${n2}`, "good");
+      return;
+    }
+
+    case "clearMap": {
+      // Chỉ dọn thứ MỌC RA (cỏ dại, cây con). Cây to và đá là địa hình do bản
+      // đồ dựng — xoá sạch chúng thì không có nút nào dựng lại được.
+      const co = weedProp(content)?.id;
+      const cay = saplingProp(content)?.id;
+      let n2 = 0;
+      everyTile(d, (i) => {
+        const cur = d.s.tiles[i];
+        if (!cur || cur.prop === null) return;
+        if (cur.prop !== co && cur.prop !== cay) return;
+        const m = dTile(d, i);
+        if (!m) return;
+        m.prop = null;
+        m.hp = 0;
+        n2++;
+      });
+      toastText(d, `[debug] dọn ${n2} ô cỏ/cây con`, "good");
+      return;
+    }
+
+    /* ------------------------------------------------------- thực thể */
+
+    case "spawnAnimal":
+    case "spawnPest": {
+      const list = content.animalOrder.filter((id) =>
+        op === "spawnPest"
+          ? content.animals[id]?.job === "pest"
+          : content.animals[id]?.job !== "pest",
+      );
+      if (!list.length) return;
+      const k = Number.isFinite(n) ? ((n as number) % list.length + list.length) % list.length : 0;
+      // Không đưa `n` thì XOAY VÒNG theo số con đang có: bấm liên tục ra mỗi
+      // lần một loài khác, chứ không phải mười con bò.
+      const id = list[Number.isFinite(n) ? k : d.s.entities.length % list.length]!;
+      const def = content.animals[id]!;
+      const spot = spotNear(d, content, def.box);
+      if (!spot) {
+        toastText(d, "[debug] không có chỗ trống để thả", "bad");
+        return;
+      }
+      const eid = spawnEntity(d, content, { def: id, map: d.s.mapId, x: spot.x, y: spot.y });
+      if (eid === null) {
+        toastText(d, "[debug] đã chạm trần số thực thể", "bad");
+        return;
+      }
+      toastText(d, `[debug] thả ${def.name}`, "good");
+      return;
+    }
+
+    case "spawnWorker": {
+      // Miễn phí: cộng đủ tiền rồi gọi đúng đường thuê thật, để người làm sinh
+      // ra giống hệt lúc chơi (tên, bộ đồ, ngày trả lương) chứ không phải một
+      // biến thể chỉ có ở bảng gỡ lỗi.
+      const cfg = content.workers;
+      if (d.s.money < cfg.hireFee) touch(d).money = cfg.hireFee;
+      const id = hireWorker(d, content, d.s.entities.length % 2 === 0 ? "crops" : "livestock");
+      if (id === null) return;
+      touch(d).money = d.s.money + cfg.hireFee; // hoàn lại tiền vừa trừ
+      return;
+    }
+
+    case "callBuyer": {
+      if (sendVehicle(d, content, "buyer", { kind: "buy" }) === null)
+        toastText(d, "[debug] không gọi được xe (đủ xe rồi, hoặc sai bản đồ)", "bad");
+      return;
+    }
+
+    case "clearEntities": {
+      const ids = d.s.entities.filter((e) => e.map === d.s.mapId).map((e) => e.id);
+      for (const id of ids) removeEntity(d, id);
+      toastText(d, `[debug] bỏ ${ids.length} thực thể`, "info");
+      return;
+    }
+
+    /* ---------------------------------------------------------- thời gian */
+
+    case "nextSeason": {
+      const per = Math.max(1, content.daysPerSeason | 0);
+      const con = per - (((d.s.day - 1) % per) + 1) + 1;
+      for (let i = 0; i < con; i++) newDay(d, content, { passedOut: false });
+      toastText(d, `[debug] nhảy ${con} ngày sang mùa mới`, "info");
+      return;
+    }
+
+    case "skipHours": {
+      const gio = Number.isFinite(n) ? Math.max(1, Math.floor(n as number)) : 3;
+      const s2 = touch(d);
+      const het = content.balance.dayEndMinutes;
+      // Đừng vượt qua mốc ngất: quá giờ đó thì việc đúng là NGỦ, và `newDay`
+      // mới là cửa duy nhất được đổi ngày.
+      s2.minutes = Math.min(het - 1, s2.minutes + gio * 60);
       return;
     }
   }

@@ -53,18 +53,39 @@ const GROUPS: { title: string; items: [label: string, op: DebugOp, n?: number][]
     title: "Thời gian",
     items: [
       ["Sang ngày", "skipDay"],
+      ["+3 giờ", "skipHours", 3],
+      ["Sang mùa", "nextSeason"],
       ["Thời tiết", "weather"],
     ],
   },
   {
-    title: "Ruộng",
+    title: "Ruộng · quanh đây",
     items: [
-      ["Chín hết", "growAll"],
-      ["Thu tất cả", "harvestAll"],
       ["Cày + gieo", "plantAround"],
       ["Rắc cỏ", "addGrass"],
       ["Rắc cây", "addTrees"],
       ["Gây bệnh", "sickAround"],
+    ],
+  },
+  {
+    title: "Ruộng · CẢ BẢN ĐỒ",
+    items: [
+      ["Cày hết", "tillMap"],
+      ["Gieo hết", "plantMap"],
+      ["Tưới hết", "waterMap"],
+      ["Chín hết", "growAll"],
+      ["Thu tất cả", "harvestAll"],
+      ["Dọn cỏ", "clearMap"],
+    ],
+  },
+  {
+    title: "Thực thể",
+    items: [
+      ["+ Vật nuôi", "spawnAnimal"],
+      ["+ Sâu bọ", "spawnPest"],
+      ["+ Người làm", "spawnWorker"],
+      ["Xe thu mua", "callBuyer"],
+      ["Dọn sạch", "clearEntities"],
     ],
   },
 ];
@@ -74,9 +95,15 @@ export function createDevPanel(host: HTMLElement, h: DevHandlers): DevPanel {
   /** chữ của dòng số liệu lần vẽ trước — chỉ ghi DOM khi thật sự đổi */
   let lastStat = "";
 
+  /* Thu gọn còn đúng thanh tiêu đề + dòng số liệu. Bảng có năm nhóm lệnh nên
+     nó cao; mà phần lớn thời gian thử nghiệm là NHÌN thế giới chứ không bấm.
+     Thu gọn giữ được dòng số liệu (thứ đáng nhìn liên tục) mà trả lại màn hình. */
+  let mini = false;
+
   host.innerHTML = `
     <div class="dev-head">
       <b>Gỡ lỗi</b>
+      <button type="button" class="dev-min" aria-label="Thu gọn bảng gỡ lỗi">–</button>
       <button type="button" class="dev-x" aria-label="Đóng bảng gỡ lỗi">×</button>
     </div>
     <div class="dev-body"></div>
@@ -87,7 +114,7 @@ export function createDevPanel(host: HTMLElement, h: DevHandlers): DevPanel {
 
   for (const g of GROUPS) {
     const lab = document.createElement("div");
-    lab.className = "dev-group";
+    lab.className = `dev-group${g.title.includes("BẢN ĐỒ") ? " wide" : ""}`;
     lab.textContent = g.title;
     body.appendChild(lab);
 
@@ -132,6 +159,13 @@ export function createDevPanel(host: HTMLElement, h: DevHandlers): DevPanel {
   };
 
   host.querySelector<HTMLElement>(".dev-x")!.addEventListener("click", () => api.close());
+  const minBtn = host.querySelector<HTMLButtonElement>(".dev-min")!;
+  minBtn.addEventListener("click", () => {
+    mini = !mini;
+    host.classList.toggle("mini", mini);
+    minBtn.textContent = mini ? "+" : "–";
+    minBtn.setAttribute("aria-label", mini ? "Mở rộng bảng gỡ lỗi" : "Thu gọn bảng gỡ lỗi");
+  });
 
   // Nuốt mọi cú chạm rơi vào bảng: không để nó xuyên xuống thành "chạm vào thế
   // giới" rồi nhân vật lững thững đi về phía góc màn hình.

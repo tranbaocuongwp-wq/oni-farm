@@ -1786,7 +1786,9 @@ export interface Atlas {
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật nuôi: dựng LƯỜI ở lần dùng đầu tiên để thời gian khởi động không đổi */
-  animal(defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null;
+  animal(defId: string, dir: PlayerDir, frame: number, pose?: AnimalPose): HTMLCanvasElement | null;
+  /** Bong bóng cảm xúc 9×9 nổi trên đầu con vật / người làm. */
+  emote(kind: EmoteKind): HTMLCanvasElement;
   /** người làm thuê: cùng 28 khung với nhân vật chính, khác bảng màu */
   worker(skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement;
   /** xe: 4 hướng, không cần khung đi (bánh quay không thấy ở cỡ này) */
@@ -2000,18 +2002,119 @@ function makeToolIcon(id: string, action: string): HTMLCanvasElement {
    loài mới lại thành một lần phát hành core thay vì một lần đẩy OTA.
 ============================================================================ */
 
+
+/* ------------------------------------------------------------ bong bóng cảm xúc
+
+   Một ký hiệu nổi trên đầu, đọc được từ đầu kia ruộng.
+
+   Vì sao cần: trước đây "con vật đang cần bạn" chỉ có MỘT tín hiệu — lớp phủ
+   đốm bệnh khi đói. Nhưng con vật có nhiều trạng thái đáng biết hơn thế, và ba
+   trong số đó khiến người chơi phải đi tới tận nơi bấm thử mới biết: đã tới lứa
+   sữa chưa, vừa được cho ăn chưa, người làm đang mệt hay đang làm. Ký hiệu nổi
+   trả lời từ xa, và đó đúng là thứ biến một cái chuồng tĩnh thành một cái chuồng
+   đang sống.
+
+   Cố ý dùng bóng thoại pixel có đuôi nhọn thay vì icon trần: đuôi nhọn nói rõ
+   "cái này thuộc về con bên dưới" khi hai con đứng sát nhau.
+--------------------------------------------------------------------------- */
+
+export type EmoteKind =
+  /** đói — dấu chấm than đỏ */
+  | "hungry"
+  /** tới lứa: sữa/trứng/lông — chấm vàng */
+  | "ready"
+  /** vừa được cho ăn / vui — trái tim */
+  | "love"
+  /** đang ngủ — chữ Z */
+  | "sleep"
+  /** người làm đang mệt — giọt mồ hôi */
+  | "tired";
+
+const EMOTE = 9;
+
+function makeEmote(kind: EmoteKind): HTMLCanvasElement {
+  const s = surface(EMOTE, EMOTE + 2);
+  const bg = "#f6ecdc";
+  const edge = "#2b2118";
+  // bóng thoại: hộp bo góc 9×8 + đuôi nhọn 2px chỉ xuống
+  s.rect(1, 0, EMOTE - 2, 8, bg);
+  s.rect(0, 1, EMOTE, 6, bg);
+  s.hline(1, 0, EMOTE - 2, edge);
+  s.hline(1, 7, EMOTE - 2, edge);
+  s.vline(0, 1, 6, edge);
+  s.vline(EMOTE - 1, 1, 6, edge);
+  s.px(4, 8, bg);
+  s.px(3, 8, edge);
+  s.px(5, 8, edge);
+  s.px(4, 9, edge);
+
+  const ink =
+    kind === "hungry" ? "#e05d5d" : kind === "ready" ? "#c9931a" : kind === "love" ? "#e05d8a" : "#5aa9e6";
+
+  if (kind === "hungry") {
+    s.vline(4, 2, 3, ink);
+    s.px(4, 6, ink);
+  } else if (kind === "ready") {
+    // giọt/quả tròn đầy đặn: "có thứ để lấy"
+    s.rect(3, 2, 3, 4, ink);
+    s.px(2, 3, ink);
+    s.px(6, 3, ink);
+    s.px(4, 1, ink);
+  } else if (kind === "love") {
+    s.px(2, 2, ink); s.px(3, 2, ink); s.px(5, 2, ink); s.px(6, 2, ink);
+    s.hline(2, 3, 5, ink);
+    s.hline(3, 4, 3, ink);
+    s.px(4, 5, ink);
+  } else if (kind === "sleep") {
+    s.hline(2, 2, 5, ink);
+    s.px(5, 3, ink);
+    s.px(4, 4, ink);
+    s.px(3, 5, ink);
+    s.hline(2, 6, 5, ink);
+  } else {
+    // giọt mồ hôi
+    s.px(4, 2, ink);
+    s.hline(3, 3, 3, ink);
+    s.hline(3, 4, 3, ink);
+    s.px(4, 5, ink);
+  }
+  return s.c;
+}
+
 const ANIMAL_FRAMES = 3;
 
 /** Bốn hướng × ba khung (0 đứng, 1-2 bước chân). */
-function makeAnimal(art: AnimalArt, dir: PlayerDir, frame: number): HTMLCanvasElement {
+/**
+ * TƯ THẾ của con vật, ngoài chuyện đi hay đứng.
+ *
+ * Vì sao đáng làm: một cái chuồng đầy bò mà con nào cũng một dáng thì nó là một
+ * hàng hình dán, không phải một cái chuồng. Ba tư thế này là ba trạng thái người
+ * chơi THẬT SỰ cần đọc từ xa — con nào đang gặm cỏ (khoẻ, không cần gì), con nào
+ * đang ngủ (đêm rồi, đừng chờ sữa), con nào đang đi.
+ *
+ * Cùng một hàm vẽ, chỉ đổi vài con số: chi phí gần bằng không so với vẽ ba bộ
+ * sprite riêng, và một loài mới thêm bằng JSON vẫn tự có đủ ba tư thế.
+ */
+export type AnimalPose = "walk" | "eat" | "sleep";
+
+function makeAnimal(
+  art: AnimalArt,
+  dir: PlayerDir,
+  frame: number,
+  pose: AnimalPose = "walk",
+): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const side = dir === "left" || dir === "right";
   const flip = dir === "left";
   // nhún theo khung: chân trước/chân sau đổi nhau, thân nhấp nhô 1px
   const bob = frame === 2 ? 1 : 0;
   const w = Math.max(3, Math.min(14, Math.round(art.w * (side ? 1 : 0.72))));
-  const h = Math.max(3, Math.min(12, Math.round(art.h)));
-  const legLen = art.form === "fish" ? 0 : art.form === "bird" ? 2 : 3;
+  const h0 = Math.max(3, Math.min(12, Math.round(art.h)));
+  /* NGỦ: nằm bẹp xuống — thân dẹt đi một phần ba và chân thu hết vào trong.
+     Cá thì không: cá ngủ vẫn là cá đang bơi. */
+  const nam = pose === "sleep" && art.form !== "fish";
+  const h = nam ? Math.max(3, h0 - 2) : h0;
+  const legLen = art.form === "fish" ? 0 : nam ? 0 : art.form === "bird" ? 2 : 3;
 
   const bodyY = TILE - 1 - legLen - h + bob;
   const bodyX = Math.round((TILE - w) / 2);
@@ -2078,6 +2181,11 @@ function makeAnimal(art: AnimalArt, dir: PlayerDir, frame: number): HTMLCanvasEl
     hx = bodyX + Math.round((w - headSize) / 2);
     hy = dir === "up" ? bodyY - 1 : bodyY + h - Math.round(headSize * 0.6);
   }
+  /* ĂN: đầu cúi sát đất. NGỦ: đầu gục xuống nửa chừng. Chỉ dịch toạ độ đầu —
+     phần vẽ mỏ/sừng/mắt bên dưới bám theo `hy` nên tự đi theo, không phải sửa
+     một dòng nào ở đó. */
+  if (pose === "eat" && art.form !== "fish") hy += Math.max(2, Math.round(headSize * 0.55));
+  else if (nam) hy += Math.max(1, Math.round(headSize * 0.3));
   if (art.form !== "fish") {
     s.rect(hx, hy, headSize, headSize, art.body);
     s.hline(hx, hy, headSize, art.bodyDark);
@@ -2259,15 +2367,30 @@ export function buildAtlas(content: Content): Atlas {
     return c;
   };
 
+  const emoteCache = new Map<EmoteKind, HTMLCanvasElement>();
+  const emoteOf = (kind: EmoteKind): HTMLCanvasElement => {
+    let c = emoteCache.get(kind);
+    if (!c) {
+      c = makeEmote(kind);
+      emoteCache.set(kind, c);
+    }
+    return c;
+  };
+
   const animalCache = new Map<string, HTMLCanvasElement>();
-  const animalOf = (defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null => {
+  const animalOf = (
+    defId: string,
+    dir: PlayerDir,
+    frame: number,
+    pose: AnimalPose = "walk",
+  ): HTMLCanvasElement | null => {
     const def = content.animals[defId];
     if (!def) return null;
     const f = ((frame % ANIMAL_FRAMES) + ANIMAL_FRAMES) % ANIMAL_FRAMES;
-    const key = `${defId}|${dir}|${f}`;
+    const key = `${defId}|${dir}|${f}|${pose}`;
     let c = animalCache.get(key);
     if (!c) {
-      c = makeAnimal(def.art, dir, f);
+      c = makeAnimal(def.art, dir, f, pose);
       animalCache.set(key, c);
     }
     return c;
@@ -2346,6 +2469,7 @@ export function buildAtlas(content: Content): Atlas {
     grass, path, asphalt, soil, soilWet, soilEdge, water, shore, wood,
     autotiles,
     animal: animalOf,
+    emote: emoteOf,
     worker: workerOf,
     vehicle: vehicleOf,
     tuft: makeTuft(),

@@ -363,7 +363,7 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "BUILD_LINE": {
       // Đang vung tay dở thì không xây — cùng luật với mọi thao tác khác.
       if (state.busy > 0) return state;
-      buildLine(d, content, action.id, action.x0, action.y0, action.x1, action.y1);
+      buildLine(d, content, action.id, action.x0, action.y0, action.x1, action.y1, action.far === true);
       if (d.changed) applyProgression(d, content);
       return commit(d);
     }

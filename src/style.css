@@ -334,31 +334,49 @@ body[data-hand="left"] .mid-col {
 }
 
 /* ---- bảng thống kê con vật đang đứng cạnh ---- */
+/* GỌN: đây là một chú thích, không phải một cửa sổ. Bản đầu rộng 42vw với
+   `--fs-sm` đầy đủ và chiếm gần một phần tư màn hình điện thoại. */
 .animal-card {
-  pointer-events: none;
-  width: clamp(150px, 42vw, 214px);
-  padding: 7px 9px;
+  /* Nút × phải bấm được, nên hộp nhận chạm — nhưng chỉ hộp này. */
+  pointer-events: auto;
+  width: clamp(128px, 34vw, 168px);
+  padding: 4px 6px 5px;
   background: var(--glass);
   border: 2px solid var(--edge);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
-  font-size: var(--fs-sm);
+  font-size: calc(var(--fs-sm) * 0.88);
+  line-height: 1.3;
   animation: toast-in var(--anim) ease-out;
 }
 .animal-card .hd {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 5px;
-  padding-bottom: 5px;
+  gap: 5px;
+  margin-bottom: 3px;
+  padding-bottom: 3px;
   border-bottom: 1px solid var(--panel-3);
+}
+.animal-card .hd b {
+  flex: 1;
+  min-width: 0;
+}
+.animal-card .ax {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+  font-size: 1em;
 }
 .animal-card .hd b {
   color: var(--gold);
 }
 .animal-card .pic canvas {
   display: block;
-  width: 24px;
+  width: 18px;
   height: auto;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -367,7 +385,6 @@ body[data-hand="left"] .mid-col {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  line-height: 1.5;
 }
 .animal-card .row span {
   color: var(--ink-mute);
@@ -387,8 +404,8 @@ body[data-hand="left"] .mid-col {
 }
 /* Thanh no: cùng ngôn ngữ với thanh năng lượng trên đầu màn hình. */
 .animal-card .bar {
-  height: 4px;
-  margin: 3px 0 4px;
+  height: 3px;
+  margin: 2px 0 3px;
   background: var(--panel-3);
   border-radius: 2px;
   overflow: hidden;
@@ -506,34 +523,64 @@ body[data-hand="left"] .mid-col {
   color: #cfe4ff;
 }
 
-/* ---- bảng gỡ lỗi NỔI: đè lên góc, KHÔNG chặn game ---- */
+/* ---- bảng gỡ lỗi NỔI: đè lên góc, KHÔNG chặn game ----
+
+   Nó XẾP DƯỚI nút ☰ chứ không đè lên: nút menu nằm ở `top: 10px` phải-trên với
+   cỡ `--tap`, nên bảng bắt đầu ngay dưới nó. Trước đây cả hai cùng ở góc phải
+   trên và bảng nuốt luôn nút menu — mở bảng gỡ lỗi ra là không vào được menu
+   tạm dừng nữa, phải tải lại trang.
+
+   Cũng đổi nền từ `rgba(20,15,10,.95)` tự chế sang `--glass` + `--radius`, đúng
+   bộ mà bản đồ nhỏ, hotbar và bảng vật nuôi đang dùng — để nó trông như một
+   phần của game chứ không như một cửa sổ lạ dán đè lên.
+*/
 #devpanel {
   position: absolute;
-  top: calc(var(--hud-gap) + var(--sa-t));
-  right: calc(var(--hud-gap) + var(--sa-r));
+  top: calc(10px + var(--sa-t) + var(--tap) + 8px);
+  right: calc(10px + var(--sa-r));
   z-index: 40;
-  width: min(230px, 52vw);
-  max-height: 70%;
+  width: min(224px, 56vw);
+  max-height: calc(100% - var(--tap) - 130px);
   overflow-y: auto;
   padding: 5px 6px 6px;
-  background: rgba(20, 15, 10, 0.95);
+  background: var(--glass);
   border: 2px solid var(--edge);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(4px);
   /* CHỈ hộp này nhận chạm — phần còn lại của màn hình vẫn chạm-để-đi được */
   pointer-events: auto;
   font-size: calc(var(--fs-sm) * 0.86);
 }
+/* Đổi bên cùng lúc với nút ☰: hai thứ luôn ở chung một phía, không bao giờ
+   phải viết luật tránh nhau với nút hành động ở phía đối diện. */
+body[data-hand="left"] #devpanel {
+  right: auto;
+  left: calc(10px + var(--sa-l));
+}
 #devpanel[hidden] {
   display: none;
+}
+/* Thu gọn: giữ tiêu đề và dòng số liệu, giấu lưới lệnh. */
+#devpanel.mini .dev-body {
+  display: none;
+}
+#devpanel.mini {
+  max-height: none;
 }
 .dev-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   margin-bottom: 4px;
 }
-.dev-x {
+.dev-head b {
+  flex: 1;
+  color: var(--gold);
+  letter-spacing: 0.4px;
+}
+.dev-x,
+.dev-min {
   width: 20px;
   height: 20px;
   min-height: 20px;
@@ -541,6 +588,12 @@ body[data-hand="left"] .mid-col {
   line-height: 1;
   border-radius: 50%;
   font-size: 1.1em;
+  flex: none;
+}
+/* Nhóm "CẢ BẢN ĐỒ" đổi màu nhãn: những lệnh này sửa cả nghìn ô một lúc và
+   không hoàn tác được, nên nhìn phải khác hẳn nhóm "quanh đây". */
+.dev-group.wide {
+  color: var(--gold-dark);
 }
 .dev-group {
   margin: 5px 0 2px;
@@ -1819,3 +1872,117 @@ body[data-orientation="landscape"] #toasts {
 /* ---- thời tiết trên thanh trạng thái (core 1.3) ---- */
 .stat.weather .ic.next { opacity: 0.55; margin-left: 2px; }
 .stat.weather .ic.next::before { content: "›"; opacity: 0.7; margin-right: 1px; font-size: 0.85em; }
+
+/* ==========================================================================
+   CHẾ ĐỘ XÂY DỰNG — thanh trên + bảng chọn dưới.
+
+   Chiếm hai mép màn hình và chừa trọn phần giữa cho bản đồ: cả chế độ này là
+   để NHÌN địa hình mà quy hoạch, nên thứ duy nhất không được che là địa hình.
+   ========================================================================== */
+#buildmode {
+  position: absolute;
+  inset: 0;
+  z-index: 42;
+  /* Lớp phủ KHÔNG nhận chạm — cú kéo phải rơi xuống bản đồ bên dưới. Chỉ hai
+     thanh mép mới nhận. Thiếu dòng này là không xây được ô nào. */
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+#buildmode[hidden] {
+  display: none;
+}
+
+.bm-bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: calc(var(--hud-gap) + var(--sa-t)) var(--hud-gap) 0;
+  padding: 6px 8px 6px 12px;
+  background: var(--glass);
+  border: 2px solid var(--gold-dark);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(4px);
+  font-size: var(--fs-sm);
+}
+.bm-bar b {
+  color: var(--gold);
+  flex: none;
+}
+.bm-note {
+  color: var(--ink-mute);
+  flex: 1;
+  min-width: 0;
+  font-size: 0.86em;
+  line-height: 1.2;
+}
+.bm-bar .bm-x {
+  flex: none;
+  padding: 6px 14px;
+  min-height: var(--tap);
+  background: var(--gold);
+  color: #14100c;
+  font-weight: 800;
+  border-radius: var(--radius-sm);
+}
+
+.bm-pal {
+  pointer-events: auto;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 var(--hud-gap) calc(var(--hud-gap) + var(--sa-b));
+  padding: 6px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(4px);
+}
+.bm-pal::-webkit-scrollbar {
+  display: none;
+}
+.bm-empty {
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+  padding: 6px 4px;
+}
+.bm-item {
+  position: relative;
+  flex: none;
+  width: 66px;
+  min-height: 66px;
+  padding: 5px 3px 4px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  background: rgba(58, 44, 32, 0.55);
+  font-size: calc(var(--fs-sm) * 0.8);
+  line-height: 1.15;
+  text-align: center;
+}
+/* Ô đang chọn phải khác HẲN, không chỉ sáng hơn một chút: cả thao tác kéo phụ
+   thuộc vào việc người chơi biết mình đang cầm cái gì. */
+.bm-item.on {
+  background: var(--green-dark);
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.bm-item .icon {
+  image-rendering: pixelated;
+  width: 24px;
+  height: auto;
+}
+.bm-item .n {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  color: var(--gold);
+  font-weight: 700;
+}

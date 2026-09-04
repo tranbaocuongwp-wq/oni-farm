@@ -59,6 +59,8 @@ export interface MenuHandlers {
   contentInfo(): { version: string; source: string; pending: string | null };
   /** Có thể cài PWA không (đã bắt được beforeinstallprompt). */
   canInstall(): boolean;
+  /** Mở chế độ xây dựng (dừng thời gian, kéo thả địa hình). */
+  buildMode(): void;
   install(): void;
   /** Bật/tắt bảng gỡ lỗi nổi. Phải có NÚT chứ không chỉ có phím tắt — điện
    *  thoại không có bàn phím, mà đây là thiết bị chơi chính. */
@@ -893,6 +895,10 @@ export function createMenus(
     list.className = "menu-list";
     list.append(
       mkBtn("🎒 Balo", () => openBag()),
+      mkBtn("🏗 Chế độ xây dựng", () => {
+        close();
+        h.buildMode();
+      }, "accent"),
       mkBtn("⚙ Cài đặt", () => openSettings()),
       mkBtn("? Hướng dẫn chơi", () => openHelp()),
     );

@@ -52,7 +52,9 @@ import {
 } from "../art/atlas.ts";
 import { selectedItemId } from "../game/inventory.ts";
 import { parseItem } from "../game/items.ts";
+import { animalMood } from "../game/animals.ts";
 import type { Camera } from "./camera.ts";
+import type { EmoteKind } from "../art/atlas.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
 const LETTERBOX = "#0b0907";
@@ -548,17 +550,21 @@ export function createRenderer(
    * ĐÚNG công thức `base` (`round(y) + 5`), nên con bò đi trước mặt thì che
    * nhân vật, đi sau lưng thì bị che — không cần luật riêng nào.
    */
-  function drawActors(s: GameState, content: Content, items: Item[]) {
+  function drawActors(s: GameState, content: Content, items: Item[], timeSec: number) {
     for (const e of s.entities) {
       if (e.map !== s.mapId) continue;
       if (!e.worker && e.kind !== "vehicle" && !content.animals[e.def]) continue;
       const moving = e.ai.path.length > 0;
       const frame = moving ? 1 + (Math.floor(e.anim * 5) % 2) : 0;
+      /* Dáng và ký hiệu do `game/animals.ts` quyết định, không phải ở đây: nó
+         đọc đúng những con số quyết định luật chơi, nên bong bóng "tới lứa"
+         không bao giờ nói khác với thứ xảy ra khi bấm. */
+      const mood = e.kind === "animal" ? animalMood(s, content, e) : null;
       const img = e.worker
         ? atlas.worker(e.worker.skin, e.dir, moving ? 1 + (Math.floor(e.anim * 8) % 4) : 0)
         : e.kind === "vehicle"
           ? atlas.vehicle(e.def, e.dir)
-          : atlas.animal(e.def, e.dir, frame);
+          : atlas.animal(e.def, e.dir, frame, mood?.pose ?? "walk");
       if (!img) continue;
       const px = snapDev(e.x - camera.rx) - TILE / 2;
       const py = snapDev(e.y - camera.ry) - TILE + 3;
@@ -569,6 +575,15 @@ export function createRenderer(
         : e.kind === "vehicle"
           ? false
           : e.animal.fed <= 0;
+      const emo: EmoteKind | null = e.worker
+        ? e.worker.energy <= content.workers.restBelow
+          ? "tired"
+          : null
+        : (mood?.emote ?? null);
+      /* Bong bóng nhấp nhô nhẹ và KHÔNG theo `e.anim`: `anim` chỉ chạy khi con
+         vật đi, nên con đang nằm ngủ sẽ có cái bóng chết cứng. Dùng đồng hồ
+         thật, lệch pha theo `e.id` để cả đàn không nhún cùng một nhịp. */
+      const eBob = emo ? Math.round(Math.sin(timeSec * 2.2 + e.id) * 0.9) : 0;
       items.push({
         base: Math.round(e.y) + 5,
         run: () => {
@@ -576,6 +591,7 @@ export function createRenderer(
           // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
           // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
           if (doi) g.drawImage(atlas.sickOverlay, px, py);
+          if (emo) g.drawImage(atlas.emote(emo), px + 4, py - 9 + eBob);
         },
       });
     }
@@ -853,7 +869,7 @@ export function createRenderer(
     const items: Item[] = [];
     const lights: Light[] = [];
     collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion, opts.weather);
-    drawActors(s, content, items);
+    drawActors(s, content, items, timeSec);
     drawPlayer(s, content, items);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 

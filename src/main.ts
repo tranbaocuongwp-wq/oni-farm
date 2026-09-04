@@ -47,6 +47,7 @@ import { createMenus } from "./ui/menus.ts";
 import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
 import { createDevPanel } from "./ui/devpanel.ts";
+import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
@@ -200,6 +201,7 @@ async function boot() {
 
 
 
+
   /* ---- 4. hệ thống hiển thị ---- */
   const canvas = $<HTMLCanvasElement>("#game");
   const stage = $("#stage");
@@ -215,6 +217,9 @@ async function boot() {
   });
   camera.jumpTo(initial.player.x, initial.player.y);
   const hud = createHud($("#hud"), atlas);
+  hud.onAnimalClose(() => {
+    cardAnimal = null;
+  });
   const toasts = createToasts($("#toasts"));
 
   const tutorial = createTutorial($("#tutorial"), () => {
@@ -298,6 +303,7 @@ async function boot() {
     assign: (id, job) => store.dispatch({ t: "ASSIGN", id, job }),
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
+    buildMode: () => buildUI.open(),
     install: async () => {
       const p = installPrompt;
       if (!p) return;
@@ -333,6 +339,10 @@ async function boot() {
   /* Bảng gỡ lỗi NỔI. CỐ Ý không tính vào biến `modal`: game vẫn chạy, thời gian
      vẫn trôi, nhân vật vẫn đi được trong lúc bảng mở — đó mới là chỗ nó hữu ích,
      bấm một lệnh rồi nhìn thẳng vào thế giới thấy ngay kết quả. */
+  const buildUI = createBuildMode($("#buildmode"), atlas, {
+    select: (slot) => store.dispatch({ t: "SELECT", slot }),
+  });
+
   const devPanel = createDevPanel($("#devpanel"), {
     debug: (op, n) => store.dispatch({ t: "DEBUG", op, ...(n === undefined ? {} : { n }) }),
   });
@@ -363,8 +373,13 @@ async function boot() {
   });
 
   {
+    // Nút tuyến giờ không còn BẬT chế độ nữa (cầm hàng rào là tự ở trong chế độ
+    // đó rồi) — nó chỉ để HUỶ đoạn đang vẽ dở khi lỡ ấn nhầm chỗ bắt đầu.
     const lb = document.querySelector<HTMLElement>("#linebtn");
-    lb?.addEventListener("click", () => setLineMode(!lineMode));
+    lb?.addEventListener("click", () => {
+      lineFrom = null;
+      lineTo = null;
+    });
   }
 
   for (const [sel, code] of [
@@ -520,6 +535,16 @@ async function boot() {
 
   let aimed: { x: number; y: number } | null = null;
 
+  /**
+   * Con vật đang MỞ bảng thống kê, theo id. `null` = không mở bảng nào.
+   *
+   * Cố ý theo Ý ĐỊNH của người chơi chứ không theo khoảng cách. Bản đầu tự hiện
+   * bảng cho con vật gần nhất, và trên điện thoại nó bật lên mỗi lần đi ngang
+   * qua chuồng, che một phần tư màn hình đúng lúc đang cần nhìn ruộng. Giờ:
+   * chạm vào con vật thì mở, bấm × hoặc chạm chỗ khác thì đóng.
+   */
+  let cardAnimal: number | null = null;
+
   function snapTap(s: GameState, wx: number, wy: number): { x: number; y: number } {
     const raw = {
       x: Math.max(0, Math.min(s.w - 1, Math.floor(wx / TILE))),
@@ -558,12 +583,28 @@ async function boot() {
     return t.g !== "water" || !!content.tiles.grounds["water"]?.interact;
   }
 
-  /* ---- XÂY THEO TUYẾN ---------------------------------------------------
-     Chọn ô đầu, chọn ô cuối, cả tuyến dựng một lượt. Trạng thái này CỐ Ý không
-     nằm trong `GameState`: nó là ý định nhất thời đang vẽ dở, cùng loại với
-     đích của `nav`. Bỏ dở giữa chừng thì không có gì phải dọn trong save. */
-  let lineMode = false;
+  /* ---- XÂY THEO TUYẾN: KÉO --------------------------------------------
+     Hàng rào và đường nhựa là thứ dựng thành ĐOẠN, không phải đặt từng ô: mười
+     ô rào là mười cú bấm, lệch một ô là phải đập đi làm lại. Nên chúng không
+     dùng đường "chọn rồi ĐẶT" như vòi tưới hay pin mặt trời — cầm chúng lên là
+     vào ngay chế độ kéo: ấn ở đầu đoạn, rê tới cuối, nhả tay.
+
+     Loại nào kéo được là do CONTENT nói (`BuildingDef.drag`), không phải
+     `switch (id)` trong này — thêm "mương nước" sau chỉ là thêm một dòng JSON.
+
+     Trạng thái CỐ Ý không nằm trong `GameState`: nó là ý định đang vẽ dở, cùng
+     loại với đích của `nav`. Bỏ dở giữa chừng thì không có gì phải dọn trong
+     save. */
   let lineFrom: { x: number; y: number } | null = null;
+  /** Ô cuối đang rê tới — trên điện thoại con trỏ chuột không tồn tại, nên
+   *  đường xem trước phải bám vào ĐÂY chứ không bám `cursor`. */
+  let lineTo: { x: number; y: number } | null = null;
+
+  /** Công trình đang cầm có phải loại KÉO không. */
+  function dragBuilding(s: GameState): string | null {
+    const id = heldBuilding(s);
+    return id && content.buildings[id]?.drag ? id : null;
+  }
 
   /** Đang cầm công trình gì (id trần), null nếu không cầm công trình nào. */
   function heldBuilding(s: GameState): string | null {
@@ -573,13 +614,19 @@ async function boot() {
     return content.buildings[id] ? id : null;
   }
 
+  /** Bật/tắt hiển thị nút tuyến và luồng ý định kéo. Gọi mỗi khung hình —
+   *  rẻ, và không phải nhớ tắt ở mười chỗ khác nhau. */
   const setLineMode = (on: boolean) => {
-    lineMode = on;
-    lineFrom = null;
+    input.setDrag(on);
+    if (!on) {
+      lineFrom = null;
+      lineTo = null;
+    }
     const b = document.querySelector<HTMLElement>("#linebtn");
     if (b) {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.hidden = !on;
     }
   };
 
@@ -871,8 +918,16 @@ async function boot() {
   const loop = createLoop((dt) => {
     elapsed += dt;
     const modal = menus.isOpen() || tutorial.isOpen();
+    /* Chế độ xây dựng KHÔNG phải modal: người chơi vẫn đi lại được để ngắm chỗ
+       xây, chỉ có ĐỒNG HỒ là đứng. Gộp nó vào `modal` thì nhân vật cứng đơ và
+       không xem được góc bên kia nông trại. */
+    const building = buildUI.isOpen();
 
     if (modal) nav.cancel();
+    if (building) {
+      nav.cancel();
+      if (autoWork) setAuto(false);
+    }
 
     if (!modal) {
       const ax = input.axis();
@@ -889,7 +944,11 @@ async function boot() {
         else if (store.getState().player.moving)
           store.dispatch({ t: "MOVE", dx: 0, dy: 0, dt });
       }
-      store.dispatch({ t: "TICK", dt });
+      /* Đây là chỗ THỜI GIAN TRÔI. Không dispatch TICK nghĩa là: cây không lớn,
+         con vật không đói, xe không chạy, đồng hồ đứng. Đúng ý của chế độ xây
+         dựng — quy hoạch là lúc ngồi nhìn và nghĩ, mà đồng hồ chạy trong lúc
+         nghĩ thì biến việc nghĩ thành việc mất mát. */
+      if (!building) store.dispatch({ t: "TICK", dt });
 
       const arrived = nav.takeArrival();
       if (arrived) {
@@ -917,7 +976,7 @@ async function boot() {
       // TỰ ĐỘNG LÀM: cùng một hàm với giữ-nút, chỉ khác là không cần giữ. Chờ
       // hết `busy` và hết đường đang đi rồi mới chọn việc mới, nên vẫn TUẦN TỰ
       // từng việc một như Cường muốn.
-      if (autoWork) {
+      if (autoWork && !building) {
         const s = store.getState();
         const mark = progressMark(s);
         if (mark !== autoMark) {
@@ -943,7 +1002,7 @@ async function boot() {
       // quản sau khi đã giữ quá 0,2s và nhát trước là một việc trên ô — nên bấm
       // MUA cạnh cửa hàng không bao giờ bị hiểu nhầm thành cày. Đang tự đi tới
       // đích (nav) thì tới nơi mới làm.
-      if (input.useHeld()) {
+      if (input.useHeld() && !building) {
         heldFor += dt;
         if (heldFor > 0.2 && lastKind !== null && !nav.target()) {
           const s = store.getState();
@@ -1019,6 +1078,13 @@ async function boot() {
           break;
         }
         case "pointer": {
+          if (building) {
+            const q = snapTap(s, it.wx, it.wy);
+            lineFrom = { x: q.x, y: q.y };
+            lineTo = { x: q.x, y: q.y };
+            aimed = { x: q.x, y: q.y };
+            break;
+          }
           if (modal) break;
           const snapped = snapTap(s, it.wx, it.wy);
           const tx = snapped.x;
@@ -1027,22 +1093,15 @@ async function boot() {
           // Người chơi tự chạm thì đây KHÔNG còn là chuyến đi làm việc nữa —
           // tới nơi được phép mở cửa hàng/giường như bình thường.
           workGoal = null;
+          // Chạm trúng con vật thì mở bảng của NÓ; chạm ra chỗ khác thì đóng.
+          const chuot = animalNear(s, tx, ty);
+          cardAnimal = chuot ? chuot.id : null;
 
-          // Chế độ tuyến nuốt cú chạm: chạm đầu đặt mốc, chạm sau thì dựng.
-          const lineId = lineMode ? heldBuilding(s) : null;
-          if (lineId) {
-            if (!lineFrom) lineFrom = { x: tx, y: ty };
-            else {
-              store.dispatch({
-                t: "BUILD_LINE",
-                id: lineId,
-                x0: lineFrom.x,
-                y0: lineFrom.y,
-                x1: tx,
-                y1: ty,
-              });
-              lineFrom = null;
-            }
+          // Đang cầm hàng rào / đường: cú ấn này là ĐẦU đoạn. Phần còn lại do
+          // `drag` (rê) và `dragEnd` (nhả tay) lo.
+          if (dragBuilding(s)) {
+            lineFrom = { x: tx, y: ty };
+            lineTo = { x: tx, y: ty };
             break;
           }
 
@@ -1072,6 +1131,35 @@ async function boot() {
             deny();
           break;
         }
+        /* Rê ngón/chuột khi đang vẽ tuyến: chỉ cập nhật ô CUỐI. Không dispatch
+           gì cả — dựng dở từng ô theo đường rê thì rê lệch một cái là mất vật
+           liệu, mà không có cách nào lấy lại. */
+        case "drag": {
+          if ((modal && !building) || !lineFrom) break;
+          const q = snapTap(s, it.wx, it.wy);
+          lineTo = { x: q.x, y: q.y };
+          aimed = { x: q.x, y: q.y };
+          break;
+        }
+
+        case "dragEnd": {
+          // Trong chế độ xây thì MỌI công trình kéo được, không chỉ loại `drag`.
+          const id = building ? heldBuilding(s) : dragBuilding(s);
+          if (id && lineFrom && lineTo)
+            store.dispatch({
+              t: "BUILD_LINE",
+              id,
+              x0: lineFrom.x,
+              y0: lineFrom.y,
+              x1: lineTo.x,
+              y1: lineTo.y,
+              far: building,
+            });
+          lineFrom = null;
+          lineTo = null;
+          break;
+        }
+
         case "interact": {
           if (modal) break;
           const c = targetTile(s, true);
@@ -1104,19 +1192,21 @@ async function boot() {
       if (fade <= 0) dayFadeAt = 0;
     }
 
-    // Nút TUYẾN chỉ hiện khi đang cầm công trình — không cầm gì thì nó vô nghĩa.
-    const buildId = heldBuilding(s);
-    const lineBtn = document.querySelector<HTMLElement>("#linebtn");
-    if (lineBtn) lineBtn.hidden = buildId === null;
-    if (!buildId && lineMode) setLineMode(false);
+    /* Chế độ kéo bám thẳng vào THỨ ĐANG CẦM: cầm hàng rào lên là ở trong đó,
+       đổi sang cái cuốc là ra khỏi đó. Không có nút bật/tắt nào để quên.
+       Trong CHẾ ĐỘ XÂY DỰNG thì mọi công trình đều kéo được. */
+    const dragId = buildUI.isOpen() ? heldBuilding(s) : dragBuilding(s);
+    setLineMode(dragId !== null);
+    buildUI.update(s, content);
 
-    // Xem trước tuyến: từ mốc đã đặt tới ô đang ngắm.
+    // Xem trước tuyến: từ ô ấn xuống tới ô đang rê tới.
     let lineCells: { x: number; y: number; ok: boolean }[] | null = null;
-    if (lineMode && buildId && lineFrom && cursor) {
-      lineCells = linePath(lineFrom.x, lineFrom.y, cursor.x, cursor.y).map((c) => ({
+    const dich = lineTo ?? cursor;
+    if (dragId && lineFrom && dich) {
+      lineCells = linePath(lineFrom.x, lineFrom.y, dich.x, dich.y).map((c) => ({
         x: c.x,
         y: c.y,
-        ok: canPlaceBuilding(s, content, buildId, c.x, c.y),
+        ok: canPlaceBuilding(s, content, dragId, c.x, c.y),
       }));
     }
 
@@ -1143,14 +1233,14 @@ async function boot() {
     const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;
     hud.update(s, content, hint);
 
-    /* Bảng vật nuôi: hiện con vật ở ô ĐANG NGẮM, không có thì con đứng ngay
-       dưới chân. Đọc theo ô ngắm chứ không theo "con gần nhất trong bán kính":
-       giữa một đàn thì phải là con người chơi đang chỉ vào, nếu không thì bảng
-       nhảy qua nhảy lại giữa hai con mỗi khi nhân vật nhích nửa ô. */
-    const cursorAnimal = cursor ? animalNear(s, cursor.x, cursor.y) : null;
-    const px = Math.floor(s.player.x / TILE);
-    const py = Math.floor(s.player.y / TILE);
-    const shown = modal ? null : (cursorAnimal ?? animalNear(s, px, py));
+    /* Bảng vật nuôi: CHỈ con người chơi đã chạm vào. Tự đóng khi con đó không
+       còn (bán thịt, chết đói, sang bản đồ khác) — giữ lại một cái bảng nói về
+       con vật không tồn tại là kiểu nói dối khó chịu nhất. */
+    const shown =
+      modal || cardAnimal === null
+        ? null
+        : (s.entities.find((e) => e.id === cardAnimal && e.map === s.mapId) ?? null);
+    if (cardAnimal !== null && !shown) cardAnimal = null;
     hud.showAnimal(shown ? animalStats(shown, content) : null);
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);

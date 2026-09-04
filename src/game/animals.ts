@@ -143,6 +143,47 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
   };
 }
 
+/* --------------------------------------------------------------- dáng & cảm xúc */
+
+/** Dáng đứng, đọc được từ xa. Tên thuần chuỗi vì `game/` không được biết `art/`. */
+export type PoseName = "walk" | "eat" | "sleep";
+
+/** Ký hiệu nổi trên đầu. `null` = không có gì đáng báo. */
+export type EmoteName = "hungry" | "ready" | "love" | "sleep" | null;
+
+/** Từ giờ này trở đi coi là ĐÊM — con vật nằm ngủ. 20:00. */
+const NIGHT_FROM = 20 * 60;
+
+/**
+ * Con vật này đang ở dáng nào và có gì để báo.
+ *
+ * Ở `game/` chứ không ở renderer vì nó đọc ĐÚNG những con số quyết định luật
+ * chơi (`isHungry`, `readyProduct`) — nếu renderer tự diễn giải lại thì bong
+ * bóng "tới lứa" sẽ có ngày nói dối, mà nói dối đúng ở chỗ người chơi tin nhất.
+ */
+export function animalMood(
+  s: GameState,
+  content: Content,
+  e: Entity,
+): { pose: PoseName; emote: EmoteName } {
+  const def = animalDef(content, e.def);
+  const dem = s.minutes >= NIGHT_FROM || s.minutes < (content.balance.dayStartMinutes ?? 360);
+  const dangDi = e.ai.path.length > 0;
+
+  const pose: PoseName = dangDi ? "walk" : dem ? "sleep" : "eat";
+
+  let emote: EmoteName = null;
+  if (isHungry(e) && def?.feed) emote = "hungry";
+  else if (readyProduct(e, content) >= 0) emote = "ready";
+  // Vừa được cho ăn: `fed` gần đầy. Suy ra từ con số sẵn có thay vì thêm một
+  // trường mốc-thời-gian vào save — trường mới thì phải migrate, mà cái này chỉ
+  // để vui mắt trong vài phút game.
+  else if (def && def.fedMinutes > 0 && e.animal.fed > def.fedMinutes * 0.94) emote = "love";
+  else if (pose === "sleep") emote = "sleep";
+
+  return { pose, emote };
+}
+
 /* ------------------------------------------------------------------ cho ăn */
 
 /**

@@ -31,11 +31,20 @@ export type Intent =
    *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
    *  công cụ). Tách hai ý định ra như vậy thì trên màn nhỏ không còn chuyện
    *  định đi mà lại lỡ tay cày mất một ô. */
-  | { t: "pointer"; wx: number; wy: number; double: boolean };
+  | { t: "pointer"; wx: number; wy: number; double: boolean }
+  /* ---- KÉO một tuyến (hàng rào, đường nhựa) ----------------------------
+     Chỉ phát khi `setDrag(true)`. Cố ý phải bật thủ công chứ không phát mọi
+     lúc: đường bấm-để-đi đã được chỉnh rất kỹ để không giật (xem `pointer`),
+     và đổ thêm một luồng ý định vào mỗi khung hình ngón tay di chuyển là cách
+     nhanh nhất để làm hỏng nó lần nữa. */
+  | { t: "drag"; wx: number; wy: number }
+  | { t: "dragEnd" };
 
 export interface Input {
   /** hướng đi mong muốn, độ dài <= 1 */
   axis(): { x: number; y: number };
+  /** Bật/tắt luồng ý định `drag`/`dragEnd`. Chỉ bật khi đang vẽ tuyến. */
+  setDrag(on: boolean): void;
   /** lấy và XOÁ hàng đợi ý định rời rạc */
   drain(): Intent[];
   /** Vị trí trỏ bằng WORLD px — chỉ trả về khi chuột VỪA cử động gần đây.
@@ -169,13 +178,30 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const onBlur = () => held.clear();
 
   /* --------------------------------------------------------------- chuột */
+  /** Đang bắt kéo không, và ngón/chuột nào đang giữ tuyến. */
+  let dragOn = false;
+  let dragId: number | null = null;
+
   const onMove = (e: PointerEvent) => {
+    // Đang vẽ tuyến thì NGÓN TAY cũng phải được rê: cả tính năng là "ấn ở đầu
+    // đoạn, rê tới cuối". Đây là ngoại lệ duy nhất của luật bên dưới.
+    if (dragOn && dragId === e.pointerId) {
+      const q = opts.toWorld(e.clientX, e.clientY);
+      if (q) push({ t: "drag", wx: q.x, wy: q.y });
+      if (e.pointerType === "touch") return;
+    }
     // Ngón tay không phải con trỏ: nó không "rê" quanh màn hình để ngắm, nên
     // không cho chạm cập nhật vị trí ngắm — nếu không, ô đang nhắm sẽ dính lại
     // ở chỗ vừa chạm.
     if (e.pointerType === "touch") return;
     ptr = opts.toWorld(e.clientX, e.clientY);
     ptrAt = performance.now();
+  };
+
+  const onUp = (e: PointerEvent) => {
+    if (!dragOn || dragId !== e.pointerId) return;
+    dragId = null;
+    push({ t: "dragEnd" });
   };
 
   const onDown = (e: PointerEvent) => {
@@ -202,6 +228,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     // Sau một cú chạm kép thì đặt lại mốc, nếu không chạm lần thứ ba sẽ lại
     // được tính là kép và thao tác chạy hai lần liền.
     lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY, tx, ty };
+    if (dragOn && dragId === null) dragId = e.pointerId;
     push({ t: "pointer", wx: p.x, wy: p.y, double: isDouble });
   };
 
@@ -289,6 +316,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   target.addEventListener("pointermove", onMove);
   target.addEventListener("pointerdown", onDown);
   target.addEventListener("pointerleave", onLeave);
+  target.addEventListener("pointerup", onUp);
+  target.addEventListener("pointercancel", onUp);
   target.addEventListener("wheel", onWheel, { passive: false });
 
   if (js) {
@@ -300,6 +329,10 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   }
 
   return {
+    setDrag(on) {
+      dragOn = on;
+      if (!on) dragId = null;
+    },
     axis() {
       let x = 0;
       let y = 0;
@@ -334,6 +367,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       window.removeEventListener("blur", onBlur);
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerdown", onDown);
+      target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", onUp);
       target.removeEventListener("pointerleave", onLeave);
       target.removeEventListener("wheel", onWheel);
       if (js) {

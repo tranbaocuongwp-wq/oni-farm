@@ -246,6 +246,17 @@ export interface BuildingDef {
   solid: boolean;
   /** Tự nối hình theo hàng xóm cùng loại (hàng rào). Vắng = một sprite cố định. */
   autotile?: AutotileKind;
+  /**
+   * Đặt bằng cách KÉO một tuyến, không phải bấm từng ô.
+   *
+   * Hàng rào và đường nhựa là thứ người ta dựng thành ĐOẠN — mười ô rào thì
+   * mười cú bấm, và chỉ cần lệch một ô là phải đập đi làm lại. Bật cờ này thì
+   * cầm nó lên là vào ngay chế độ kéo: ấn ở đầu đoạn, rê tới cuối, nhả tay.
+   *
+   * Là DỮ LIỆU chứ không phải `switch (id)` trong code: thêm "mương nước" hay
+   * "hàng rào đá" sau này chỉ là thêm một dòng JSON.
+   */
+  drag?: boolean;
   effects: BuildingEffects;
   power: { produce: number; consume: number };
   art: { body: string; dark: string; accent: string };
@@ -884,7 +895,11 @@ export type Action =
    *  hay toạ độ tuỳ ý được. */
   | { t: "PORTAL"; x: number; y: number }
   /** Xây cả một tuyến công trình từ (x0,y0) tới (x1,y1) theo hình chữ L. */
-  | { t: "BUILD_LINE"; id: string; x0: number; y0: number; x1: number; y1: number }
+  /* `far`: bỏ kiểm TẦM VỚI. Chỉ CHẾ ĐỘ XÂY DỰNG dùng — ở đó thời gian đứng
+     yên và người chơi đang QUY HOẠCH cả khu, nên bắt họ lê từng bước tới sát
+     mỗi ô rào là biến một việc mười giây thành một việc mười phút. Vật liệu và
+     năng lượng vẫn trừ như thường, nên nó không phải là gian lận. */
+  | { t: "BUILD_LINE"; id: string; x0: number; y0: number; x1: number; y1: number; far?: boolean }
   /** Cất từ túi vào kho (slot của TÚI). */
   | { t: "STORE_PUT"; slot: number; n: number }
   /** Lấy từ kho ra túi (slot của KHO). */
@@ -930,7 +945,34 @@ export type DebugOp =
   /** đổi thời tiết hôm nay sang kiểu kế tiếp trong content (n = chỉ số cụ thể) */
   | "weather"
   /** làm mọi cây đang lớn quanh nhân vật nhiễm bệnh */
-  | "sickAround";
+  | "sickAround"
+  /* ---- lệnh TOÀN BẢN ĐỒ ------------------------------------------------
+     Các lệnh "quanh nhân vật" ở trên tốt cho việc soi một ô, nhưng để thử cân
+     bằng thì phải dựng được cả một nông trại trong một cú bấm: cày sạch, gieo
+     sạch, tưới sạch rồi ngủ vài đêm xem tiền ra bao nhiêu. Làm tay thì mất
+     mười phút mỗi lần chỉnh một con số. */
+  /** cày mọi ô cày được trên bản đồ đang chơi */
+  | "tillMap"
+  /** gieo hạt đang cầm ra MỌI ô đã cày */
+  | "plantMap"
+  /** tưới mọi ô đã cày */
+  | "waterMap"
+  /** dọn sạch cỏ dại và cây con trên cả bản đồ */
+  | "clearMap"
+  /** thả một con vật cạnh nhân vật (n = chỉ số loài, thiếu thì xoay vòng) */
+  | "spawnAnimal"
+  /** thả một con sâu bọ để thử chó tuần tra */
+  | "spawnPest"
+  /** thuê ngay một người làm, miễn phí */
+  | "spawnWorker"
+  /** gọi xe thu mua tới ngay */
+  | "callBuyer"
+  /** bỏ mọi thực thể trên bản đồ đang chơi */
+  | "clearEntities"
+  /** nhảy thẳng sang mùa kế tiếp */
+  | "nextSeason"
+  /** +3 giờ trong ngày */
+  | "skipHours";
 
 /* ---------------------------------------------------------------------------
    PHẦN E — SAVE
