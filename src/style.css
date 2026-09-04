@@ -2070,15 +2070,19 @@ button.ico-btn .bi {
    gọi `el.focus()` bằng script nên không tính, và người chơi gạt cần gạt mà
    không thấy gì di chuyển. Nên vẽ vòng cho cả `:focus` thường trong menu.
    ========================================================================== */
-.sheet button:focus,
-.modal button:focus {
+.modal button:focus,
+.modal [role="button"]:focus,
+.modal input:focus,
+.tut-card button:focus,
+#devpanel button:focus {
   outline: 3px solid var(--gold);
   outline-offset: -3px;
 }
 /* Chuột thì không cần vòng: bấm xong nút vẫn giữ tiêu điểm và vòng vàng đứng
    lại đó trông như bị kẹt. Chỉ giữ vòng khi tiêu điểm đến từ bàn phím/tay cầm. */
-body.pointer-focus .sheet button:focus:not(:focus-visible),
-body.pointer-focus .modal button:focus:not(:focus-visible) {
+body.pointer-focus .modal button:focus:not(:focus-visible),
+body.pointer-focus .modal [role="button"]:focus:not(:focus-visible),
+body.pointer-focus #devpanel button:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -2367,4 +2371,54 @@ body[data-input="pad"] .modal [data-x] {
 .animal-card .hd .ax.next {
   font-size: 1.1em;
   color: var(--gold);
+}
+
+/* ==========================================================================
+   TÊN THỨ VỪA CẦM LÊN — hiện một nhịp rồi tự mờ.
+
+   Không để nhãn thường trực: thứ đang cầm đã có HÌNH trong ô hotbar đang sáng,
+   nên chữ nằm đó mãi chỉ chiếm chỗ để nói một thứ đang hiện sẵn. Nhưng ngay
+   LÚC ĐỔI thì hình chưa kịp vào mắt — nhất là khi đổi bằng vai tay cầm, lúc
+   mắt đang nhìn nhân vật chứ không nhìn hotbar.
+   ========================================================================== */
+.selname {
+  align-self: center;
+  margin-bottom: 5px;
+  padding: 3px 12px;
+  background: var(--glass);
+  border: 1px solid var(--edge-hi);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--gold);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.selname[hidden] {
+  display: none;
+}
+.selname.fade {
+  animation: sel-in 0.14s ease-out, sel-out 0.35s ease-in 1.2s forwards;
+}
+@keyframes sel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@keyframes sel-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Giảm chuyển động: hiện thẳng, tắt thẳng, không trượt lên. */
+body[data-motion="reduce"] .selname.fade {
+  animation: none;
+}
+/* `.hud-bottom` là flex hàng ngang căn giữa — thêm cột để nhãn nằm TRÊN hotbar
+   chứ không nằm cạnh. */
+.hud-bottom {
+  flex-direction: column;
+  align-items: center;
 }

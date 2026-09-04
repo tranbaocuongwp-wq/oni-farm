@@ -145,6 +145,10 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       </div>
     </div>
     <div class="hud-bottom">
+      <!-- Tên thứ vừa cầm lên. Hiện một nhịp rồi tự mờ đi: đổi ô hotbar mà
+           không có gì cho biết vừa cầm cái gì thì người chơi phải nhìn xuống
+           đếm ô, hoặc bấm thử rồi xem chuyện gì xảy ra. -->
+      <div id="selname" class="selname" hidden></div>
       <div class="hotbar-wrap">
         <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
         <button type="button" id="bag-btn" class="bag-btn" aria-label="Mở balo"><i class="ic" data-ic="bag"></i><span class="n" id="bag-count"></span></button>
@@ -202,7 +206,29 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   elBagBtn.addEventListener("click", () => bagFn());
   const prev = {
     money: -1, day: -1, clock: "", night: false, energy: -1, power: -1, water: -1, cap: -1,
-    goal: "", hotbar: "", hint: "", bag: -1, wx: "",
+    goal: "", hotbar: "", hint: "", bag: -1, wx: "", sel: "",
+  };
+
+  /* ---- tên thứ đang cầm ------------------------------------------------
+     Hiện MỘT NHỊP mỗi khi đổi ô hotbar rồi tự mờ. Không phải một nhãn thường
+     trực: thứ đang cầm đã có hình trong ô sáng ở hotbar và trong cụm nút, nên
+     để chữ nằm đó mãi là chiếm chỗ để nói một thứ đang hiện sẵn. Nhưng ngay
+     LÚC ĐỔI thì hình chưa kịp vào mắt — nhất là khi đổi bằng vai tay cầm, lúc
+     mắt đang nhìn nhân vật chứ không nhìn hotbar. */
+  const elSelName = root.querySelector<HTMLElement>("#selname")!;
+  let selTimer = 0;
+
+  const flashSel = (s: GameState, content: Content) => {
+    const slot = s.inv[s.sel];
+    elSelName.textContent = slot ? `${itemLabel(slot.id, content)}${slot.n > 1 ? ` ×${slot.n}` : ""}` : "Tay không";
+    elSelName.hidden = false;
+    elSelName.classList.remove("fade");
+    void elSelName.offsetWidth; // ép chạy lại hoạt ảnh
+    elSelName.classList.add("fade");
+    window.clearTimeout(selTimer);
+    selTimer = window.setTimeout(() => {
+      elSelName.hidden = true;
+    }, 1600);
   };
 
   /* ---- mục tiêu: chip bấm để thu gọn ---- */
@@ -605,6 +631,17 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         prev.bag = bag;
         elBagCount.textContent = bag > 0 ? String(bag) : "";
         elBagBtn.classList.toggle("has", bag > 0);
+      }
+
+      /* Đổi ô hotbar, HOẶC thứ nằm trong ô đang cầm đổi (dùng hết hạt, chặt
+         xong cây làm số gỗ đổi) — cả hai đều là "thứ trên tay tôi vừa khác đi",
+         và cả hai đều đáng báo. */
+      const selKey = `${s.sel}:${s.inv[s.sel]?.id ?? ""}`;
+      if (selKey !== prev.sel) {
+        // Lần vẽ ĐẦU TIÊN thì không báo: người chơi chưa đổi gì cả, và một cái
+        // nhãn nhảy ra ngay khi vừa vào game là nhiễu, không phải thông tin.
+        if (prev.sel !== "") flashSel(s, content);
+        prev.sel = selKey;
       }
 
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua

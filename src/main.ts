@@ -150,8 +150,12 @@ async function boot() {
   let pendingVersion: string | null = null;
   /** Đã nhận tay cầm ở khung trước chưa — để chỉ báo MỘT lần lúc vừa cắm. */
   let padOn = false;
-  /** Đã đặt tiêu điểm cho menu đang mở chưa. */
-  let menuFocused = false;
+  /** Tấm sheet đang giữ tiêu điểm. So bằng THAM CHIẾU phần tử, không bằng cờ
+   *  đóng/mở: mỗi màn con (Cài đặt, Kho, Cập nhật…) dựng một `.modal` MỚI mà
+   *  `menus.isOpen()` vẫn true suốt, nên một cái cờ sẽ chỉ đặt tiêu điểm cho
+   *  màn đầu tiên rồi thôi — và mọi màn con đều mở ra với tiêu điểm nằm trên
+   *  `<body>`, tức là D-pad phải bấm một cái vô ích mới bắt đầu chạy. */
+  let focusedRootEl: HTMLElement | null = null;
   /** Đã xem sơ đồ nút tay cầm trên máy này chưa. */
   const PAD_SEEN = "oni-farm:pad-help-seen";
 
@@ -1060,9 +1064,19 @@ async function boot() {
   function moveFocus(dx: number, dy: number): void {
     const root = focusRoot();
     if (!root) return;
-    const all = [...root.querySelectorAll<HTMLElement>("button:not([disabled]), [tabindex='0']")].filter(
-      (el) => el.offsetParent !== null,
-    );
+    /* KHÔNG chỉ `<button>`. Ô balo, ô kho, dòng quầy thu mua đều là
+       `<div role="button">` — trình duyệt không cho chúng nhận tiêu điểm, nên
+       D-pad đi qua chúng như thể chúng không tồn tại. Đó là lý do balo, cửa
+       hàng, kho và cài đặt "không bấm được bằng tay cầm" dù menu tạm dừng thì
+       được: menu tạm dừng toàn nút thật.
+
+       Sửa ở ĐÂY chứ không sửa từng màn hình: mỗi màn mới viết sau này sẽ tự
+       chạy được, không phải nhớ thêm một luật. */
+    const all = [
+      ...root.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), [role='button'], [role='option'], input:not([disabled]), select:not([disabled]), [tabindex]",
+      ),
+    ].filter((el) => el.offsetParent !== null && !el.hasAttribute("disabled"));
     if (!all.length) return;
 
     const cur = document.activeElement as HTMLElement | null;
@@ -1120,6 +1134,11 @@ async function boot() {
    *  dọc; chuyển tiêu điểm xuống thẻ thứ ba mươi mà không cuộn theo thì màn
    *  hình đứng yên và người chơi tưởng cần gạt hỏng. */
   function focusIn(el: HTMLElement): void {
+    /* `tabIndex = -1` cho phép GỌI `.focus()` mà không nhét phần tử vào thứ tự
+       phím Tab — đúng thứ cần cho `div role="button"`: tay cầm tới được, còn
+       người dùng bàn phím vẫn Tab qua đúng các nút thật. */
+    if (!el.hasAttribute("tabindex") && el.tagName !== "BUTTON" && el.tagName !== "INPUT")
+      el.tabIndex = -1;
     el.focus();
     el.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
@@ -1678,22 +1697,23 @@ async function boot() {
     /* Menu vừa mở bằng tay cầm mà không có gì đeo vòng vàng thì người chơi gạt
        cần một cái mới thấy nó "bật lên" — nửa giây tưởng máy treo. Đặt tiêu
        điểm ngay vào nút đầu tiên. */
-    const dangMo = menus.isOpen() || tutorial.isOpen() || devPanel.isOpen();
-    if (padOn && dangMo && !menuFocused) {
-      menuFocused = true;
-      const r = focusRoot();
+    const r0 = focusRoot();
+    if (padOn && r0 && r0 !== focusedRootEl) {
+      focusedRootEl = r0;
+      const r = r0;
       /* Đặt tiêu điểm vào nút đầu tiên TRONG THÂN, không phải nút ✕ ở tiêu đề.
          Nút đầu tiên theo DOM chính là ✕ — mở menu ra mà vòng vàng nằm trên nút
          đóng thì bấm "chọn" theo phản xạ là đóng luôn cái vừa mở. */
       const first =
-        r?.querySelector<HTMLElement>(".body button:not([disabled]), .dev-grid button:not([disabled])") ??
-        r?.querySelector<HTMLElement>("button:not([disabled])");
+        r?.querySelector<HTMLElement>(
+          ".body button:not([disabled]), .body [role='button'], .dev-grid button:not([disabled])",
+        ) ?? r?.querySelector<HTMLElement>("button:not([disabled])");
       if (first) focusIn(first);
       // Nút ✕ đeo tên nút HUỶ của tay cầm: người chơi thấy ngay là bấm nút đó
       // cũng đóng được, khỏi phải gạt cần lên tận tiêu đề.
-      const x = r?.querySelector<HTMLElement>("[data-x]");
+      const x = r.querySelector<HTMLElement>("[data-x]");
       if (x) x.dataset["pad"] = padButtonName(input.padInfo(), 1);
-    } else if (!dangMo) menuFocused = false;
+    } else if (!r0) focusedRootEl = null;
 
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
