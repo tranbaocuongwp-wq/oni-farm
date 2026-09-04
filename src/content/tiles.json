@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.",
   "grounds": {
     "water": {
       "solid": true,
@@ -131,5 +131,22 @@
     "map": "farm",
     "x": 26,
     "y": 29
+  },
+  "parking": {
+    "map": "farm",
+    "spots": [
+      {
+        "x": 23,
+        "y": 11
+      },
+      {
+        "x": 24,
+        "y": 11
+      },
+      {
+        "x": 25,
+        "y": 11
+      }
+    ]
   }
 }

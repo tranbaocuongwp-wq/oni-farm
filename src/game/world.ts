@@ -356,6 +356,63 @@ export function blockedAt(state: GameState, content: Content, cx: number, cy: nu
   return blockedAtBox(state, content, cx, cy, PLAYER_W, PLAYER_H);
 }
 
+/**
+ * Ô này đi được với một thực thể BƠI hay ĐI BỘ.
+ *
+ * Loài dưới nước đảo ngược luật: nước là chỗ đi được, cạn là chỗ chặn. Không có
+ * cái này thì con cá được thả xuống sẽ đứng trên đường nhựa như một con cá đi
+ * bộ, còn cái ao thì nó không bao giờ vào được — vì nước là ô ĐẶC với mọi thứ
+ * khác trong game.
+ */
+export function tileOkFor(t: Tile | null, content: Content, swims: boolean): boolean {
+  if (!t) return false;
+  if (!swims) return !isSolidTile(t, content);
+  if (t.prop || t.b) return false;
+  return t.g === "water";
+}
+
+/** Hộp va chạm của một thực thể BƠI/ĐI BỘ tại (cx,cy) có nằm gọn trong vùng đi
+ *  được không. */
+export function blockedForActor(
+  state: GameState,
+  content: Content,
+  cx: number,
+  cy: number,
+  bw: number,
+  bh: number,
+  swims: boolean,
+): boolean {
+  if (!swims) return blockedAtBox(state, content, cx, cy, bw, bh);
+  const EPS = 1e-6;
+  const x0 = Math.floor((cx - bw / 2) / TILE);
+  const x1 = Math.floor((cx + bw / 2 - EPS) / TILE);
+  const y0 = Math.floor((cy - bh / 2) / TILE);
+  const y1 = Math.floor((cy + bh / 2 - EPS) / TILE);
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) if (!tileOkFor(tileAt(state, x, y), content, true)) return true;
+  return false;
+}
+
+/** Ô NƯỚC gần (x,y) nhất — dùng để thả cá xuống ao thay vì lên mặt đường. */
+export function nearestWaterTile(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+  maxR = 30,
+): { x: number; y: number } | null {
+  for (let r = 0; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const tx = x + dx;
+        const ty = y + dy;
+        if (tileOkFor(tileAt(state, tx, ty), content, true)) return { x: tx, y: ty };
+      }
+  }
+  return null;
+}
+
 /** Hộp va chạm KÍCH THƯỚC BẤT KỲ tại (cx,cy) có đè lên ô đặc nào không.
  *  Xe tải rộng hơn người, con gà hẹp hơn — dùng chung một hộp cố định thì xe
  *  sẽ tìm ra đường mà thân nó không lọt. */

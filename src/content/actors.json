@@ -31,12 +31,12 @@
       "art": {
         "form": "quadruped",
         "body": "#f2eee6",
-        "bodyDark": "#b9b0a2",
+        "bodyDark": "#2e2a26",
         "belly": "#ffffff",
         "accent": "#e0a0a0",
         "w": 12,
         "h": 8,
-        "patch": 0.4,
+        "patch": 0.55,
         "horn": 1
       }
     },
@@ -178,7 +178,7 @@
         "body": "#f4e6c8",
         "bodyDark": "#c6ab7e",
         "belly": "#fffaf0",
-        "accent": "#e0913a",
+        "accent": "#d8342a",
         "w": 7,
         "h": 7
       }
@@ -215,7 +215,7 @@
         "body": "#e8eaee",
         "bodyDark": "#a9b0ba",
         "belly": "#ffffff",
-        "accent": "#e8b13a",
+        "accent": "#f0b429",
         "w": 8,
         "h": 7
       }

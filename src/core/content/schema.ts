@@ -94,7 +94,19 @@ class Check {
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** Phải khớp với kiểu CropForm trong src/game/types.ts. */
-const CROP_FORMS = ["leafy", "root", "vine", "stalk", "bush", "grain", "flower"] as const;
+const CROP_FORMS = [
+  "head",
+  "herb",
+  "bulb",
+  "melon",
+  "leafy",
+  "root",
+  "vine",
+  "stalk",
+  "bush",
+  "grain",
+  "flower",
+] as const;
 
 function colors(c: Check, src: Any, keys: string[], where: string) {
   for (const k of keys) {

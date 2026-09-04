@@ -169,6 +169,13 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       const all = new Set(d.s.unlocked);
       for (const id of content.cropOrder) all.add(`seed:${id}`);
       for (const id of content.buildingOrder) all.add(id);
+      // Vật nuôi cũng phải mở — nút này hứa "mở hết", mà từ khi có chăn nuôi thì
+      // nó vẫn chỉ mở cây với công trình, nên bấm xong tab Vật nuôi vẫn khoá
+      // sạch. Duyệt thẳng content chứ không liệt kê tay, để loài thêm sau tự có.
+      for (const id of content.animalOrder) {
+        if (content.animals[id]?.job === "pest") continue;
+        all.add(`animal:${id}`);
+      }
       const stages = new Set(d.s.stagesDone);
       for (const st of content.stages) stages.add(st.id);
       const s = touch(d);

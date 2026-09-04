@@ -25,6 +25,7 @@ import {
   tileCenterX,
   tileCenterY,
   blockedAtBox,
+  blockedForActor,
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { parseItem } from "./items.ts";
@@ -234,7 +235,10 @@ export function checkInvariants(state: GameState, content: Content): string[] {
             : en.kind === "vehicle"
               ? content.vehicles[en.def]?.box
               : content.animals[en.def]?.box;
-        if (box && blockedAtBox(state, content, en.x, en.y, box.w, box.h))
+        // Loài dưới nước ĐẢO NGƯỢC luật: với nó, nước mới là chỗ hợp lệ. Dùng
+        // phép kiểm chung ở đây sẽ báo mọi con cá là "nằm trong ô đặc".
+        const swims = content.animals[en.def]?.housing === "water";
+        if (box && blockedForActor(state, content, en.x, en.y, box.w, box.h, swims))
           e.push(
             `thực thể ${en.id} ('${en.def}') nằm trong ô solid tại ` +
               `(${(en.x / 16).toFixed(2)}, ${(en.y / 16).toFixed(2)})`,

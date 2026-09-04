@@ -26,7 +26,15 @@
  * Thiếu trường = "leafy", đúng cách vẽ cũ, nên content pack cũ không đổi hình.
  */
 export type CropForm =
-  /** thân đứng có lá hai bên, quả treo quanh thân (xà lách, cà chua) */
+  /** BẮP tròn ôm sát đất (xà lách, cải thìa, su hào) */
+  | "head"
+  /** búi lá MẢNH dựng đứng, ăn lá không ăn quả (hành, hẹ, sả, húng) */
+  | "herb"
+  /** củ tròn nổi trên mặt đất, ngọn mảnh (hành tây, tỏi) */
+  | "bulb"
+  /** quả TO nằm trên đất, dây lá bò quanh (dưa hấu, bí đỏ) */
+  | "melon"
+  /** thân đứng có lá hai bên, quả treo quanh thân (cà chua) */
   | "leafy"
   /** củ vùi dưới đất, chín thì nhô vai củ lên (cà rốt, khoai) */
   | "root"
@@ -410,6 +418,14 @@ export interface TilesDef {
   spawn: { map: string; x: number; y: number };
   /** CỔNG: ô ở mép bản đồ mà xe từ ngoài đi vào. Thiếu thì không có xe nào. */
   gate?: { map: string; x: number; y: number };
+  /**
+   * BÃI ĐẬU trước kho — chỗ xe thu mua dừng lại.
+   *
+   * Danh sách ô CỐ ĐỊNH, khai trong content chứ không tính lúc chạy: người chơi
+   * nhìn mặt đường là biết xe sẽ đậu đâu, và xe tới sau khi bãi đầy thì đứng
+   * chờ ngoài đường thay vì chen vào.
+   */
+  parking?: { map: string; spots: { x: number; y: number }[] };
   /**
    * ĐIỂM GIAO HÀNG — chỗ vật nuôi và (sau này) xe được thả xuống.
    *

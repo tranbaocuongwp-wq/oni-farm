@@ -16,7 +16,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "leafy",
+        "form": "head",
         "stem": "#4a7c2a",
         "leaf": "#6cc94f",
         "leafDark": "#3f8f33",
@@ -48,7 +48,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "head",
         "stem": "#5b8a2e",
         "leaf": "#8fd35c",
         "leafDark": "#4a7a2c",
@@ -146,7 +146,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "head",
         "stem": "#2f5c30",
         "leaf": "#468a47",
         "leafDark": "#28502c",
@@ -240,7 +240,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#59395e",
         "leaf": "#7d5285",
         "leafDark": "#452c4a",
@@ -272,7 +272,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#8fbf5a",
         "leaf": "#a8d370",
         "leafDark": "#6f9c42",
@@ -304,7 +304,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#4f8a34",
         "leaf": "#7fc95a",
         "leafDark": "#3f6f2b",
@@ -337,7 +337,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#3c6b2c",
         "leaf": "#5fa844",
         "leafDark": "#31582a",
@@ -369,7 +369,7 @@
       "yieldMin": 1,
       "yieldMax": 3,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#3f7a3a",
         "leaf": "#63b45c",
         "leafDark": "#356633",
@@ -402,7 +402,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#e8ecd8",
         "leaf": "#5fae4a",
         "leafDark": "#3f7a34",
@@ -436,7 +436,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#d8e4c4",
         "leaf": "#4f9e42",
         "leafDark": "#356b2e",
@@ -469,7 +469,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#b9c98a",
         "leaf": "#8fae5c",
         "leafDark": "#63803c",
@@ -501,7 +501,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "leafy",
+        "form": "herb",
         "stem": "#4a6b34",
         "leaf": "#6f9e4a",
         "leafDark": "#3c5a2c",
@@ -662,7 +662,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "root",
+        "form": "head",
         "stem": "#5b8a2e",
         "leaf": "#8fd35c",
         "leafDark": "#4a7a2c",
@@ -886,7 +886,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "root",
+        "form": "bulb",
         "stem": "#a8c47a",
         "leaf": "#7aae4a",
         "leafDark": "#5a8a34",
@@ -918,7 +918,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "root",
+        "form": "bulb",
         "stem": "#a8c47a",
         "leaf": "#7aae4a",
         "leafDark": "#5a8a34",
@@ -983,7 +983,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "vine",
+        "form": "melon",
         "stem": "#4a7a2c",
         "leaf": "#6fae4a",
         "leafDark": "#3c6326",
@@ -1015,7 +1015,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "vine",
+        "form": "melon",
         "stem": "#4d7a24",
         "leaf": "#68a83a",
         "leafDark": "#3d6b22",
@@ -1047,7 +1047,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "vine",
+        "form": "melon",
         "stem": "#4a7a2c",
         "leaf": "#6fae4a",
         "leafDark": "#3c6326",
@@ -1173,7 +1173,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
-        "form": "vine",
+        "form": "melon",
         "stem": "#4a7a2c",
         "leaf": "#6fae4a",
         "leafDark": "#3c6326",
@@ -1205,7 +1205,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
-        "form": "vine",
+        "form": "melon",
         "stem": "#4a7a2c",
         "leaf": "#6fae4a",
         "leafDark": "#3c6326",

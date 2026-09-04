@@ -28,10 +28,11 @@
 import type { AnimalDef, Content, Dir, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
-import { blockedAtBox, idx, TILE } from "./world.ts";
+import { blockedForActor, idx, TILE } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
+import { patrolCatch } from "./animals.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -70,14 +71,15 @@ export function animalDef(content: Content, id: string): AnimalDef | null {
 export function actorShape(
   content: Content,
   e: Entity,
-): { speed: number; box: { w: number; h: number } } | null {
-  if (e.kind === "worker") return { speed: content.workers.speed, box: content.workers.box };
+): { speed: number; box: { w: number; h: number }; swims: boolean } | null {
+  if (e.kind === "worker")
+    return { speed: content.workers.speed, box: content.workers.box, swims: false };
   if (e.kind === "vehicle") {
     const v = content.vehicles[e.def];
-    return v ? { speed: v.speed, box: v.box } : null;
+    return v ? { speed: v.speed, box: v.box, swims: false } : null;
   }
   const def = animalDef(content, e.def);
-  return def ? { speed: def.speed, box: def.box } : null;
+  return def ? { speed: def.speed, box: def.box, swims: def.housing === "water" } : null;
 }
 
 /** Thực thể trên bản đồ ĐANG chơi. Mọi vòng lặp trong TICK phải đi qua đây. */
@@ -222,8 +224,8 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
     const ny = cur.y + (dy / len) * step;
     let mx = cur.x;
     let my = cur.y;
-    if (!blockedAtBox(s, content, nx, cur.y, def.box.w, def.box.h)) mx = nx;
-    if (!blockedAtBox(s, content, mx, ny, def.box.w, def.box.h)) my = ny;
+    if (!blockedForActor(s, content, nx, cur.y, def.box.w, def.box.h, def.swims)) mx = nx;
+    if (!blockedForActor(s, content, mx, ny, def.box.w, def.box.h, def.swims)) my = ny;
 
     if (mx === cur.x && my === cur.y) {
       // Kẹt: bỏ đường, bước quyết định kế tiếp sẽ tính lại. Không cố dí vào
@@ -250,16 +252,28 @@ function roll(e: Entity): number {
 
 /* ------------------------------------------------------------ bước quyết định */
 
-/** Ô đích ngẫu nhiên quanh vị trí hiện tại, trong bán kính `r` ô. */
-function wanderGoal(e: Entity, s: GameState, r: number): { x: number; y: number } {
+/**
+ * Ô đích ngẫu nhiên quanh vị trí hiện tại, trong bán kính `r` ô.
+ *
+ * Thử vài lần để né RUỘNG. Không thử lại thì con bò cứ nhắm thẳng vào luống rau
+ * mà đi, và tuy đường đi đã tránh ruộng thì cái ĐÍCH vẫn nằm giữa luống.
+ */
+function wanderGoal(e: Entity, s: GameState, r: number, avoidFarm: boolean): { x: number; y: number } {
   const cx = Math.floor(e.x / TILE);
   const cy = Math.floor(e.y / TILE);
-  const dx = Math.floor(roll(e) * (r * 2 + 1)) - r;
-  const dy = Math.floor(roll(e) * (r * 2 + 1)) - r;
-  return {
-    x: Math.max(1, Math.min(s.w - 2, cx + dx)),
-    y: Math.max(1, Math.min(s.h - 2, cy + dy)),
-  };
+  let best = { x: cx, y: cy };
+  for (let k = 0; k < 4; k++) {
+    const dx = Math.floor(roll(e) * (r * 2 + 1)) - r;
+    const dy = Math.floor(roll(e) * (r * 2 + 1)) - r;
+    const g = {
+      x: Math.max(1, Math.min(s.w - 2, cx + dx)),
+      y: Math.max(1, Math.min(s.h - 2, cy + dy)),
+    };
+    best = g;
+    if (!avoidFarm) break;
+    if (!s.tiles[g.y * s.w + g.x]?.tilled) break;
+  }
+  return best;
 }
 
 /**
@@ -270,6 +284,13 @@ function wanderGoal(e: Entity, s: GameState, r: number): { x: number; y: number 
  * 20 con hay 60 con thì vẫn ngần ấy lần tìm đường mỗi giây.
  */
 export function actorStep(d: Draft, content: Content): void {
+  if (!d.s.entities.length) return;
+
+  // Chó bắt sâu bọ TRƯỚC khi ai kịp nghĩ: làm ở đây thì nó bắt được cả ban ngày
+  // lúc đang đuổi, chứ không phải chỉ một lần lúc người chơi đi ngủ.
+  // Đọc `d.s` SAU lời gọi này: bắt được con nào là draft đã thay mảng thực thể,
+  // giữ tham chiếu cũ thì cả bước quyết định chạy trên danh sách đã lỗi thời.
+  patrolCatch(d, content);
   const s = d.s;
   if (!s.entities.length) return;
 
@@ -324,7 +345,26 @@ export function actorStep(d: Draft, content: Content): void {
     if (budget <= 0) continue;
     if (s.minutes - e.ai.planAt < REPLAN_COOLDOWN) continue;
 
-    const g = wanderGoal(e, s, 4);
+    // Vật nuôi tránh ruộng; sâu bọ thì KHÔNG — phá cây là việc của chúng.
+    const neRuong = cur.kind === "animal";
+
+    /* Con chó ĐI TUẦN chứ không lang thang: nó nhắm thẳng vào con sâu bọ gần
+       nhất. Không có cái này thì nó đi ngẫu nhiên trên bản đồ 40×30 và gần như
+       không bao giờ đứng đủ gần con chuột nào để đuổi — nuôi chó thành ra vô
+       nghĩa, đúng thứ người chơi sẽ nhận ra ngay sau vài đêm. */
+    let g: { x: number; y: number } | null = null;
+    if (animalDef(content, cur.def)?.job === "patrol") {
+      let bestD = Infinity;
+      for (const p of s.entities) {
+        if (p.map !== s.mapId || animalDef(content, p.def)?.job !== "pest") continue;
+        const dd = Math.hypot(p.x - e.x, p.y - e.y);
+        if (dd < bestD) {
+          bestD = dd;
+          g = { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) };
+        }
+      }
+    }
+    if (!g) g = wanderGoal(e, s, 4, neRuong);
     e.ai.planAt = s.minutes;
     budget--;
 
@@ -333,7 +373,13 @@ export function actorStep(d: Draft, content: Content): void {
     const path = findPath(s, content, cx, cy, new Set([idx(s.w, g.x, g.y)]), {
       maxNodes: MAX_NODES_ACTOR,
       box: def.box,
-      leash: { x: cx, y: cy, r: LEASH_TILES },
+      swims: def.swims,
+      // Chó đang đuổi thì được phép băng qua ruộng — đứng ngoài bờ nhìn con
+      // chuột gặm cây thì tuần tra để làm gì.
+      avoidFarm: neRuong && animalDef(content, cur.def)?.job !== "patrol",
+      // Loài bơi bị nhốt trong cái ao của nó: bán kính nhỏ, không đi lang thang
+      // sang ao khác qua đường bộ (mà nó cũng không đi bộ được).
+      leash: { x: cx, y: cy, r: def.swims ? 6 : LEASH_TILES },
     });
     if (path && path.length) {
       e.ai.path = path.slice(0, MAX_PATH);

@@ -35,7 +35,7 @@ import {
   touch,
 } from "./state.ts";
 import { harvestTileIn } from "./actions.ts";
-import { idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
+import { TILE, blockedAtBox, idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
 import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
@@ -467,11 +467,18 @@ function spawnPests(d: Draft, content: Content): void {
     const i = idx(d.s.w, rx.v, ry.v);
     const t = d.s.tiles[i];
     if (!t || t.prop || t.b) continue;
+    // Phải kiểm cả HỘP VA CHẠM, không chỉ "ô này có vật thể không": ô nước
+    // trống rỗng nhưng vẫn là ô ĐẶC, và một con chuột sinh ra giữa ao sẽ làm
+    // vỡ bất biến ngay tại action SLEEP — tức là game chết đúng lúc sang ngày.
+    const cx = rx.v * TILE + TILE / 2;
+    const cy = ry.v * TILE + TILE / 2;
+    const box = content.animals[loai[r2.v]!]?.box;
+    if (!box || blockedAtBox(d.s, content, cx, cy, box.w, box.h)) continue;
     spawnEntity(d, content, {
       def: loai[r2.v]!,
       map: d.s.mapId,
-      x: rx.v * 16 + 8,
-      y: ry.v * 16 + 8,
+      x: cx,
+      y: cy,
     });
   }
 }

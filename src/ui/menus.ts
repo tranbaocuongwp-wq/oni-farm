@@ -119,15 +119,39 @@ export function createMenus(
     if (e.target === root) close();
   });
 
+  /**
+   * Ảnh minh hoạ cho một id.
+   *
+   * `atlas.icon` chỉ biết vật phẩm (tool/item/seed/crop/build). Con vật và người
+   * làm không phải vật phẩm — cố ý, vì con vật sống không bao giờ vào túi đồ —
+   * nên phải hỏi đúng nguồn của chúng ở đây, nếu không cửa hàng hiện toàn ô
+   * trống.
+   */
+  function artFor(id: string): HTMLCanvasElement | null {
+    if (id.startsWith("animal:")) return atlas.animal(id.slice(7), "down", 0);
+    if (id.startsWith("worker:")) return atlas.worker(Number(id.slice(7)) || 0, "down", 0);
+    // Hạt giống: hiện CÂY ĐÃ CHÍN chứ không phải gói hạt. Sáu mươi mốt gói giấy
+    // trông giống hệt nhau thì người chơi không phân biệt được gì; nhìn cái cây
+    // là biết mình đang mua gì.
+    if (id.startsWith("plant:")) {
+      const frames = atlas.crops[id.slice(6)];
+      return frames?.[frames.length - 1] ?? null;
+    }
+    return atlas.icon(id);
+  }
+
   function icon(id: string, size = 16): HTMLElement {
-    const src = atlas.icon(id);
+    const src = artFor(id);
     const c = document.createElement("canvas");
     c.width = src?.width ?? 16;
     c.height = src?.height ?? 16;
     if (src) c.getContext("2d")!.drawImage(src, 0, 0);
     c.className = "icon";
-    c.style.width = `${size * 2}px`;
-    c.style.height = `${size * 2}px`;
+    // Giữ đúng tỉ lệ: sprite cây cao 24px chứ không vuông 16px, ép vuông là bóp
+    // méo cả cây thành một cục.
+    const k = (size * 2) / Math.max(c.width, c.height);
+    c.style.width = `${Math.round(c.width * k)}px`;
+    c.style.height = `${Math.round(c.height * k)}px`;
     return c;
   }
 
@@ -272,15 +296,44 @@ export function createMenus(
       // nhầm hạt trái mùa là bẫy tiền — mà danh sách 61 dòng cũng không ai đọc
       // hết. Lọc theo mùa vừa khỏi bẫy, vừa biến cửa hàng thành thứ ĐÁNG xem
       // lại mỗi đầu mùa.
+      /* LƯỚI THẺ chứ không phải danh sách dòng. Một mùa có tới 40 loại hạt;
+         bốn mươi dòng chữ xếp dọc thì không ai đọc hết, mà cũng không so sánh
+         được với nhau. Thẻ có ẢNH CÂY ĐÃ CHÍN nên nhìn là biết đang mua gì. */
+      const grid = document.createElement("div");
+      grid.className = "shop-grid";
       let shown = 0;
       for (const id of c.cropOrder) {
         if (!cropInSeason(id, s.day, c)) continue;
         const crop = c.crops[id]!;
+        const mo = s.unlocked.includes(`seed:${id}`);
         const days = crop.growthDays.reduce((a, b) => a + b, 0);
-        const regrow = crop.regrowDays ? ` · mọc lại ${crop.regrowDays} ngày` : "";
-        mk(`seed:${id}`, crop.seedName, `${days} ngày · bán ${money(crop.sellPrice)}${regrow}`, crop.seedPrice);
+
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = `shop-card${mo ? "" : " locked"}`;
+        card.disabled = !mo || s.money < crop.seedPrice;
+        card.appendChild(icon(`plant:${id}`, 22));
+
+        const nm = document.createElement("div");
+        nm.className = "nm";
+        nm.textContent = mo ? crop.name : "???";
+        const sub = document.createElement("div");
+        sub.className = "sub";
+        sub.textContent = mo
+          ? `${days}n · ${money(crop.sellPrice)}${crop.regrowDays ? " ↻" : ""}`
+          : "chưa mở";
+        const pr = document.createElement("div");
+        pr.className = "pr";
+        pr.textContent = money(crop.seedPrice);
+        card.append(nm, sub, pr);
+        card.addEventListener("click", () => {
+          h.buy(`seed:${id}`, 1);
+          openShop();
+        });
+        grid.appendChild(card);
         shown++;
       }
+      body.appendChild(grid);
       const sea = currentSeason(s, c);
       const left = c.daysPerSeason - dayOfSeason(s.day, c);
       foot.appendChild(

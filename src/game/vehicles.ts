@@ -25,7 +25,7 @@ import { dEntity, randInt, toastText, touch } from "./state.ts";
 import { setStore } from "./storage.ts";
 import { removeEntity } from "./entities.ts";
 import { sellPriceOf } from "./items.ts";
-import { TILE, idx, tileAt } from "./world.ts";
+import { TILE, idx, nearestWaterTile, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, spawnEntity } from "./entities.ts";
 
@@ -120,6 +120,38 @@ export function sendVehicle(
   return id;
 }
 
+/**
+ * Ô đậu TRỐNG gần kho nhất cho chiếc xe `id`, hoặc null nếu bãi đã đầy.
+ *
+ * "Trống" nghĩa là chưa xe nào khác đang nhắm tới hoặc đang đứng đó. Thứ tự
+ * duyệt là thứ tự khai trong content, nên kết quả TẤT ĐỊNH — không cần một hàng
+ * đợi riêng trong state, cũng không có gì để lệch qua save/load.
+ */
+export function freeParkSpot(
+  s: GameState,
+  content: Content,
+  selfId: number,
+): { x: number; y: number } | null {
+  const pk = content.tiles.parking;
+  if (!pk || pk.map !== s.mapId) return null;
+  for (const spot of pk.spots) {
+    let taken = false;
+    for (const e of s.entities) {
+      if (e.kind !== "vehicle" || e.id === selfId) continue;
+      if (e.ai.tx === spot.x && e.ai.ty === spot.y) {
+        taken = true;
+        break;
+      }
+      if (Math.floor(e.x / TILE) === spot.x && Math.floor(e.y / TILE) === spot.y) {
+        taken = true;
+        break;
+      }
+    }
+    if (!taken) return spot;
+  }
+  return null;
+}
+
 /* -------------------------------------------------------------------- bước */
 
 /**
@@ -174,8 +206,23 @@ export function vehicleStep(
     return true;
   }
 
-  // ---- đang vào ----------------------------------------------------------
-  if (Math.abs(cx - drop.x) + Math.abs(cy - drop.y) <= 1) {
+  /* ---- đang vào --------------------------------------------------------
+     Xe THU MUA đậu ở BÃI ĐẬU trước kho; xe GIAO HÀNG thì tới thẳng điểm giao.
+     Bãi đầy thì xe đứng chờ ngoài đường — đó chính là hàng đợi, không cần cấu
+     trúc gì thêm trong state. */
+  let dich = drop;
+  if (v.role === "buyer") {
+    const spot = freeParkSpot(d.s, content, e.id);
+    if (!spot) {
+      v.wait = 2; // bãi đầy: chờ rồi hỏi lại
+      return true;
+    }
+    dich = { map: drop.map, x: spot.x, y: spot.y };
+    e.ai.tx = spot.x;
+    e.ai.ty = spot.y;
+  }
+
+  if (Math.abs(cx - dich.x) + Math.abs(cy - dich.y) <= 1) {
     v.wait = WAIT_MINUTES;
     e.ai.phase = "wait";
     e.ai.path = [];
@@ -183,7 +230,7 @@ export function vehicleStep(
   }
   if (e.ai.path.length) return true;
   if (!takeBudget()) return true;
-  const p = drivePath(d.s, content, { x: cx, y: cy }, drop, box);
+  const p = drivePath(d.s, content, { x: cx, y: cy }, dich, box);
   if (p && p.length) e.ai.path = p;
   else {
     // Không có đường vào — thường là người chơi chưa lát đường tới kho. Đứng
@@ -202,14 +249,32 @@ function doErrand(d: Draft, content: Content, index: number): void {
   const drop = content.tiles.dropoff ?? content.tiles.spawn;
 
   if (er.kind === "drop") {
+    const def = content.animals[er.animal];
+    // Loài dưới nước phải xuống AO, không phải xuống mặt đường: nước là ô đặc
+    // với mọi thứ khác, nên thả cá lên đường là con cá đó kẹt trên cạn vĩnh viễn.
+    let px = drop.x;
+    let py = drop.y + 1;
+    if (def?.housing === "water") {
+      const ao = nearestWaterTile(d.s, content, drop.x, drop.y);
+      if (!ao) {
+        toastText(d, "Chưa có ao để thả cá — hàng bị trả lại.", "bad");
+        return;
+      }
+      px = ao.x;
+      py = ao.y;
+    }
     const id = spawnEntity(d, content, {
       def: er.animal,
       map: drop.map,
-      x: drop.x * TILE + TILE / 2,
-      y: (drop.y + 1) * TILE + TILE / 2,
+      x: px * TILE + TILE / 2,
+      y: py * TILE + TILE / 2,
     });
-    const def = content.animals[er.animal];
-    if (id !== null && def) toastText(d, `${def.name} đã được giao tới.`, "good");
+    if (id !== null && def)
+      toastText(
+        d,
+        def.housing === "water" ? `${def.name} đã được thả xuống ao.` : `${def.name} đã được giao tới.`,
+        "good",
+      );
     return;
   }
 

@@ -2270,7 +2270,12 @@ test("41. thời tiết tất định: cùng seed → cùng chuỗi 30 ngày; d�
 });
 
 test("42. mưa: sáng ra ô đã cày NGOÀI TRỜI ướt, trong nhà không; nắng gắt: quá trưa ruộng khô", () => {
-  const store = mkStore(7);
+  /* Tắt "đất cày bỏ không thì hoang trở lại" cho riêng kịch bản này. Nó kiểm
+     MƯA, không kiểm cỏ dại — mà luật hoang trở lại có xác suất 10% mỗi đêm, nên
+     chỉ cần đổi bản đồ một chút (chuỗi seed dịch đi) là một ô nào đó hoang lại
+     và test đỏ vì một lý do chẳng liên quan. */
+  const kho = contentWith((r) => { r.balance.tilledDecayChance = 0; });
+  const store = createStore(createNewGame(kho, 7), kho, { validate: true, strict: true });
   walkTo(store, HOME.x, HOME.y);
   selectItem(store, "tool:hoe");
   for (const p of PLOTS) use(store, p.x, p.y);

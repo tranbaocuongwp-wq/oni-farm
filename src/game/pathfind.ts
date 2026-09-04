@@ -21,7 +21,18 @@
 ============================================================================ */
 
 import type { Content, GameState } from "./types.ts";
-import { PLAYER_H, PLAYER_W, TILE, blockedAtBox, idx, isSolid, speedMulAt } from "./world.ts";
+import {
+  PLAYER_H,
+  PLAYER_W,
+  TILE,
+  blockedAtBox,
+  blockedForActor,
+  idx,
+  isSolid,
+  speedMulAt,
+  tileAt,
+  tileOkFor,
+} from "./world.ts";
 
 /** Hộp va chạm của một thực thể, tính bằng world px. */
 export interface Box {
@@ -37,6 +48,20 @@ export const MAX_NODES_DEFAULT = 4000;
 export interface PathOptions {
   maxNodes?: number;
   box?: Box;
+  /** Thực thể BƠI: nước là chỗ đi được, cạn là chỗ chặn. */
+  swims?: boolean;
+  /**
+   * Tránh RUỘNG: không lập đường qua ô đã cày.
+   *
+   * Chỉ áp cho VẬT NUÔI. Con bò đứng giữa luống xà lách là thứ ai cũng thấy
+   * ngay và thấy là khó chịu. Cố ý chỉ chặn lúc LẬP ĐƯỜNG chứ không chặn lúc va
+   * chạm: nếu người chơi cày ngay dưới chân con bò thì nó vẫn phải đi ra được,
+   * chứ không bị nhốt trong chính cái luống vừa cày.
+   *
+   * KHÔNG áp cho sâu bọ — chúng phải tới được cây thì mới phá được, đó là việc
+   * của chúng. Cũng không áp cho người làm: họ phải băng qua ruộng mà làm.
+   */
+  avoidFarm?: boolean;
   /** Dây xích: chỉ tìm trong bán kính này (ô) quanh tâm, để một actor kẹt không
    *  quét cả bản đồ. */
   leash?: { x: number; y: number; r: number };
@@ -48,8 +73,10 @@ export function walkableTile(
   content: Content,
   x: number,
   y: number,
+  swims = false,
 ): boolean {
   if (x < 0 || y < 0 || x >= state.w || y >= state.h) return false;
+  if (swims) return tileOkFor(tileAt(state, x, y), content, true);
   return !isSolid(state, content, x, y);
 }
 
@@ -154,6 +181,8 @@ export function findPath(
 ): number[] | null {
   const w = state.w;
   const box = opts.box ?? PLAYER_BOX;
+  const swims = opts.swims === true;
+  const avoidFarm = opts.avoidFarm === true;
   const maxNodes = opts.maxNodes ?? MAX_NODES_DEFAULT;
   const leash = opts.leash;
   const start = idx(w, sx, sy);
@@ -223,16 +252,18 @@ export function findPath(
         const ny = cy + dy;
         if (leash && (Math.abs(nx - leash.x) > leash.r || Math.abs(ny - leash.y) > leash.r))
           continue;
-        if (!walkableTile(state, content, nx, ny)) continue;
+        if (!walkableTile(state, content, nx, ny, swims)) continue;
+        if (avoidFarm && tileAt(state, nx, ny)?.tilled) continue;
         // Hộp va chạm rộng hơn một điểm: ô đi được ở mức Ô vẫn có thể không lọt.
-        if (!blockedAtBox(state, content, nx * TILE + TILE / 2, ny * TILE + TILE / 2, box.w, box.h)) {
-          // ok
-        } else continue;
+        if (
+          blockedForActor(state, content, nx * TILE + TILE / 2, ny * TILE + TILE / 2, box.w, box.h, swims)
+        )
+          continue;
         // Cấm cắt góc: đi chéo thì hai ô kề cũng phải trống, nếu không thân
         // thực thể sẽ kẹt cứng ở góc tường.
         if (dx !== 0 && dy !== 0) {
-          if (!walkableTile(state, content, cx + dx, cy)) continue;
-          if (!walkableTile(state, content, cx, cy + dy)) continue;
+          if (!walkableTile(state, content, cx + dx, cy, swims)) continue;
+          if (!walkableTile(state, content, cx, cy + dy, swims)) continue;
         }
         const ni = idx(w, nx, ny);
         const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;

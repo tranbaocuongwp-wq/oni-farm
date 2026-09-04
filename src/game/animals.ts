@@ -286,7 +286,41 @@ export function pestNight(d: Draft, content: Content): number {
   return hit;
 }
 
-/** Chó tuần tra: con sâu bọ nào lọt vào bán kính thì bị đuổi. */
+/**
+ * Chó tuần tra BẮT TẠI CHỖ — chạy mỗi bước quyết định, ban ngày lẫn ban đêm.
+ *
+ * Trước đây chó chỉ đuổi được sâu bọ trong `patrolNight`, tức đúng một lần lúc
+ * người chơi đi ngủ. Ban ngày nó đuổi theo con chuột, dí sát tận nơi, đứng đè
+ * lên nhau — rồi không có gì xảy ra. Nhìn thì như con chó bị hỏng.
+ *
+ * Gom id rồi mới xoá: `removeEntity` cắt mảng, mà hàm gọi nó đang duyệt mảng ấy
+ * theo CHỈ SỐ. Xoá giữa vòng lặp là cách chắc chắn nhất để nhảy cóc mất một con.
+ */
+export function patrolCatch(d: Draft, content: Content): number {
+  const dogs = d.s.entities.filter(
+    (e) => e.map === d.s.mapId && animalDef(content, e.def)?.job === "patrol",
+  );
+  if (!dogs.length) return 0;
+  const bat: number[] = [];
+  for (const e of d.s.entities) {
+    if (e.map !== d.s.mapId) continue;
+    if (animalDef(content, e.def)?.job !== "pest") continue;
+    for (const dog of dogs) {
+      // 1,5 ô: đủ rộng để "chạm là bắt" không bị hụt vì hai con dừng lệch nhau
+      // nửa ô, đủ hẹp để vẫn phải đuổi tới nơi chứ không bắt từ xa.
+      if (Math.hypot(dog.x - e.x, dog.y - e.y) / TILE <= 1.5) {
+        bat.push(e.id);
+        break;
+      }
+    }
+  }
+  for (const id of bat) removeEntity(d, id);
+  if (bat.length) toastText(d, `Chó đuổi được ${bat.length} con phá hoại.`, "good");
+  return bat.length;
+}
+
+/** Chó tuần tra: quét đêm, bán kính rộng hơn — thứ mà con chó "canh nhà" làm
+ *  được kể cả khi người chơi không nhìn. */
 export function patrolNight(d: Draft, content: Content): number {
   const dogs = d.s.entities.filter((e) => animalDef(content, e.def)?.job === "patrol");
   if (!dogs.length) return 0;
