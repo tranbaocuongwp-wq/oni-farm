@@ -540,7 +540,7 @@ function hubPage() {
             <p>Từng việc nhân vật làm được, cần cầm gì, và mẹo cho mỗi việc.</p>
           </a>
           <a class="hub-card" href="/cach-hoat-dong/">
-            <div class="hub-art">🌗 ☔ ⚡</div>
+            <div class="hub-art">${cx("ui:moon", 30, "Ngày đêm")}${cx("ui:water", 30, "Mưa")}${cx("ui:power", 30, "Điện")}</div>
             <h3>Cách game vận hành</h3>
             <p>Vì sao cây lớn khi bạn ngủ, thời tiết ảnh hưởng gì, tiền từ đâu ra.</p>
           </a>

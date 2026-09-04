@@ -573,6 +573,18 @@ body[data-hand="left"] #devpanel {
   align-items: center;
   gap: 4px;
   margin-bottom: 4px;
+  /* Thanh tiêu đề là TAY CẦM để kéo cả bảng đi chỗ khác. `touch-action: none`
+     là bắt buộc: thiếu nó thì trình duyệt hiểu cú vuốt là cuộn trang và
+     `pointermove` không bao giờ tới nơi. */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+#devpanel.dragging {
+  opacity: 0.85;
+}
+#devpanel.dragging .dev-head {
+  cursor: grabbing;
 }
 .dev-head b {
   flex: 1;
@@ -1981,4 +1993,21 @@ body[data-orientation="landscape"] #toasts {
 .bm-item .pr {
   color: var(--gold);
   font-weight: 700;
+}
+
+/* Nút menu có ICON PIXEL. Icon vẽ trong atlas chứ không dùng emoji: emoji là
+   font của HỆ ĐIỀU HÀNH nên mỗi máy ra một hình, và trong một game mà từng
+   điểm ảnh đều tự vẽ thì một cái emoji bóng loáng lộ ra ngay. */
+button.ico-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+button.ico-btn .bi {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 16px;
+  height: 16px;
+  flex: none;
 }

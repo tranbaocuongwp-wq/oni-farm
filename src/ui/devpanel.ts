@@ -158,6 +158,71 @@ export function createDevPanel(host: HTMLElement, h: DevHandlers): DevPanel {
     },
   };
 
+  /* ---- KÉO ĐỂ DỜI CHỖ ---------------------------------------------------
+     Bảng cắm cứng ở góc phải-trên, mà đúng cái đang cần soi thường nằm ngay
+     dưới nó — và ô mình vừa cày thì không nhìn thấy. Kéo thanh tiêu đề để dời
+     đi chỗ khác.
+
+     Vị trí lưu ở `localStorage` chứ không ở settings: đây là thói quen của
+     người ĐANG GỠ LỖI trên đúng cái máy này, không phải một tuỳ chọn của game,
+     và nó không đáng để leo vào đường settings có phiên bản + migrate. */
+  const POS_KEY = "oni-farm:devpanel-pos";
+
+  const datViTri = (x: number, y: number) => {
+    const w = host.offsetWidth || 220;
+    const h2 = host.offsetHeight || 200;
+    // Kẹp trong màn hình, chừa lại ít nhất một mẩu để còn kéo ngược ra được.
+    const cx = Math.max(4, Math.min(window.innerWidth - w - 4, x));
+    const cy = Math.max(4, Math.min(window.innerHeight - Math.min(h2, 80) - 4, y));
+    host.style.left = `${cx}px`;
+    host.style.top = `${cy}px`;
+    host.style.right = "auto";
+  };
+
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    if (raw) {
+      const v = JSON.parse(raw) as { x: number; y: number };
+      if (Number.isFinite(v?.x) && Number.isFinite(v?.y)) datViTri(v.x, v.y);
+    }
+  } catch {
+    /* localStorage bị chặn / dữ liệu hỏng — cứ để bảng ở chỗ mặc định */
+  }
+
+  {
+    const head = host.querySelector<HTMLElement>(".dev-head")!;
+    let keo: { id: number; dx: number; dy: number } | null = null;
+
+    head.addEventListener("pointerdown", (e) => {
+      // Bấm vào nút × hay nút thu gọn thì KHÔNG phải là kéo.
+      if ((e.target as HTMLElement).closest("button")) return;
+      const r = host.getBoundingClientRect();
+      keo = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top };
+      head.setPointerCapture(e.pointerId);
+      host.classList.add("dragging");
+      e.preventDefault();
+    });
+
+    head.addEventListener("pointermove", (e) => {
+      if (!keo || keo.id !== e.pointerId) return;
+      datViTri(e.clientX - keo.dx, e.clientY - keo.dy);
+    });
+
+    const thaTay = (e: PointerEvent) => {
+      if (!keo || keo.id !== e.pointerId) return;
+      keo = null;
+      host.classList.remove("dragging");
+      try {
+        const r = host.getBoundingClientRect();
+        localStorage.setItem(POS_KEY, JSON.stringify({ x: r.left, y: r.top }));
+      } catch {
+        /* không lưu được thì thôi — lần sau về chỗ mặc định */
+      }
+    };
+    head.addEventListener("pointerup", thaTay);
+    head.addEventListener("pointercancel", thaTay);
+  }
+
   host.querySelector<HTMLElement>(".dev-x")!.addEventListener("click", () => api.close());
   const minBtn = host.querySelector<HTMLButtonElement>(".dev-min")!;
   minBtn.addEventListener("click", () => {

@@ -19,7 +19,7 @@
 ============================================================================ */
 
 import type { Content, DebugOp, GameState } from "../game/types.ts";
-import type { Atlas } from "../art/atlas.ts";
+import type { Atlas, UiIcon } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
@@ -61,6 +61,10 @@ export interface MenuHandlers {
   canInstall(): boolean;
   /** Mở chế độ xây dựng (dừng thời gian, kéo thả địa hình). */
   buildMode(): void;
+  /** Hỏi server xem có bản mới không. Trả về câu trả lời để hiện ngay. */
+  checkUpdate(): Promise<string>;
+  /** BUỘC cập nhật: xoá sạch cache, gỡ service worker, tải lại trang. */
+  forceUpdate(): Promise<void>;
   install(): void;
   /** Bật/tắt bảng gỡ lỗi nổi. Phải có NÚT chứ không chỉ có phím tắt — điện
    *  thoại không có bàn phím, mà đây là thiết bị chơi chính. */
@@ -195,6 +199,28 @@ export function createMenus(
     b.className = cls;
     b.textContent = label;
     b.addEventListener("click", fn);
+    return b;
+  };
+
+  /**
+   * Nút có ICON PIXEL đứng trước chữ.
+   *
+   * Cố ý không dùng emoji: emoji là FONT của hệ điều hành, nên cùng một ký tự
+   * ra một hình trên iPhone, một hình khác trên Android, và trên vài máy thì
+   * ra ô vuông rỗng. Trong một game mà từng điểm ảnh đều do mình vẽ, một cái
+   * emoji bóng loáng nằm giữa menu là thứ lộ ra ngay.
+   */
+  const iconBtn = (name: UiIcon, label: string, fn: () => void, cls = "") => {
+    const b = mkBtn("", fn, `ico-btn ${cls}`.trim());
+    const src = atlas.ui(name);
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext("2d")!.drawImage(src, 0, 0);
+    c.className = "bi";
+    const t = document.createElement("span");
+    t.textContent = label;
+    b.append(c, t);
     return b;
   };
 
@@ -891,40 +917,74 @@ export function createMenus(
     const grid = document.createElement("div");
     grid.className = "grid2";
     grid.append(
-      mkBtn(c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
-      mkBtn(c.strings.ui["load"] ?? "Tải game", () => h.load()),
-      mkBtn(c.strings.ui["export"] ?? "Xuất file save", () => h.exportSave()),
-      mkBtn(c.strings.ui["import"] ?? "Nhập file save", () => h.importSave()),
+      iconBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
+      iconBtn("load", c.strings.ui["load"] ?? "Tải game", () => h.load()),
+      iconBtn("file", c.strings.ui["export"] ?? "Xuất file", () => h.exportSave()),
+      iconBtn("file", c.strings.ui["import"] ?? "Nhập file", () => h.importSave()),
     );
     body.appendChild(grid);
 
+    /* Menu này từng là chín nút xếp DỌC, tràn quá một màn hình điện thoại nên
+       "Chơi mới" (nút nguy hiểm nhất) lại phải cuộn mới thấy. Xếp LƯỚI HAI CỘT
+       thì cả menu vừa một màn, và nút nguy hiểm nằm đúng chỗ mắt nhìn tới cuối. */
     const list = document.createElement("div");
-    list.className = "menu-list";
+    list.className = "grid2";
     list.append(
-      mkBtn("🎒 Balo", () => openBag()),
-      mkBtn("🏗 Chế độ xây dựng", () => {
+      iconBtn("build", "Xây dựng", () => {
         close();
         h.buildMode();
       }, "accent"),
-      mkBtn("⚙ Cài đặt", () => openSettings()),
-      mkBtn("? Hướng dẫn chơi", () => openHelp()),
+      iconBtn("bag", "Balo", () => openBag()),
+      iconBtn("gear", "Cài đặt", () => openSettings()),
+      iconBtn("help", "Hướng dẫn", () => openHelp()),
     );
-    if (h.canInstall()) list.appendChild(mkBtn("⤓ Cài về màn hình chính", () => h.install(), "accent"));
+    if (h.canInstall()) list.appendChild(iconBtn("install", "Cài về máy", () => h.install(), "accent"));
     list.appendChild(
-      mkBtn("Bảng gỡ lỗi", () => {
+      iconBtn("bug", "Gỡ lỗi", () => {
         close();
         h.toggleDevPanel();
       }, "dim"),
     );
     body.appendChild(list);
 
-    if (info.pending) body.appendChild(note(`Có nội dung ${info.pending} đang chờ — tải lại trang để áp dụng.`));
+    /* ---- CẬP NHẬT ----------------------------------------------------
+       Service worker giữ bản cũ cho tới khi người chơi đồng ý tải lại (cố ý —
+       xem `registerType: "prompt"` trong vite.config). Nhưng ai mở PWA suốt
+       ngày mà không bao giờ bấm vào thanh báo thì ở lại bản cũ vô thời hạn, và
+       không có cách nào tự thoát ra. Hai nút này là cách thoát đó. */
+    const upNote = note(
+      info.pending
+        ? `Có nội dung ${info.pending} đang chờ — bấm "Cập nhật ngay" để áp dụng.`
+        : "Trò chơi tự tìm bản mới khi có mạng.",
+    );
+    body.appendChild(upNote);
+
+    const upRow = document.createElement("div");
+    upRow.className = "grid2";
+    const btnCheck = iconBtn("reload", "Kiểm tra", async () => {
+      btnCheck.disabled = true;
+      upNote.textContent = "Đang kiểm tra…";
+      upNote.textContent = await h.checkUpdate();
+      btnCheck.disabled = false;
+    });
+    upRow.append(
+      btnCheck,
+      iconBtn("install", "Cập nhật ngay", () => {
+        // Buộc cập nhật XOÁ SẠCH cache rồi tải lại — nên phải hỏi, và phải nói
+        // rõ là save không mất (save nằm ở IndexedDB, không nằm trong cache).
+        if (!confirm("Xoá bộ nhớ đệm và tải lại bản mới nhất?\nTiến trình đã lưu KHÔNG mất."))
+          return;
+        void h.forceUpdate();
+      }, "primary"),
+    );
+    body.appendChild(upRow);
+
     if (info.source === "ota") {
       body.appendChild(
         mkBtn(c.strings.ui["contentRevert"] ?? "Hoàn tác về bản đóng kèm", () => {
           h.revertContent();
           close();
-        }),
+        }, "dim"),
       );
     }
 

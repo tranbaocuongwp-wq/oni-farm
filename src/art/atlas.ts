@@ -1589,8 +1589,18 @@ function makeDrop(): HTMLCanvasElement {
   return s.c;
 }
 
-/** Icon 12×12 cho HUD: tiền, giờ, năng lượng, nước, điện, mục tiêu. */
-export type UiIcon = "coin" | "sun" | "moon" | "energy" | "water" | "power" | "goal" | "day" | "bag";
+/**
+ * Icon 12×12 cho HUD và MENU.
+ *
+ * Menu dùng icon vẽ tay ở đây chứ không dùng emoji, vì emoji là FONT của hệ
+ * điều hành: cùng một ký tự ra một hình trên iPhone, một hình khác trên
+ * Android, và trên vài máy Linux thì ra ô vuông rỗng. Trong một game mà từng
+ * điểm ảnh đều do mình vẽ, một cái emoji bóng loáng của Apple nằm giữa menu là
+ * thứ lộ ra ngay.
+ */
+export type UiIcon =
+  | "coin" | "sun" | "moon" | "energy" | "water" | "power" | "goal" | "day" | "bag"
+  | "gear" | "help" | "build" | "install" | "bug" | "save" | "load" | "file" | "reload";
 
 function makeUiIcon(name: UiIcon): HTMLCanvasElement {
   const s = surface(12, 12);
@@ -1664,6 +1674,94 @@ function makeUiIcon(name: UiIcon): HTMLCanvasElement {
       s.rect(3, 6, 2, 2, P.outline);
       s.rect(6, 6, 2, 2, "#b9a68d");
       s.rect(3, 9, 2, 1, "#b9a68d");
+      break;
+
+    /* ---- icon của MENU ------------------------------------------------- */
+    case "gear": {
+      // bánh răng: đĩa + bốn răng trục, lỗ giữa tối
+      const g = "#b9c4d0";
+      const gd = "#7b8794";
+      s.disc(6, 6, 4, gd);
+      s.disc(6, 6, 3, g);
+      s.rect(5, 0, 2, 2, g); s.rect(5, 10, 2, 2, g);
+      s.rect(0, 5, 2, 2, g); s.rect(10, 5, 2, 2, g);
+      s.px(2, 2, g); s.px(9, 2, g); s.px(2, 9, g); s.px(9, 9, g);
+      s.disc(6, 6, 1, "#2b2118");
+      break;
+    }
+    case "help":
+      s.disc(6, 6, 5, P.goldDark);
+      s.disc(6, 6, 4, P.gold);
+      // dấu hỏi bằng pixel, cỡ 12px thì đây là hình đọc được nhỏ nhất
+      s.hline(4, 3, 4, "#2b2118");
+      s.px(8, 4, "#2b2118");
+      s.px(7, 5, "#2b2118");
+      s.px(6, 6, "#2b2118");
+      s.px(6, 7, "#2b2118");
+      s.px(6, 9, "#2b2118");
+      break;
+    case "build":
+      // búa: cán gỗ chéo + đầu búa thép
+      s.rect(2, 1, 6, 3, "#b9c4d0");
+      s.hline(2, 1, 6, "#7b8794");
+      s.px(1, 2, "#7b8794"); s.px(1, 3, "#7b8794");
+      s.px(6, 4, "#8a5c34"); s.px(6, 5, "#8a5c34");
+      s.px(5, 6, "#8a5c34"); s.px(5, 7, "#8a5c34");
+      s.px(4, 8, "#8a5c34"); s.px(4, 9, "#8a5c34");
+      s.px(3, 10, "#5a3b21");
+      break;
+    case "install":
+      // mũi tên xuống + vạch đáy: ký hiệu "tải về máy" quen thuộc nhất
+      s.rect(5, 1, 2, 5, "#6cc94f");
+      s.hline(3, 6, 6, "#6cc94f");
+      s.hline(4, 7, 4, "#6cc94f");
+      s.px(6, 8, "#6cc94f"); s.px(5, 8, "#6cc94f");
+      s.hline(2, 10, 8, "#3d6b2a");
+      break;
+    case "bug":
+      // con bọ: thân bầu dục, hai râu, ba cặp chân
+      s.disc(6, 6, 3, "#8a4f2f");
+      s.disc(6, 5, 2, "#a06438");
+      s.px(4, 1, "#5c3320"); s.px(8, 1, "#5c3320");
+      s.px(5, 2, "#5c3320"); s.px(7, 2, "#5c3320");
+      s.px(2, 5, "#5c3320"); s.px(10, 5, "#5c3320");
+      s.px(2, 7, "#5c3320"); s.px(10, 7, "#5c3320");
+      s.px(3, 9, "#5c3320"); s.px(9, 9, "#5c3320");
+      s.px(5, 4, "#f6ecdc"); s.px(7, 4, "#f6ecdc");
+      break;
+    case "save":
+      // đĩa mềm: vỏ, nhãn trắng, cửa trượt
+      s.rect(1, 1, 10, 10, "#4a6b8a");
+      s.rect(3, 1, 6, 4, "#cfd8ea");
+      s.rect(5, 2, 2, 3, "#3a4a5c");
+      s.rect(3, 7, 6, 4, "#f1ede2");
+      s.hline(4, 8, 4, "#7b8794");
+      s.hline(4, 9, 4, "#7b8794");
+      break;
+    case "load":
+      // thư mục mở
+      s.rect(1, 3, 10, 8, "#c9931a");
+      s.rect(1, 2, 5, 2, "#e0a92a");
+      s.rect(2, 5, 8, 5, "#ffd84a");
+      break;
+    case "file":
+      // trang giấy có góc gập
+      s.rect(2, 1, 8, 10, "#f1ede2");
+      s.px(9, 1, "#b9a68d"); s.px(8, 1, "#b9a68d"); s.px(9, 2, "#b9a68d");
+      s.hline(4, 4, 5, "#8a7a66");
+      s.hline(4, 6, 5, "#8a7a66");
+      s.hline(4, 8, 3, "#8a7a66");
+      break;
+    case "reload":
+      // mũi tên vòng: đọc ra "làm lại / cập nhật"
+      s.disc(6, 6, 5, "#5aa9e6");
+      s.disc(6, 6, 3, "rgba(0,0,0,0)");
+      s.g.globalCompositeOperation = "destination-out";
+      s.disc(6, 6, 3, "#000");
+      s.rect(6, 0, 6, 5, "#000");
+      s.g.globalCompositeOperation = "source-over";
+      s.px(6, 0, "#5aa9e6"); s.px(7, 1, "#5aa9e6"); s.px(8, 2, "#5aa9e6");
+      s.px(7, 3, "#5aa9e6"); s.px(6, 4, "#5aa9e6"); s.px(5, 3, "#5aa9e6");
       break;
   }
   return s.c;

@@ -19,7 +19,7 @@
    minh hoạ, còn số liệu nằm trong HTML do `scripts/build-site.mjs` sinh ra.
 ============================================================================ */
 
-import { buildAtlas } from "../art/atlas.ts";
+import { buildAtlas, type Atlas } from "../art/atlas.ts";
 import { bundledContent } from "../core/content/bundled.ts";
 
 const content = bundledContent();
@@ -28,6 +28,9 @@ const atlas = buildAtlas(content);
 /** Sprite cho một khoá `data-sprite`, hoặc null nếu không có gì để vẽ. */
 function spriteFor(key: string): HTMLCanvasElement | null {
   if (key === "player") return atlas.player.down[0] ?? null;
+  // "ui:power" → icon 12×12 của HUD. Dùng chính bộ icon trong game thay cho
+  // emoji: emoji là font của hệ điều hành nên mỗi máy ra một hình khác.
+  if (key.startsWith("ui:")) return atlas.ui(key.slice(3) as Parameters<Atlas["ui"]>[0]);
   if (key.startsWith("worker:")) return atlas.worker(Number(key.slice(7)) || 0, "down", 0);
   if (key.startsWith("animal:")) return atlas.animal(key.slice(7), "down", 0);
   if (key.startsWith("vehicle:")) return atlas.vehicle(key.slice(8), "right");

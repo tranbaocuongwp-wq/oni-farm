@@ -304,6 +304,59 @@ async function boot() {
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
     buildMode: () => buildUI.open(),
+
+    /* Hỏi HAI thứ trong một lần bấm, vì người chơi chỉ biết một khái niệm
+       "bản mới": nội dung OTA (giá, cây, mùa) và mã game (service worker).
+       Trả về đúng một câu để hiện thẳng dưới nút. */
+    async checkUpdate() {
+      let cauNoiDung = "Nội dung đã là bản mới nhất.";
+      if (CONTENT_URL) {
+        const r = await checkForUpdate(content.contentVersion, { contentUrl: CONTENT_URL });
+        if (r.status === "ready") {
+          pendingVersion = r.contentVersion;
+          cauNoiDung = `Có nội dung ${r.contentVersion} — bấm "Cập nhật ngay".`;
+        } else if (r.status === "incompatible")
+          cauNoiDung = `Bản nội dung mới cần core ${r.requiresCore}, máy đang chạy ${CORE_VERSION}.`;
+        else if (r.status === "invalid") cauNoiDung = "Bản nội dung trên máy chủ bị lỗi — bỏ qua.";
+        else if (r.status === "error") cauNoiDung = "Không hỏi được máy chủ (mất mạng?).";
+      }
+      // Giục service worker đi hỏi ngay thay vì chờ nhịp kiểm tra của trình duyệt.
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration();
+        if (reg) await reg.update();
+      } catch {
+        /* không có service worker (bản dev, hoặc trình duyệt chặn) — bỏ qua */
+      }
+      return cauNoiDung;
+    },
+
+    /**
+     * BUỘC cập nhật.
+     *
+     * Cố ý mạnh tay: gỡ hẳn service worker và xoá SẠCH mọi cache rồi tải lại.
+     * Đường "lịch sự" (`update(true)` của thanh báo) chỉ chạy khi Workbox đã
+     * thấy một bản mới đang chờ — mà đúng cái kẹt cần thoát ra là lúc nó KHÔNG
+     * thấy: người chơi mở PWA suốt, service worker cũ phục vụ mãi một bản cũ,
+     * và không có nút nào thoát ra được.
+     *
+     * Save nằm ở IndexedDB nên không đụng tới — chỉ cache bị xoá.
+     */
+    async forceUpdate() {
+      try {
+        const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+        await Promise.all(regs.map((r) => r.unregister()));
+      } catch {
+        /* bỏ qua */
+      }
+      try {
+        const ks = await caches.keys();
+        await Promise.all(ks.map((k) => caches.delete(k)));
+      } catch {
+        /* bỏ qua */
+      }
+      // `?v=` để chắc chắn không ăn lại bản trong bộ nhớ đệm của chính trình duyệt.
+      location.replace(`${location.pathname}?v=${Date.now()}`);
+    },
     install: async () => {
       const p = installPrompt;
       if (!p) return;
