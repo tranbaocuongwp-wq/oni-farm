@@ -631,6 +631,10 @@ export function validateWeather(raw: unknown): string[] {
   return c.errors;
 }
 
+/** Tên công thức đã tự chép số lượng vào ("Đường nhựa ×4") — bảng chế tạo in
+ *  '×n' từ `out.n`, nên tên như thế hiện ra thành "Đường nhựa ×4 ×4". */
+const TEN_CO_SO_LUONG = /[×x]\s*\d+\s*$/;
+
 export function validateRecipes(raw: unknown): string[] {
   const c = new Check("recipes.json");
   if (!isObj(raw)) return ["recipes.json: phải là object"];
@@ -648,11 +652,18 @@ export function validateRecipes(raw: unknown): string[] {
       if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
       seen.add(id);
     }
-    k.str(item, "name");
+    const ten = k.str(item, "name");
     const out = k.obj(item, "out");
     if (out) {
       if (!isStr(out["id"])) k.fail("out.id", "phải là chuỗi");
       if (!isNum(out["n"]) || (out["n"] as number) < 1) k.fail("out.n", "phải là số >= 1");
+      // SỐ LƯỢNG có đúng MỘT nguồn là `out.n`. Chép nó vào tên nữa thì bảng chế
+      // tạo in ra "Đường nhựa ×4 ×4" — sai không gây crash nên sống rất dai.
+      if (ten && (out["n"] as number) > 1 && TEN_CO_SO_LUONG.test(ten))
+        k.fail(
+          "name",
+          `'${ten}' đã tự chép số lượng vào tên — bảng chế tạo in '×${out["n"]}' từ out.n rồi`,
+        );
     }
     const ins = k.arr(item, "in");
     if (ins) {

@@ -187,6 +187,10 @@ reject("khu đổ được một thứ không tồn tại", (p) => (p.tiles.pens
 reject("thức ăn bày bán nhưng không mốc nào mở khoá", (p) => {
   p.items.materials.push({ id: "camMaQuai", name: "Cám ma quái", sellPrice: 3, buyPrice: 9 });
 });
+reject("tên công thức tự chép số lượng vào (\"Đường nhựa ×4\" → in ra ×4 ×4)", (p) => {
+  const r = p.recipes.recipes.find((q) => q.out.n > 1);
+  r.name = `${r.name} ×${r.out.n}`;
+});
 reject("khu dưới nước lại đặt máng", (p) => {
   const pen = p.tiles.pens.find((q) => q.swim);
   const r = p.maps.farm.rows[pen.y].split("");

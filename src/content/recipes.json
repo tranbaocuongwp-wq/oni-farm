@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — công thức chế tạo, làm ở BÀN CHẾ TẠO trong nhà. Nguyên liệu có thể là vật liệu (item:), công cụ (tool:) hay bất cứ vật phẩm nào — nên nâng cấp công cụ chính là một công thức ăn cả công cụ cũ lẫn vật liệu.\n\nLƯU Ý VÒNG BOOTSTRAP: rìu cần gỗ mà gỗ lại cần rìu — nên BỤI CỎ DẠI (phá được bằng tay không) vừa ra sợi vừa ra ít cành khô. Từ bụi làm ra rìu, rìu mở khoá gỗ, gỗ+sợi làm cuốc chim, cuốc chim mở khoá đá, đá mở khoá mọi thứ còn lại. Đổi công thức thì phải giữ nguyên chuỗi này.",
+  "$comment": "LÀN NHANH — công thức chế tạo, làm ở BÀN CHẾ TẠO trong nhà. Nguyên liệu có thể là vật liệu (item:), công cụ (tool:) hay bất cứ vật phẩm nào — nên nâng cấp công cụ chính là một công thức ăn cả công cụ cũ lẫn vật liệu.\n\nLƯU Ý VÒNG BOOTSTRAP: rìu cần gỗ mà gỗ lại cần rìu — nên BỤI CỎ DẠI (phá được bằng tay không) vừa ra sợi vừa ra ít cành khô. Từ bụi làm ra rìu, rìu mở khoá gỗ, gỗ+sợi làm cuốc chim, cuốc chim mở khoá đá, đá mở khoá mọi thứ còn lại. Đổi công thức thì phải giữ nguyên chuỗi này.\n\nTÊN công thức KHÔNG được tự chép số lượng vào: bảng chế tạo đã in '×n' từ `out.n` rồi, nên 'Đường nhựa ×4' hiện ra thành 'Đường nhựa ×4 ×4'. Số lượng có ĐÚNG MỘT nguồn là `out.n` — validatePack chặn nếu tên lặp lại nó.",
   "recipes": [
     {
       "id": "axe",
@@ -178,7 +178,7 @@
     },
     {
       "id": "road",
-      "name": "Đường nhựa ×4",
+      "name": "Đường nhựa",
       "desc": "Đập đá lấy sỏi rải đường.",
       "out": {
         "id": "build:road",
