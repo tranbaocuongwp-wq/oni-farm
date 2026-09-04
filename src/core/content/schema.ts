@@ -306,6 +306,8 @@ export function validateProps(raw: unknown): string[] {
     if (item["becomes"] !== undefined && !isStr(item["becomes"]))
       k.fail("becomes", "phải là chuỗi id prop");
     if (item["interact"] !== undefined) k.enumStr(item, "interact", INTERACTS);
+    if (item["portable"] !== undefined && typeof item["portable"] !== "boolean")
+      k.fail("portable", "phải là boolean");
 
     const drops = item["drops"];
     if (drops !== undefined) {

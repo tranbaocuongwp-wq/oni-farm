@@ -639,6 +639,11 @@ export function createRenderer(
       }
     }
     const toolRef = tool;
+    /* VẬT ĐANG VÁC, đội trên đầu. Không có nó thì "đang vác một khúc gỗ" là
+       một trạng thái vô hình: người chơi bấm nút thấy ghi ĐẶT XUỐNG mà không
+       hiểu mình đang cầm cái gì. Nhún nhẹ theo bước đi để nó trông có sức nặng. */
+    const vac = s.carry ? (atlas.props[s.carry] ?? null) : null;
+    const nhun = vac && p.moving ? (Math.floor(p.anim * 8) % 2 === 0 ? 0 : 1) : 0;
     items.push({
       base: Math.round(p.y) + 5,
       run: () => {
@@ -646,6 +651,7 @@ export function createRenderer(
         if (toolRef && raising && dir !== "down") g.drawImage(toolRef.img, toolRef.x, toolRef.y);
         g.drawImage(img, px, py);
         if (toolRef && !(raising && dir !== "down")) g.drawImage(toolRef.img, toolRef.x, toolRef.y);
+        if (vac) g.drawImage(vac, px, py - 11 + nhun);
       },
     });
   }

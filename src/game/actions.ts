@@ -25,6 +25,7 @@ import {
   isTillableTile,
   propDef,
   tileIndexAt,
+  isSolid,
 } from "./world.ts";
 
 /* ------------------------------------------------------- công cụ đang cầm */
@@ -427,6 +428,10 @@ export type UseKind =
   | "cure"
   /** nhổ cây bệnh (cầm cuốc) */
   | "pull"
+  /** TAY KHÔNG nhấc một vật thể vác được lên (khúc gỗ, hòn đá) */
+  | "lift"
+  /** đang vác thì ĐẶT xuống một ô trống */
+  | "putdown"
   | null;
 
 /**
@@ -456,12 +461,28 @@ export function canUseAt(
   if (!ignoreReach && !inReach(state, x, y)) return null;
   const cur = state.tiles[i];
   if (!cur) return null;
+
+  /* ĐANG VÁC thì hai tay bận: việc DUY NHẤT làm được là đặt xuống.
+     Xét trước cả thu hoạch — nếu không thì đang vác hòn đá mà đi ngang cây
+     chín là nút đổi thành THU, bấm vào thì không có gì xảy ra (tay đang bận),
+     đúng lớp lỗi "nút nói một đằng làm một nẻo". */
+  if (state.carry) {
+    if (cur.prop !== null || cur.crop !== null || cur.b !== null) return null;
+    if (cur.tilled) return null; // đặt hòn đá lên luống vừa cày thì phí cả luống
+    return isSolid(state, content, x, y) ? null : "putdown";
+  }
+
   if (isRipe(cur, content)) return "harvest";
 
   // Vật thể trên ô chặn mọi việc khác: hoặc phá được nó, hoặc không làm gì.
   if (cur.prop !== null) {
     const def = propDef(content, cur.prop);
     if (!def) return null; // vật thể lạ → coi như không khai thác được
+    /* TAY KHÔNG + vật vác được → NHẤC LÊN, không phá.
+       Xét ở đây chứ không xét sau: nhánh này `return` trước, nên đặt luật nhấc
+       ở dưới thì nó không bao giờ chạy tới. Và chỉ khi tay TRỐNG: cầm cái rìu
+       mà bấm vào khúc gỗ thì ý định rõ ràng là chặt nó ra gỗ. */
+    if (def.portable && selectedItemId(state.inv, sel) === null) return "lift";
     const tool = heldTool(state, content, sel);
     if (!canBreakWith(def, tool)) return null;
     return breakAction(def, tool) === "MINE" ? "mine" : "chop";
@@ -469,6 +490,7 @@ export function canUseAt(
 
   const held = selectedItemId(state.inv, sel);
   const it = held ? parseItem(held) : null;
+
   if (!it) return null;
 
   // Cây bệnh: thuốc thì chữa, cuốc thì nhổ. Xét trước công cụ thường vì cuốc
@@ -515,6 +537,44 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
   if (!inReach(d.s, x, y)) return; // ngoài tầm với: bỏ qua, không toast
   const cur = d.s.tiles[i];
   if (!cur) return;
+
+  /* ---- ĐANG VÁC: đặt xuống, và chỉ thế thôi ----------------------------- */
+  if (d.s.carry) {
+    if (cur.prop !== null || cur.crop !== null || cur.b !== null || cur.tilled) {
+      toastText(d, "Chỗ này không đặt xuống được.", "bad");
+      return;
+    }
+    if (isSolid(d.s, content, x, y)) {
+      toastText(d, "Chỗ này không đặt xuống được.", "bad");
+      return;
+    }
+    const pd = propDef(content, d.s.carry);
+    const t = dTile(d, i);
+    if (!t) return;
+    t.prop = d.s.carry;
+    t.hp = Math.max(0, Math.floor(pd?.hits ?? 0));
+    touch(d).carry = null;
+    toastText(d, `Đã đặt ${pd?.name ?? "vật"} xuống.`, "good");
+    return;
+  }
+
+  /* ---- TAY KHÔNG: nhấc vật thể vác được lên ------------------------------
+     Chỉ chặn khi vật thể VÁC ĐƯỢC. Chặn mọi vật thể ở đây thì bụi cỏ — thứ
+     tay không vẫn phá được từ đầu — bỗng dưng không phá được nữa (kịch bản 22
+     bắt đúng chỗ này). */
+  if (selectedItemId(d.s.inv, d.s.sel) === null && cur.prop !== null) {
+    const pd = propDef(content, cur.prop);
+    if (pd?.portable) {
+      // Chỉ vác được MỘT thứ: `carry` là một chuỗi, không phải một danh sách.
+      const t = dTile(d, i);
+      if (!t) return;
+      t.prop = null;
+      t.hp = 0;
+      touch(d).carry = pd.id;
+      toastText(d, `Đang vác ${pd.name}.`, "info");
+      return;
+    }
+  }
 
   // Luật ưu tiên: cây chín thì thu hoạch trước mọi thứ.
   if (isRipe(cur, content)) {

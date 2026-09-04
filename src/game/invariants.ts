@@ -513,6 +513,12 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       }
       return fixed;
     });
+    /* Vật đang vác phải là một prop CÒN TỒN TẠI trong content mới. Pack OTA gỡ
+       bỏ "khúc gỗ" mà người chơi đang vác một khúc thì nó thành một chuỗi trỏ
+       vào hư không — và ô nào đặt xuống cũng ra một vật thể không vẽ được. */
+    const carry =
+      typeof state.carry === "string" && content.props[state.carry] ? state.carry : null;
+
     const entSeq = Math.max(
       Number.isFinite(state.entSeq) ? Math.floor(state.entSeq) : 0,
       ...entities.map((e) => e.id),
@@ -596,6 +602,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       actStep: Number.isFinite(state.actStep) ? Math.max(0, Math.floor(state.actStep)) : 0,
       planCursor: Number.isFinite(state.planCursor) ? Math.max(0, Math.floor(state.planCursor)) : 0,
       sel,
+      carry,
       unlocked,
       stagesDone: [...state.stagesDone],
       goalsDone: [...state.goalsDone],

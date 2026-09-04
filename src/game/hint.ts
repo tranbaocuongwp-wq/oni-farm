@@ -61,6 +61,8 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   store: "KHO",
   gather: "THU",
   feed: "CHO ĂN",
+  lift: "NHẤC",
+  putdown: "ĐẶT XUỐNG",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -129,10 +131,16 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
 }
 
 /**
- * Gợi ý cho ô (x,y). Thứ tự ưu tiên trùng với luật của reducer:
- *   1. có vật thể tương tác gần đó (cửa hàng, quầy, giường, giếng, cửa)
+ * Gợi ý cho NÚT NGỮ CẢNH (A). Nó bám theo THỨ ĐANG CẦM, không hơn:
+ *   1. con vật đứng đè lên ô — thu sản phẩm / cho ăn
  *   2. việc làm được với vật phẩm đang cầm (thu hoạch luôn thắng, như useAt)
  *   3. không có gì → lý do
+ *
+ * CỐ Ý KHÔNG có tương tác vật thể (cửa hàng, giường, giếng, kho). Trước đây có,
+ * và hậu quả là: đứng cạnh quầy thu mua cầm cái cuốc, bấm nút chính thì mở
+ * bảng bán hàng thay vì cày — người chơi đang cày một luống dài, đi ngang qua
+ * quầy, và cả nhịp làm việc gãy. Nút chính phải LUÔN làm đúng thứ trên tay;
+ * mở cửa hàng là việc của nút tương tác (xem `interactHint`).
  */
 export function hintAt(state: GameState, content: Content, x: number, y: number): Hint {
   /* Con vật đứng ĐÈ LÊN ô được ưu tiên hơn mọi thứ khác trên ô đó: người chơi
@@ -149,11 +157,6 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
     }
   }
 
-  const ik = interactNear(state, content, x, y);
-  if (ik) {
-    const kind = INTERACT_KIND[ik];
-    return { kind, label: LABEL[kind], ready: inReach(state, x, y), why: null };
-  }
   /* Đang cầm CÔNG TRÌNH: nút ghi XÂY và mở chế độ quy hoạch, chứ không đặt
      xuống ô đang ngắm. Đặt ở đây (chứ không trong `canUseAt`) vì nó không phụ
      thuộc vào Ô nào cả — cầm công trình lên là đã ở trong ý định xây rồi. */
@@ -167,6 +170,27 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
     return { kind: use, label: LABEL[use], ready: inReach(state, x, y), why: null };
   }
   return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
+}
+
+/**
+ * Gợi ý cho NÚT TƯƠNG TÁC (B): "nói chuyện với thứ ĐỨNG ở đây".
+ *
+ * Tách khỏi `hintAt` vì hai nút trả lời hai câu khác nhau. Gộp lại thì một
+ * trong hai câu luôn bị nuốt — và câu bị nuốt là câu người chơi đang cần.
+ */
+export function interactHint(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): { kind: Exclude<HintKind, null>; label: string } | null {
+  // Con vật / người làm: B là XEM bảng thông tin, không phải vắt sữa.
+  if (animalNear(state, x, y)) return { kind: "gather", label: "XEM" };
+
+  const ik = interactNear(state, content, x, y);
+  if (!ik) return null;
+  const kind = INTERACT_KIND[ik];
+  return { kind, label: LABEL[kind] };
 }
 
 /** Tuỳ chọn cho `nearestTarget`. Mặc định = đúng hành vi cũ, không đổi một ly. */

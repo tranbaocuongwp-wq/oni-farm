@@ -53,7 +53,7 @@ import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
+import { autoJob, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
 import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
@@ -1418,11 +1418,12 @@ async function boot() {
             // Con vật trước tiên — nếu không thì nhãn nút ghi THU mà bấm vào lại
             // đi cày, tức là nút nói một đằng làm một nẻo.
             if (tryAnimal(s, c.x, c.y)) break;
-            // Với công trình gần đó (cửa hàng, giường…) nút chính cũng tương tác
-            // được — người chơi không phải phân biệt DÙNG với E.
-            if (nearbyInteract(s, c.x, c.y)) {
-              if (!tryInteract(s, c.x, c.y)) deny();
-            } else if (canUseAt(s, content, c.x, c.y) !== null) {
+            /* Nút chính KHÔNG mở cửa hàng, giường, giếng, kho nữa — đó là
+               việc của nút tương tác. Trước đây nó làm cả hai, và hậu quả là
+               đang cày một luống dài, đi ngang qua quầy thu mua, bấm tiếp thì
+               bật bảng bán hàng: cả nhịp làm việc gãy vì một thứ mình không
+               hề định làm. Nút chính phải LUÔN làm đúng thứ trên tay. */
+            if (canUseAt(s, content, c.x, c.y) !== null) {
               tryUse(s, c.x, c.y);
             } else if (s.busy <= 0) {
               // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là tự sang ô kế
@@ -1676,7 +1677,13 @@ async function boot() {
     });
 
     const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;
-    hud.update(s, content, hint);
+    /* Nút tương tác nhìn quanh CHÍNH NHÂN VẬT chứ không nhìn ô đang ngắm: nó
+       nói về thứ mình đang đứng cạnh, không phải thứ mình đang chỉ vào. */
+    const iHint = modal
+      ? null
+      : interactHint(s, content, Math.floor(s.player.x / TILE), Math.floor(s.player.y / TILE)) ??
+        (cursor ? interactHint(s, content, cursor.x, cursor.y) : null);
+    hud.update(s, content, hint, iHint);
 
     /* Bảng vật nuôi: CHỈ con người chơi đã chạm vào. Tự đóng khi con đó không
        còn (bán thịt, chết đói, sang bản đồ khác) — giữ lại một cái bảng nói về

@@ -14,7 +14,7 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { hintAt, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
+import { hintAt, interactHint, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -2136,9 +2136,15 @@ test("37. hintAt: nhãn nút đổi đúng theo vật phẩm đang cầm và tr�
     return null;
   })();
   ok(shop, "bản đồ có máy bán hạt");
+  /* Nút NGỮ CẢNH thôi mở cửa hàng — nó bám theo thứ trên tay, không hơn.
+     Trước đây nó làm cả hai, và hậu quả là: đang cày một luống dài, đi ngang
+     qua quầy thu mua, bấm tiếp thì bật bảng bán hàng. Mở cửa hàng giờ là việc
+     của NÚT TƯƠNG TÁC. */
   h = hintAt(store.getState(), content, shop.x, shop.y + 1);
-  eq(h.kind, "shop", "kề cửa hàng → shop");
-  eq(h.label, "MUA", "nhãn MUA");
+  ok(h.kind !== "shop", "nút ngữ cảnh KHÔNG mở cửa hàng nữa");
+  const ih = interactHint(store.getState(), content, shop.x, shop.y + 1);
+  eq(ih?.kind, "shop", "nút tương tác mới là nút mở cửa hàng");
+  eq(ih?.label, "MUA", "nhãn MUA");
 
   // Ô trước mặt tính đúng theo hướng
   setState(store, (st) => { st.player.dir = "left"; });
@@ -3542,6 +3548,65 @@ test("64. con vật đứng trên luống vừa cày thì tự đi ra", () => {
   }
   ok(thoat, "con bò tự bước ra khỏi luống dù người chơi đứng ngay cạnh");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi nó tránh ra");
+});
+
+
+test("65. tay không: nhấc khúc gỗ / hòn đá, vác đi rồi đặt xuống chỗ khác", () => {
+  const content = loadContent();
+  const store = mkStore(1301);
+  walkTo(store, HOME.x, HOME.y);
+  const p = store.getState().player;
+  const px = Math.floor(p.x / TILE);
+  const py = Math.floor(p.y / TILE);
+
+  ok(content.props.log?.portable, "content khai khúc gỗ vác được");
+  ok(!content.props.bush?.portable, "…còn bụi cỏ thì không");
+
+  setState(store, (s) => {
+    // ô bên phải: khúc gỗ. ô bên trái: trống hẳn để đặt xuống.
+    for (const [dx, id] of [[1, "log"], [-1, null]]) {
+      const t = s.tiles[idx(s.w, px + dx, py)];
+      t.g = "grass"; t.tilled = false; t.wet = false; t.crop = null; t.b = null;
+      t.prop = id;
+      t.hp = id ? (content.props[id].hits ?? 0) : 0;
+    }
+    // TAY KHÔNG: chọn một ô hotbar trống
+    s.sel = 9;
+    s.inv[9] = null;
+  });
+
+  const oPhai = () => store.getState().tiles[idx(store.getState().w, px + 1, py)];
+  const oTrai = () => store.getState().tiles[idx(store.getState().w, px - 1, py)];
+
+  eq(canUseAt(store.getState(), content, px + 1, py), "lift", "tay không + khúc gỗ → NHẤC");
+  use(store, px + 1, py);
+  eq(store.getState().carry, "log", "đang vác khúc gỗ");
+  eq(oPhai().prop, null, "ô cũ trống ra");
+
+  /* Đang vác thì HAI TAY BẬN: không cày, không thu, chỉ đặt xuống được. Nếu
+     không thì nút nói một đằng làm một nẻo — đúng lớp lỗi đã tốn nửa buổi. */
+  setState(store, (s) => { s.sel = 0; }); // cầm cuốc
+  eq(canUseAt(store.getState(), content, px, py + 1), "putdown", "đang vác thì cầm cuốc cũng chỉ đặt xuống được");
+
+  eq(canUseAt(store.getState(), content, px - 1, py), "putdown", "ô trống → ĐẶT XUỐNG");
+  use(store, px - 1, py);
+  eq(store.getState().carry ?? null, null, "đặt xong thì tay trống");
+  eq(oTrai().prop, "log", "khúc gỗ nằm ở chỗ mới");
+
+  // vác được đúng MỘT thứ
+  setState(store, (s) => { s.sel = 9; });
+  use(store, px - 1, py);
+  eq(store.getState().carry, "log", "nhấc lại được");
+  setState(store, (s) => {
+    const t = s.tiles[idx(s.w, px + 1, py)];
+    t.prop = "log";
+    t.hp = content.props.log.hits ?? 0;
+  });
+  use(store, px + 1, py);
+  eq(store.getState().carry, "log", "đang vác rồi thì không nhấc thêm cái thứ hai");
+  eq(store.getState().tiles[idx(store.getState().w, px + 1, py)].prop, "log", "khúc gỗ kia vẫn nằm yên");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi vác đồ");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

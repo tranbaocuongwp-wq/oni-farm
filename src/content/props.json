@@ -71,6 +71,7 @@
     {
       "id": "rock",
       "name": "Tảng đá",
+      "portable": true,
       "solid": true,
       "hits": 3,
       "tool": "MINE",
@@ -220,6 +221,7 @@
     {
       "id": "log",
       "name": "Khúc gỗ",
+      "portable": true,
       "solid": true,
       "hits": 2,
       "tool": "CHOP",

@@ -307,6 +307,14 @@ export interface PropDef {
   /** Cửa dịch chuyển: BẢN ĐỒ và toạ độ Ô người chơi sẽ hiện ra. */
   portal?: { map: string; x: number; y: number };
   /**
+   * VÁC ĐI ĐƯỢC bằng tay không: khúc gỗ, hòn đá nhỏ.
+   *
+   * Là dữ liệu chứ không phải danh sách id trong code — thêm "chậu cây" hay
+   * "thùng gỗ" sau này chỉ là một dòng JSON. Vật thể `tall` (cây lớn) cố ý
+   * không nên bật cờ này: vác cả một cái cây đi thì vô lý.
+   */
+  portable?: boolean;
+  /**
    * Vật thể LỚN theo ngày: sau `days` ngày (nhân với `growMul` của thời tiết)
    * thì biến thành `to`. Cây con → cây lớn, cỏ non → cỏ dày, bụi nhỏ → bụi lớn.
    * Tiến độ nằm ở `Tile.age`.
@@ -808,6 +816,18 @@ export interface GameState {
   inv: InvSlot[];
   /** chỉ số slot đang chọn trong hotbar */
   sel: number;
+
+  /**
+   * Vật thể đang VÁC TRÊN TAY, hoặc null. Là id của một `PropDef`.
+   *
+   * Cố ý KHÔNG phải một ô túi đồ: khúc gỗ và cục đá vác trên tay không nhét
+   * vào ba lô được, và cũng không gộp chồng — vác được đúng MỘT thứ, và trong
+   * lúc vác thì hai tay bận, không cày không tưới được. Chính cái giới hạn đó
+   * mới làm việc dọn nông trại thành một quyết định: dời hòn đá này hay để đó.
+   *
+   * Vắng/`null` = tay không.
+   */
+  carry?: string | null;
 
   /** id đã mở khoá: 'seed:tomato', 'sprinkler'... — chặn hàng trong cửa hàng */
   unlocked: string[];

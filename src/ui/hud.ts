@@ -32,7 +32,13 @@ import type { AnimalStats } from "../game/animals.ts";
 import type { WorkerCard } from "../game/workers.ts";
 
 export interface Hud {
-  update(s: GameState, content: Content, hint: Hint | null): void;
+  update(
+    s: GameState,
+    content: Content,
+    hint: Hint | null,
+    /** Việc NÚT TƯƠNG TÁC sẽ làm — nhãn riêng, vì nó là một nút khác. */
+    iHint: { label: string } | null,
+  ): void;
   /** Tên nút "dùng" của tay cầm đang cắm (A / ✕ / B…). Rỗng = không có tay cầm. */
   setPadKey(name: string): void;
   /** hotbar bấm được bằng chuột/chạm */
@@ -529,7 +535,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       }
       elAnimal.hidden = false;
     },
-    update(s, content, hint) {
+    update(s, content, hint, iHint) {
       if (s.money !== prev.money) {
         const up = prev.money >= 0 && s.money > prev.money;
         prev.money = s.money;
@@ -651,7 +657,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
       // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
-      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}`;
+      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}|${iHint?.label ?? ""}`;
       if (hk !== prev.hint) {
         prev.hint = hk;
         const btn = document.querySelector<HTMLElement>("#abtn .a");
@@ -666,6 +672,15 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         if (why) {
           why.textContent = hint?.why ?? "";
           why.hidden = !hint?.why;
+        }
+        /* Nút TƯƠNG TÁC cũng phải nói nó sẽ làm gì. Từ khi nút chính thôi mở
+           cửa hàng, chữ "MUA" không còn hiện ở đâu nữa — mà không thấy chữ đó
+           thì người chơi đứng trước quầy mà không biết bấm cái gì. */
+        const bb = document.querySelector<HTMLElement>("#abtn .b");
+        if (bb) {
+          bb.textContent = iHint?.label ?? "E";
+          bb.classList.toggle("ready", !!iHint);
+          bb.setAttribute("aria-label", iHint?.label ?? "Tương tác");
         }
         /* Dải ngữ cảnh cho TAY CẦM.
 
