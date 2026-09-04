@@ -255,12 +255,39 @@ dần trở lại thành cỏ (`tilledDecayChance`) — bỏ bê là ruộng hoa
 
 ### Bảng gỡ lỗi
 
-`F2` hoặc `Esc` → *Bảng gỡ lỗi*. Cộng tiền, đầy năng lượng/nước, sang ngày mới, cho cây chín
-hết, tự cày + gieo quanh nhân vật, rắc cỏ, rắc cây, mở khoá tất cả, +50 mỗi vật liệu.
+`F2` bật/tắt bảng gỡ lỗi — một **bảng NỔI ở góc trên phải, không chặn game**. 13 lệnh chia ba
+nhóm: tài nguyên (tiền, năng lượng, nước, vật liệu, mở khoá) · thời gian (sang ngày, đổi thời
+tiết) · ruộng (chín hết, thu tất cả, cày + gieo quanh đây, rắc cỏ, rắc cây, gây bệnh). Cộng
+một dòng số liệu sống ở chân bảng.
+
+Trước đây nó là một **modal**, và đó là cái sai: modal dừng thế giới lại, rồi sau mỗi lệnh
+lại vẽ lại chính nó — nên thử một thay đổi cân bằng (thêm tiền → sang ngày → xem cây lớn
+chưa) tốn nhiều thao tác mở-đóng hơn là thao tác thật. Bảng nổi thì thời gian vẫn trôi và
+nhân vật vẫn đi được trong lúc nó mở, nên bấm một lệnh là nhìn thẳng vào thế giới thấy ngay.
+
+Hai chi tiết dễ sai đã xử lý: `pointer-events` chỉ bật trên chính hộp bảng (không thì nửa
+màn hình trên mất khả năng chạm-để-đi), và bảng tự nuốt sự kiện chạm của mình (không thì mỗi
+lần bấm một chip lại kèm một cú "chạm vào thế giới" xuyên qua).
 
 Mọi thao tác gỡ lỗi đi qua **một action `DEBUG` trong reducer**, không phải UI thò tay sửa
 thẳng state — giữ đúng luật "mọi thay đổi qua một cửa", nên nó cũng chịu kiểm bất biến như
 mọi thứ khác.
+
+### Tự động làm
+
+Nút **AUTO** cạnh nút DÙNG (hoặc phím `F`) bật chế độ tự động: nhân vật tìm việc gần nhất
+làm được với thứ đang cầm, **tự đi tới** nếu ở xa, làm xong mới chọn việc kế tiếp — tuần tự
+từng việc một, đúng như khi bạn tự bấm.
+
+Nó dùng **chính hàm** `nearestTarget` mà chế độ giữ-nút-DÙNG đang dùng, chỉ khác hai tham số
+(`radius`, `requireReach`). Cố ý viết một lần: sau này AI người làm thuê cũng gọi đúng hàm
+đó, nếu tách hai đường thì thứ tự ưu tiên của người chơi và của người làm sẽ trôi khỏi nhau.
+
+Tự tắt khi: bạn tự cầm lái, quanh đây hết việc, hoặc **4 giây không có tiến triển nào**. Phép
+đo cuối cùng là thứ quan trọng: thao tác ở đây có hiệu lực TRỄ (`USE` đặt `busy` rồi mới kiểm
+năng lượng lúc chạm đất), nên ngay sau khi ra lệnh thì không cách nào biết nhát này ăn hay
+trượt. Đếm bộ đếm thống kê thì đúng với mọi lý do hỏng cùng lúc — hết năng lượng, túi đầy,
+hết hạt, kẹt đường.
 
 ### Hiển thị & camera
 

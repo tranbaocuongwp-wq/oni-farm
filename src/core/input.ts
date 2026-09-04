@@ -24,6 +24,8 @@ export type Intent =
   | { t: "inventory" }
   | { t: "map" }
   | { t: "debug" }
+  /** Bật/tắt chế độ TỰ ĐỘNG LÀM. */
+  | { t: "auto" }
   /** Bấm/chạm vào thế giới — toạ độ WORLD px.
    *  `double` = cú chạm thứ hai của một lần chạm kép. Luật điều khiển:
    *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
@@ -140,6 +142,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         break;
       case "KeyM":
         push({ t: "map" });
+        break;
+      case "KeyF":
+        push({ t: "auto" });
         break;
       case "F2":
         push({ t: "debug" });

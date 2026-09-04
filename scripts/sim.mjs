@@ -2606,6 +2606,95 @@ test("48. sang mùa: cây chưa chín trái mùa héo, cây đã chín và ô nh
   );
 });
 
+/* ========================================================================== */
+/* 49-50. TỰ TÌM VIỆC Ở XA                                                     */
+/* ========================================================================== */
+
+test("49. nearestTarget bán kính rộng: tìm được ô NGOÀI tầm với; gọi kiểu cũ không đổi", () => {
+  const store = mkStore(810);
+  walkTo(store, HOME.x, HOME.y);
+  selectItem(store, "tool:hoe");
+
+  // dọn sạch mọi ô cày được quanh chân, để chỉ còn việc ở XA
+  for (let i = 0; i < 40; i++) {
+    const near = nearestTarget(store.getState(), content, "till", null);
+    if (!near) break;
+    use(store, near.x, near.y);
+  }
+  eq(nearestTarget(store.getState(), content, "till", null), null, "quanh chân đã hết việc");
+
+  // …nhưng mở rộng bán kính thì vẫn còn cả nông trại để cày
+  const far = nearestTarget(store.getState(), content, "till", null, {
+    radius: 12,
+    requireReach: false,
+  });
+  ok(far, "bán kính rộng thì tìm ra ô ở xa");
+  eq(far.kind, "till", "vẫn đúng loại việc");
+  const s0 = store.getState();
+  const xa = Math.hypot(far.x * TILE + 8 - s0.player.x, far.y * TILE + 8 - s0.player.y) / TILE;
+  ok(
+    xa > 1.6,
+    `ô tìm được nằm NGOÀI tầm với (${xa.toFixed(2)} ô > 1,6) — nơi gọi phải tự đi tới`,
+  );
+
+  // giá trị mặc định phải y hệt hành vi cũ (bảo vệ kịch bản 40)
+  const st2 = mkStore(811);
+  walkTo(st2, HOME.x, HOME.y);
+  selectItem(st2, "tool:hoe");
+  const a = nearestTarget(st2.getState(), content, "till", null);
+  const b = nearestTarget(st2.getState(), content, "till", null, {});
+  const c = nearestTarget(st2.getState(), content, "till", null, { radius: 2, requireReach: true });
+  deepEq(b, a, "gọi với opts rỗng cho kết quả y hệt gọi không opts");
+  deepEq(c, a, "gọi với đúng giá trị mặc định cũng y hệt");
+});
+
+test("50. quét theo VÒNG cho kết quả y hệt quét vét cạn (bẫy ô chéo vòng trong)", () => {
+  /* Đây là bẫy thật, suýt lọt: điểm số = phạt-khác-loại(0|100) + chéo(0|10) +
+     khoảng cách. Một ô CHÉO ở vòng 1 (10 + 22,6 = 32,6) THUA một ô THẲNG HÀNG ở
+     vòng 2 (0 + 32 = 32). Nên "tìm thấy ở vòng nào là dừng ở vòng đó" sẽ trả về
+     ô khác với bản quét đầy đủ. Test này so hai cách trên nhiều thế trận. */
+  const R = 6;
+  const vetCan = (s, prefer) => {
+    const px = s.player.x, py = s.player.y;
+    const cx = Math.floor(px / 16), cy = Math.floor(py / 16);
+    let best = null, bestScore = Infinity;
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;
+        const kind = canUseAt(s, content, x, y, true);
+        if (kind === null) continue;
+        const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
+        const straight = dx === 0 || dy === 0 ? 0 : 1;
+        const score = (prefer && kind !== prefer ? 100 : 0) + straight * 10 + d;
+        if (score < bestScore) { bestScore = score; best = { x, y, kind }; }
+      }
+    }
+    return best;
+  };
+
+  let soCa = 0;
+  for (let seed = 820; seed < 832; seed++) {
+    const store = mkStore(seed);
+    walkTo(store, HOME.x, HOME.y);
+    selectItem(store, "tool:hoe");
+    // cày ngẫu nhiên vài ô để thế trận mỗi vòng lặp một khác
+    for (let i = 0; i < seed % 7; i++) {
+      const t = nearestTarget(store.getState(), content, "till", null);
+      if (!t) break;
+      use(store, t.x, t.y);
+    }
+    for (const prefer of ["till", "water", null]) {
+      const s = store.getState();
+      const vong = nearestTarget(s, content, prefer, null, { radius: R, requireReach: false });
+      const het = vetCan(s, prefer);
+      deepEq(vong, het, `seed ${seed}, prefer ${prefer}: quét vòng phải khớp quét vét cạn`);
+      soCa++;
+    }
+  }
+  ok(soCa >= 30, `đã so ${soCa} thế trận`);
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 console.log("\n  ONIFARM — sim\n");

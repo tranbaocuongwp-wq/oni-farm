@@ -29,6 +29,7 @@
         <!-- HUD và modal là DOM, không vẽ lên canvas: chữ sắc nét ở mọi cỡ màn
              hình và mọi mật độ điểm ảnh, không phụ thuộc hệ số phóng của game. -->
         <div id="hud"></div>
+        <div id="devpanel" hidden></div>
         <div id="modal-root"></div>
         <div id="tutorial" hidden></div>
 
@@ -42,6 +43,7 @@
           <div id="abtn">
             <div class="why" hidden></div>
             <div class="btns">
+              <button type="button" class="auto" aria-label="Tự động làm" aria-pressed="false">AUTO</button>
               <button type="button" class="b" aria-label="Tương tác">E</button>
               <button type="button" class="a" aria-label="Dùng vật phẩm">DÙNG</button>
             </div>

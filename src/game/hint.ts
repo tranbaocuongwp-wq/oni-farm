@@ -139,48 +139,96 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
   return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
 }
 
+/** Tuỳ chọn cho `nearestTarget`. Mặc định = đúng hành vi cũ, không đổi một ly. */
+export interface NearestOptions {
+  /** bán kính quét, tính bằng Ô. Mặc định 2 (hộp 5×5 quanh chân). */
+  radius?: number;
+  /** bắt buộc ô phải nằm trong tầm công cụ. Mặc định true. */
+  requireReach?: boolean;
+}
+
 /**
- * Ô GẦN NHẤT trong tầm với mà vật phẩm đang cầm làm được việc — để giữ nút
- * DÙNG (hoặc bấm liên tục) là nhân vật tự chuyển sang ô kế tiếp, không phải
- * ngắm lại từng ô. "Trong tầm công cụ" là cố ý: không tự đi xa, chỉ quét quanh
- * chân — muốn sang luống khác thì người chơi chạm.
+ * Ô GẦN NHẤT mà vật phẩm đang cầm làm được việc.
+ *
+ * Hai chế độ, cùng một công thức chấm điểm:
+ *
+ * · Mặc định (`radius: 2, requireReach: true`) — quét quanh chân, chỉ nhận ô
+ *   với tới được. Đây là chế độ cho việc GIỮ NÚT: cày xong một ô thì nhảy sang
+ *   ô kế bên, không phải ngắm lại.
+ *
+ * · Bán kính rộng, bỏ `requireReach` — dùng cho "tự động làm" và (sau này) cho
+ *   AI người làm thuê. Ô trả về có thể ở XA, nơi gọi có nhiệm vụ tự đi tới.
+ *   Đây cố ý là cùng một hàm: người chơi bấm "tự động làm" và người làm thuê
+ *   chọn việc phải cho ra cùng một thứ tự ưu tiên, nếu không thì hai hệ thống
+ *   sẽ trôi khỏi nhau theo thời gian.
  *
  * `prefer`: loại việc vừa làm (till/water/…) được ưu tiên, để đang cày thì
  * không nhảy sang thu hoạch một cây chín tình cờ đứng cạnh (thu hoạch vẫn là
  * việc "làm được" theo `canUseAt`). Không có ô cùng loại thì mới lấy loại khác.
  * Trả null nếu quanh đây không còn gì.
+ *
+ * Quét theo VÒNG từ trong ra ngoài và thoát sớm: ca thường gặp (có việc ngay
+ * cạnh chân) chỉ tốn 8 ô thay vì quét trọn 25×25 = 625 ô mỗi lần.
  */
 export function nearestTarget(
   state: GameState,
   content: Content,
   prefer: UseKind | null,
   exclude: { x: number; y: number } | null = null,
+  opts: NearestOptions = {},
 ): { x: number; y: number; kind: Exclude<UseKind, null> } | null {
+  const radius = Math.max(0, Math.floor(opts.radius ?? 2));
+  const requireReach = opts.requireReach !== false;
   const px = state.player.x;
   const py = state.player.y;
   const cx = Math.floor(px / 16);
   const cy = Math.floor(py / 16);
   let best: { x: number; y: number; kind: Exclude<UseKind, null> } | null = null;
   let bestScore = Infinity;
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      const x = cx + dx;
-      const y = cy + dy;
-      if (exclude && exclude.x === x && exclude.y === y) continue;
-      if (!inReach(state, x, y)) continue;
-      const kind = canUseAt(state, content, x, y);
-      if (kind === null) continue;
-      const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
-      // cùng loại việc thắng tuyệt đối; sau đó ô thẳng hàng (không chéo) thắng
-      // ô chéo — nhân vật vung tay theo 4 hướng nên ô chéo trông lệch;
-      // cuối cùng mới tới khoảng cách.
-      const straight = dx === 0 || dy === 0 ? 0 : 1;
-      const score = (prefer && kind !== prefer ? 100 : 0) + straight * 10 + d;
-      if (score < bestScore) {
-        bestScore = score;
-        best = { x, y, kind };
+
+  const consider = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= state.w || y >= state.h) return;
+    if (exclude && exclude.x === x && exclude.y === y) return;
+    if (requireReach && !inReach(state, x, y)) return;
+    // `canUseAt` TỰ kiểm tầm với ở bên trong; phải bảo nó bỏ qua, nếu không thì
+    // `requireReach: false` ở đây vô nghĩa và bán kính rộng không tìm ra gì.
+    const kind = canUseAt(state, content, x, y, !requireReach);
+    if (kind === null) return;
+    const dx = x - cx;
+    const dy = y - cy;
+    const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
+    // cùng loại việc thắng tuyệt đối; sau đó ô thẳng hàng (không chéo) thắng
+    // ô chéo — nhân vật vung tay theo 4 hướng nên ô chéo trông lệch;
+    // cuối cùng mới tới khoảng cách.
+    const straight = dx === 0 || dy === 0 ? 0 : 1;
+    const score = (prefer && kind !== prefer ? 100 : 0) + straight * 10 + d;
+    if (score < bestScore) {
+      bestScore = score;
+      best = { x, y, kind };
+    }
+  };
+
+  for (let r = 0; r <= radius; r++) {
+    if (r === 0) consider(cx, cy);
+    else {
+      for (let dx = -r; dx <= r; dx++) {
+        consider(cx + dx, cy - r);
+        consider(cx + dx, cy + r);
+      }
+      for (let dy = -r + 1; dy <= r - 1; dy++) {
+        consider(cx - r, cy + dy);
+        consider(cx + r, cy + dy);
       }
     }
+    // Thoát sớm, có CHỨNG MINH chứ không phải áng chừng. Ô ở vòng r+1 trở ra
+    // có tâm cách người chơi ít nhất `(r+1)*16 - 8` px, mà điểm số luôn >= khoảng
+    // cách (hai thành phần kia không âm). Nên khi điểm tốt nhất đã <= cận đó thì
+    // không ô nào ngoài kia thắng được nữa.
+    //
+    // Cắt ẩu ở đây là sai thật: một ô CHÉO vòng trong bị phạt +10 hoàn toàn có
+    // thể thua một ô THẲNG HÀNG vòng ngoài, nên "tìm thấy là dừng" sẽ trả về ô
+    // khác với bản quét đầy đủ cũ.
+    if (best !== null && bestScore <= (r + 1) * 16 - 8) break;
   }
   return best;
 }

@@ -317,6 +317,69 @@ body.touch[data-hand="left"] .hud-top {
   flex: 1;
   min-height: 0;
 }
+/* ---- bảng gỡ lỗi NỔI: đè lên góc, KHÔNG chặn game ---- */
+#devpanel {
+  position: absolute;
+  top: calc(var(--hud-gap) + var(--sa-t));
+  right: calc(var(--hud-gap) + var(--sa-r));
+  z-index: 40;
+  width: min(230px, 52vw);
+  max-height: 70%;
+  overflow-y: auto;
+  padding: 5px 6px 6px;
+  background: rgba(20, 15, 10, 0.95);
+  border: 2px solid var(--edge);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  /* CHỈ hộp này nhận chạm — phần còn lại của màn hình vẫn chạm-để-đi được */
+  pointer-events: auto;
+  font-size: calc(var(--fs-sm) * 0.86);
+}
+#devpanel[hidden] {
+  display: none;
+}
+.dev-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.dev-x {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+  font-size: 1.1em;
+}
+.dev-group {
+  margin: 5px 0 2px;
+  color: var(--ink-dim);
+  font-size: 0.85em;
+}
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+.dev-btn {
+  padding: 4px 2px;
+  min-height: 0;
+  font-size: 0.9em;
+  line-height: 1.15;
+  border-radius: var(--radius-sm);
+}
+.dev-stat {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--edge);
+  color: var(--ink-dim);
+  font-size: 0.82em;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
 #minimap {
   pointer-events: auto;
   padding: 3px;
@@ -508,32 +571,37 @@ body.touch .slot .k {
   align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
   align-items: center;
   pointer-events: none;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 .toast {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   background: rgba(20, 15, 10, 0.94);
-  border: 2px solid var(--edge);
+  border: 1px solid var(--edge);
   border-radius: 999px;
-  padding: 6px 14px 6px 10px;
+  padding: 3px 10px 3px 7px;
   animation: toast-in var(--anim) ease-out;
   text-align: center;
-  font-size: var(--fs-sm);
+  font-size: calc(var(--fs-sm) * 0.9);
+  /* một dòng, dài quá thì cắt — toast hai dòng đẩy hết HUD xuống */
+  max-width: 68vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: opacity 0.25s ease-out, transform 0.25s ease-out;
 }
 .toast .ico {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   font-weight: 800;
-  font-size: 0.8em;
+  font-size: 0.72em;
   flex: none;
 }
 .toast .ico:empty {
@@ -1176,6 +1244,22 @@ body[data-hand="left"] #abtn .btns {
   height: var(--btn-b);
   min-height: var(--btn-b);
   font-size: 1.05em;
+}
+/* TỰ ĐỘNG LÀM: nút công tắc, nhỏ hơn nút E, đặt xa nút DÙNG nhất trong cụm để
+   không bấm nhầm khi đang thao tác dồn dập. Sáng lên khi đang bật. */
+#abtn .auto {
+  width: var(--btn-b);
+  height: var(--btn-b);
+  min-height: var(--btn-b);
+  font-size: 0.62em;
+  letter-spacing: 0;
+  color: var(--ink-dim);
+}
+#abtn .auto.on {
+  background: rgba(61, 90, 130, 0.96);
+  border-color: #5aa9e6;
+  color: #dceeff;
+  box-shadow: 0 0 0 3px rgba(90, 169, 230, 0.3), 0 0 14px rgba(90, 169, 230, 0.4);
 }
 #abtn button.down {
   transform: translateY(2px);

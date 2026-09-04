@@ -62,7 +62,6 @@ export interface Menus {
   openShop(): void;
   openSell(): void;
   openCraft(): void;
-  openDebug(): void;
   openPause(): void;
   openSettings(): void;
   openBag(): void;
@@ -559,48 +558,6 @@ export function createMenus(
   }
 
   /* ------------------------------------------------------------ GỠ LỖI */
-  function openDebug() {
-    current = openDebug;
-    const c = getContent();
-    const { body, foot } = shell("Bảng gỡ lỗi", "Công cụ thử nghiệm — không phải cách chơi thật");
-
-    const grid = document.createElement("div");
-    grid.className = "grid2";
-    const add = (label: string, op: DebugOp, n?: number) => {
-      grid.appendChild(mkBtn(label, () => {
-        h.debug(op, n);
-        openDebug();
-      }));
-    };
-    add("+1.000đ", "money", 1000);
-    add("Đầy năng lượng", "energy");
-    add("Đầy bình nước", "water");
-    add("+50 mỗi vật liệu", "materials");
-    add("Mở khoá tất cả", "unlockAll");
-    add("Sang ngày mới", "skipDay");
-    add("Cho cây chín hết", "growAll");
-    add("Thu hoạch tất cả", "harvestAll");
-    add("Tự cày + gieo quanh đây", "plantAround");
-    add("Rắc cỏ quanh đây", "addGrass");
-    add("Rắc cây nhỏ quanh đây", "addTrees");
-    add("Đổi thời tiết", "weather");
-    add("Làm cây bệnh quanh đây", "sickAround");
-    body.appendChild(grid);
-
-    const s = getState();
-    const stat = document.createElement("div");
-    stat.className = "sub mono";
-    stat.style.marginTop = "8px";
-    stat.innerHTML = [
-      `ngày ${s.day} · ${Math.floor(s.minutes)}′ · ${s.money}đ`,
-      `năng lượng ${Math.round(s.energy)}/${c.balance.energyMax} · nước ${Math.round(s.water)}`,
-      `ô: ${s.w}×${s.h} · vị trí ${Math.floor(s.player.x / 16)},${Math.floor(s.player.y / 16)}`,
-      `content ${c.contentVersion} · core ${CORE_VERSION}`,
-    ].join("<br>");
-    body.appendChild(stat);
-
-    foot.appendChild(mkBtn("Đóng", close, "primary"));
-  }
 
   /* ------------------------------------------------------------ TẠM DỪNG */
   function openPause() {
@@ -630,7 +587,7 @@ export function createMenus(
       mkBtn("? Hướng dẫn chơi", () => openHelp()),
     );
     if (h.canInstall()) list.appendChild(mkBtn("⤓ Cài về màn hình chính", () => h.install(), "accent"));
-    list.appendChild(mkBtn("Bảng gỡ lỗi", () => openDebug(), "dim"));
+    list.appendChild(note("Bảng gỡ lỗi: phím F2 (bảng nổi, không chặn game)."));
     body.appendChild(list);
 
     if (info.pending) body.appendChild(note(`Có nội dung ${info.pending} đang chờ — tải lại trang để áp dụng.`));
@@ -807,7 +764,6 @@ export function createMenus(
     openShop,
     openSell,
     openCraft,
-    openDebug,
     openPause,
     openSettings,
     openBag,

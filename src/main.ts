@@ -46,6 +46,7 @@ import { createHud } from "./ui/hud.ts";
 import { createMenus } from "./ui/menus.ts";
 import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
+import { createDevPanel } from "./ui/devpanel.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
@@ -305,6 +306,13 @@ async function boot() {
     else menus.openBag();
   });
 
+  /* Bảng gỡ lỗi NỔI. CỐ Ý không tính vào biến `modal`: game vẫn chạy, thời gian
+     vẫn trôi, nhân vật vẫn đi được trong lúc bảng mở — đó mới là chỗ nó hữu ích,
+     bấm một lệnh rồi nhìn thẳng vào thế giới thấy ngay kết quả. */
+  const devPanel = createDevPanel($("#devpanel"), {
+    debug: (op, n) => store.dispatch({ t: "DEBUG", op, ...(n === undefined ? {} : { n }) }),
+  });
+
   const minimap = createMinimap($("#minimap"));
   minimap.onPick((tx, ty) => {
     if (menus.isOpen()) return;
@@ -333,6 +341,7 @@ async function boot() {
   for (const [sel, code] of [
     ["#abtn .a", "Space"],
     ["#abtn .b", "KeyE"],
+    ["#abtn .auto", "KeyF"],
     ["#sysbtn .menu", "Escape"],
   ] as [string, string][]) {
     const el = document.querySelector<HTMLElement>(sel);
@@ -559,6 +568,59 @@ async function boot() {
   /** Loại việc của nhát GẦN NHẤT — để giữ nút thì tiếp tục đúng việc đó. */
   let lastKind: UseKind = null;
 
+  /* ---- TỰ ĐỘNG LÀM ----------------------------------------------------
+     Cố ý KHÔNG nằm trong `GameState`: đây là ý định nhất thời của người chơi,
+     đúng cùng lý do đích của `nav` không được lưu vào save (xem đầu
+     core/navigate.ts). Nhờ vậy mốc này không phải tăng SAVE_VERSION.
+
+     Cùng một hàm `continueWork` mà nút DÙNG giữ-để-làm-tiếp đang dùng — và
+     cũng chính là hàm mà AI người làm thuê sẽ dùng lại. Viết một lần. */
+  let autoWork = false;
+  /** Số lần liên tiếp không tìm ra việc. Hai lần thì tự tắt. */
+  let autoMiss = 0;
+  /** Ô đang đi tới ĐỂ LÀM VIỆC (không phải do người chơi chạm). Tới nơi thì chỉ
+   *  dùng công cụ, không mở hộp thoại nào. */
+  let workGoal: { x: number; y: number } | null = null;
+  /** Bao lâu rồi không có việc nào THÀNH CÔNG, tính bằng giây. */
+  let autoIdle = 0;
+  let autoMark = "";
+  /** Bấy nhiêu giây không nhúc nhích thì tắt. Đủ dài để bao một nhát cuốc
+   *  (actionSeconds) cộng quãng đi vài ô, đủ ngắn để không nhả một tràng toast. */
+  const AUTO_IDLE_LIMIT = 4;
+
+  /**
+   * Vì sao đo bằng "không tiến triển" chứ không bắt từng lý do hỏng:
+   * thao tác ở đây có HIỆU LỰC TRỄ — `USE` đặt `busy` ngay rồi mới kiểm năng
+   * lượng lúc chạm đất — nên ngay sau khi dispatch thì không có cách nào biết
+   * nhát này sẽ ăn hay trượt. Còn đếm bộ đếm thống kê thì đúng với MỌI lý do
+   * hỏng cùng một lúc: hết năng lượng, túi đầy, hết hạt, kẹt đường.
+   */
+  const progressMark = (s: GameState): string =>
+    `${s.stats.tilled}|${s.stats.planted}|${s.stats.watered}|${s.stats.harvested}|${s.stats.cured}`;
+
+  const stopAuto = (s: GameState) => {
+    setAuto(false);
+    toasts.say(
+      s.energy < content.balance.energyCost.till
+        ? "Hết năng lượng — đã tắt tự động làm."
+        : "Quanh đây hết việc — đã tắt tự động làm.",
+      "info",
+    );
+  };
+  const setAuto = (on: boolean) => {
+    autoWork = on;
+    autoMiss = 0;
+    // Đặt lại cả đồng hồ "không tiến triển", nếu không thì bật lại ngay sau khi
+    // nó vừa tự tắt là tắt lần nữa tức thì (đồng hồ vẫn đang quá ngưỡng).
+    autoIdle = 0;
+    autoMark = "";
+    const b = document.querySelector<HTMLElement>("#abtn .auto");
+    if (b) {
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  };
+
   function tryUse(s: GameState, tx: number, ty: number): boolean {
     if (!inReachOf(s, tx, ty)) return false;
     lastUse = { x: tx, y: ty };
@@ -574,15 +636,43 @@ async function boot() {
    * Không tự đi xa: hết ô quanh chân thì dừng, người chơi chạm chỗ khác.
    * Trả về true nếu đã bắt đầu một nhát mới.
    */
+  /** Bán kính tự đi tới việc, tính bằng Ô. Đủ để dọn một luống mà không lang
+   *  thang sang tận đầu kia nông trại. */
+  const AUTO_RADIUS = 12;
+
+  /**
+   * Làm tiếp việc kế tiếp. Ba nấc, ưu tiên từ gần ra xa:
+   *   1. ô đang ngắm còn việc → làm ngay (cày xong đổi hạt là gieo ngay)
+   *   2. ô trong TẦM VỚI → làm ngay
+   *   3. ô ở XA → tự ĐI TỚI rồi làm khi đến nơi
+   *
+   * Nấc 3 là chỗ mới. Nó đi qua đúng đường ống `nav.goTo(act:true)` →
+   * `takeArrival()` → `actOnTile()` vốn đã chạy cho cú chạm kép, nên không sinh
+   * thêm máy trạng thái nào.
+   */
   function continueWork(s: GameState): boolean {
     if (s.busy > 0) return false;
-    // ô đang ngắm vẫn còn việc → làm tiếp ở đó (cày xong đổi hạt là gieo ngay)
     if (aimed && inReachOf(s, aimed.x, aimed.y) && canUseAt(s, content, aimed.x, aimed.y) !== null)
       return tryUse(s, aimed.x, aimed.y);
-    const next = nearestTarget(s, content, lastKind, null);
-    if (!next) return false;
-    aimed = { x: next.x, y: next.y };
-    return tryUse(s, next.x, next.y);
+
+    const near = nearestTarget(s, content, lastKind, null);
+    if (near) {
+      aimed = { x: near.x, y: near.y };
+      return tryUse(s, near.x, near.y);
+    }
+
+    const far = nearestTarget(s, content, lastKind, null, {
+      radius: AUTO_RADIUS,
+      requireReach: false,
+    });
+    if (!far) return false;
+    aimed = { x: far.x, y: far.y };
+    // Đánh dấu đây là chuyến đi ĐỂ LÀM VIỆC, không phải cú chạm của người chơi.
+    // Tới nơi thì chỉ được DÙNG công cụ, tuyệt đối không `tryInteract` — nếu
+    // không, đi cày một ô cạnh quầy thu mua là bật ngay hộp thoại bán hàng giữa
+    // lúc đang tự động làm, và thế giới đứng hình cho tới khi người chơi tắt nó.
+    workGoal = { x: far.x, y: far.y };
+    return nav.goTo(s, content, far.x, far.y, { avoidStandingOn: holdingSolidBuilding(s) });
   }
 
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
@@ -614,6 +704,9 @@ async function boot() {
     if (!modal) {
       const ax = input.axis();
       if (ax.x !== 0 || ax.y !== 0) {
+        // Người chơi tự cầm lái thì nhường ngay — cùng luật với `nav.cancel()`:
+        // nhập tay luôn thắng thứ đang chạy tự động.
+        if (autoWork) setAuto(false);
         nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
         aimed = null;
@@ -628,7 +721,35 @@ async function boot() {
       const arrived = nav.takeArrival();
       if (arrived) {
         aimed = { x: arrived.tx, y: arrived.ty };
-        if (arrived.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) deny();
+        const forWork =
+          workGoal !== null && workGoal.x === arrived.tx && workGoal.y === arrived.ty;
+        workGoal = null;
+        if (arrived.act) {
+          const st = store.getState();
+          const done = forWork
+            ? tryUse(st, arrived.tx, arrived.ty)
+            : actOnTile(st, arrived.tx, arrived.ty);
+          if (!done) deny();
+        }
+      }
+
+      // TỰ ĐỘNG LÀM: cùng một hàm với giữ-nút, chỉ khác là không cần giữ. Chờ
+      // hết `busy` và hết đường đang đi rồi mới chọn việc mới, nên vẫn TUẦN TỰ
+      // từng việc một như Cường muốn.
+      if (autoWork) {
+        const s = store.getState();
+        const mark = progressMark(s);
+        if (mark !== autoMark) {
+          autoMark = mark;
+          autoIdle = 0;
+        } else if ((autoIdle += dt) > AUTO_IDLE_LIMIT) {
+          stopAuto(s);
+        }
+        if (autoWork && s.busy <= 0 && !nav.target()) {
+          if (!continueWork(s)) autoMiss++;
+          else autoMiss = 0;
+          if (autoMiss >= 2) stopAuto(store.getState());
+        }
       }
 
       // GIỮ nút DÙNG: hết khoá là tự sang ô kế tiếp trong tầm. Cú bấm ĐẦU do
@@ -669,7 +790,11 @@ async function boot() {
           minimap.toggle();
           break;
         case "debug":
-          menus.openDebug();
+          devPanel.toggle();
+          break;
+        case "auto":
+          setAuto(!autoWork);
+          toasts.say(autoWork ? "Tự động làm: BẬT" : "Tự động làm: TẮT", "info");
           break;
         case "select":
           store.dispatch({ t: "SELECT", slot: it.slot });
@@ -710,6 +835,9 @@ async function boot() {
           const tx = snapped.x;
           const ty = snapped.y;
           aimed = { x: tx, y: ty };
+          // Người chơi tự chạm thì đây KHÔNG còn là chuyến đi làm việc nữa —
+          // tới nơi được phép mở cửa hàng/giường như bình thường.
+          workGoal = null;
 
           if (!it.double) {
             // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
@@ -792,6 +920,7 @@ async function boot() {
     hud.update(s, content, hint);
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
+    devPanel.update(s, content);
   });
 
   function nearbyInteract(s: GameState, x: number, y: number) {
