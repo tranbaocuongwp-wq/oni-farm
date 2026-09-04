@@ -13,7 +13,7 @@
 ============================================================================ */
 
 import type { Content, GameState, InteractKind } from "./types.ts";
-import { canUseAt, type UseKind } from "./actions.ts";
+import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { parseItem } from "./items.ts";
 import { inReach, interactAt, isRipe, tileAt, propDef } from "./world.ts";
@@ -92,6 +92,18 @@ function interactNear(state: GameState, content: Content, x: number, y: number):
 function explain(state: GameState, content: Content, x: number, y: number): string | null {
   const t = tileAt(state, x, y);
   if (!t) return null;
+
+  /* ĐANG VÁC: mọi câu bên dưới đều nói về thứ đang CẦM trên hotbar, mà lúc vác
+     thì hai tay bận — hỏi hotbar sẽ ra "Chọn vật phẩm ở hotbar", một câu vô
+     nghĩa với người đang ôm hòn đá. Trả lời đúng câu họ đang hỏi: vì sao đặt
+     xuống đây không được. */
+  if (state.carry) {
+    if (putdownWouldTrap(state, content, x, y)) return "Lùi ra rồi đặt";
+    if (t.tilled) return "Đừng đặt lên luống cày";
+    if (t.prop || t.crop || t.b) return "Chỗ này đã có thứ khác";
+    return "Không đặt xuống được ở đây";
+  }
+
   if (t.prop) {
     const def = propDef(content, t.prop);
     if (!def) return null;

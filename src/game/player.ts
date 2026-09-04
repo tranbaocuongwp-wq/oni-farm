@@ -12,7 +12,7 @@
 import type { Content, Dir } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dPlayer } from "./state.ts";
-import { PLAYER_SPEED, blockedAt, speedMulAt } from "./world.ts";
+import { PLAYER_SPEED, blockedAt, nudgeOutOfSolid, speedMulAt } from "./world.ts";
 
 export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
   if (nx === 0 && ny === 0) return fallback;
@@ -30,19 +30,44 @@ export function movePlayer(
   run = false,
 ): boolean {
   const p = d.base.player;
+
+  /* ---- CỨU KẸT ----------------------------------------------------------
+     Đứng sẵn trong ô đặc thì cả hai trục đều bị chặn: nhân vật đứng chết một
+     chỗ, không nút nào gỡ được, phải tải lại trang. Bất biến
+     "người chơi nằm trong ô solid" bắt chuyện này — nhưng bất biến chỉ chạy khi
+     `validate` bật (bản DEV), còn bản chơi thật thì im lặng.
+
+     Save từ bản có lỗi ĐẶT ĐÁ XUỐNG CHÂN đang kẹt sẵn như thế. Luật mới không
+     tự gỡ cho họ được (hòn đá đã nằm đó rồi), nên nhích ra ô trống gần nhất
+     ngay tại bước đi đầu tiên — cùng cách `migrateForContent` cứu lúc tải save,
+     chỉ là không bắt họ tải lại mới được cứu.
+
+     Đặt TRƯỚC nhánh "không có input" để nó chạy cả khi đứng yên: người đang kẹt
+     thường buông tay ra xem chuyện gì đang xảy ra chứ không giữ phím. */
+  let x = p.x;
+  let y = p.y;
+  if (blockedAt(d.s, content, x, y)) {
+    const out = nudgeOutOfSolid(d.s, content, x, y);
+    x = out.x;
+    y = out.y;
+  }
+  const rescued = x !== p.x || y !== p.y;
+
   const len = Math.sqrt(dx * dx + dy * dy);
   // Nền dưới chân quyết định tốc độ: đường nhựa đi nhanh hơn cỏ.
   const base =
     (run
       ? (content.balance.runSpeed ?? PLAYER_SPEED)
-      : (content.balance.moveSpeed ?? PLAYER_SPEED)) * speedMulAt(d.s, content, p.x, p.y);
+      : (content.balance.moveSpeed ?? PLAYER_SPEED)) * speedMulAt(d.s, content, x, y);
   // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
   const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
   const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;
 
   if (!Number.isFinite(len) || len <= 1e-9) {
-    if (!p.moving) return false;
+    if (!p.moving && !rescued) return false;
     const np = dPlayer(d);
+    np.x = x;
+    np.y = y;
     np.moving = false;
     return true;
   }
@@ -50,8 +75,6 @@ export function movePlayer(
   const nx = dx / len;
   const ny = dy / len;
 
-  let x = p.x;
-  let y = p.y;
   if (step > 0) {
     const tryX = x + nx * step;
     if (!blockedAt(d.s, content, tryX, y)) x = tryX;

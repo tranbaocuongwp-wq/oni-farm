@@ -329,6 +329,11 @@ export function canPlaceBuilding(
   if (def.kind === "object" && t.crop !== null) return false;
   if (def.kind === "floor" && t.g !== "grass" && t.g !== "path") return false;
   if (def.solid && playerOverlapsTile(state, x, y)) return false;
+  /* Con vật / người làm đứng đó cũng bị nhốt y như người chơi, mà chúng không
+     có ai bấm nút gỡ ra hộ. Luật này lẽ ra đã có từ đầu: entities.ts từng có
+     sẵn một hàm đúng để làm việc đó, kèm chú thích "dùng để CẤM xây đè lên con
+     vật" — nhưng chưa nơi nào gọi tới. */
+  if (def.solid && anyEntityOverlapsTile(state, content, x, y)) return false;
   return true;
 }
 
@@ -374,6 +379,43 @@ export function playerOverlapsTile(state: GameState, x: number, y: number): bool
   const l = x * TILE;
   const t = y * TILE;
   return r.r > l && r.l < l + TILE && r.b > t && r.t < t + TILE;
+}
+
+/**
+ * Có con vật / người làm / xe nào đang ĐÈ LÊN ô này không.
+ *
+ * So bằng HỘP VA CHẠM chứ không bằng ô tâm: hộp con bò hẹp hơn một ô nên nó
+ * cũng đè lên hai ô như người chơi, và đặt hòn đá xuống ô nó đang chớm sang là
+ * nhốt nó y hệt. Hỏi ô tâm thôi thì luật hở đúng nửa số trường hợp.
+ *
+ * Con vật / xe mà content không còn khai báo thì lấy trọn một ô — không biết
+ * nó to bằng nào thì chặn cho chắc, giống cách `isSolidTile` xử vật thể lạ.
+ *
+ * Ở world.ts chứ không ở entities.ts vì `canPlaceBuilding` ngay trên cần nó, mà
+ * entities.ts đã import world.ts rồi — để bên kia là thành vòng import.
+ */
+export function anyEntityOverlapsTile(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): boolean {
+  const l = x * TILE;
+  const t = y * TILE;
+  for (const e of state.entities) {
+    if (e.map !== state.mapId) continue;
+    const box =
+      e.kind === "worker"
+        ? content.workers.box
+        : e.kind === "vehicle"
+          ? content.vehicles[e.def]?.box
+          : content.animals[e.def]?.box;
+    const w = box?.w ?? TILE;
+    const h = box?.h ?? TILE;
+    if (e.x + w / 2 > l && e.x - w / 2 < l + TILE && e.y + h / 2 > t && e.y - h / 2 < t + TILE)
+      return true;
+  }
+  return false;
 }
 
 /** Hitbox tại (cx,cy) có đè lên ô solid nào không. Vỏ mỏng cho kích thước

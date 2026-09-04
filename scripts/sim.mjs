@@ -12,7 +12,7 @@ import { buildContent } from "../src/core/content/loader.ts";
 import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
-import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
+import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, interactHint, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
@@ -3607,6 +3607,134 @@ test("65. tay không: nhấc khúc gỗ / hòn đá, vác đi rồi đặt xuố
   eq(store.getState().tiles[idx(store.getState().w, px + 1, py)].prop, "log", "khúc gỗ kia vẫn nằm yên");
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi vác đồ");
+});
+
+test("66. đặt vật xuống KHÔNG được tự nhốt mình; save đang kẹt thì bước đi đầu tiên gỡ ra", () => {
+  /* Lỗi thật, bản 1.7.0: đang vác hòn đá mà bấm ĐẶT vào ô mình đang đứng thì
+     hòn đá — vật ĐẶC — rơi ngay dưới chân. Hitbox người chơi rộng 10px trong ô
+     16px, nên mọi hướng đi đều đụng nó: nhân vật đứng chết một chỗ, không nút
+     nào gỡ được, phải tải lại trang. `canPlaceBuilding` đã có đúng luật này cho
+     công trình từ đầu; đường VÁC ĐỒ thì không. */
+  const content = loadContent();
+  const store = mkStore(1401);
+  walkTo(store, HOME.x, HOME.y);
+  const px = HOME.x;
+  const py = HOME.y;
+
+  ok(content.props.rock?.solid, "hòn đá phải là vật ĐẶC, nếu không kịch bản này không chứng minh gì");
+  ok(content.props.rock?.portable, "…và vác được");
+
+  const donSach = (s) => {
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -2; dx <= 1; dx++) {
+        const t = s.tiles[idx(s.w, px + dx, py + dy)];
+        t.g = "grass"; t.tilled = false; t.wet = false; t.crop = null; t.b = null; t.prop = null; t.hp = 0;
+      }
+  };
+  setState(store, (s) => {
+    donSach(s);
+    s.carry = "rock";
+    s.sel = 9;
+    s.inv[9] = null;
+  });
+
+  // ---- ô ĐANG ĐỨNG: nút không mời, mà bấm thẳng cũng không ăn thua --------
+  eq(canUseAt(store.getState(), content, px, py), null, "ô đang đứng: không phải chỗ đặt xuống");
+  use(store, px, py);
+  eq(store.getState().carry, "rock", "vẫn đang vác — không tự thả đá xuống chân");
+  eq(tile(store, px, py).prop, null, "ô đang đứng vẫn trống");
+
+  // …và vẫn đi lại được, đó mới là thứ người chơi kêu
+  const truoc = { ...store.getState().player };
+  for (let i = 0; i < 30; i++) store.dispatch({ t: "MOVE", dx: -1, dy: 0, dt: 1 / 60 });
+  ok(store.getState().player.x < truoc.x - 1, "sau cú bấm hụt vẫn đi được như thường");
+
+  // ---- ô BÊN CẠNH mà hitbox đang ĐÈ LÊN: cũng là tự nhốt -----------------
+  setState(store, (s) => {
+    donSach(s);
+    s.player.x = (px + 1) * TILE - 2; // đứng sát mép: hộp va chạm tràn sang ô bên
+    s.player.y = (py + 0.5) * TILE;
+  });
+  ok(playerOverlapsTile(store.getState(), px + 1, py), "đứng sát mép thì hitbox đè sang ô bên");
+  eq(canUseAt(store.getState(), content, px + 1, py), null, "ô hitbox đang đè lên: cũng không đặt được");
+  eq(
+    hintAt(store.getState(), content, px + 1, py).why,
+    "Lùi ra rồi đặt",
+    "và nút nói ĐÚNG lý do, không phải câu chung chung về hotbar",
+  );
+
+  // ---- ô KHÔNG đè lên: vẫn đặt được y như cũ (đừng chặn oan) --------------
+  setState(store, (s) => {
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+  });
+  ok(!playerOverlapsTile(store.getState(), px + 1, py), "đứng giữa ô thì không đè sang ô bên");
+  eq(canUseAt(store.getState(), content, px + 1, py), "putdown", "ô sạch, không đè: ĐẶT XUỐNG");
+  use(store, px + 1, py);
+  eq(store.getState().carry ?? null, null, "đặt xong thì tay trống");
+  eq(tile(store, px + 1, py).prop, "rock", "hòn đá nằm ở ô bên cạnh");
+  ok(!blockedAt(store.getState(), content, store.getState().player.x, store.getState().player.y), "không kẹt");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi đặt đá xuống");
+
+  // ---- không nhốt CON VẬT / NGƯỜI LÀM vào trong đá, cũng không xây đè lên -
+  setState(store, (s) => {
+    donSach(s);
+    s.carry = "rock";
+    const n = s.entSeq + 1;
+    s.entSeq = n;
+    s.entities.push({
+      id: n, kind: "animal", def: "cow", map: "farm",
+      x: (px - 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 77 + n,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 400, hungryDays: 0, prod: [0] },
+    });
+  });
+  eq(canUseAt(store.getState(), content, px - 1, py), null, "ô có con bò đứng: không thả đá lên đầu nó");
+
+  /* Hộp con bò (12×9) hẹp hơn một ô, nên nó cũng ĐÈ SANG ô bên như người chơi.
+     Hỏi ô tâm thôi là luật hở đúng nửa số trường hợp: dời bò sang sát mép ô
+     px-2, tâm nó KHÔNG còn ở px-1 nữa mà thân vẫn chớm sang. */
+  setState(store, (s) => {
+    const bo = s.entities[s.entities.length - 1];
+    bo.x = (px - 1) * TILE - 1;
+  });
+  const boNay = store.getState().entities[store.getState().entities.length - 1];
+  eq(Math.floor(boNay.x / TILE), px - 2, "tâm con bò đã nằm ở ô bên trái");
+  eq(
+    canUseAt(store.getState(), content, px - 1, py),
+    null,
+    "thân bò chớm sang ô nào thì ô đó cũng không thả đá được",
+  );
+  const tuong = Object.keys(content.buildings).find((id) => content.buildings[id]?.solid);
+  if (tuong)
+    eq(
+      canPlaceBuilding(store.getState(), content, tuong, px - 1, py),
+      false,
+      "công trình đặc cũng không xây đè lên con vật",
+    );
+
+  /* ---- CỨU KẸT ---------------------------------------------------------
+     Luật mới chặn được từ hôm nay, nhưng save của người đã dính lỗi thì hòn đá
+     đã nằm dưới chân rồi. Dựng đúng cảnh đó (phải tắt `validate`, vì bất biến
+     "người chơi nằm trong ô solid" bắt ngay) rồi xem bước MOVE đầu tiên có gỡ
+     ra không — kể cả khi người chơi không bấm hướng nào. */
+  const ket = createStore(createNewGame(content, 1402), content, { validate: false });
+  const s0 = clone(ket.getState());
+  s0.player.x = (px + 0.5) * TILE;
+  s0.player.y = (py + 0.5) * TILE;
+  const o = s0.tiles[idx(s0.w, px, py)];
+  o.g = "grass"; o.tilled = false; o.crop = null; o.b = null;
+  o.prop = "rock";
+  o.hp = content.props.rock.hits ?? 0;
+  ket.replace(s0);
+  ok(blockedAt(ket.getState(), content, ket.getState().player.x, ket.getState().player.y), "dựng được đúng cảnh kẹt");
+
+  ket.dispatch({ t: "MOVE", dx: 0, dy: 0, dt: 1 / 60 });
+  const sau = ket.getState().player;
+  ok(!blockedAt(ket.getState(), content, sau.x, sau.y), "đứng yên thôi cũng được gỡ ra khỏi ô đặc");
+  eq(tile(ket, px, py).prop, "rock", "hòn đá vẫn ở đó — gỡ người ra, không xoá đồ của người ta");
+  deepEq(checkInvariants(ket.getState(), content), [], "bất biến sau khi được cứu");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

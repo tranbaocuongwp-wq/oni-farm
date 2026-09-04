@@ -101,11 +101,6 @@ export function entityAt(s: GameState, x: number, y: number): Entity | null {
   return null;
 }
 
-/** Có con nào đang đứng đè lên ô này không — dùng để CẤM xây đè lên con vật. */
-export function anyEntityOverlapsTile(s: GameState, x: number, y: number): boolean {
-  return entityAt(s, x, y) !== null;
-}
-
 /* ------------------------------------------------------------------- sinh */
 
 export interface SpawnOptions {

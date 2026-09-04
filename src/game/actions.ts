@@ -18,15 +18,44 @@ import { itemName, parseItem } from "./items.ts";
 import { cureTile, pullTile } from "./disease.ts";
 import { cropInSeason, currentSeason, tileAllSeason } from "./season.ts";
 import {
+  anyEntityOverlapsTile,
   canPlaceBuilding,
   hasNearbyInteract,
   inReach,
   isRipe,
   isTillableTile,
+  playerOverlapsTile,
   propDef,
   tileIndexAt,
   isSolid,
 } from "./world.ts";
+
+/* ---------------------------------------------------- đặt xuống có nhốt ai */
+
+/**
+ * Đặt thứ đang VÁC xuống ô (x,y) thì có NHỐT ai vào trong nó không?
+ *
+ * Hai vật vác được — hòn đá và khúc gỗ — đều là vật ĐẶC, mà hitbox người chơi
+ * (10px) hẹp hơn một ô (16px) nên đứng lệch một chút là đè lên tới hai ô. Đặt
+ * hòn đá xuống một ô mình đang đè lên thì mọi hướng đi đều đụng nó: nhân vật
+ * đứng chết một chỗ cho tới lúc tải lại trang. Con vật và người làm cũng vậy.
+ *
+ * `canPlaceBuilding` đã chặn đúng chuyện này cho CÔNG TRÌNH ngay từ đầu; đường
+ * VÁC ĐỒ thì quên mất — đây là chỗ trả lại luật đó.
+ */
+export function putdownWouldTrap(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): boolean {
+  if (!state.carry) return false;
+  const def = propDef(content, state.carry);
+  // Vật lạ (content mới thêm, core chưa biết) → coi như đặc, cùng luật với
+  // `isSolidTile`. Vật khai báo không đặc thì đứng đè lên nó cũng chẳng sao.
+  if (def && !def.solid) return false;
+  return playerOverlapsTile(state, x, y) || anyEntityOverlapsTile(state, content, x, y);
+}
 
 /* ------------------------------------------------------- công cụ đang cầm */
 
@@ -469,7 +498,10 @@ export function canUseAt(
   if (state.carry) {
     if (cur.prop !== null || cur.crop !== null || cur.b !== null) return null;
     if (cur.tilled) return null; // đặt hòn đá lên luống vừa cày thì phí cả luống
-    return isSolid(state, content, x, y) ? null : "putdown";
+    if (isSolid(state, content, x, y)) return null;
+    // Đặt xuống chân mình = tự xây tường quanh chân — xem `putdownWouldTrap`.
+    if (putdownWouldTrap(state, content, x, y)) return null;
+    return "putdown";
   }
 
   if (isRipe(cur, content)) return "harvest";
@@ -546,6 +578,14 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
     }
     if (isSolid(d.s, content, x, y)) {
       toastText(d, "Chỗ này không đặt xuống được.", "bad");
+      return;
+    }
+    /* Nói RÕ lý do, đừng dùng chung câu "không đặt xuống được": người chơi
+       đang đứng ngay đó thì cái họ cần biết là LÙI RA, không phải là ô này
+       hỏng. Đây cũng là câu chặn cuối — `canUseAt` đã trả null nên nút không
+       mời bấm, nhưng bàn phím và tự-động vẫn gọi thẳng vào đây. */
+    if (putdownWouldTrap(d.s, content, x, y)) {
+      toastText(d, "Đang đứng chắn chỗ — lùi ra rồi đặt.", "bad");
       return;
     }
     const pd = propDef(content, d.s.carry);
