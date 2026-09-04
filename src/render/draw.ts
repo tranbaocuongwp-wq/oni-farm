@@ -551,15 +551,20 @@ export function createRenderer(
   function drawActors(s: GameState, content: Content, items: Item[]) {
     for (const e of s.entities) {
       if (e.map !== s.mapId) continue;
-      const def = content.animals[e.def];
-      if (!def) continue;
+      if (!e.worker && !content.animals[e.def]) continue;
       const moving = e.ai.path.length > 0;
       const frame = moving ? 1 + (Math.floor(e.anim * 5) % 2) : 0;
-      const img = atlas.animal(e.def, e.dir, frame);
+      const img = e.worker
+        ? atlas.worker(e.worker.skin, e.dir, moving ? 1 + (Math.floor(e.anim * 8) % 4) : 0)
+        : atlas.animal(e.def, e.dir, frame);
       if (!img) continue;
       const px = snapDev(e.x - camera.rx) - TILE / 2;
       const py = snapDev(e.y - camera.ry) - TILE + 3;
-      const doi = e.animal.fed <= 0;
+      // Người làm mệt cũng báo bằng lớp phủ giống con vật đói — một ký hiệu
+      // cho một ý "cái này đang cần bạn để mắt tới".
+      const doi = e.worker
+        ? e.worker.energy <= content.workers.restBelow
+        : e.animal.fed <= 0;
       items.push({
         base: Math.round(e.y) + 5,
         run: () => {

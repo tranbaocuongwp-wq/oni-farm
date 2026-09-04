@@ -3155,6 +3155,114 @@ test("58. mua vật nuôi: giao tới ĐIỂM GIAO cố định, chưa mở kho�
   eq(store.getState().entities.length, 1, "không đủ tiền thì không thêm con nào");
 });
 
+/* ========================================================================== */
+/* 59-60. NGƯỜI LÀM THUÊ                                                       */
+/* ========================================================================== */
+
+test("59. thuê người: trừ tiền, tới điểm giao, 3 ngày trả lương một lần, hết tiền thì nghỉ", () => {
+  const cfg = content.workers;
+  const store = mkStore(930);
+  walkTo(store, HOME.x, HOME.y);
+  const drop = content.tiles.dropoff;
+
+  // không đủ tiền → không thuê được
+  setState(store, (s) => { s.money = cfg.hireFee - 1; });
+  store.dispatch({ t: "HIRE", job: "crops" });
+  eq(store.getState().entities.length, 0, "không đủ tiền thì không thuê được ai");
+
+  setState(store, (s) => { s.money = cfg.hireFee + cfg.wage * 2; });
+  const tien0 = store.getState().money;
+  store.dispatch({ t: "HIRE", job: "crops" });
+  const s1 = store.getState();
+  eq(s1.entities.length, 1, "thuê được một người");
+  eq(s1.money, tien0 - cfg.hireFee, "trừ đúng phí thuê");
+  const w = s1.entities[0];
+  eq(w.kind, "worker", "đúng loại thực thể");
+  eq(Math.floor(w.x / TILE), drop.x, "người làm tới ĐIỂM GIAO, không hiện ra dưới chân");
+  eq(w.worker.job, "crops", "nhận đúng việc được giao");
+  eq(w.worker.paidDay, s1.day, "mốc trả lương tính từ hôm thuê");
+  deepEq(checkInvariants(s1, content), [], "bất biến sau khi thuê");
+
+  // đổi việc
+  store.dispatch({ t: "ASSIGN", id: w.id, job: "livestock" });
+  eq(store.getState().entities[0].worker.job, "livestock", "đổi việc được");
+
+  // chưa tới kỳ thì chưa trừ lương
+  const truocNgu = store.getState().money;
+  sleep(store);
+  eq(store.getState().money, truocNgu, `ngày đầu chưa tới kỳ ${cfg.wageEveryDays} ngày`);
+
+  // tới kỳ thì trừ đúng một lần
+  for (let i = 1; i < cfg.wageEveryDays; i++) sleep(store);
+  eq(
+    store.getState().money,
+    truocNgu - cfg.wage,
+    `đủ ${cfg.wageEveryDays} ngày thì trừ đúng một kỳ lương`,
+  );
+
+  // hết tiền → nghỉ việc, và tiền KHÔNG âm
+  setState(store, (s) => { s.money = 0; });
+  for (let i = 0; i < cfg.wageEveryDays; i++) sleep(store);
+  eq(store.getState().entities.length, 0, "không đủ tiền trả lương thì người làm nghỉ");
+  ok(store.getState().money >= 0, "và tiền không bao giờ âm");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi nghỉ việc");
+});
+
+test("60. người làm tự làm việc: thu cây chín rồi đem về KHO, mệt thì nghỉ", () => {
+  const cfg = content.workers;
+  const store = mkStore(931);
+  walkTo(store, HOME.x, HOME.y);
+  unlockAll(store);
+
+  // rải một luống cây CHÍN quanh điểm giao để người làm có việc ngay
+  const drop = content.tiles.dropoff;
+  setState(store, (s) => {
+    s.money = 99999;
+    for (let i = 0; i < 6; i++) {
+      const x = drop.x - 3 + i;
+      const y = drop.y - 2;
+      const t = s.tiles[idx(s.w, x, y)];
+      t.prop = null; t.b = null; t.hp = 0;
+      t.tilled = true; t.wet = true;
+      t.crop = { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false };
+    }
+  });
+  store.dispatch({ t: "HIRE", job: "crops" });
+  eq(store.getState().entities.length, 1, "đã thuê");
+
+  const chinTruoc = () => {
+    const s = store.getState();
+    let n = 0;
+    for (const t of s.tiles) {
+      if (!t.crop) continue;
+      const cd = content.crops[t.crop.id];
+      if (cd && t.crop.stage >= cd.growthDays.length) n++;
+    }
+    return n;
+  };
+  eq(chinTruoc(), 6, "sáu cây đang chín");
+
+  // chạy nửa ngày game
+  for (let i = 0; i < 9000; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+
+  const s2 = store.getState();
+  const conChin = chinTruoc();
+  ok(conChin < 6, `người làm đã thu bớt cây chín: còn ${conChin}/6`);
+
+  const trongKho = s2.store.reduce((n, v) => n + (v && v.id === "crop:lettuce" ? v.n : 0), 0);
+  const dangDeo = s2.entities[0]
+    ? s2.entities[0].worker.carry.reduce((n, v) => n + (v ? v.n : 0), 0)
+    : 0;
+  ok(trongKho + dangDeo > 0, `nông sản đã vào kho hoặc đang trên tay: kho ${trongKho}, tay ${dangDeo}`);
+  ok(s2.entities[0].worker.energy <= cfg.energyMax, "năng lượng không vượt trần");
+  deepEq(checkInvariants(s2, content), [], "bất biến sau nửa ngày người làm tự chạy");
+
+  // state.seed vẫn không bị TICK đụng tới, kể cả khi có người làm
+  const seed0 = store.getState().seed;
+  for (let i = 0; i < 1200; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(store.getState().seed, seed0, "TICK vẫn không đụng state.seed dù người làm đang làm việc");
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 console.log("\n  ONIFARM — sim\n");

@@ -444,6 +444,45 @@ export function validateActors(raw: unknown): string[] {
     if (!list) continue;
     list.forEach((item, i) => one(item, `${group}[${i}]`));
   }
+
+  const w = raw["workers"];
+  if (w !== undefined) {
+    const k = new Check("workers");
+    if (!isObj(w)) c.fail("workers", "phải là object");
+    else {
+      for (const [key, lo, hi] of [
+        ["hireFee", 0, 1e9],
+        ["wage", 0, 1e9],
+        ["wageEveryDays", 1, 365],
+        ["carryMax", 1, 9999],
+        ["energyMax", 1, 9999],
+        ["energyPerTask", 0, 9999],
+        ["restBelow", 0, 9999],
+        ["restMinutes", 0, 100000],
+        ["speed", 1, 400],
+      ] as [string, number, number][])
+        k.num(w, key, lo, hi);
+      const box = k.obj(w, "box");
+      if (box) {
+        k.num(box as Record<string, unknown>, "w", 1, 64);
+        k.num(box as Record<string, unknown>, "h", 1, 64);
+      }
+      const skins = k.arr(w, "skins");
+      if (skins) {
+        if (!skins.length) k.fail("skins", "phải có ít nhất một bộ đồ");
+        skins.forEach((sk, i) => {
+          if (!isObj(sk)) {
+            k.fail(`skins[${i}]`, "phải là object");
+            return;
+          }
+          for (const key of ["shirt", "shirtDark", "pants", "cap", "hair"])
+            if (!isStr(sk[key]) || !/^#[0-9a-fA-F]{6}$/.test(sk[key] as string))
+              k.fail(`skins[${i}].${key}`, "phải là mã màu #rrggbb");
+        });
+      }
+      c.merge(k);
+    }
+  }
   return c.errors;
 }
 

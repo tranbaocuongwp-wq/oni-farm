@@ -367,6 +367,31 @@ nào, ruộng đầy cây chín bỏ đó qua đêm thì trả giá. Chúng ăn 
 xoá sạch: mất một đêm công chăm, không mất cả vụ. Chó tuần tra đuổi được chúng trong bán kính
 8 ô. Toàn bộ chạy lúc sang ngày, nên TICK không phải gánh thêm gì.
 
+### Người làm thuê
+
+Thuê ở tab **Người làm** trong cửa hàng. Giao một loại việc — *chăm cây* hoặc *chăn nuôi* —
+rồi họ tự lo: tìm việc, đi tới, làm, xong mới chọn việc khác. Đầy tay thì đem về kho tập
+trung. Mệt thì tự nghỉ, nghỉ xong làm tiếp. **Trả lương 3 ngày một lần**; không đủ tiền thì
+họ nghỉ việc chứ không cho nợ — để `money` không bao giờ âm và hậu quả của việc thuê quá tay
+là thấy được ngay.
+
+Thứ tự ưu tiên **cố định**, không ngẫu nhiên. "Tự phán đoán" nghĩa là họ tự nhìn ra việc gì
+đang cần, chứ không phải mỗi lần lại chọn khác — người chơi phải đoán được người làm sẽ làm
+gì, nếu không thì thuê người thành ra thả một con rối vào ruộng.
+
+- *chăm cây*: thu cây chín → chữa cây bệnh (dùng thuốc trong kho) → tưới ô khô
+- *chăn nuôi*: thu sữa/trứng/lông tới lứa → cho con vật đói ăn (dùng cỏ trong kho)
+
+**Họ KHÔNG cày và KHÔNG gieo.** Cả hai đều tiêu vật phẩm của người chơi và đều là quyết định
+về *bố cục* nông trại; người làm tự ý cày chỗ này gieo chỗ kia thì người chơi mất quyền quy
+hoạch ruộng của chính mình.
+
+Về đồ hoạ họ dùng lại **nguyên bộ 28 khung** của nhân vật chính — cả khung vung công cụ — chỉ
+đổi bảng màu. Thêm một bộ đồ mới là thêm năm mã màu trong `actors.json`.
+
+Lương trả ở **bước 2 của `newDay`** (bước tiền tệ), bắt buộc trước bước 8 `applyProgression`:
+trả sau thì mốc mở khoá theo `money` sẽ tính bằng số tiền chưa trừ lương.
+
 ### Hiển thị & camera
 
 `src/render/camera.ts` là chỗ **duy nhất** trong dự án biết màn hình to nhỏ ra sao.

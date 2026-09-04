@@ -40,6 +40,9 @@ export interface MenuHandlers {
   storeSellAll(): void;
   /** Mua một con vật — nó được giao tới điểm giao cố định. */
   buyAnimal(def: string): void;
+  hire(job: "crops" | "livestock"): void;
+  fire(id: number): void;
+  assign(id: number, job: "crops" | "livestock"): void;
   sell(id: string, n: number): void;
   sellAll(): void;
   save(): void;
@@ -102,7 +105,7 @@ export function createMenus(
 ): Menus {
   let current: (() => void) | null = null;
   /** tab đang chọn của cửa hàng — nhớ giữa các lần mở */
-  let shopTab: "seed" | "build" | "animal" = "seed";
+  let shopTab: "seed" | "build" | "animal" | "worker" = "seed";
   /** số lượng đang chọn ở quầy bán, theo id */
   const sellQty = new Map<string, number>();
 
@@ -239,6 +242,7 @@ export function createMenus(
     mkTab("seed", "Hạt giống");
     mkTab("build", "Công trình");
     mkTab("animal", "Vật nuôi");
+    mkTab("worker", "Người làm");
     body.appendChild(tabs);
 
     const mk = (id: string, name: string, desc: string, price: number) => {
@@ -286,6 +290,43 @@ export function createMenus(
             : "Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.",
         ),
       );
+    } else if (shopTab === "worker") {
+      const cfg = c.workers;
+      const dsach = s.entities.filter((e) => e.kind === "worker" && e.worker);
+      body.appendChild(
+        note(
+          `Thuê ${money(cfg.hireFee)} · lương ${money(cfg.wage)} mỗi ${cfg.wageEveryDays} ngày. ` +
+            `Không đủ tiền trả lương thì họ nghỉ việc.`,
+        ),
+      );
+      const grid = document.createElement("div");
+      grid.className = "grid2";
+      grid.append(
+        mkBtn("Thuê — chăm cây", () => { h.hire("crops"); openShop(); },
+          s.money >= cfg.hireFee ? "primary" : "dim"),
+        mkBtn("Thuê — chăn nuôi", () => { h.hire("livestock"); openShop(); },
+          s.money >= cfg.hireFee ? "primary" : "dim"),
+      );
+      body.appendChild(grid);
+
+      body.appendChild(note(dsach.length ? `Đang thuê ${dsach.length} người` : "Chưa thuê ai."));
+      for (const e of dsach) {
+        const w = e.worker!;
+        const deo = w.carry.reduce((n, v) => n + (v ? v.n : 0), 0);
+        body.appendChild(
+          row({
+            id: `worker:${e.id}`,
+            name: `${w.name} · ${w.job === "crops" ? "chăm cây" : "chăn nuôi"}`,
+            desc: `sức ${Math.round(w.energy)}/${cfg.energyMax} · đeo ${deo}/${cfg.carryMax} · trả lương ngày ${w.paidDay + cfg.wageEveryDays}`,
+            price: "",
+            extra: mkBtn("Đổi việc", () => {
+              h.assign(e.id, w.job === "crops" ? "livestock" : "crops");
+              openShop();
+            }),
+            action: { label: "Cho nghỉ", disabled: false, onClick: () => { h.fire(e.id); openShop(); } },
+          }),
+        );
+      }
     } else if (shopTab === "animal") {
       for (const id of c.animalOrder) {
         const a = c.animals[id]!;

@@ -24,6 +24,7 @@ import type {
   PropDef,
   AnimalDef,
   RecipeDef,
+  WorkerContent,
   SeasonDef,
   Strings,
   TilesDef,
@@ -294,6 +295,21 @@ export function validatePack(raw: RawPack): string[] {
 /** Giá trị mặc định cho các trường cân bằng được thêm sau. Nhờ chúng, một content
  *  pack cũ đã cache (tải về trước khi core nâng cấp) vẫn chạy được thay vì bị từ
  *  chối — người chơi không mất gì, chỉ là chưa có số liệu mới. */
+/** Pack cũ đã cache chưa có mục `workers` — điền mặc định để nó vẫn nạp được. */
+const WORKER_DEFAULTS = {
+  hireFee: 900,
+  wage: 220,
+  wageEveryDays: 3,
+  carryMax: 24,
+  energyMax: 100,
+  energyPerTask: 4,
+  restBelow: 15,
+  restMinutes: 90,
+  speed: 62,
+  box: { w: 10, h: 10 },
+  skins: [{ shirt: "#4a7fb5", shirtDark: "#2f5a86", pants: "#3b4a5c", cap: "#d8622f", hair: "#3a2a1c" }],
+};
+
 const BALANCE_DEFAULTS = {
   moveSpeed: 78,
   runSpeed: 132,
@@ -354,6 +370,7 @@ export function buildContent(raw: RawPack): Content {
     strings: raw.strings as Strings,
     animals: byId(animalList),
     animalOrder: animalList.map((a) => a.id),
+    workers: (actorPack as { workers?: WorkerContent } | null)?.workers ?? WORKER_DEFAULTS,
     seasons: byId(seasonList),
     seasonOrder: seasonList.map((s) => s.id),
     daysPerSeason: Math.max(1, Math.floor(seasonRaw?.daysPerSeason ?? 1)),

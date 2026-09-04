@@ -58,6 +58,11 @@ export function animalNear(
   let bestD = Infinity;
   for (const e of s.entities) {
     if (e.map !== s.mapId) continue;
+    // CHỈ vật nuôi. Người làm thuê cũng là thực thể và cũng đứng cạnh ô đang
+    // làm — không lọc thì `doWork` tưởng mình đang đứng cạnh con bò rồi thoát
+    // ra, và người làm đứng đực ra giữa ruộng cây chín. Nút ngữ cảnh của người
+    // chơi cũng sẽ ghi "THU" khi chỉ vào một người làm.
+    if (e.kind !== "animal") continue;
     const d = Math.hypot(e.x - cx, e.y - cy) / TILE;
     if (d <= maxTiles && d < bestD) {
       bestD = d;

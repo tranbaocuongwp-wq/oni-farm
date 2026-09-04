@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — mọi loài vật đều là DỮ LIỆU. Thêm loài mới = thêm một object ở đây, KHÔNG một dòng .ts nào: art.form chọn dáng vẽ (quadruped/bird/fish/critter) rồi bộ sinh pixel dựng hình từ tham số, đúng như cây trồng đang làm.\n\nproducts = thu LẶP LẠI (sữa/trứng/lông), every tính bằng ngày. meat = thu MỘT LẦN khi bán thịt; null nghĩa là không bán thịt được (chó). Con vật 'vừa lấy cái này vừa lấy cái kia' chính là con có cả products lẫn meat.\n\nhousing: pen = phải ở trong hàng rào · free = thả rông tự kiếm ăn · water = sống dưới nước. feed null = tự đi kiếm cỏ quanh sân.\n\njob: patrol = đi tuần đuổi sâu bọ (chó) · pest = phá hoại mùa màng (chuột, sóc).",
+  "$comment": "LÀN NHANH — mọi loài vật đều là DỮ LIỆU. Thêm loài mới = thêm một object ở đây, KHÔNG một dòng .ts nào: art.form chọn dáng vẽ (quadruped/bird/fish/critter) rồi bộ sinh pixel dựng hình từ tham số, đúng như cây trồng đang làm.\n\nproducts = thu LẶP LẠI (sữa/trứng/lông), every tính bằng ngày. meat = thu MỘT LẦN khi bán thịt; null nghĩa là không bán thịt được (chó). Con vật 'vừa lấy cái này vừa lấy cái kia' chính là con có cả products lẫn meat.\n\nhousing: pen = phải ở trong hàng rào · free = thả rông tự kiếm ăn · water = sống dưới nước. feed null = tự đi kiếm cỏ quanh sân.\n\njob: patrol = đi tuần đuổi sâu bọ (chó) · pest = phá hoại mùa màng (chuột, sóc).\n\nworkers: cấu hình chung cho người làm thuê. Họ dùng lại NGUYÊN bộ khung hoạt hoạ của nhân vật chính, chỉ đổi bảng màu (skins) — nên thêm một bộ đồ mới là thêm năm mã màu, không phải vẽ 28 khung.",
   "animals": [
     {
       "id": "cow",
@@ -333,5 +333,50 @@
         "h": 4
       }
     }
-  ]
+  ],
+  "workers": {
+    "hireFee": 900,
+    "wage": 220,
+    "wageEveryDays": 3,
+    "carryMax": 24,
+    "energyMax": 100,
+    "energyPerTask": 4,
+    "restBelow": 15,
+    "restMinutes": 90,
+    "speed": 62,
+    "box": {
+      "w": 10,
+      "h": 10
+    },
+    "skins": [
+      {
+        "shirt": "#4a7fb5",
+        "shirtDark": "#2f5a86",
+        "pants": "#3b4a5c",
+        "cap": "#d8622f",
+        "hair": "#3a2a1c"
+      },
+      {
+        "shirt": "#7bb54a",
+        "shirtDark": "#548a2f",
+        "pants": "#4a4034",
+        "cap": "#e8c05a",
+        "hair": "#2b1d14"
+      },
+      {
+        "shirt": "#b5744a",
+        "shirtDark": "#8a4f2f",
+        "pants": "#3f3a4c",
+        "cap": "#5aa9e6",
+        "hair": "#4a3020"
+      },
+      {
+        "shirt": "#9a5ab5",
+        "shirtDark": "#6f3a8a",
+        "pants": "#33384a",
+        "cap": "#f0e0a0",
+        "hair": "#1f1710"
+      }
+    ]
+  }
 }

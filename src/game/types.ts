@@ -148,6 +148,38 @@ export interface AnimalDef {
   art: AnimalArt;
 }
 
+/** Bảng màu một bộ đồ — người làm thuê dùng lại nguyên bộ khung của nhân vật
+ *  chính, chỉ đổi màu. Cùng 28 khung vung công cụ, không vẽ thêm gì. */
+export interface CharSkin {
+  shirt: string;
+  shirtDark: string;
+  pants: string;
+  cap: string;
+  hair: string;
+}
+
+/** Cấu hình chung cho người làm thuê. Toàn số nên chỉnh nhịp qua OTA được. */
+export interface WorkerContent {
+  /** trả một lần khi thuê */
+  hireFee: number;
+  /** lương mỗi kỳ */
+  wage: number;
+  /** bao nhiêu NGÀY trả lương một lần */
+  wageEveryDays: number;
+  /** đeo được bao nhiêu món trước khi phải về kho */
+  carryMax: number;
+  energyMax: number;
+  /** tiêu bao nhiêu năng lượng cho mỗi việc làm xong */
+  energyPerTask: number;
+  /** dưới ngưỡng này thì đi nghỉ */
+  restBelow: number;
+  /** nghỉ bao nhiêu phút game */
+  restMinutes: number;
+  speed: number;
+  box: { w: number; h: number };
+  skins: CharSkin[];
+}
+
 /** Một mùa. `weather` ghi đè trọng số trong weather.json cho riêng mùa này —
  *  đó là chỗ mùa được CẢM THẤY chứ không chỉ đọc trên HUD. */
 export interface SeasonDef {
@@ -474,6 +506,7 @@ export interface Content {
   strings: Strings;
   animals: Record<string, AnimalDef>;
   animalOrder: string[];
+  workers: WorkerContent;
   seasons: Record<string, SeasonDef>;
   /** thứ tự các mùa trong năm — chính là vòng quay */
   seasonOrder: string[];
@@ -589,7 +622,7 @@ export interface StoredMap {
   awayAt: number;
 }
 
-export type EntityKind = "animal" | "pest";
+export type EntityKind = "animal" | "pest" | "worker";
 
 /** Máy trạng thái của một actor. Nằm TRONG save: tải lại mà con vật quên mình
  *  đang đi đâu là một lỗi thấy được. */
@@ -618,6 +651,21 @@ export interface AnimalState {
   prod: number[];
 }
 
+/** Việc được giao cho một người làm. */
+export type WorkerJob = "crops" | "livestock";
+
+export interface WorkerState {
+  name: string;
+  /** chỉ số bộ đồ trong `content.workers.skins` */
+  skin: number;
+  job: WorkerJob;
+  energy: number;
+  /** ngày cuối cùng đã trả lương */
+  paidDay: number;
+  /** hàng đang đeo; đầy thì phải về kho đổ */
+  carry: InvSlot[];
+}
+
 export interface Entity {
   id: number;
   kind: EntityKind;
@@ -641,6 +689,8 @@ export interface Entity {
   seed: number;
   ai: AiState;
   animal: AnimalState;
+  /** chỉ có ở `kind === "worker"` */
+  worker?: WorkerState;
 }
 
 export interface GameState {
@@ -796,6 +846,12 @@ export type Action =
   | { t: "GATHER"; x: number; y: number }
   /** Bán con vật gần ô (x,y) lấy thịt. */
   | { t: "SLAUGHTER"; x: number; y: number }
+  /** Thuê một người làm; họ tới ĐIỂM GIAO như mọi thứ khác. */
+  | { t: "HIRE"; job: WorkerJob }
+  /** Cho nghỉ việc. */
+  | { t: "FIRE"; id: number }
+  /** Đổi việc được giao. */
+  | { t: "ASSIGN"; id: number; job: WorkerJob }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
   | { t: "DEBUG"; op: DebugOp; n?: number }

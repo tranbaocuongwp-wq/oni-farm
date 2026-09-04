@@ -280,6 +280,9 @@ async function boot() {
     storePutAll: () => store.dispatch({ t: "STORE_PUT_ALL" }),
     storeSellAll: () => store.dispatch({ t: "STORE_SELL_ALL" }),
     buyAnimal: (def) => store.dispatch({ t: "BUY_ANIMAL", def }),
+    hire: (job) => store.dispatch({ t: "HIRE", job }),
+    fire: (id) => store.dispatch({ t: "FIRE", id }),
+    assign: (id, job) => store.dispatch({ t: "ASSIGN", id, job }),
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
     install: async () => {

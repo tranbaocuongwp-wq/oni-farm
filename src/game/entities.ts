@@ -30,6 +30,7 @@ import type { Draft } from "./state.ts";
 import { dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
 import { blockedAtBox, idx, TILE } from "./world.ts";
 import { findPath } from "./pathfind.ts";
+import { workerStep } from "./workerai.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -61,6 +62,17 @@ export const REPLAN_COOLDOWN = 2;
 
 export function animalDef(content: Content, id: string): AnimalDef | null {
   return content.animals[id] ?? null;
+}
+
+/** Tốc độ và hộp va chạm của MỘT actor bất kỳ — vật nuôi tra `content.animals`,
+ *  người làm thuê tra `content.workers`. Một chỗ hỏi, hai bảng trả lời. */
+export function actorShape(
+  content: Content,
+  e: Entity,
+): { speed: number; box: { w: number; h: number } } | null {
+  if (e.kind === "worker") return { speed: content.workers.speed, box: content.workers.box };
+  const def = animalDef(content, e.def);
+  return def ? { speed: def.speed, box: def.box } : null;
 }
 
 /** Thực thể trên bản đồ ĐANG chơi. Mọi vòng lặp trong TICK phải đi qua đây. */
@@ -174,7 +186,7 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
     if (cur.map !== s.mapId) continue;
     if (!cur.ai.path.length) continue;
 
-    const def = animalDef(content, cur.def);
+    const def = actorShape(content, cur);
     if (!def) continue;
 
     const target = cur.ai.path[0]!;
@@ -259,11 +271,17 @@ export function actorStep(d: Draft, content: Content): void {
     const i = (start + k) % n;
     const cur = s.entities[i]!;
     if (cur.map !== s.mapId) continue;
-    const def = animalDef(content, cur.def);
+    const def = actorShape(content, cur);
     if (!def) continue;
 
     // Còn đường để đi thì cứ đi, không phải nghĩ gì.
     if (cur.ai.path.length) continue;
+
+    // Người làm thuê có bộ não riêng (workers.ts). Trả về true nghĩa là họ đã
+    // tự lo xong lượt này — vật nuôi mới đi tiếp nhánh lang thang bên dưới.
+    if (cur.kind === "worker") {
+      if (workerStep(d, content, i, () => budget > 0 && (budget--, true))) continue;
+    }
 
     const e = dEntity(d, i);
     if (!e) continue;
@@ -361,7 +379,9 @@ export function catchUpEntities(
 export function pruneEntities(list: Entity[], content: Content): { list: Entity[]; dropped: string[] } {
   const dropped: string[] = [];
   const out = list.filter((e) => {
-    if (!content.animals[e.def]) {
+    // Người làm thuê không nằm trong bảng loài — họ có bảng cấu hình riêng, nên
+    // đừng đem `content.animals` ra hỏi rồi xoá sạch họ lúc cập nhật content.
+    if (e.kind !== "worker" && !content.animals[e.def]) {
       dropped.push(e.def);
       return false;
     }

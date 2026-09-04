@@ -20,6 +20,7 @@ import { applyDebug } from "./debug.ts";
 import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.ts";
 import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
 import { feedAnimal, gatherFrom, slaughter } from "./animals.ts";
+import { assignJob, fireWorker, hireWorker } from "./workers.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
   blockedAt,
@@ -328,6 +329,23 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "SLAUGHTER": {
       if (state.busy > 0) return state;
       slaughter(d, content, action.x | 0, action.y | 0);
+      return commit(d);
+    }
+
+    case "HIRE": {
+      if (state.busy > 0) return state;
+      hireWorker(d, content, action.job);
+      return commit(d);
+    }
+
+    case "FIRE": {
+      if (state.busy > 0) return state;
+      fireWorker(d, action.id | 0);
+      return commit(d);
+    }
+
+    case "ASSIGN": {
+      assignJob(d, action.id | 0, action.job);
       return commit(d);
     }
 

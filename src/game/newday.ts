@@ -41,6 +41,7 @@ import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weather
 import { diseaseNight } from "./disease.ts";
 import { animalNight, patrolNight, pestNight } from "./animals.ts";
 import { spawnEntity } from "./entities.ts";
+import { payWages, restWorkers } from "./workers.ts";
 import {
   cropInSeason,
   isLastDayOfSeason,
@@ -508,6 +509,11 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   }
   if (income !== 0) touch(d).money = d.s.money + income;
 
+  // ---- 2b. trả lương người làm ------------------------------------------
+  // Cùng bước tiền tệ với thu nhập, và PHẢI trước bước 8: nếu trả sau, mốc mở
+  // khoá theo `money` sẽ tính bằng số tiền chưa trừ lương.
+  payWages(d, content);
+
   // ---- 3..5b trên từng bản đồ -------------------------------------------
   //
   // Mỗi bản đồ có mốc riêng: bản đồ đang đứng đã được TICK nuôi tới tận lúc đi
@@ -576,6 +582,8 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
       ? bal.lateSleepPenalty
       : bal.sleepRestore;
   const energy = Math.round(bal.energyMax * ratio);
+  // Người làm cũng ngủ một đêm — hồi đầy cùng lúc với người chơi.
+  restWorkers(d, content);
   touch(d).energy = Math.max(0, Math.min(bal.energyMax, energy));
 
   // ---- 8. progression ----------------------------------------------------

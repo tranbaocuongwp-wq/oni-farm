@@ -28,7 +28,7 @@
       lên; đất cày nâu đỏ tách hẳn khỏi lối đi vàng nhạt.
 ============================================================================ */
 
-import type { AnimalArt, Content, CropArt, CropDef } from "../game/types.ts";
+import type { AnimalArt, CharSkin, Content, CropArt, CropDef } from "../game/types.ts";
 import { hash2, mulberry32 } from "../core/rng.ts";
 
 export const TILE = 16;
@@ -1217,7 +1217,34 @@ function drawFlower({ s, a, t, ripe, baseY, rnd }: FormCtx) {
 const DIRS = ["down", "up", "left", "right"] as const;
 export type PlayerDir = (typeof DIRS)[number];
 
-function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
+/** Làm tối/ sáng một mã màu #rrggbb — đủ để dựng bóng đổ và viền từ một màu
+ *  duy nhất, nên bảng màu trong content chỉ cần khai màu chính. */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * k)));
+  const r = f((n >> 16) & 255);
+  const g = f((n >> 8) & 255);
+  const b = f(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+const darken = (hex: string) => shade(hex, 0.68);
+const lighten = (hex: string) => shade(hex, 1.28);
+
+/** Bảng màu mặc định = ĐÚNG các hằng của nhân vật chính, nên khi không truyền
+ *  gì thì không một pixel nào đổi. */
+const DEFAULT_SKIN: CharSkin = {
+  shirt: P.shirt,
+  shirtDark: P.shirtDark,
+  pants: P.denim,
+  cap: P.cap,
+  hair: P.hair,
+};
+
+/**
+ * Nhân vật. `skin` cho phép người làm thuê dùng lại NGUYÊN bộ 28 khung này —
+ * cả khung vung công cụ — mà chỉ tốn năm mã màu trong content.
+ */
+function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const act = frame === PLAYER_ACT_FRAME;
   const raise = frame === PLAYER_RAISE_FRAME;
@@ -1238,13 +1265,13 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
   if (dir === "left" || dir === "right") {
     const front = dir === "right" ? 8 : 5;
     const back = dir === "right" ? 5 : 8;
-    s.rect(back + (step < 0 ? 0 : 0), legY, 3, 3 - bob, P.denimDark);
-    s.rect(front + step, legY - (step !== 0 ? 1 : 0), 3, 3 - bob, P.denim);
+    s.rect(back + (step < 0 ? 0 : 0), legY, 3, 3 - bob, darken(skin.pants));
+    s.rect(front + step, legY - (step !== 0 ? 1 : 0), 3, 3 - bob, skin.pants);
     s.rect(back, 15 - bob, 3, 1, P.boot);
     s.rect(front + step, 15 - bob, 3, 1, P.boot);
   } else {
-    s.rect(5, legY - (step > 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? P.denim : P.denimDark);
-    s.rect(9, legY - (step < 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? P.denimDark : P.denim);
+    s.rect(5, legY - (step > 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? skin.pants : darken(skin.pants));
+    s.rect(9, legY - (step < 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? darken(skin.pants) : skin.pants);
     s.rect(5, 15 - bob, 3, 1, P.boot);
     s.rect(9, 15 - bob, 3, 1, P.boot);
   }
@@ -1252,13 +1279,13 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
   s.g.save();
   s.g.translate(lx, ly);
   // thân — áo trắng + yếm quần bò
-  s.rect(5, top + 6, 7, 6, P.shirt);
-  s.rect(5, top + 8, 7, 4, P.denim);
-  s.vline(7, top + 6, 3, P.denim);
-  s.vline(10, top + 6, 3, P.denim);
-  s.px(6, top + 10, P.denimDark);
-  s.px(11, top + 10, P.denimDark);
-  s.px(5, top + 7, P.shirtDark);
+  s.rect(5, top + 6, 7, 6, skin.shirt);
+  s.rect(5, top + 8, 7, 4, skin.pants);
+  s.vline(7, top + 6, 3, skin.pants);
+  s.vline(10, top + 6, 3, skin.pants);
+  s.px(6, top + 10, darken(skin.pants));
+  s.px(11, top + 10, darken(skin.pants));
+  s.px(5, top + 7, skin.shirtDark);
 
   // tay
   const armY = top + 7;
@@ -1300,12 +1327,12 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
   s.hline(4, top + 6, 9, P.skinDark);
 
   // mũ lưỡi trai — nét nhận diện chính ở kích thước nhỏ
-  s.rect(3, top - 1, 11, 3, P.cap);
-  s.hline(4, top - 1, 9, P.capLight);
-  s.hline(3, top + 1, 11, P.capDark);
-  if (dir === "down") s.rect(3, top + 2, 11, 1, P.capDark);
-  else if (dir === "left") s.rect(1, top + 2, 6, 1, P.capDark);
-  else if (dir === "right") s.rect(10, top + 2, 6, 1, P.capDark);
+  s.rect(3, top - 1, 11, 3, skin.cap);
+  s.hline(4, top - 1, 9, lighten(skin.cap));
+  s.hline(3, top + 1, 11, darken(skin.cap));
+  if (dir === "down") s.rect(3, top + 2, 11, 1, darken(skin.cap));
+  else if (dir === "left") s.rect(1, top + 2, 6, 1, darken(skin.cap));
+  else if (dir === "right") s.rect(10, top + 2, 6, 1, darken(skin.cap));
 
   // mặt
   if (dir === "down") {
@@ -1315,13 +1342,13 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
     s.px(7, top + 5, "#e08a8a");
     s.px(10, top + 5, "#e08a8a");
   } else if (dir === "up") {
-    s.rect(4, top + 3, 9, 3, P.hair);
+    s.rect(4, top + 3, 9, 3, skin.hair);
   } else if (dir === "left") {
     s.px(5, top + 4, P.outline);
-    s.rect(9, top + 3, 4, 3, P.hair);
+    s.rect(9, top + 3, 4, 3, skin.hair);
   } else {
     s.px(11, top + 4, P.outline);
-    s.rect(4, top + 3, 4, 3, P.hair);
+    s.rect(4, top + 3, 4, 3, skin.hair);
   }
   s.g.restore();
   return outline(s).c;
@@ -1650,6 +1677,8 @@ export interface Atlas {
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật nuôi: dựng LƯỜI ở lần dùng đầu tiên để thời gian khởi động không đổi */
   animal(defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null;
+  /** người làm thuê: cùng 28 khung với nhân vật chính, khác bảng màu */
+  worker(skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
@@ -2025,6 +2054,20 @@ export function buildAtlas(content: Content): Atlas {
   /* Vật nuôi dựng LƯỜI: 10 loài × 4 hướng × 3 khung = 120 canvas, dựng hết lúc
      khởi động thì màn hình chờ dài thêm mà phần lớn không dùng tới (ván mới
      chưa có con nào). Dựng lần đầu cần đến rồi nhớ luôn. */
+  const workerCache = new Map<string, HTMLCanvasElement>();
+  const workerOf = (skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement => {
+    const skins = content.workers.skins;
+    const si = skins.length ? ((skin % skins.length) + skins.length) % skins.length : 0;
+    const f = Math.max(0, Math.min(PLAYER_FRAMES - 1, frame));
+    const key = `${si}|${dir}|${f}`;
+    let c = workerCache.get(key);
+    if (!c) {
+      c = makePlayer(dir, f, skins[si] ?? undefined);
+      workerCache.set(key, c);
+    }
+    return c;
+  };
+
   const animalCache = new Map<string, HTMLCanvasElement>();
   const animalOf = (defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null => {
     const def = content.animals[defId];
@@ -2112,6 +2155,7 @@ export function buildAtlas(content: Content): Atlas {
     grass, path, asphalt, soil, soilWet, soilEdge, water, shore, wood,
     autotiles,
     animal: animalOf,
+    worker: workerOf,
     tuft: makeTuft(),
     voidOut: [0, 1, 2, 3].map((v) => makeVoid(v, false)),
     voidIn: [0, 1].map((v) => makeVoid(v, true)),

@@ -207,13 +207,25 @@ export function checkInvariants(state: GameState, content: Content): string[] {
       else if (ids.has(en.id)) e.push(`trùng id thực thể ${en.id}`);
       else ids.add(en.id);
       if (en.id > state.entSeq) e.push(`thực thể ${en.id} có id lớn hơn entSeq ${state.entSeq}`);
-      if (!content.animals[en.def]) e.push(`thực thể ${en.id}: loài '${en.def}' không có trong content`);
+      // Người làm thuê KHÔNG nằm trong bảng loài — họ có bảng cấu hình riêng.
+      if (en.kind === "worker") {
+        if (!en.worker) e.push(`thực thể ${en.id}: kind 'worker' nhưng thiếu khối worker`);
+        else {
+          const cfg = content.workers;
+          if (!Number.isFinite(en.worker.energy) || en.worker.energy < 0 || en.worker.energy > cfg.energyMax)
+            e.push(`người làm ${en.id}: năng lượng ${en.worker.energy} ngoài [0, ${cfg.energyMax}]`);
+          if (!Array.isArray(en.worker.carry)) e.push(`người làm ${en.id}: carry phải là mảng`);
+          if (en.worker.paidDay > state.day)
+            e.push(`người làm ${en.id}: paidDay ${en.worker.paidDay} lớn hơn ngày hiện tại`);
+        }
+      } else if (!content.animals[en.def])
+        e.push(`thực thể ${en.id}: loài '${en.def}' không có trong content`);
       if (!content.maps[en.map]) e.push(`thực thể ${en.id}: bản đồ '${en.map}' không có trong content`);
       if (!Number.isFinite(en.x) || !Number.isFinite(en.y))
         e.push(`thực thể ${en.id}: toạ độ không hữu hạn`);
       else if (en.map === state.mapId) {
-        const def = content.animals[en.def];
-        if (def && blockedAtBox(state, content, en.x, en.y, def.box.w, def.box.h))
+        const box = en.kind === "worker" ? content.workers.box : content.animals[en.def]?.box;
+        if (box && blockedAtBox(state, content, en.x, en.y, box.w, box.h))
           e.push(
             `thực thể ${en.id} ('${en.def}') nằm trong ô solid tại ` +
               `(${(en.x / 16).toFixed(2)}, ${(en.y / 16).toFixed(2)})`,
@@ -464,7 +476,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
     for (const id of new Set(entPruned.dropped))
       notes.push(`bỏ con vật '${id}' — content mới không còn`);
     const entities = capEntities(entPruned.list).map((en) => {
-      const def = content.animals[en.def]!;
+      const box = en.kind === "worker" ? content.workers.box : content.animals[en.def]?.box;
       const fixed = { ...en, ai: { ...en.ai, path: [] as number[] } };
       const grid = en.map === mapId ? active : rebuilt[en.map];
       if (grid) {
@@ -475,7 +487,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
           h: grid.h,
           tiles: grid.tiles,
         };
-        if (blockedAtBox(probe, content, fixed.x, fixed.y, def.box.w, def.box.h)) {
+        if (box && blockedAtBox(probe, content, fixed.x, fixed.y, box.w, box.h)) {
           const p = nudgeOutOfSolid(probe, content, fixed.x, fixed.y);
           fixed.x = p.x;
           fixed.y = p.y;
