@@ -41,34 +41,30 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 
 ## Triển khai: sửa ở đâu cũng được, push là tự lên production
 
-**Tên miền chính: <https://oni-farm.pages.dev>** (Cloudflare Pages, project `oni-farm`,
-production branch `main`, không có custom domain).
+**Tên miền chính: <https://oni-farm.pages.dev>** — Cloudflare Pages, project `oni-farm`,
+production branch `main`, chưa gắn custom domain.
 
-Quy trình thường ngày — **không cần MacBook, không cần cài gì**:
+Project nối thẳng với repo GitHub qua **Cloudflare Pages Git integration**. Quy trình
+thường ngày — **không cần MacBook, không cần cài gì**:
 
 1. Sửa code ở bất kỳ đâu (Claude Code trên cloud, GitHub web, máy khác…).
 2. `git push` lên nhánh `main`.
-3. GitHub Actions (`.github/workflows/deploy.yml`) tự chạy trên máy chủ GitHub:
-   `npm ci` → `npm run test:all` → `npm run build` → `wrangler pages deploy dist`.
-4. Vì deploy với `--branch=main` trùng production branch nên đây là **production
-   deployment**, `oni-farm.pages.dev` cập nhật ngay sau khi job xanh (~1–2 phút).
+3. Cloudflare tự clone repo, `npm install`, chạy `npm run build`, publish `dist/`.
+4. Khoảng 6–8 phút sau, `oni-farm.pages.dev` chạy bản mới.
 
-Toàn bộ thông tin đăng nhập nằm ở 2 secret trong repo GitHub
-(*Settings → Secrets and variables → Actions*) — trên máy cá nhân không cần gì cả:
+Push lên nhánh khác sinh preview deployment riêng, không đụng production.
 
-| Secret | Dùng để |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Token API Cloudflare có quyền **Cloudflare Pages: Edit** |
-| `CLOUDFLARE_ACCOUNT_ID` | ID account Cloudflare chứa project `oni-farm` |
+Xem tiến độ ở dashboard → **Workers & Pages → oni-farm → Deployments**.
 
-Xem tiến độ: tab **Actions** của repo, hoặc `gh run watch`.
-
-Deploy tay chỉ là đường lui khi Actions hỏng:
+Đường lui khi Git integration hỏng:
 
 ```sh
-npm run deploy          # build + đẩy cả site
+npm run deploy          # build + đẩy cả site từ máy
 npm run deploy:content  # chỉ đẩy content pack OTA
 ```
+
+hoặc chạy tay workflow `.github/workflows/deploy.yml` ở tab **Actions → Run workflow**
+(nó dùng 2 secret `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` đã đặt trong repo).
 
 Chi tiết và cách xử lý sự cố: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
