@@ -55,6 +55,7 @@ const FILE_TO_KEY: Record<string, keyof RawPack> = {
   "progression.json": "progression",
   "strings.vi.json": "strings",
   "weather.json": "weather",
+  "seasons.json": "seasons",
 };
 
 export interface OtaOptions {

@@ -139,6 +139,17 @@ export function validateCrops(raw: unknown): string[] {
     const rg = item["regrowDays"];
     if (rg !== null && (!isNum(rg) || rg < 1))
       k.fail("regrowDays", "phải là null hoặc số >= 1");
+    // seasons TUỲ CHỌN: pack cũ không có trường này thì cây gieo được quanh
+    // năm — giữ nguyên hành vi trước khi có mùa. Có thì phải là mảng chuỗi;
+    // tên mùa lạ được bắt ở loader (chỗ đó mới biết danh sách mùa).
+    const seasons = item["seasons"];
+    if (seasons !== undefined) {
+      if (!Array.isArray(seasons)) k.fail("seasons", "phải là mảng tên mùa");
+      else
+        seasons.forEach((v, j) => {
+          if (!isStr(v)) k.fail(`seasons[${j}]`, "phải là chuỗi");
+        });
+    }
     const ymin = k.num(item, "yieldMin", 1);
     const ymax = k.num(item, "yieldMax", 1);
     if (ymin !== null && ymax !== null && ymax < ymin)
@@ -185,7 +196,7 @@ export function validateBuildings(raw: unknown): string[] {
 
     const eff = k.obj(item, "effects");
     if (eff) {
-      const allowed = ["waterRadius", "autoWet", "income", "harvestRadius"];
+      const allowed = ["waterRadius", "autoWet", "allSeason", "income", "harvestRadius"];
       for (const key of Object.keys(eff))
         if (!allowed.includes(key))
           k.fail(`effects.${key}`, `hiệu ứng không được core hỗ trợ (core biết: ${allowed.join(", ")})`);
@@ -339,6 +350,49 @@ export function validateProps(raw: unknown): string[] {
 
     const art = k.obj(item, "art");
     if (art) colors(k, art, ["body", "dark", "accent"], "art");
+    c.merge(k);
+  });
+  return c.errors;
+}
+
+/**
+ * seasons.json — bốn mùa. TUỲ CHỌN ở cấp pack (pack cũ đã cache không có file
+ * này vẫn nạp được, loader sẽ coi như "không có mùa"), nhưng có thì phải đủ.
+ */
+export function validateSeasons(raw: unknown): string[] {
+  const c = new Check("seasons.json");
+  if (!isObj(raw)) return ["seasons.json: phải là object"];
+  c.num(raw, "daysPerSeason", 1, 365);
+  const list = c.arr(raw, "seasons");
+  if (!list) return c.errors;
+  if (list.length === 0) c.fail("seasons", "phải có ít nhất một mùa");
+  const seen = new Set<string>();
+  list.forEach((item, i) => {
+    const k = new Check(`seasons[${i}]`);
+    if (!isObj(item)) {
+      c.fail(`seasons[${i}]`, "phải là object");
+      return;
+    }
+    const id = k.str(item, "id");
+    if (id) {
+      if (seen.has(id)) k.fail("id", `trùng id '${id}'`);
+      seen.add(id);
+    }
+    k.str(item, "name");
+    k.num(item, "growMul", 0, 10);
+    const w = k.obj(item, "weather");
+    if (w)
+      for (const [wid, v] of Object.entries(w))
+        if (!isNum(v) || v < 0) k.fail(`weather.${wid}`, "phải là số >= 0");
+    if (item["tint"] !== undefined) {
+      const t = k.obj(item, "tint");
+      if (t) {
+        if (!isStr(t["color"]) || !/^#[0-9a-fA-F]{6}$/.test(t["color"] as string))
+          k.fail("tint.color", "phải là mã màu dạng #rrggbb");
+        k.num(t as Record<string, unknown>, "alpha", 0, 1);
+        if (t["desat"] !== undefined) k.num(t as Record<string, unknown>, "desat", 0, 1);
+      }
+    }
     c.merge(k);
   });
   return c.errors;

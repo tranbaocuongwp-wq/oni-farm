@@ -38,6 +38,14 @@ import { idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
 import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
+import {
+  cropInSeason,
+  isLastDayOfSeason,
+  seasonGrowMul,
+  seasonIndex,
+  seasonOfDay,
+  tileAllSeason,
+} from "./season.ts";
 
 /* ---------------------------------------------------------- tăng trưởng */
 
@@ -86,7 +94,13 @@ export function growCropsIn(v: MapView, content: Content, minutes: number, growM
 /** Tăng trưởng trên bản đồ ĐANG chơi. Đây là thứ TICK gọi mỗi khung hình —
  *  cố ý KHÔNG chạm tới bản đồ đã cất. */
 export function growCrops(d: Draft, content: Content, minutes: number): void {
-  growCropsIn(activeView(d), content, minutes, weatherDef(d.s, content).growMul);
+  // Cùng công thức với ban đêm (nightWeatherOf): thời tiết NHÂN với mùa.
+  growCropsIn(
+    activeView(d),
+    content,
+    minutes,
+    weatherDef(d.s, content).growMul * seasonGrowMul(d.s, content),
+  );
 }
 
 /* --------------------------------------------- cỏ mọc / đất cày bỏ hoang */
@@ -257,6 +271,37 @@ interface NightReport {
   felled: number;
 }
 
+/**
+ * Sang mùa: cây TRÁI MÙA mà CHƯA CHÍN thì héo, mất trắng.
+ *
+ * Hai chỗ cố ý nới tay, vì mục đích của mùa là bắt người chơi TÍNH TRƯỚC chứ
+ * không phải để phạt:
+ *   · Cây ĐÃ CHÍN thì tha — mất giống và mất công chăm đã đủ đau; cướp nốt vụ
+ *     đang chờ gặt chỉ làm người chơi hậm hực chứ không dạy được gì.
+ *   · Ô có `allSeason` (sàn nhà kính) miễn nhiễm — nhờ vậy một công trình vốn
+ *     chỉ để khỏi phải tưới bỗng thành thứ đáng để dành tiền mua.
+ * Và người chơi luôn được báo trước một ngày (xem toast `seasonLast`).
+ */
+function witherOutOfSeason(d: Draft, content: Content, v: MapView): number {
+  let n = 0;
+  const total = v.w * v.h;
+  for (let i = 0; i < total; i++) {
+    const t = v.tiles[i];
+    if (!t || !t.crop) continue;
+    if (tileAllSeason(t, content)) continue;
+    const def = content.crops[t.crop.id];
+    if (!def) continue;
+    if (t.crop.stage >= def.growthDays.length) continue; // đã chín thì tha
+    if (cropInSeason(t.crop.id, d.s.day, content)) continue; // vẫn hợp mùa mới
+    const m = v.edit(i);
+    if (m) {
+      m.crop = null;
+      n++;
+    }
+  }
+  return n;
+}
+
 /** Bước 3+4+5+5b cho một bản đồ: tưới tự động → cây lớn → bệnh/bão → làm khô → đêm xuống.
  *
  *  `yesterday` là thời tiết của ngày VỪA QUA (đêm nay nối tiếp nó): cây lớn
@@ -421,6 +466,22 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
     const from = v.active ? sleptAt : (d.s.maps?.[v.id]?.awayAt ?? sleptAt);
     nightOnMap(d, content, v, Math.max(0, dawn - Math.min(from, dawn)), yesterday, todayWet, rep);
   }
+  // ---- 5c. sang mùa ------------------------------------------------------
+  // Chạy SAU khi cây lớn xong đêm nay: cây vừa kịp chín trong đêm cuối mùa thì
+  // được tha, đúng như lời hứa "không bao giờ mất một vụ đã công cốc".
+  if (seasonIndex(d.s.day, content) !== seasonIndex(d.s.day - 1, content)) {
+    let withered = 0;
+    for (const v of views) withered += witherOutOfSeason(d, content, v);
+    const now = seasonOfDay(d.s.day, content);
+    if (now) toastKey(d, content, "seasonNew", "info", now.name);
+    if (withered > 0) toastKey(d, content, "seasonWither", "bad", `×${withered}`);
+  } else if (isLastDayOfSeason(d.s.day, content)) {
+    // Báo trước đúng một ngày. Không có lời báo này thì luật "cây trái mùa sẽ
+    // héo" chỉ là một cú mất trắng không hiểu vì sao.
+    const next = seasonOfDay(d.s.day + 1, content);
+    if (next) toastKey(d, content, "seasonLast", "info", next.name);
+  }
+
   if (rep.stormCrops > 0) toastKey(d, content, "stormDamage", "bad", `×${rep.stormCrops}`);
   if (rep.felled > 0) toastKey(d, content, "stormFell", "bad", `×${rep.felled}`);
   if (rep.sick > 0) toastKey(d, content, "cropSick", "bad");

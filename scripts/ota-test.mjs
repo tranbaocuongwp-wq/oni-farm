@@ -92,6 +92,15 @@ reject("hotbarSlots lớn hơn inventorySlots", (p) => (p.balance.hotbarSlots = 
 reject("dayEndMinutes <= dayStartMinutes", (p) => (p.balance.dayEndMinutes = 100));
 reject("contentVersion không phải semver", (p) => (p.manifest.contentVersion = "mới nhất"));
 reject("requiresCore không phải dải semver", (p) => (p.manifest.requiresCore = "core xịn"));
+reject("cây trỏ vào mùa không tồn tại", (p) => {
+  p.crops.crops[0].seasons = ["mua_mua_ngau"];
+});
+reject("một mùa không cây nào gieo được", (p) => {
+  // Mùa trống là mấy chục phút người chơi không làm gì được — gần như chắc chắn
+  // là sót lúc biên tập, không phải chủ ý.
+  for (const c of p.crops.crops) c.seasons = c.seasons.filter((x) => x !== "dong");
+});
+reject("daysPerSeason bằng 0", (p) => (p.seasons.daysPerSeason = 0));
 reject("cửa dịch chuyển trỏ ra ngoài bản đồ", (p) => {
   // Bẫy kinh điển khi đẩy OTA đổi map mà quên chỉnh cửa: người chơi bước vào
   // cửa rồi rơi ra hư vô. Phải chặn từ lúc kiểm pack.
@@ -196,6 +205,14 @@ accept("pack cũ không có các số cân bằng core 1.3 (loader điền mặc
 });
 accept("THÊM hẳn một bản đồ mới", (p) => {
   p.maps.hangDong = { w: 6, h: 4, rows: ["oooooo", "o::::o", "o::::o", "oooooo"] };
+});
+accept("đổi nhịp mùa qua OTA: mùa dài hơn, đổi trọng số thời tiết", (p) => {
+  p.seasons.daysPerSeason = 20;
+  p.seasons.seasons.find((x) => x.id === "dong").weather.fog = 40;
+});
+accept("thêm hẳn mùa thứ năm và cho cây gieo trong đó", (p) => {
+  p.seasons.seasons.push({ id: "tet", name: "Tết", growMul: 1.2, weather: { sunny: 60, fog: 20 } });
+  p.crops.crops[0].seasons = [...p.crops.crops[0].seasons, "tet"];
 });
 
 console.log("\n── Ghép pack: thiếu file thì dùng bản đóng kèm ──");

@@ -23,6 +23,7 @@ import type {
   ProgressionStage,
   PropDef,
   RecipeDef,
+  SeasonDef,
   Strings,
   TilesDef,
   ToolDef,
@@ -38,6 +39,7 @@ import {
   validateProgression,
   validateProps,
   validateRecipes,
+  validateSeasons,
   validateStrings,
   validateTiles,
   validateWeather,
@@ -57,6 +59,8 @@ export interface RawPack {
   strings: unknown;
   /** Thời tiết (core 1.3). Pack cũ không có → ota.ts ghép từ bản đóng kèm. */
   weather: unknown;
+  /** Bốn mùa (core 1.4). Thiếu = content không có mùa, cây gieo quanh năm. */
+  seasons?: unknown;
   /** Mỗi bản đồ một lưới riêng, tra theo tên: { farm: {...}, house: {...} }. */
   maps: Record<string, unknown>;
 }
@@ -84,6 +88,7 @@ export function validatePack(raw: RawPack): string[] {
     ...validateProgression(raw.progression),
     ...validateStrings(raw.strings),
     ...validateWeather(raw.weather),
+    ...(raw.seasons === undefined ? [] : validateSeasons(raw.seasons)),
   ];
 
   // map cần legend nên phải kiểm sau tiles
@@ -208,6 +213,24 @@ export function validatePack(raw: RawPack): string[] {
   for (const id of tilesDef.indoorMaps ?? [])
     if (!maps?.[id]) errors.push(`tiles.indoorMaps: bản đồ '${id}' không tồn tại`);
 
+  // ---- mùa: tên mùa phải có thật, và không mùa nào được trống trơn ---------
+  if (raw.seasons !== undefined) {
+    const sr = raw.seasons as { seasons?: { id: string }[] } | null;
+    const seasonIds = new Set((sr?.seasons ?? []).map((s) => s.id));
+    const used = new Set<string>();
+    for (const cr of crops) {
+      for (const sid of cr.seasons ?? []) {
+        if (!seasonIds.has(sid))
+          errors.push(`crops '${cr.id}': mùa '${sid}' không có trong seasons.json`);
+        used.add(sid);
+      }
+    }
+    // Một mùa không cây nào gieo được là một khoảng chết dài mấy chục phút mà
+    // người chơi không làm gì được — gần như chắc chắn là sót, không phải chủ ý.
+    for (const sid of seasonIds)
+      if (!used.has(sid)) errors.push(`seasons '${sid}': không có cây nào gieo được trong mùa này`);
+  }
+
   const spawn = tilesDef.spawn;
   const spawnMap = maps?.[spawn.map];
   if (!spawnMap) errors.push(`tiles.spawn: bản đồ '${spawn.map}' không tồn tại`);
@@ -267,6 +290,8 @@ export function buildContent(raw: RawPack): Content {
   const recipeList = (raw.recipes as { recipes: RecipeDef[] }).recipes;
   const prog = raw.progression as { stages: ProgressionStage[]; goals: Goal[] };
   const weatherRaw = raw.weather as { weathers: WeatherDef[]; firstDay: string };
+  const seasonRaw = (raw.seasons ?? null) as { daysPerSeason: number; seasons: SeasonDef[] } | null;
+  const seasonList = seasonRaw?.seasons ?? [];
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>
     Object.fromEntries(list.map((x) => [x.id, x]));
@@ -292,6 +317,9 @@ export function buildContent(raw: RawPack): Content {
     stages: prog.stages,
     goals: prog.goals,
     strings: raw.strings as Strings,
+    seasons: byId(seasonList),
+    seasonOrder: seasonList.map((s) => s.id),
+    daysPerSeason: Math.max(1, Math.floor(seasonRaw?.daysPerSeason ?? 1)),
     weathers: byId(weatherRaw.weathers),
     weatherOrder: weatherRaw.weathers.map((w) => w.id),
     weatherFirst: weatherRaw.firstDay,

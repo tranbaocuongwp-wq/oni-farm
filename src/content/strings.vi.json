@@ -52,6 +52,10 @@
     "pulled": "Đã nhổ cây bệnh.",
     "needMedicine": "Cần thuốc trừ sâu.",
     "stormDamage": "Bão làm hỏng cây",
-    "stormFell": "Bão quật đổ cây con"
+    "stormFell": "Bão quật đổ cây con",
+    "outOfSeason": "Hạt này không hợp mùa hiện tại.",
+    "seasonNew": "Sang mùa mới:",
+    "seasonWither": "Cây trái mùa đã héo:",
+    "seasonLast": "Hôm nay là ngày cuối mùa — mai sang"
   }
 }

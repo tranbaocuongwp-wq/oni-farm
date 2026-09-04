@@ -85,6 +85,8 @@ export interface WeatherFx {
   fog: number;
   /** bản đồ đang chơi ở ngoài trời không — trong nhà không vẽ mưa/sương */
   outdoor: boolean;
+  /** lớp màu của MÙA, phủ cả trong nhà (mùa thì ở đâu cũng là mùa đó) */
+  seasonTint: { color: string; alpha: number; desat?: number } | null;
 }
 
 export interface DrawOptions {
@@ -588,6 +590,28 @@ export function createRenderer(
 
   /** Lớp phủ toàn màn: sương, tint âm u, tối bão + chớp. Sau lớp đêm. */
   function drawWeatherScreen(timeSec: number, wx: WeatherFx, reduceMotion: boolean) {
+    // Màu của MÙA vẽ trước và KHÔNG phụ thuộc trong nhà hay ngoài trời: mưa thì
+    // chỉ rơi ngoài sân, còn mùa đông thì trong nhà cũng là mùa đông.
+    if (wx.seasonTint) {
+      const st = wx.seasonTint;
+      // Rút bão hoà TRƯỚC rồi mới phủ màu: làm ngược lại thì chính lớp màu vừa
+      // phủ cũng bị rút mất, và mùa thu hết cả sắc vàng.
+      const de = st.desat ?? 0;
+      if (de > 0.001) {
+        g.globalCompositeOperation = "saturation";
+        g.globalAlpha = de;
+        g.fillStyle = "#808080";
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        g.globalAlpha = 1;
+        g.globalCompositeOperation = "source-over";
+      }
+      if (st.alpha > 0.001) {
+        g.fillStyle = st.color;
+        g.globalAlpha = st.alpha;
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        g.globalAlpha = 1;
+      }
+    }
     if (!wx.outdoor) return;
     let color = "";
     let alpha = 0;

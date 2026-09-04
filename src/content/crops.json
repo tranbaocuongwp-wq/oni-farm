@@ -27,7 +27,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu"
+      ]
     },
     {
       "id": "bokchoy",
@@ -55,7 +59,12 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "mustard",
@@ -83,7 +92,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "spinach",
@@ -111,7 +124,12 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "kale",
@@ -139,7 +157,11 @@
         "spread": 6,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "waterspinach",
@@ -167,7 +189,10 @@
         "spread": 6,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "amaranth",
@@ -195,7 +220,10 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "perilla",
@@ -223,7 +251,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "celery",
@@ -251,7 +283,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "coriander",
@@ -279,7 +315,12 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "basil",
@@ -307,7 +348,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "mint",
@@ -335,7 +380,12 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "scallion",
@@ -363,7 +413,13 @@
         "spread": 3,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "chive",
@@ -391,7 +447,12 @@
         "spread": 3,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "lemongrass",
@@ -419,7 +480,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "perillared",
@@ -447,7 +512,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "tomato",
@@ -476,7 +545,11 @@
         "spread": 4,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "carrot",
@@ -504,7 +577,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "radish",
@@ -532,7 +609,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "beet",
@@ -560,7 +641,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "kohlrabi",
@@ -588,7 +673,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "potato",
@@ -616,7 +705,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu"
+      ]
     },
     {
       "id": "sweetpotato",
@@ -644,7 +737,11 @@
         "spread": 6,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "cassava",
@@ -672,7 +769,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "taro",
@@ -700,7 +801,11 @@
         "spread": 6,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "ginger",
@@ -728,7 +833,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "turmeric",
@@ -756,7 +865,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "onion",
@@ -784,7 +897,11 @@
         "spread": 3,
         "fruitCount": 1,
         "fruitSize": 6
-      }
+      },
+      "seasons": [
+        "xuan",
+        "thu"
+      ]
     },
     {
       "id": "garlic",
@@ -812,7 +929,11 @@
         "spread": 3,
         "fruitCount": 1,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "peanut",
@@ -840,7 +961,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "watermelon",
@@ -869,7 +994,10 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 9
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "pumpkin",
@@ -898,7 +1026,10 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "thu"
+      ]
     },
     {
       "id": "wintermelon",
@@ -927,7 +1058,11 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 8
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "cucumber",
@@ -955,7 +1090,11 @@
         "spread": 6,
         "fruitCount": 2,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "bittermelon",
@@ -983,7 +1122,10 @@
         "spread": 6,
         "fruitCount": 2,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "luffa",
@@ -1011,7 +1153,10 @@
         "spread": 7,
         "fruitCount": 2,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "gourd",
@@ -1039,7 +1184,10 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "melon",
@@ -1068,7 +1216,10 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 8
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "zucchini",
@@ -1096,7 +1247,11 @@
         "spread": 6,
         "fruitCount": 2,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "corn",
@@ -1125,7 +1280,10 @@
         "spread": 5,
         "fruitCount": 2,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "sugarcane",
@@ -1153,7 +1311,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "okra",
@@ -1181,7 +1343,10 @@
         "spread": 5,
         "fruitCount": 2,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "eggplant",
@@ -1209,7 +1374,11 @@
         "spread": 5,
         "fruitCount": 2,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "chili",
@@ -1237,7 +1406,12 @@
         "spread": 4,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "bellpepper",
@@ -1265,7 +1439,11 @@
         "spread": 5,
         "fruitCount": 2,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "rice",
@@ -1293,7 +1471,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "wheat",
@@ -1321,7 +1503,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "barley",
@@ -1349,7 +1535,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "sesame",
@@ -1377,7 +1567,10 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "soybean",
@@ -1405,7 +1598,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 2
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "greenbean",
@@ -1433,7 +1630,11 @@
         "spread": 5,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "pea",
@@ -1461,7 +1662,11 @@
         "spread": 5,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "dong"
+      ]
     },
     {
       "id": "strawberry",
@@ -1489,7 +1694,10 @@
         "spread": 6,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan"
+      ]
     },
     {
       "id": "blueberry",
@@ -1517,7 +1725,10 @@
         "spread": 6,
         "fruitCount": 4,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "ha"
+      ]
     },
     {
       "id": "coffee",
@@ -1546,7 +1757,12 @@
         "spread": 7,
         "fruitCount": 4,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "tea",
@@ -1575,7 +1791,12 @@
         "spread": 7,
         "fruitCount": 3,
         "fruitSize": 3
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "sunflower",
@@ -1603,7 +1824,11 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 7
-      }
+      },
+      "seasons": [
+        "ha",
+        "thu"
+      ]
     },
     {
       "id": "marigold",
@@ -1631,7 +1856,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "chrysanthemum",
@@ -1659,7 +1888,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "thu",
+        "dong"
+      ]
     },
     {
       "id": "lavender",
@@ -1687,7 +1920,11 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 4
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha"
+      ]
     },
     {
       "id": "rose",
@@ -1715,7 +1952,12 @@
         "spread": 4,
         "fruitCount": 1,
         "fruitSize": 5
-      }
+      },
+      "seasons": [
+        "xuan",
+        "ha",
+        "thu"
+      ]
     }
   ]
 }

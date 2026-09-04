@@ -16,6 +16,7 @@ import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch 
 import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { cureTile, pullTile } from "./disease.ts";
+import { cropInSeason, currentSeason, tileAllSeason } from "./season.ts";
 import {
   canPlaceBuilding,
   hasNearbyInteract,
@@ -220,6 +221,11 @@ function plant(d: Draft, content: Content, i: number, cur: Tile, cropId: string)
       return;
     }
   }
+  if (!cropInSeason(cropId, d.s.day, content) && !tileAllSeason(cur, content)) {
+    const s = currentSeason(d.s, content);
+    toastKey(d, content, "outOfSeason", "bad", s ? `(${def.name} không hợp mùa ${s.name})` : undefined);
+    return;
+  }
   const cost = content.balance.energyCost.plant;
   if (!hasEnergy(d, cost)) {
     toastKey(d, content, "noEnergy", "bad");
@@ -390,6 +396,9 @@ export function canUseAt(
     if (!content.crops[it.ref]) return null;
     if (!cur.tilled || cur.crop) return null;
     if (cur.b && content.buildings[cur.b]?.kind !== "floor") return null;
+    // Trái mùa thì con trỏ phải báo NGAY, đừng để người chơi đi tới nơi rồi mới
+    // biết. Sàn nhà kính miễn nhiễm.
+    if (!cropInSeason(it.ref, state.day, content) && !tileAllSeason(cur, content)) return null;
     return "plant";
   }
   if (it.kind === "build") {

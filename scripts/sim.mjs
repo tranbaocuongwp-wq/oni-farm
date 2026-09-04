@@ -16,6 +16,7 @@ import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, facingTile, nearestTarget } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
+import * as seasonApi from "../src/game/season.ts";
 import * as migrateApi from "../src/core/save.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
@@ -2491,6 +2492,118 @@ test("46. save v6 (không có thời tiết) nạp lên v7 → migrate xanh; rou
   const mig2 = migrateForContent(withFog, c2);
   eq(mig2.state.weather.today, c2.weatherFirst, "kiểu thời tiết bị gỡ → về kiểu đầu");
   deepEq(checkInvariants(mig2.state, c2), [], "bất biến xanh");
+});
+
+/* ========================================================================== */
+/* 47. MÙA VỤ                                                                 */
+/* ========================================================================== */
+
+test("47. mùa vụ: lịch đúng, hạt trái mùa không gieo/không mua được", () => {
+  const { seasonOfDay, dayOfSeason, yearOf, cropInSeason } = seasonApi;
+
+  // --- lịch: 12 ngày mỗi mùa, 4 mùa một năm ---
+  eq(seasonOfDay(1, content).id, "xuan", "ngày 1 là Xuân");
+  eq(seasonOfDay(12, content).id, "xuan", "ngày 12 vẫn Xuân");
+  eq(seasonOfDay(13, content).id, "ha", "ngày 13 sang Hạ");
+  eq(seasonOfDay(37, content).id, "dong", "ngày 37 là Đông");
+  eq(seasonOfDay(49, content).id, "xuan", "ngày 49 quay lại Xuân");
+  eq(yearOf(49, content), 2, "ngày 49 là năm 2");
+  eq(dayOfSeason(25, content), 1, "ngày 25 là ngày đầu mùa Thu");
+
+  // --- dâu tây chỉ mùa Xuân ---
+  ok(cropInSeason("strawberry", 1, content), "dâu tây gieo được mùa Xuân");
+  ok(!cropInSeason("strawberry", 13, content), "dâu tây KHÔNG gieo được mùa Hạ");
+  ok(cropInSeason("scallion", 40, content), "hành lá gieo được cả mùa Đông");
+
+  // --- gieo trái mùa bị từ chối ---
+  const store = mkStore(701);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[0];
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+  ok(tile(store, plot.x, plot.y).tilled, "ô đã cày");
+
+  setState(store, (s) => {
+    s.day = 13; // mùa Hạ
+    s.inv[2] = { id: "seed:strawberry", n: 3 };
+  });
+  eq(seasonApi.currentSeason(store.getState(), content).id, "ha", "đang ở mùa Hạ");
+  eq(canUseAt(store.getState(), content, plot.x, plot.y), null, "con trỏ báo KHÔNG gieo được");
+  selectItem(store, "seed:strawberry");
+  use(store, plot.x, plot.y);
+  eq(tile(store, plot.x, plot.y).crop, null, "gieo trái mùa không ăn thua");
+  eq(countInv(store, "seed:strawberry"), 3, "không mất hạt nào");
+
+  // --- đúng mùa thì gieo được ---
+  setState(store, (s) => { s.day = 1; });
+  selectItem(store, "seed:strawberry");
+  use(store, plot.x, plot.y);
+  eq(tile(store, plot.x, plot.y).crop.id, "strawberry", "mùa Xuân gieo dâu được");
+
+  // --- mua hạt trái mùa bị từ chối ---
+  const st2 = mkStore(702);
+  setState(st2, (s) => { s.day = 13; s.money = 9999; });
+  const tienTruoc = st2.getState().money;
+  st2.dispatch({ t: "BUY", id: "strawberry", n: 1 });
+  eq(st2.getState().money, tienTruoc, "mua hạt trái mùa không trừ tiền");
+  eq(countInv(st2, "seed:strawberry"), 0, "và không có hạt nào vào túi");
+  deepEq(checkInvariants(st2.getState(), content), [], "bất biến sau khi bị từ chối");
+});
+
+test("48. sang mùa: cây chưa chín trái mùa héo, cây đã chín và ô nhà kính còn nguyên", () => {
+  const store = mkStore(703);
+  walkTo(store, HOME.x, HOME.y);
+  unlockAll(store);
+
+  const CHUA_CHIN = PLOTS[0];   // dâu tây (chỉ Xuân), còn xanh  → phải héo
+  const DA_CHIN = PLOTS[1];     // dâu tây (chỉ Xuân), đã chín   → phải còn
+  const HOP_MUA = PLOTS[2];     // hành lá (bốn mùa)             → phải còn
+  const NHA_KINH = PLOTS[3];    // dâu tây trên sàn nhà kính     → phải còn
+
+  const rip = content.crops.strawberry.growthDays.length;
+  setState(store, (s) => {
+    s.day = 12; // ngày cuối mùa Xuân
+    setTile(s, CHUA_CHIN.x, CHUA_CHIN.y, { tilled: true, wet: false, crop: { id: "strawberry", stage: 0, grow: 0, regrown: false } });
+    setTile(s, DA_CHIN.x, DA_CHIN.y, { tilled: true, wet: false, crop: { id: "strawberry", stage: rip, grow: 0, regrown: false } });
+    setTile(s, HOP_MUA.x, HOP_MUA.y, { tilled: true, wet: false, crop: { id: "scallion", stage: 0, grow: 0, regrown: false } });
+    setTile(s, NHA_KINH.x, NHA_KINH.y, { tilled: true, wet: false, b: "greenhouse", crop: { id: "strawberry", stage: 0, grow: 0, regrown: false } });
+  });
+
+  sleep(store);
+  eq(store.getState().day, 13, "đã sang ngày 13");
+  eq(seasonApi.currentSeason(store.getState(), content).id, "ha", "đã sang mùa Hạ");
+
+  eq(tile(store, CHUA_CHIN.x, CHUA_CHIN.y).crop, null, "cây trái mùa chưa chín thì héo");
+  ok(tile(store, DA_CHIN.x, DA_CHIN.y).crop, "cây ĐÃ CHÍN thì không bị đụng tới");
+  eq(tile(store, DA_CHIN.x, DA_CHIN.y).crop.id, "strawberry", "vẫn là dâu tây, gặt được bình thường");
+  ok(tile(store, HOP_MUA.x, HOP_MUA.y).crop, "cây hợp mùa mới thì ở lại");
+  ok(tile(store, NHA_KINH.x, NHA_KINH.y).crop, "ô sàn nhà kính miễn nhiễm mùa");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi sang mùa");
+
+  // ô đã cày vẫn còn để gieo lứa mới — không mất luôn công cày
+  ok(tile(store, CHUA_CHIN.x, CHUA_CHIN.y).tilled, "chỉ mất cây, không mất luống");
+
+  // --- mùa Đông cây lớn chậm hơn mùa Xuân ---
+  const lonTrongMua = (day) => {
+    const st = mkStore(704);
+    walkTo(st, HOME.x, HOME.y);
+    const p = PLOTS[0];
+    setState(st, (s) => {
+      s.day = day;
+      s.weather = { today: "overcast", tomorrow: "overcast", wetStreak: 0, driedDay: 0 };
+      setTile(s, p.x, p.y, { tilled: true, wet: true, crop: { id: "scallion", stage: 0, grow: 0, regrown: false } });
+    });
+    st.dispatch({ t: "TICK", dt: 60 });
+    return tile(st, p.x, p.y).crop.grow;
+  };
+  const xuan = lonTrongMua(1);
+  const dong = lonTrongMua(37);
+  ok(xuan > 0 && dong > 0, "cả hai mùa cây đều lớn");
+  ok(dong < xuan, `mùa Đông chậm hơn mùa Xuân: đông ${dong.toFixed(1)} < xuân ${xuan.toFixed(1)}`);
+  ok(
+    Math.abs(dong / xuan - 0.8) < 1e-6,
+    `đúng bằng growMul 0,8 của mùa Đông: tỉ lệ ${(dong / xuan).toFixed(4)}`,
+  );
 });
 
 /* ------------------------------------------------------------------ tổng kết */

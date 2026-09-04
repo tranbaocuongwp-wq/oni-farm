@@ -71,7 +71,30 @@ export interface CropDef {
   regrowDays: number | null;
   yieldMin: number;
   yieldMax: number;
+  /**
+   * Các mùa gieo được. Rỗng = quanh năm.
+   *
+   * Đây là thứ làm cho một danh sách 61 loại cây có nghĩa: không có mùa thì
+   * người chơi chỉ việc chọn cây lãi nhất rồi bỏ qua 58 loại còn lại; có mùa
+   * thì mỗi mùa là một bộ bài riêng và phải tính trước.
+   */
+  seasons: string[];
   art: CropArt;
+}
+
+/** Một mùa. `weather` ghi đè trọng số trong weather.json cho riêng mùa này —
+ *  đó là chỗ mùa được CẢM THẤY chứ không chỉ đọc trên HUD. */
+export interface SeasonDef {
+  id: string;
+  name: string;
+  /** hệ số lớn của cây trong mùa này (đông chậm hơn) */
+  growMul: number;
+  /** trọng số thời tiết riêng của mùa; thiếu kiểu nào thì kiểu đó dùng weight gốc */
+  weather: Record<string, number>;
+  /** lớp màu phủ toàn màn — chỗ mùa được NHÌN THẤY chứ không chỉ đọc trên HUD.
+   *  `desat` rút bớt bão hoà màu (0..1): phủ thêm màu lên pixel art chỉ làm nó
+   *  đục, còn rút màu đi thì cả khung hình bạc đi đúng kiểu mùa lạnh. */
+  tint?: { color: string; alpha: number; desat?: number };
 }
 
 export interface BuildingEffects {
@@ -79,6 +102,8 @@ export interface BuildingEffects {
   waterRadius?: number;
   /** Ô đặt công trình này luôn ẩm (sàn nhà kính). */
   autoWet?: boolean;
+  /** Ô này miễn nhiễm mùa: gieo được quanh năm và cây không héo lúc sang mùa. */
+  allSeason?: boolean;
   /** Cộng tiền mỗi sáng. */
   income?: number;
   /** Tự thu hoạch cây chín trong bán kính này mỗi sáng. */
@@ -355,6 +380,11 @@ export interface Content {
   stages: ProgressionStage[];
   goals: Goal[];
   strings: Strings;
+  seasons: Record<string, SeasonDef>;
+  /** thứ tự các mùa trong năm — chính là vòng quay */
+  seasonOrder: string[];
+  /** số ngày mỗi mùa */
+  daysPerSeason: number;
   weathers: Record<string, WeatherDef>;
   weatherOrder: string[];
   /** kiểu thời tiết ngày đầu tiên */

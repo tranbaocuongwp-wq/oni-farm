@@ -17,6 +17,7 @@ import balance from "../../content/balance.json";
 import progression from "../../content/progression.json";
 import strings from "../../content/strings.vi.json";
 import weather from "../../content/weather.json";
+import seasons from "../../content/seasons.json";
 import farmMap from "../../content/maps/farm.json";
 import houseMap from "../../content/maps/house.json";
 
@@ -25,7 +26,7 @@ import { buildContent, type RawPack } from "./loader.ts";
 
 export function bundledRawPack(): RawPack {
   return {
-    manifest, tiles, props, crops, buildings, items, recipes, balance, progression, strings, weather,
+    manifest, tiles, props, crops, buildings, items, recipes, balance, progression, strings, weather, seasons,
     maps: { farm: farmMap, house: houseMap },
   };
 }

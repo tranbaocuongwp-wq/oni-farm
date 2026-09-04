@@ -13,6 +13,7 @@ import type { Content, GameState, WeatherDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { activeView, nextRandom, toastKey, touch } from "./state.ts";
 import { propDef } from "./world.ts";
+import { seasonGrowMul, seasonOfDay } from "./season.ts";
 
 /** Định nghĩa kiểu thời tiết HÔM NAY. Kiểu lạ → kiểu đầu tiên của content. */
 export function weatherDef(state: GameState, content: Content): WeatherDef {
@@ -43,7 +44,8 @@ export interface NightWeather {
 export function nightWeatherOf(state: GameState, content: Content): NightWeather {
   const def = weatherDef(state, content);
   return {
-    growMul: def.growMul,
+    // Thời tiết NHÂN với mùa: mưa xuân và mưa đông không cho cùng một kết quả.
+    growMul: def.growMul * seasonGrowMul(state, content),
     wet: !!def.wet,
     storm: def.storm ?? null,
     diseaseMul: def.diseaseMul ?? 1,
@@ -55,15 +57,27 @@ export function isOutdoor(content: Content, mapId: string): boolean {
   return !(content.tiles.indoorMaps ?? []).includes(mapId);
 }
 
-/** Rút thăm một kiểu theo weight. Trả id và seed mới. */
-function pickWeather(content: Content, seed: number): { id: string; seed: number } {
+/**
+ * Rút thăm một kiểu theo weight. Trả id và seed mới.
+ *
+ * `over` là trọng số RIÊNG CỦA MÙA, ghi đè weight gốc cho những kiểu nó nhắc
+ * tới. Đây là chỗ mùa được CẢM THẤY chứ không chỉ đọc trên HUD: hè thì nắng
+ * gắt và bão, đông thì sương mù dày và hầu như không nắng gắt.
+ */
+function pickWeather(
+  content: Content,
+  seed: number,
+  over?: Record<string, number>,
+): { id: string; seed: number } {
+  const wOf = (id: string): number =>
+    Math.max(0, over?.[id] ?? content.weathers[id]?.weight ?? 0);
   let total = 0;
-  for (const id of content.weatherOrder) total += Math.max(0, content.weathers[id]?.weight ?? 0);
+  for (const id of content.weatherOrder) total += wOf(id);
   const r = nextRandom(seed);
   if (!(total > 0)) return { id: content.weatherFirst, seed: r.seed };
   let acc = r.v * total;
   for (const id of content.weatherOrder) {
-    acc -= Math.max(0, content.weathers[id]?.weight ?? 0);
+    acc -= wOf(id);
     if (acc < 0) return { id, seed: r.seed };
   }
   return { id: content.weatherOrder[content.weatherOrder.length - 1] ?? content.weatherFirst, seed: r.seed };
@@ -82,6 +96,9 @@ export function rollWeather(d: Draft, content: Content): void {
 
   let seed = d.s.seed;
   let tomorrow: string;
+  // Dự báo là cho NGÀY MAI, nên lấy trọng số theo mùa của ngày mai — sang mùa
+  // đúng vào hôm sau thì thời tiết đổi giọng ngay hôm đó, không trễ một nhịp.
+  const nextSeason = seasonOfDay(d.s.day + 1, content)?.weather;
   const streak = todayDef.streak;
   if (streak) {
     // chuỗi ngày CÙNG KIỂU: đếm bằng wetStreak khi kiểu này ướt, không thì
@@ -91,12 +108,12 @@ export function rollWeather(d: Draft, content: Content): void {
     seed = r.seed;
     if (run < Math.max(1, streak.max) && r.v < streak.chance) tomorrow = today;
     else {
-      const p = pickWeather(content, seed);
+      const p = pickWeather(content, seed, nextSeason);
       tomorrow = p.id;
       seed = p.seed;
     }
   } else {
-    const p = pickWeather(content, seed);
+    const p = pickWeather(content, seed, nextSeason);
     tomorrow = p.id;
     seed = p.seed;
   }

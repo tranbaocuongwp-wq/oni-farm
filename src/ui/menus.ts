@@ -21,6 +21,7 @@
 import type { Content, DebugOp, GameState } from "../game/types.ts";
 import type { Atlas } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
+import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
 
 export interface MenuHandlers {
@@ -242,13 +243,28 @@ export function createMenus(
     };
 
     if (shopTab === "seed") {
+      // Chỉ bày hạt GIEO ĐƯỢC HÔM NAY. Bày cả 61 loại rồi để người chơi mua
+      // nhầm hạt trái mùa là bẫy tiền — mà danh sách 61 dòng cũng không ai đọc
+      // hết. Lọc theo mùa vừa khỏi bẫy, vừa biến cửa hàng thành thứ ĐÁNG xem
+      // lại mỗi đầu mùa.
+      let shown = 0;
       for (const id of c.cropOrder) {
+        if (!cropInSeason(id, s.day, c)) continue;
         const crop = c.crops[id]!;
         const days = crop.growthDays.reduce((a, b) => a + b, 0);
         const regrow = crop.regrowDays ? ` · mọc lại ${crop.regrowDays} ngày` : "";
         mk(`seed:${id}`, crop.seedName, `${days} ngày · bán ${money(crop.sellPrice)}${regrow}`, crop.seedPrice);
+        shown++;
       }
-      foot.appendChild(note("Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày."));
+      const sea = currentSeason(s, c);
+      const left = c.daysPerSeason - dayOfSeason(s.day, c);
+      foot.appendChild(
+        note(
+          sea
+            ? `Mùa ${sea.name} — ${shown} loại hạt đang bán, còn ${left} ngày nữa sang mùa. Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.`
+            : "Mua xong chọn ở hotbar rồi bấm GIEO lên luống đã cày.",
+        ),
+      );
     } else {
       for (const id of c.buildingOrder) {
         const b = c.buildings[id]!;

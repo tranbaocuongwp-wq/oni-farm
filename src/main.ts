@@ -52,6 +52,7 @@ import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
 import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
+import { currentSeason } from "./game/season.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
@@ -783,6 +784,7 @@ async function boot() {
         // sương tan dần trong 60 phút cuối trước mốc fogUntil
         fog: fogUntil > 0 && s.minutes < fogUntil ? Math.min(1, (fogUntil - s.minutes) / 60) : 0,
         outdoor: isOutdoor(content, s.mapId),
+        seasonTint: currentSeason(s, content)?.tint ?? null,
       },
     });
 

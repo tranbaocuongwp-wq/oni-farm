@@ -10,6 +10,7 @@ import type { Draft } from "./state.ts";
 import { dStats, setInv, toastKey, touch } from "./state.ts";
 import { addItem, canAdd, countItem, cropSlots, removeItem } from "./inventory.ts";
 import { buyPriceOf, itemName, sellPriceOf, shopItemId, shopKey } from "./items.ts";
+import { cropInSeason } from "./season.ts";
 
 /** Món này có đang bày bán (đã mở khoá) không. Nhận cả 'sprinkler' lẫn 'build:sprinkler'. */
 export function canBuy(state: GameState, id: string): boolean {
@@ -25,6 +26,13 @@ export function buy(d: Draft, content: Content, id: string, n: number): void {
 
   const itemIdent = shopItemId(id, content);
   if (!itemIdent) return;
+
+  // Hạt trái mùa không bày bán: mua về cũng không gieo được, để người chơi mua
+  // rồi mới phát hiện là bẫy tiền.
+  if (itemIdent.startsWith("seed:") && !cropInSeason(itemIdent.slice(5), d.s.day, content)) {
+    toastKey(d, content, "outOfSeason", "bad");
+    return;
+  }
 
   const unit = buyPriceOf(itemIdent, content);
   if (unit <= 0) return;

@@ -1,0 +1,78 @@
+{
+  "$comment": "LÀN NHANH — bốn mùa. Mùa là cái làm cho 61 loại cây có nghĩa: không có mùa thì người chơi chỉ việc chọn cây lãi nhất rồi bỏ qua 58 loại còn lại. Có mùa thì mỗi mùa là một bộ bài khác nhau, và phải TÍNH TRƯỚC.\n\ndaysPerSeason: số ngày mỗi mùa. 12 ngày × 4 mùa = một năm 48 ngày. Một ngày chơi khoảng 10 phút thật nên một năm gần 8 tiếng — đủ dài để thấy nhịp, đủ ngắn để chơi hết trong một kỳ nghỉ.\n\nweather: TRỌNG SỐ thời tiết riêng của mùa, ghi đè weight trong weather.json. Đây là chỗ mùa được CẢM THẤY chứ không chỉ đọc trên HUD: hè nắng gắt và bão, thu nhiều mây, đông sương mù và mưa phùn.\n\ngrowMul: hệ số lớn của cây trong mùa đó. XUÂN LÀ MÙA GỐC (1.0) — con số growthDays trong crops.json phải đúng nghĩa 'số ngày' ở ít nhất một mùa, nếu không thì '3 ngày' sai ở khắp nơi. Hè nhanh hơn, đông chậm hơn: thêm một lý do để tích trữ trước đông.\n\nCây ngoài mùa: gieo không được, và tới lúc SANG MÙA thì cây chưa chín sẽ héo. Cây ĐÃ CHÍN thì không sao — không bao giờ mất một vụ đã công cốc. Ô sàn nhà kính miễn nhiễm tất cả.\n\ntint: lớp màu phủ toàn màn cho mùa đó ({color, alpha}). Đây là chỗ mùa được NHÌN THẤY. Cố ý giữ alpha thấp: pixel art vốn ít màu, phủ dày là thành một đám bùn. Xuân alpha 0 vì nó là diện mạo gốc — mọi mùa khác lệch đi so với nó.\n\ndesat (0..1): rút bớt độ bão hoà màu. Đây mới là thứ làm mùa đông ĐỌC RA NGAY — phủ thêm màu lên pixel art chỉ làm nó đục, còn rút màu đi thì cả khung hình bạc đi đúng kiểu mùa lạnh, mà từng pixel vẫn phân biệt được với nhau.",
+  "daysPerSeason": 12,
+  "seasons": [
+    {
+      "id": "xuan",
+      "name": "Xuân",
+      "growMul": 1,
+      "weather": {
+        "sunny": 34,
+        "hot": 4,
+        "overcast": 20,
+        "rain": 24,
+        "storm": 4,
+        "fog": 14
+      },
+      "tint": {
+        "color": "#8fe07a",
+        "alpha": 0.0,
+        "desat": 0.0
+      }
+    },
+    {
+      "id": "ha",
+      "name": "Hạ",
+      "growMul": 1.1,
+      "weather": {
+        "sunny": 40,
+        "hot": 24,
+        "overcast": 12,
+        "rain": 12,
+        "storm": 10,
+        "fog": 2
+      },
+      "tint": {
+        "color": "#ffd473",
+        "alpha": 0.1,
+        "desat": 0.0
+      }
+    },
+    {
+      "id": "thu",
+      "name": "Thu",
+      "growMul": 1,
+      "weather": {
+        "sunny": 30,
+        "hot": 6,
+        "overcast": 26,
+        "rain": 22,
+        "storm": 6,
+        "fog": 10
+      },
+      "tint": {
+        "color": "#e8933c",
+        "alpha": 0.16,
+        "desat": 0.18
+      }
+    },
+    {
+      "id": "dong",
+      "name": "Đông",
+      "growMul": 0.8,
+      "weather": {
+        "sunny": 22,
+        "hot": 0,
+        "overcast": 30,
+        "rain": 20,
+        "storm": 4,
+        "fog": 24
+      },
+      "tint": {
+        "color": "#cfe4ff",
+        "alpha": 0.2,
+        "desat": 0.52
+      }
+    }
+  ]
+}

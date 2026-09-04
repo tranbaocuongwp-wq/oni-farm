@@ -25,6 +25,7 @@
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
+import { currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Atlas } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
 
@@ -307,7 +308,13 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       }
       if (s.day !== prev.day) {
         prev.day = s.day;
-        elDay.textContent = String(s.day);
+        // "Xuân 3" chứ không phải "Ngày 27": người chơi cần biết đang ở đâu
+        // TRONG MÙA để tính còn kịp gieo lứa nữa không, chứ số ngày cộng dồn
+        // từ đầu ván thì chẳng nói lên điều gì.
+        const sea = currentSeason(s, content);
+        elDay.textContent = sea
+          ? `${sea.name} ${dayOfSeason(s.day, content)}`
+          : String(s.day);
       }
       const clock = formatClock(s.minutes);
       if (clock !== prev.clock) {

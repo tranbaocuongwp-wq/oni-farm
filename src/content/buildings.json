@@ -8,20 +8,39 @@
       "price": 350,
       "kind": "object",
       "solid": true,
-      "effects": { "waterRadius": 1 },
-      "power": { "produce": 0, "consume": 0 },
-      "art": { "body": "#b8c6d4", "dark": "#5d7186", "accent": "#38bdf8" }
+      "effects": {
+        "waterRadius": 1
+      },
+      "power": {
+        "produce": 0,
+        "consume": 0
+      },
+      "art": {
+        "body": "#b8c6d4",
+        "dark": "#5d7186",
+        "accent": "#38bdf8"
+      }
     },
     {
       "id": "greenhouse",
       "name": "Sàn nhà kính",
-      "desc": "Ô luôn giữ ẩm, cây vẫn lớn kể cả hôm bạn quên tưới. Đi lên được.",
+      "desc": "Ô luôn giữ ẩm VÀ miễn nhiễm mùa — gieo gì cũng được, quanh năm, không héo lúc sang mùa. Đi lên được.",
       "price": 120,
       "kind": "floor",
       "solid": false,
-      "effects": { "autoWet": true },
-      "power": { "produce": 0, "consume": 0 },
-      "art": { "body": "#cfe9f2", "dark": "#7fa8b8", "accent": "#a9dbe8" }
+      "effects": {
+        "autoWet": true,
+        "allSeason": true
+      },
+      "power": {
+        "produce": 0,
+        "consume": 0
+      },
+      "art": {
+        "body": "#cfe9f2",
+        "dark": "#7fa8b8",
+        "accent": "#a9dbe8"
+      }
     },
     {
       "id": "solar",
@@ -30,9 +49,18 @@
       "price": 500,
       "kind": "object",
       "solid": true,
-      "effects": { "income": 45 },
-      "power": { "produce": 1, "consume": 0 },
-      "art": { "body": "#1e3a5f", "dark": "#0f1f36", "accent": "#4fa3e3" }
+      "effects": {
+        "income": 45
+      },
+      "power": {
+        "produce": 1,
+        "consume": 0
+      },
+      "art": {
+        "body": "#1e3a5f",
+        "dark": "#0f1f36",
+        "accent": "#4fa3e3"
+      }
     },
     {
       "id": "drone",
@@ -41,9 +69,18 @@
       "price": 900,
       "kind": "object",
       "solid": true,
-      "effects": { "harvestRadius": 4 },
-      "power": { "produce": 0, "consume": 1 },
-      "art": { "body": "#e2e8f0", "dark": "#64748b", "accent": "#f59e0b" }
+      "effects": {
+        "harvestRadius": 4
+      },
+      "power": {
+        "produce": 0,
+        "consume": 1
+      },
+      "art": {
+        "body": "#e2e8f0",
+        "dark": "#64748b",
+        "accent": "#f59e0b"
+      }
     }
   ]
 }
