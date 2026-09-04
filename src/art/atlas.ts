@@ -28,7 +28,7 @@
       lên; đất cày nâu đỏ tách hẳn khỏi lối đi vàng nhạt.
 ============================================================================ */
 
-import type { Content, CropDef } from "../game/types.ts";
+import type { Content, CropArt, CropDef } from "../game/types.ts";
 import { hash2, mulberry32 } from "../core/rng.ts";
 
 export const TILE = 16;
@@ -762,6 +762,52 @@ function makeCrop(def: CropDef, stage: number): HTMLCanvasElement {
     return outline(s).c;
   }
 
+  const ctx: FormCtx = { s, a, t, ripe, baseY, rnd };
+  switch (a.form ?? "leafy") {
+    case "root":
+      drawRoot(ctx);
+      break;
+    case "vine":
+      drawVine(ctx);
+      break;
+    case "stalk":
+      drawStalk(ctx);
+      break;
+    case "bush":
+      drawBush(ctx);
+      break;
+    case "grain":
+      drawGrain(ctx);
+      break;
+    case "flower":
+      drawFlower(ctx);
+      break;
+    default:
+      drawLeafy(ctx);
+  }
+  return outline(s).c;
+}
+
+/** Tham số chung mọi dáng cây dùng. `t` là độ lớn 0..1, `ripe` là đã chín. */
+interface FormCtx {
+  s: Surface;
+  a: CropArt;
+  t: number;
+  ripe: boolean;
+  baseY: number;
+  rnd: () => number;
+}
+
+/** Quả tròn có bóng sáng góc trên trái — dùng lại cho mọi dáng. */
+function berry(s: Surface, a: CropArt, cx: number, cy: number, r: number) {
+  s.disc(cx, cy, r, a.fruit);
+  s.disc(cx + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
+  s.px(cx - r + 1, cy - r + 1, "#ffffff");
+}
+
+/* --- leafy: thân đứng, lá so le hai bên, quả quanh thân ------------------- */
+
+function drawLeafy({ s, a, t, ripe, baseY, rnd }: FormCtx) {
   const h = Math.max(2, Math.round(a.height * (0.35 + 0.65 * t)));
   const spread = Math.max(1, Math.round(a.spread * (0.4 + 0.6 * t)));
   const leaves = Math.max(2, Math.round(a.leaves * (0.4 + 0.6 * t)));
@@ -795,13 +841,237 @@ function makeCrop(def: CropDef, stage: number): HTMLCanvasElement {
         a.fruitCount === 1
           ? baseY - Math.round(h * 0.45)
           : baseY - Math.round(h * (0.35 + 0.4 * Math.abs(Math.sin(ang))));
-      s.disc(cx, cy, r, a.fruit);
-      s.disc(cx + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
-      s.px(cx - r + 1, cy - r + 1, "#ffffff");
+      berry(s, a, cx, cy, r);
       s.px(cx, cy - r, a.leafDark);
     }
   }
-  return outline(s).c;
+}
+
+/* --- root: túm lá xoè, chín thì nhô vai củ khỏi mặt đất ------------------- */
+
+function drawRoot({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const h = Math.max(3, Math.round(a.height * (0.4 + 0.6 * t)));
+  const spread = Math.max(2, Math.round(a.spread * (0.5 + 0.5 * t)));
+
+  // vai củ: chỉ ló ra khi đã chín, đó là tín hiệu "nhổ được rồi"
+  if (ripe) {
+    const r = Math.max(2, Math.round(a.fruitSize / 2));
+    s.disc(8, baseY, r, a.fruit);
+    s.disc(8 + 1, baseY + 1, Math.max(0, r - 2), a.fruitDark);
+    s.px(8 - r + 1, baseY - r + 1, "#ffffff");
+    // đất vun quanh vai củ cho khỏi trông như quả đặt trên nền
+    s.px(8 - r - 1, baseY + 1, a.fruitDark);
+    s.px(8 + r + 1, baseY + 1, a.fruitDark);
+  }
+
+  // túm lá xoè hình quạt từ một gốc
+  const top = baseY - (ripe ? 1 : 0);
+  const blades = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
+  for (let i = 0; i < blades; i++) {
+    const frac = blades === 1 ? 0.5 : i / (blades - 1);
+    const lean = (frac - 0.5) * 2; // -1..1
+    const len = Math.max(2, Math.round(h * (0.6 + 0.4 * (1 - Math.abs(lean)))));
+    for (let k = 0; k < len; k++) {
+      const x = 8 + Math.round(lean * spread * (k / Math.max(1, len)));
+      const y = top - k;
+      s.px(x, y, k > len - 2 ? a.leafDark : a.leaf);
+      if (k > 0 && rnd() > 0.7) s.px(x + (lean < 0 ? -1 : 1), y, a.leafDark);
+    }
+  }
+  // cuống lá tụ lại ở cổ củ
+  s.px(8, top, a.stem);
+  s.px(8, top - 1, a.stem);
+}
+
+/* --- vine: dây bò ngang, quả to nằm trên đất ------------------------------ */
+
+function drawVine({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const reach = Math.max(2, Math.round((a.spread + 2) * (0.5 + 0.5 * t)));
+  const leaves = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
+
+  // hai nhánh dây bò sang hai bên, gợn lên xuống 1px cho có nhịp
+  for (let side = -1 as -1 | 1; ; side = 1) {
+    for (let k = 1; k <= reach; k++) {
+      const x = 8 + side * k;
+      const y = baseY - (k % 3 === 0 ? 1 : 0);
+      s.px(x, y, a.stem);
+    }
+    if (side === 1) break;
+  }
+
+  // lá xoè dọc dây, so le trên/dưới
+  for (let i = 0; i < leaves; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const k = 1 + Math.round((i / Math.max(1, leaves - 1)) * (reach - 1));
+    const cx = 8 + side * k;
+    const cy = baseY - 2 - (i % 3);
+    s.disc(cx, cy, 1, a.leaf);
+    s.px(cx, cy + 1, a.leafDark);
+    if (rnd() > 0.5) s.px(cx + side, cy, a.leafDark);
+  }
+
+  // quả to nằm bệt trên mặt đất — đây là điểm nhìn của dáng này
+  if (ripe) {
+    const r = Math.max(2, Math.round(a.fruitSize / 2));
+    const n = Math.max(1, Math.min(2, a.fruitCount));
+    for (let i = 0; i < n; i++) {
+      const cx = n === 1 ? 8 : 8 + (i === 0 ? -3 : 3);
+      const cy = baseY - r + 1;
+      s.disc(cx, cy, r, a.fruit);
+      // sọc dưa: vài vệt dọc màu tối, chỉ vẽ khi quả đủ to mới thấy được
+      if (r >= 3) {
+        for (let y = cy - r + 1; y <= cy + r - 1; y++) {
+          s.px(cx - Math.round(r * 0.6), y, a.fruitDark);
+          s.px(cx + Math.round(r * 0.6), y, a.fruitDark);
+        }
+      } else {
+        s.disc(cx + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
+      }
+      s.px(cx - r + 1, cy - r + 1, "#ffffff");
+      s.px(cx, cy - r, a.stem);
+    }
+  }
+}
+
+/* --- stalk: một cọng cao, bắp/quả bám dọc thân --------------------------- */
+
+function drawStalk({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const h = Math.max(4, Math.round((a.height + 4) * (0.4 + 0.6 * t)));
+  const spread = Math.max(2, Math.round(a.spread * (0.5 + 0.5 * t)));
+
+  // thân dày 2px cho ra dáng cây cao
+  for (let k = 0; k < h; k++) {
+    s.px(8, baseY - k, a.stem);
+    s.px(9, baseY - k, k % 4 === 0 ? a.leafDark : a.stem);
+  }
+
+  // lá dài rủ xuống, mọc so le dọc thân
+  const leaves = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
+  for (let i = 0; i < leaves; i++) {
+    const frac = i / Math.max(1, leaves - 1);
+    const y0 = baseY - Math.round(2 + frac * (h - 2));
+    const side = i % 2 === 0 ? -1 : 1;
+    const len = Math.max(2, Math.round(spread * (0.6 + 0.4 * frac)));
+    for (let k = 1; k <= len; k++) {
+      const x = 8 + side * k + (side < 0 ? 0 : 1);
+      const y = y0 + Math.round((k / len) * 1.5); // rủ xuống dần
+      s.px(x, y, k === len ? a.leafDark : a.leaf);
+    }
+  }
+
+  // ngọn cờ (bông ngô) khi đã chín
+  if (ripe) {
+    s.px(8, baseY - h, a.leafDark);
+    s.px(9, baseY - h - 1, a.leafDark);
+    const r = Math.max(1, Math.round(a.fruitSize / 2));
+    const n = Math.max(1, a.fruitCount);
+    for (let i = 0; i < n; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const cy = baseY - Math.round(h * (0.35 + 0.25 * i));
+      const cx = 8 + side * 2 + (side < 0 ? 0 : 1);
+      // bắp thuôn dài: chồng hai đĩa lệch nhau theo chiều dọc
+      s.disc(cx, cy, r, a.fruit);
+      s.disc(cx, cy + r, r, a.fruit);
+      s.px(cx + (side < 0 ? -1 : 1), cy, a.fruitDark);
+      s.px(cx, cy - r, a.leafDark);
+      if (rnd() > 0.5) s.px(cx, cy + r + 1, a.fruitDark);
+    }
+  }
+}
+
+/* --- bush: bụi tròn thấp, quả nhỏ rải khắp tán --------------------------- */
+
+function drawBush({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const r = Math.max(2, Math.round((a.spread + 2) * (0.45 + 0.55 * t)));
+  const cy = baseY - r + 1;
+
+  s.disc(8, cy, r, a.leaf);
+  // mảng tối ở nửa dưới phải cho tán có khối, không phẳng như cái đĩa
+  s.disc(8 + 1, cy + 1, Math.max(1, r - 1), a.leafDark);
+  s.disc(8 - 1, cy - 1, Math.max(1, r - 2), a.leaf);
+  // rìa lởm chởm để không thành hình tròn hoàn hảo
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2;
+    if (rnd() > 0.45)
+      s.px(8 + Math.round(Math.cos(ang) * (r + 1)), cy + Math.round(Math.sin(ang) * (r + 1)), a.leaf);
+  }
+  s.px(8, baseY, a.stem);
+  s.px(8, baseY - 1, a.stem);
+
+  if (ripe) {
+    const fr = Math.max(1, Math.round(a.fruitSize / 2));
+    const n = Math.max(1, a.fruitCount);
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 + 0.9;
+      const d = r * 0.55;
+      berry(s, a, 8 + Math.round(Math.cos(ang) * d), cy + Math.round(Math.sin(ang) * d), fr);
+    }
+  }
+}
+
+/* --- grain: nhiều cọng mảnh, bông trĩu đầu ngọn -------------------------- */
+
+function drawGrain({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const h = Math.max(3, Math.round(a.height * (0.45 + 0.55 * t)));
+  const n = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
+  const spread = Math.max(1, Math.round(a.spread * (0.5 + 0.5 * t)));
+
+  for (let i = 0; i < n; i++) {
+    const frac = n === 1 ? 0.5 : i / (n - 1);
+    const lean = (frac - 0.5) * 2;
+    const x0 = 8 + Math.round(lean * spread);
+    const hh = Math.max(2, h - Math.round(Math.abs(lean) * 2));
+    for (let k = 0; k < hh; k++) {
+      const x = x0 + Math.round(lean * (k / Math.max(1, hh)) * 1.5);
+      s.px(x, baseY - k, k > hh * 0.6 ? a.leaf : a.stem);
+    }
+    // bông ở ngọn: chín thì trĩu và đổi màu
+    const tipX = x0 + Math.round(lean * 1.5);
+    const tipY = baseY - hh;
+    if (ripe) {
+      s.px(tipX, tipY, a.fruit);
+      s.px(tipX, tipY - 1, a.fruit);
+      s.px(tipX + (lean < 0 ? -1 : 1), tipY, a.fruitDark);
+      if (rnd() > 0.5) s.px(tipX, tipY - 2, a.fruitDark);
+    } else {
+      s.px(tipX, tipY, a.leafDark);
+    }
+  }
+}
+
+/* --- flower: một bông to trên đỉnh thân ---------------------------------- */
+
+function drawFlower({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const h = Math.max(3, Math.round(a.height * (0.4 + 0.6 * t)));
+  for (let k = 0; k < h; k++) s.px(8, baseY - k, a.stem);
+
+  // hai lá thấp
+  const spread = Math.max(1, Math.round(a.spread * 0.6));
+  for (let k = 1; k <= spread; k++) {
+    s.px(8 - k, baseY - Math.round(h * 0.3), k === spread ? a.leafDark : a.leaf);
+    s.px(8 + k, baseY - Math.round(h * 0.55), k === spread ? a.leafDark : a.leaf);
+  }
+
+  const cy = baseY - h;
+  if (!ripe) {
+    // nụ khép
+    s.disc(8, cy, 1, a.leafDark);
+    s.px(8, cy - 1, a.leaf);
+    return;
+  }
+
+  const r = Math.max(2, Math.round(a.fruitSize / 2) + 1);
+  // cánh: 8 chấm quanh tâm
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2;
+    const px2 = 8 + Math.round(Math.cos(ang) * r);
+    const py = cy + Math.round(Math.sin(ang) * r);
+    s.disc(px2, py, 1, a.fruit);
+    if (rnd() > 0.6) s.px(px2, py + 1, a.fruitDark);
+  }
+  // nhuỵ
+  s.disc(8, cy, Math.max(1, r - 2), a.fruitDark);
+  s.px(8 - 1, cy - 1, "#ffffff");
 }
 
 /* ---------------------------------------------------------------------------

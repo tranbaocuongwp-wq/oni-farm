@@ -18,7 +18,32 @@
    PHẦN A — CONTENT (làn nhanh: đẩy OTA, không build lại)
 --------------------------------------------------------------------------- */
 
+/**
+ * DÁNG cây — quyết định `src/art/atlas.ts` vẽ theo kiểu nào.
+ *
+ * Thêm dáng mới là việc của core (phải sửa atlas), nhưng CHỌN dáng cho một cây
+ * là việc của content — nên trường này nằm trong crops.json và đẩy OTA được.
+ * Thiếu trường = "leafy", đúng cách vẽ cũ, nên content pack cũ không đổi hình.
+ */
+export type CropForm =
+  /** thân đứng có lá hai bên, quả treo quanh thân (xà lách, cà chua) */
+  | "leafy"
+  /** củ vùi dưới đất, chín thì nhô vai củ lên (cà rốt, khoai) */
+  | "root"
+  /** dây bò sát đất, quả to nằm trên mặt đất (dưa hấu, bí) */
+  | "vine"
+  /** thân cao một cọng, bắp/quả bám dọc thân (ngô, mía) */
+  | "stalk"
+  /** bụi tròn thấp, quả nhỏ rải khắp tán (dâu tây, đậu) */
+  | "bush"
+  /** nhiều cọng mảnh, bông trĩu đầu ngọn (lúa, lúa mì) */
+  | "grain"
+  /** một bông to trên đỉnh thân (hướng dương, cúc) */
+  | "flower";
+
 export interface CropArt {
+  /** Dáng cây; thiếu thì coi như "leafy". */
+  form?: CropForm;
   stem: string;
   leaf: string;
   leafDark: string;

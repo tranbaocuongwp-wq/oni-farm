@@ -488,16 +488,26 @@ test("6. mốc mở khoá bắn đúng thứ tự, hàng chưa mở khoá không
   for (let i = 0; i < 5; i++) use(store, PLOTS[i].x, PLOTS[i].y);
   eq(store.getState().stats.harvested, 5, "đã thu hoạch 5");
   deepEq(store.getState().stagesDone, ["start", "pro"], "mốc 'pro' bắn sau mốc 'start'");
-  ok(store.getState().unlocked.includes("seed:tomato"), "seed:tomato đã mở khoá");
+  ok(store.getState().unlocked.includes("seed:bokchoy"), "seed:bokchoy đã mở khoá ở mốc 'pro'");
+  ok(!store.getState().unlocked.includes("seed:tomato"), "cà chua vẫn khoá: nó nằm ở mốc 'mech'");
 
-  // giờ mua được, và tiền đủ giữa ngày là mở khoá ngay (mốc 'mech' theo money)
+  // hàng vừa mở khoá là mua được ngay
+  store.dispatch({ t: "BUY", id: "seed:bokchoy", n: 1 });
+  ok(store.getState().inv.some((v) => v && v.id === "seed:bokchoy"), "mua được hạt cải thìa sau khi mở khoá");
+
+  // Tiền đủ giữa ngày là mốc 'mech' bắn ngay, không cần ngủ — nhưng mốc chỉ được
+  // ĐÁNH GIÁ sau một action ĐỔI ĐƯỢC state. Đặt thẳng money rồi thử mua hàng còn
+  // khoá thì action bị từ chối, không có gì để đánh giá, và mốc vẫn nằm im.
   setState(store, (s) => {
     s.money = 900;
   });
-  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
-  ok(store.getState().inv.some((v) => v && v.id === "seed:tomato"), "mua được hạt cà chua sau khi mở khoá");
-  ok(store.getState().stagesDone.includes("mech"), "đủ tiền giữa ngày là mốc 'mech' bắn ngay, không cần ngủ");
+  ok(!store.getState().stagesDone.includes("mech"), "đặt thẳng money chưa đủ làm mốc bắn");
+  store.dispatch({ t: "BUY", id: "seed:bokchoy", n: 1 });
+  ok(store.getState().stagesDone.includes("mech"), "một action thành công là mốc 'mech' bắn ngay");
   ok(store.getState().unlocked.includes("sprinkler"), "vòi tưới đã mở khoá");
+
+  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
+  ok(store.getState().inv.some((v) => v && v.id === "seed:tomato"), "mua được cà chua sau mốc 'mech'");
 });
 
 /* ========================================================================== */

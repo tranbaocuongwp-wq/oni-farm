@@ -93,6 +93,9 @@ class Check {
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+/** Phải khớp với kiểu CropForm trong src/game/types.ts. */
+const CROP_FORMS = ["leafy", "root", "vine", "stalk", "bush", "grain", "flower"] as const;
+
 function colors(c: Check, src: Any, keys: string[], where: string) {
   for (const k of keys) {
     const v = src[k];
@@ -142,6 +145,11 @@ export function validateCrops(raw: unknown): string[] {
       k.fail("yieldMax", "phải >= yieldMin");
     const art = k.obj(item, "art");
     if (art) {
+      // form là TUỲ CHỌN: pack cũ không có trường này vẫn hợp lệ và vẫn vẽ như xưa.
+      // Nhưng nếu có mà sai tên thì phải chặn — không lẳng lặng rơi về "leafy",
+      // vì như thế một lỗi chính tả sẽ biến cả ruộng dưa thành cây lá.
+      if (art["form"] !== undefined)
+        k.enumStr(art, "form", CROP_FORMS);
       colors(k, art, ["stem", "leaf", "leafDark", "fruit", "fruitDark"], "art");
       for (const n of ["height", "leaves", "spread", "fruitCount", "fruitSize"])
         if (!isNum(art[n]) || (art[n] as number) < 0) k.fail(`art.${n}`, "phải là số >= 0");

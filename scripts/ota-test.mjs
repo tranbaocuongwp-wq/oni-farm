@@ -113,6 +113,17 @@ reject("legend dùng vật thể chưa định nghĩa", (p) => {
 reject("có thiết bị tiêu điện nhưng không có nguồn điện", (p) => {
   for (const b of p.buildings.buildings) b.power.produce = 0;
 });
+reject("thêm cây mà quên mốc mở khoá — cây sẽ không bao giờ mua được", (p) => {
+  p.crops.crops.push({
+    ...clone(p.crops.crops[0]),
+    id: "duaGang",
+    name: "Dưa gang",
+    seedName: "Hạt dưa gang",
+  });
+});
+reject("một cây được mở khoá ở HAI mốc khác nhau", (p) => {
+  p.progression.stages[3].unlocks.push("seed:lettuce");
+});
 
 console.log("\n── Sửa content HỢP LỆ thì phải được chấp nhận ──");
 const accept = (name, mutate) => {
@@ -126,16 +137,20 @@ accept("chỉnh cân bằng giá", (p) => {
   p.crops.crops[0].sellPrice = 99;
   p.buildings.buildings[0].price = 1;
 });
-accept("thêm một cây hoàn toàn mới", (p) => {
+const addCrop = (p) => {
   p.crops.crops.push({
     ...clone(p.crops.crops[0]),
-    id: "duaHau",
-    name: "Dưa hấu",
-    seedName: "Hạt dưa hấu",
+    id: "duaGang",
+    name: "Dưa gang",
+    seedName: "Hạt dưa gang",
     seedPrice: 90,
     sellPrice: 300,
     growthDays: [2, 2, 3],
   });
+};
+accept("thêm một cây hoàn toàn mới (kèm mốc mở khoá)", (p) => {
+  addCrop(p);
+  p.progression.stages[p.progression.stages.length - 1].unlocks.push("seed:duaGang");
 });
 accept("gỡ bỏ một cây (kèm mọi tham chiếu tới nó)", (p) => {
   p.crops.crops = p.crops.crops.filter((c) => c.id !== "pumpkin");

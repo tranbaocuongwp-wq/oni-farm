@@ -116,12 +116,29 @@ export function validatePack(raw: RawPack): string[] {
       errors.push(`balance.startSeeds.${key}: không có cây '${key.slice(5)}' trong crops.json`);
   }
 
+  const unlockedAt = new Map<string, string>();
   for (const s of prog.stages)
-    for (const u of s.unlocks)
+    for (const u of s.unlocks) {
       if (!known.has(u))
         errors.push(
           `progression stage '${s.id}' mở khoá '${u}' — không khớp cây (seed:<id>) hay công trình nào`,
         );
+      const prev = unlockedAt.get(u);
+      if (prev !== undefined)
+        errors.push(
+          `progression: '${u}' được mở khoá ở cả hai mốc '${prev}' và '${s.id}' — chỉ được một`,
+        );
+      else unlockedAt.set(u, s.id);
+    }
+
+  // Cây không nằm trong mốc nào thì vĩnh viễn không mua được ở cửa hàng: nó tồn
+  // tại trong content, tốn công vẽ, nhưng người chơi không bao giờ chạm tới.
+  // Đây là lỗi im lặng đúng kiểu dễ lọt khi bộ cây trồng phình to, nên chặn hẳn.
+  for (const id of cropIds)
+    if (!unlockedAt.has(`seed:${id}`))
+      errors.push(
+        `crops.json: cây '${id}' không được mốc nào trong progression.json mở khoá — sẽ không bao giờ mua được`,
+      );
 
   // require chỉ được dùng khoá mà progression.ts biết đọc
   const statKeys = new Set([

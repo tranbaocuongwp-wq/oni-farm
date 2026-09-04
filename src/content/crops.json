@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — đẩy OTA được. growthDays = số ngày cho MỖI lần chuyển giai đoạn; số giai đoạn hiển thị = growthDays.length + 1. Cây chín khi stage === growthDays.length. art.* là tham số để src/art/atlas.ts VẼ cây bằng code — thêm cây mới chỉ cần thêm một object ở đây, không phải vẽ tay.",
+  "$comment": "LÀN NHANH — đẩy OTA được. growthDays = số ngày cho MỖI lần chuyển giai đoạn; số giai đoạn hiển thị = growthDays.length + 1. Cây chín khi stage === growthDays.length. art.* là tham số để src/art/atlas.ts VẼ cây bằng code — thêm cây mới chỉ cần thêm một object ở đây, không phải vẽ tay.\\n\\nart.form chọn DÁNG cây: leafy (thân đứng lá hai bên), root (củ vùi đất, chín thì nhô vai củ), vine (dây bò sát đất, quả to nằm trên đất), stalk (thân cao một cọng, bắp bám dọc thân), bush (bụi tròn thấp, quả rải khắp tán), grain (nhiều cọng mảnh, bông trĩu ngọn), flower (một bông to trên đỉnh). Thiếu form thì coi như leafy — nên content pack cũ không đổi hình. Thêm dáng MỚI phải sửa atlas.ts, tức là việc của core chứ không đẩy OTA được.",
   "crops": [
     {
       "id": "lettuce",
@@ -16,6 +16,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
+        "form": "leafy",
         "stem": "#4a7c2a",
         "leaf": "#6cc94f",
         "leafDark": "#3f8f33",
@@ -26,6 +27,426 @@
         "spread": 5,
         "fruitCount": 1,
         "fruitSize": 4
+      }
+    },
+    {
+      "id": "bokchoy",
+      "name": "Cải thìa",
+      "seedName": "Hạt cải thìa",
+      "seedPrice": 14,
+      "sellPrice": 36,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#5b8a2e",
+        "leaf": "#8fd35c",
+        "leafDark": "#4a7a2c",
+        "fruit": "#e6f2b8",
+        "fruitDark": "#b6cf76",
+        "height": 8,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "mustard",
+      "name": "Cải xanh",
+      "seedName": "Hạt cải xanh",
+      "seedPrice": 16,
+      "sellPrice": 42,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#436f24",
+        "leaf": "#6fbf3e",
+        "leafDark": "#39682a",
+        "fruit": "#8ed85a",
+        "fruitDark": "#5aa036",
+        "height": 9,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "spinach",
+      "name": "Rau bina",
+      "seedName": "Hạt rau bina",
+      "seedPrice": 18,
+      "sellPrice": 46,
+      "growthDays": [
+        1,
+        2,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#37642a",
+        "leaf": "#4f9e42",
+        "leafDark": "#2c5726",
+        "fruit": "#76c45e",
+        "fruitDark": "#48853c",
+        "height": 8,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "kale",
+      "name": "Cải xoăn",
+      "seedName": "Hạt cải xoăn",
+      "seedPrice": 22,
+      "sellPrice": 58,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#2f5c30",
+        "leaf": "#468a47",
+        "leafDark": "#28502c",
+        "fruit": "#63a85e",
+        "fruitDark": "#3d7440",
+        "height": 9,
+        "leaves": 9,
+        "spread": 6,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "waterspinach",
+      "name": "Rau muống",
+      "seedName": "Hạt rau muống",
+      "seedPrice": 15,
+      "sellPrice": 38,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#4d8434",
+        "leaf": "#79c455",
+        "leafDark": "#3f7030",
+        "fruit": "#a8dd76",
+        "fruitDark": "#6aa544",
+        "height": 7,
+        "leaves": 7,
+        "spread": 6,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "amaranth",
+      "name": "Rau dền",
+      "seedName": "Hạt rau dền",
+      "seedPrice": 17,
+      "sellPrice": 44,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#6b3b4a",
+        "leaf": "#8e5d6d",
+        "leafDark": "#5a2f3c",
+        "fruit": "#c0526f",
+        "fruitDark": "#8a3550",
+        "height": 8,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "perilla",
+      "name": "Tía tô",
+      "seedName": "Hạt tía tô",
+      "seedPrice": 20,
+      "sellPrice": 52,
+      "growthDays": [
+        1,
+        2,
+        1
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#59395e",
+        "leaf": "#7d5285",
+        "leafDark": "#452c4a",
+        "fruit": "#9a6aa5",
+        "fruitDark": "#6b4373",
+        "height": 8,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "celery",
+      "name": "Cần tây",
+      "seedName": "Hạt cần tây",
+      "seedPrice": 26,
+      "sellPrice": 66,
+      "growthDays": [
+        2,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#8fbf5a",
+        "leaf": "#a8d370",
+        "leafDark": "#6f9c42",
+        "fruit": "#cfe89a",
+        "fruitDark": "#96b95e",
+        "height": 11,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "coriander",
+      "name": "Ngò rí",
+      "seedName": "Hạt ngò rí",
+      "seedPrice": 13,
+      "sellPrice": 34,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#4f8a34",
+        "leaf": "#7fc95a",
+        "leafDark": "#3f6f2b",
+        "fruit": "#a3dd7c",
+        "fruitDark": "#6aa54a",
+        "height": 6,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "basil",
+      "name": "Húng quế",
+      "seedName": "Hạt húng quế",
+      "seedPrice": 19,
+      "sellPrice": 50,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#3c6b2c",
+        "leaf": "#5fa844",
+        "leafDark": "#31582a",
+        "fruit": "#7cc55c",
+        "fruitDark": "#4d8a3c",
+        "height": 8,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "mint",
+      "name": "Bạc hà",
+      "seedName": "Hạt bạc hà",
+      "seedPrice": 18,
+      "sellPrice": 46,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "leafy",
+        "stem": "#3f7a3a",
+        "leaf": "#63b45c",
+        "leafDark": "#356633",
+        "fruit": "#8ad07e",
+        "fruitDark": "#4f9047",
+        "height": 7,
+        "leaves": 9,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "scallion",
+      "name": "Hành lá",
+      "seedName": "Hạt hành lá",
+      "seedPrice": 14,
+      "sellPrice": 36,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#e8ecd8",
+        "leaf": "#5fae4a",
+        "leafDark": "#3f7a34",
+        "fruit": "#8fd06a",
+        "fruitDark": "#5a9642",
+        "height": 10,
+        "leaves": 6,
+        "spread": 3,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "chive",
+      "name": "Hẹ",
+      "seedName": "Hạt hẹ",
+      "seedPrice": 16,
+      "sellPrice": 40,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#d8e4c4",
+        "leaf": "#4f9e42",
+        "leafDark": "#356b2e",
+        "fruit": "#7cc45e",
+        "fruitDark": "#4d8a3f",
+        "height": 9,
+        "leaves": 7,
+        "spread": 3,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "lemongrass",
+      "name": "Sả",
+      "seedName": "Hạt sả",
+      "seedPrice": 28,
+      "sellPrice": 72,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 4,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#b9c98a",
+        "leaf": "#8fae5c",
+        "leafDark": "#63803c",
+        "fruit": "#cbd89a",
+        "fruitDark": "#8fa066",
+        "height": 12,
+        "leaves": 8,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "perillared",
+      "name": "Kinh giới",
+      "seedName": "Hạt kinh giới",
+      "seedPrice": 21,
+      "sellPrice": 54,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "leafy",
+        "stem": "#4a6b34",
+        "leaf": "#6f9e4a",
+        "leafDark": "#3c5a2c",
+        "fruit": "#8fb862",
+        "fruitDark": "#5f8040",
+        "height": 8,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 3
       }
     },
     {
@@ -44,6 +465,7 @@
       "yieldMin": 1,
       "yieldMax": 2,
       "art": {
+        "form": "leafy",
         "stem": "#3f7a2c",
         "leaf": "#57b342",
         "leafDark": "#2f6d26",
@@ -54,6 +476,399 @@
         "spread": 4,
         "fruitCount": 3,
         "fruitSize": 3
+      }
+    },
+    {
+      "id": "carrot",
+      "name": "Cà rốt",
+      "seedName": "Hạt cà rốt",
+      "seedPrice": 16,
+      "sellPrice": 44,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#3f7a2c",
+        "leaf": "#6cbf4a",
+        "leafDark": "#356b2c",
+        "fruit": "#f08a2a",
+        "fruitDark": "#b35c12",
+        "height": 9,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "radish",
+      "name": "Củ cải trắng",
+      "seedName": "Hạt củ cải",
+      "seedPrice": 14,
+      "sellPrice": 38,
+      "growthDays": [
+        1,
+        1,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#4a7c2a",
+        "leaf": "#6cc94f",
+        "leafDark": "#3f8f33",
+        "fruit": "#f2ece0",
+        "fruitDark": "#c9bda8",
+        "height": 8,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "beet",
+      "name": "Củ dền",
+      "seedName": "Hạt củ dền",
+      "seedPrice": 24,
+      "sellPrice": 62,
+      "growthDays": [
+        2,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#6b3b4a",
+        "leaf": "#8e5d6d",
+        "leafDark": "#5a2f3c",
+        "fruit": "#a02a4e",
+        "fruitDark": "#6b1a34",
+        "height": 9,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "kohlrabi",
+      "name": "Su hào",
+      "seedName": "Hạt su hào",
+      "seedPrice": 22,
+      "sellPrice": 58,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "form": "root",
+        "stem": "#5b8a2e",
+        "leaf": "#8fd35c",
+        "leafDark": "#4a7a2c",
+        "fruit": "#a8d888",
+        "fruitDark": "#7aa85e",
+        "height": 9,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    },
+    {
+      "id": "potato",
+      "name": "Khoai tây",
+      "seedName": "Củ giống khoai tây",
+      "seedPrice": 34,
+      "sellPrice": 86,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "root",
+        "stem": "#3f6b2c",
+        "leaf": "#5f9e42",
+        "leafDark": "#345a26",
+        "fruit": "#c9a86a",
+        "fruitDark": "#8f7040",
+        "height": 9,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "sweetpotato",
+      "name": "Khoai lang",
+      "seedName": "Dây khoai lang",
+      "seedPrice": 30,
+      "sellPrice": 78,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "root",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#c96a3a",
+        "fruitDark": "#8f4420",
+        "height": 8,
+        "leaves": 9,
+        "spread": 6,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "cassava",
+      "name": "Khoai mì",
+      "seedName": "Hom khoai mì",
+      "seedPrice": 40,
+      "sellPrice": 104,
+      "growthDays": [
+        3,
+        2,
+        3
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 3,
+      "art": {
+        "form": "root",
+        "stem": "#6b8a4a",
+        "leaf": "#8fb35c",
+        "leafDark": "#556f36",
+        "fruit": "#d8c9a8",
+        "fruitDark": "#9c8a62",
+        "height": 12,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    },
+    {
+      "id": "taro",
+      "name": "Khoai môn",
+      "seedName": "Củ giống khoai môn",
+      "seedPrice": 44,
+      "sellPrice": 116,
+      "growthDays": [
+        3,
+        3,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "root",
+        "stem": "#5f6b8a",
+        "leaf": "#7a8aa8",
+        "leafDark": "#4a5470",
+        "fruit": "#a89ab8",
+        "fruitDark": "#6f6288",
+        "height": 11,
+        "leaves": 6,
+        "spread": 6,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    },
+    {
+      "id": "ginger",
+      "name": "Gừng",
+      "seedName": "Củ giống gừng",
+      "seedPrice": 38,
+      "sellPrice": 98,
+      "growthDays": [
+        2,
+        3,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#8fae5c",
+        "leaf": "#a8c46f",
+        "leafDark": "#6f8a40",
+        "fruit": "#d8b878",
+        "fruitDark": "#a88a48",
+        "height": 10,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "turmeric",
+      "name": "Nghệ",
+      "seedName": "Củ giống nghệ",
+      "seedPrice": 42,
+      "sellPrice": 110,
+      "growthDays": [
+        3,
+        2,
+        3
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#8fa85c",
+        "leaf": "#a8c46f",
+        "leafDark": "#6f8a40",
+        "fruit": "#e8a82a",
+        "fruitDark": "#b37a12",
+        "height": 10,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "onion",
+      "name": "Hành tây",
+      "seedName": "Hạt hành tây",
+      "seedPrice": 26,
+      "sellPrice": 68,
+      "growthDays": [
+        2,
+        2,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#a8c47a",
+        "leaf": "#7aae4a",
+        "leafDark": "#5a8a34",
+        "fruit": "#c9a8b8",
+        "fruitDark": "#96788a",
+        "height": 10,
+        "leaves": 6,
+        "spread": 3,
+        "fruitCount": 1,
+        "fruitSize": 6
+      }
+    },
+    {
+      "id": "garlic",
+      "name": "Tỏi",
+      "seedName": "Tép giống tỏi",
+      "seedPrice": 28,
+      "sellPrice": 74,
+      "growthDays": [
+        2,
+        1,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "root",
+        "stem": "#a8c47a",
+        "leaf": "#7aae4a",
+        "leafDark": "#5a8a34",
+        "fruit": "#f2ece0",
+        "fruitDark": "#c4b8a8",
+        "height": 9,
+        "leaves": 6,
+        "spread": 3,
+        "fruitCount": 1,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "peanut",
+      "name": "Đậu phộng",
+      "seedName": "Hạt đậu phộng",
+      "seedPrice": 32,
+      "sellPrice": 84,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 3,
+      "art": {
+        "form": "root",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#c9a878",
+        "fruitDark": "#96744a",
+        "height": 8,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "watermelon",
+      "name": "Dưa hấu",
+      "seedName": "Hạt dưa hấu",
+      "seedPrice": 58,
+      "sellPrice": 164,
+      "growthDays": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#2f7a34",
+        "fruitDark": "#1c4a20",
+        "height": 7,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 1,
+        "fruitSize": 9
       }
     },
     {
@@ -72,6 +887,7 @@
       "yieldMin": 1,
       "yieldMax": 1,
       "art": {
+        "form": "vine",
         "stem": "#4d7a24",
         "leaf": "#68a83a",
         "leafDark": "#3d6b22",
@@ -82,6 +898,823 @@
         "spread": 7,
         "fruitCount": 1,
         "fruitSize": 7
+      }
+    },
+    {
+      "id": "wintermelon",
+      "name": "Bí đao",
+      "seedName": "Hạt bí đao",
+      "seedPrice": 54,
+      "sellPrice": 148,
+      "growthDays": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#8fae7a",
+        "fruitDark": "#5f7a50",
+        "height": 7,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 1,
+        "fruitSize": 8
+      }
+    },
+    {
+      "id": "cucumber",
+      "name": "Dưa leo",
+      "seedName": "Hạt dưa leo",
+      "seedPrice": 24,
+      "sellPrice": 64,
+      "growthDays": [
+        1,
+        1,
+        2
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#4a8a34",
+        "fruitDark": "#2f5f22",
+        "height": 6,
+        "leaves": 7,
+        "spread": 6,
+        "fruitCount": 2,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "bittermelon",
+      "name": "Khổ qua",
+      "seedName": "Hạt khổ qua",
+      "seedPrice": 30,
+      "sellPrice": 80,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#8fc44a",
+        "fruitDark": "#5f8a2c",
+        "height": 6,
+        "leaves": 7,
+        "spread": 6,
+        "fruitCount": 2,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "luffa",
+      "name": "Mướp",
+      "seedName": "Hạt mướp",
+      "seedPrice": 28,
+      "sellPrice": 74,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#6faa3c",
+        "fruitDark": "#3f7024",
+        "height": 6,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 2,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "gourd",
+      "name": "Bầu",
+      "seedName": "Hạt bầu",
+      "seedPrice": 32,
+      "sellPrice": 86,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#a8c47a",
+        "fruitDark": "#6f8a4a",
+        "height": 6,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    },
+    {
+      "id": "melon",
+      "name": "Dưa lưới",
+      "seedName": "Hạt dưa lưới",
+      "seedPrice": 64,
+      "sellPrice": 180,
+      "growthDays": [
+        2,
+        2,
+        3,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 1,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#d8c98f",
+        "fruitDark": "#a89660",
+        "height": 7,
+        "leaves": 8,
+        "spread": 7,
+        "fruitCount": 1,
+        "fruitSize": 8
+      }
+    },
+    {
+      "id": "zucchini",
+      "name": "Bí ngòi",
+      "seedName": "Hạt bí ngòi",
+      "seedPrice": 26,
+      "sellPrice": 70,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "vine",
+        "stem": "#4a7a2c",
+        "leaf": "#6fae4a",
+        "leafDark": "#3c6326",
+        "fruit": "#3f7a2c",
+        "fruitDark": "#28541c",
+        "height": 6,
+        "leaves": 7,
+        "spread": 6,
+        "fruitCount": 2,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "corn",
+      "name": "Ngô",
+      "seedName": "Hạt ngô",
+      "seedPrice": 36,
+      "sellPrice": 96,
+      "growthDays": [
+        2,
+        2,
+        2,
+        1
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "stalk",
+        "stem": "#5f8a34",
+        "leaf": "#8fbf4a",
+        "leafDark": "#4a6f28",
+        "fruit": "#f2c44a",
+        "fruitDark": "#b8902a",
+        "height": 13,
+        "leaves": 8,
+        "spread": 5,
+        "fruitCount": 2,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "sugarcane",
+      "name": "Mía",
+      "seedName": "Hom mía",
+      "seedPrice": 48,
+      "sellPrice": 132,
+      "growthDays": [
+        3,
+        3,
+        3
+      ],
+      "regrowDays": 4,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "stalk",
+        "stem": "#8fae5c",
+        "leaf": "#a8c46f",
+        "leafDark": "#6f8a40",
+        "fruit": "#c9d88f",
+        "fruitDark": "#96a860",
+        "height": 15,
+        "leaves": 8,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "okra",
+      "name": "Đậu bắp",
+      "seedName": "Hạt đậu bắp",
+      "seedPrice": 30,
+      "sellPrice": 80,
+      "growthDays": [
+        2,
+        1,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "stalk",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#7ab33f",
+        "fruitDark": "#4f7f26",
+        "height": 11,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 2,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "eggplant",
+      "name": "Cà tím",
+      "seedName": "Hạt cà tím",
+      "seedPrice": 34,
+      "sellPrice": 92,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "stalk",
+        "stem": "#4a6b34",
+        "leaf": "#6f9e4a",
+        "leafDark": "#3c5a2c",
+        "fruit": "#7a3f96",
+        "fruitDark": "#4d2263",
+        "height": 11,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 2,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "chili",
+      "name": "Ớt",
+      "seedName": "Hạt ớt",
+      "seedPrice": 22,
+      "sellPrice": 60,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "stalk",
+        "stem": "#3f6b2c",
+        "leaf": "#5f9e42",
+        "leafDark": "#345a26",
+        "fruit": "#e03020",
+        "fruitDark": "#96180f",
+        "height": 10,
+        "leaves": 7,
+        "spread": 4,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "bellpepper",
+      "name": "Ớt chuông",
+      "seedName": "Hạt ớt chuông",
+      "seedPrice": 38,
+      "sellPrice": 100,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "stalk",
+        "stem": "#3f6b2c",
+        "leaf": "#5f9e42",
+        "leafDark": "#345a26",
+        "fruit": "#e8a020",
+        "fruitDark": "#a86a0d",
+        "height": 11,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 2,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "rice",
+      "name": "Lúa",
+      "seedName": "Thóc giống",
+      "seedPrice": 26,
+      "sellPrice": 70,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "grain",
+        "stem": "#6f9e3f",
+        "leaf": "#8fc44f",
+        "leafDark": "#557f2c",
+        "fruit": "#e8d26a",
+        "fruitDark": "#b39a34",
+        "height": 11,
+        "leaves": 9,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "wheat",
+      "name": "Lúa mì",
+      "seedName": "Hạt lúa mì",
+      "seedPrice": 28,
+      "sellPrice": 76,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "grain",
+        "stem": "#a8b35c",
+        "leaf": "#c4c96f",
+        "leafDark": "#7f8a3c",
+        "fruit": "#e8d288",
+        "fruitDark": "#b39a4a",
+        "height": 12,
+        "leaves": 9,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "barley",
+      "name": "Lúa mạch",
+      "seedName": "Hạt lúa mạch",
+      "seedPrice": 30,
+      "sellPrice": 82,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "grain",
+        "stem": "#9caf5c",
+        "leaf": "#bcc46f",
+        "leafDark": "#76853c",
+        "fruit": "#dcc878",
+        "fruitDark": "#a89040",
+        "height": 12,
+        "leaves": 9,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "sesame",
+      "name": "Vừng",
+      "seedName": "Hạt vừng",
+      "seedPrice": 34,
+      "sellPrice": 90,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "grain",
+        "stem": "#6f8a4a",
+        "leaf": "#8fae5c",
+        "leafDark": "#546b34",
+        "fruit": "#e8e0c4",
+        "fruitDark": "#b8ac8a",
+        "height": 10,
+        "leaves": 8,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "soybean",
+      "name": "Đậu nành",
+      "seedName": "Hạt đậu nành",
+      "seedPrice": 32,
+      "sellPrice": 86,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 2,
+      "yieldMax": 3,
+      "art": {
+        "form": "grain",
+        "stem": "#5f8a3f",
+        "leaf": "#7fae4f",
+        "leafDark": "#48682c",
+        "fruit": "#d8c98a",
+        "fruitDark": "#a89660",
+        "height": 10,
+        "leaves": 9,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 2
+      }
+    },
+    {
+      "id": "greenbean",
+      "name": "Đậu que",
+      "seedName": "Hạt đậu que",
+      "seedPrice": 24,
+      "sellPrice": 64,
+      "growthDays": [
+        1,
+        2,
+        1
+      ],
+      "regrowDays": 2,
+      "yieldMin": 2,
+      "yieldMax": 3,
+      "art": {
+        "form": "bush",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#5fa83c",
+        "fruitDark": "#3a7024",
+        "height": 7,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "pea",
+      "name": "Đậu Hà Lan",
+      "seedName": "Hạt đậu Hà Lan",
+      "seedPrice": 26,
+      "sellPrice": 70,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 2,
+      "yieldMin": 2,
+      "yieldMax": 3,
+      "art": {
+        "form": "bush",
+        "stem": "#5f9e42",
+        "leaf": "#8fc45f",
+        "leafDark": "#48762c",
+        "fruit": "#8fd05a",
+        "fruitDark": "#5f9636",
+        "height": 7,
+        "leaves": 7,
+        "spread": 5,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "strawberry",
+      "name": "Dâu tây",
+      "seedName": "Cây con dâu tây",
+      "seedPrice": 56,
+      "sellPrice": 150,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 2,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "bush",
+        "stem": "#3f7a34",
+        "leaf": "#5fa844",
+        "leafDark": "#31582a",
+        "fruit": "#e03a4a",
+        "fruitDark": "#96182c",
+        "height": 6,
+        "leaves": 8,
+        "spread": 6,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "blueberry",
+      "name": "Việt quất",
+      "seedName": "Cây con việt quất",
+      "seedPrice": 62,
+      "sellPrice": 168,
+      "growthDays": [
+        2,
+        2,
+        3
+      ],
+      "regrowDays": 3,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "bush",
+        "stem": "#3f6b3a",
+        "leaf": "#5f9e50",
+        "leafDark": "#2f5230",
+        "fruit": "#4a5fae",
+        "fruitDark": "#2c3a7a",
+        "height": 7,
+        "leaves": 8,
+        "spread": 6,
+        "fruitCount": 4,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "coffee",
+      "name": "Cà phê",
+      "seedName": "Cây con cà phê",
+      "seedPrice": 120,
+      "sellPrice": 320,
+      "growthDays": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "regrowDays": 5,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "bush",
+        "stem": "#3c5f34",
+        "leaf": "#548a44",
+        "leafDark": "#2c4728",
+        "fruit": "#c43020",
+        "fruitDark": "#8a1810",
+        "height": 8,
+        "leaves": 9,
+        "spread": 7,
+        "fruitCount": 4,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "tea",
+      "name": "Trà xanh",
+      "seedName": "Cây con trà",
+      "seedPrice": 110,
+      "sellPrice": 290,
+      "growthDays": [
+        3,
+        3,
+        3,
+        3
+      ],
+      "regrowDays": 5,
+      "yieldMin": 2,
+      "yieldMax": 4,
+      "art": {
+        "form": "bush",
+        "stem": "#3c6b34",
+        "leaf": "#548a44",
+        "leafDark": "#2c5228",
+        "fruit": "#8fc45f",
+        "fruitDark": "#5f9636",
+        "height": 8,
+        "leaves": 9,
+        "spread": 7,
+        "fruitCount": 3,
+        "fruitSize": 3
+      }
+    },
+    {
+      "id": "sunflower",
+      "name": "Hướng dương",
+      "seedName": "Hạt hướng dương",
+      "seedPrice": 44,
+      "sellPrice": 120,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": null,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "flower",
+        "stem": "#5f8a34",
+        "leaf": "#8fbf4a",
+        "leafDark": "#4a6f28",
+        "fruit": "#f2c42a",
+        "fruitDark": "#b3901a",
+        "height": 14,
+        "leaves": 5,
+        "spread": 5,
+        "fruitCount": 1,
+        "fruitSize": 7
+      }
+    },
+    {
+      "id": "marigold",
+      "name": "Cúc vạn thọ",
+      "seedName": "Hạt cúc vạn thọ",
+      "seedPrice": 30,
+      "sellPrice": 80,
+      "growthDays": [
+        1,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "flower",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#f0921a",
+        "fruitDark": "#b3600d",
+        "height": 9,
+        "leaves": 5,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "chrysanthemum",
+      "name": "Hoa cúc",
+      "seedName": "Hạt hoa cúc",
+      "seedPrice": 36,
+      "sellPrice": 96,
+      "growthDays": [
+        2,
+        2,
+        2
+      ],
+      "regrowDays": 3,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "flower",
+        "stem": "#4a7a34",
+        "leaf": "#6fae4c",
+        "leafDark": "#3c6329",
+        "fruit": "#f2e04a",
+        "fruitDark": "#b8a41a",
+        "height": 10,
+        "leaves": 5,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 5
+      }
+    },
+    {
+      "id": "lavender",
+      "name": "Oải hương",
+      "seedName": "Cây con oải hương",
+      "seedPrice": 78,
+      "sellPrice": 206,
+      "growthDays": [
+        3,
+        2,
+        3
+      ],
+      "regrowDays": 4,
+      "yieldMin": 1,
+      "yieldMax": 3,
+      "art": {
+        "form": "flower",
+        "stem": "#6f8a5c",
+        "leaf": "#8faf72",
+        "leafDark": "#546b40",
+        "fruit": "#8a6ac4",
+        "fruitDark": "#5a3f96",
+        "height": 12,
+        "leaves": 5,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 4
+      }
+    },
+    {
+      "id": "rose",
+      "name": "Hoa hồng",
+      "seedName": "Cây con hoa hồng",
+      "seedPrice": 96,
+      "sellPrice": 258,
+      "growthDays": [
+        3,
+        3,
+        3
+      ],
+      "regrowDays": 4,
+      "yieldMin": 1,
+      "yieldMax": 2,
+      "art": {
+        "form": "flower",
+        "stem": "#3f6b34",
+        "leaf": "#5f9e4a",
+        "leafDark": "#2f5228",
+        "fruit": "#e0304a",
+        "fruitDark": "#961830",
+        "height": 11,
+        "leaves": 5,
+        "spread": 4,
+        "fruitCount": 1,
+        "fruitSize": 5
       }
     }
   ]
