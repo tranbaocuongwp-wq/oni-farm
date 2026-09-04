@@ -2011,3 +2011,168 @@ button.ico-btn .bi {
   height: 16px;
   flex: none;
 }
+
+/* ==========================================================================
+   TAY CẦM — vòng tiêu điểm phải NHÌN THẤY được.
+
+   Trình duyệt chỉ vẽ `:focus-visible` khi tiêu điểm đến từ BÀN PHÍM. Tay cầm
+   gọi `el.focus()` bằng script nên không tính, và người chơi gạt cần gạt mà
+   không thấy gì di chuyển. Nên vẽ vòng cho cả `:focus` thường trong menu.
+   ========================================================================== */
+.sheet button:focus,
+.modal button:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: -3px;
+}
+/* Chuột thì không cần vòng: bấm xong nút vẫn giữ tiêu điểm và vòng vàng đứng
+   lại đó trông như bị kẹt. Chỉ giữ vòng khi tiêu điểm đến từ bàn phím/tay cầm. */
+body.pointer-focus .sheet button:focus:not(:focus-visible),
+body.pointer-focus .modal button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Bảng phím tắt tay cầm trong màn Hướng dẫn */
+.pad-map {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 8px 0 0;
+  font-size: var(--fs-sm);
+}
+.pad-map b {
+  color: var(--gold);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.pad-map span {
+  color: var(--ink-dim);
+}
+
+/* ==========================================================================
+   MENU DẠNG Ô VUÔNG — icon trên, chữ dưới.
+
+   Menu tạm dừng có mười mục. Xếp thành nút một hàng thì cao bảy hàng, tràn quá
+   một màn hình điện thoại, và "Chơi mới" — nút nguy hiểm nhất — lại phải cuộn
+   mới thấy. Ô vuông ba cột gói cả menu trong bốn hàng.
+
+   `auto-fit` + `minmax` chứ không phải `repeat(3, …)`: màn hình cực nhỏ
+   (≤320px) ra hai cột, tablet ngang ra năm — không cần một điểm ngắt nào.
+   ========================================================================== */
+.menu-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+.menu-tiles .tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 68px;
+  padding: 9px 4px;
+  line-height: 1.15;
+  text-align: center;
+  font-size: calc(var(--fs-sm) * 0.94);
+}
+.menu-tiles .tile .bi {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 22px;
+  height: 22px;
+}
+
+/* ==========================================================================
+   CHẾ ĐỘ TAY CẦM — `body[data-input="pad"]`.
+
+   Cầm tay cầm rồi thì joystick ảo và ba nút tròn góc dưới chỉ còn là thứ che
+   mất nông trại. Giấu chúng đi trả lại gần một phần tư màn hình trên máy dọc.
+   ========================================================================== */
+body[data-input="pad"] #stick,
+body[data-input="pad"] #abtn .btns,
+body[data-input="pad"] #linebtn {
+  display: none;
+}
+body[data-input="pad"] #abtn {
+  /* Vẫn giữ khung để dòng "vì sao không làm được" còn chỗ hiện. */
+  pointer-events: none;
+}
+
+/* Nhắc xoay ngang: nền vàng nhạt để tách khỏi ghi chú thường. */
+.sub.warn {
+  color: var(--gold);
+  border-left: 3px solid var(--gold-dark);
+  padding-left: 8px;
+}
+
+/* Dải ngữ cảnh của CHẾ ĐỘ TAY CẦM: thay cho ba nút tròn bị giấu đi. Nó phải
+   nói đủ hai điều mà nút vẫn nói — bấm A thì làm gì, và vì sao chưa làm được. */
+.padctx {
+  display: none;
+}
+body[data-input="pad"] .padctx {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + 8px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 460px);
+  padding: 5px 12px 5px 6px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: var(--fs-sm);
+  pointer-events: none;
+}
+body[data-input="pad"] .padctx.off {
+  opacity: 0.4;
+}
+.padctx b {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-dark);
+  border: 1px solid #5c9b40;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+.padctx span {
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.padctx i {
+  color: var(--ink-mute);
+  font-style: normal;
+  font-size: 0.9em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bảng vật nuôi: nhãn cột trái là ICON. Thẻ rộng chưa tới 170px trên điện
+   thoại, mà chữ "Tuổi" / "Sữa bò" chiếm gần nửa bề ngang chỉ để nói một thứ
+   mà một hình 12px nói xong. */
+.animal-card .row .ri {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+}
+.animal-card .row .ri canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 14px;
+  height: auto;
+}

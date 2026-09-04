@@ -2278,7 +2278,7 @@ test("42. mưa: sáng ra ô đã cày NGOÀI TRỜI ướt, trong nhà không; n
      MƯA, không kiểm cỏ dại — mà luật hoang trở lại có xác suất 10% mỗi đêm, nên
      chỉ cần đổi bản đồ một chút (chuỗi seed dịch đi) là một ô nào đó hoang lại
      và test đỏ vì một lý do chẳng liên quan. */
-  const kho = contentWith((r) => { r.balance.tilledDecayChance = 0; });
+  const kho = contentWith((r) => { r.balance.tilledIdleDays = 0; });
   const store = createStore(createNewGame(kho, 7), kho, { validate: true, strict: true });
   walkTo(store, HOME.x, HOME.y);
   selectItem(store, "tool:hoe");
@@ -3456,6 +3456,44 @@ test("62. con vật ĐỨNG LẠI khi người chơi tới gần, đi xa thì đ
   }
   ok(dichuyen, "người chơi đi xa thì con bò lang thang trở lại");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến vẫn sạch");
+});
+
+
+test("63. luống bỏ không đủ ngày thì MỌC CỎ và trở lại địa hình ban đầu", () => {
+  const content = loadContent();
+  const ngay = content.balance.tilledIdleDays;
+  ok(ngay > 0, `content khai tilledIdleDays = ${ngay}`);
+
+  const store = mkStore(931);
+  walkTo(store, HOME.x, HOME.y);
+  const p = store.getState().player;
+  const px = Math.floor(p.x / TILE);
+  const py = Math.floor(p.y / TILE);
+  // Hai ô cày sẵn: một BỎ KHÔNG, một có cây — chỉ ô bỏ không được mọc cỏ lại.
+  const boKhong = idx(store.getState().w, px + 3, py);
+  const coCay = idx(store.getState().w, px + 4, py);
+  setState(store, (s) => {
+    for (const i of [boKhong, coCay]) {
+      const t = s.tiles[i];
+      t.prop = null; t.b = null; t.crop = null; t.g = "grass";
+      t.tilled = true; t.wet = false; t.hp = 0;
+      delete t.idle;
+    }
+    s.tiles[coCay].crop = { id: "lettuce", stage: 0, grow: 0, regrown: false };
+  });
+
+  // Chưa đủ ngày thì luống VẪN CÒN — đây mới là phần khiến nó là hạn chót chứ
+  // không phải xúc xắc: bỏ hai đêm mà mất luống thì không ai học được luật nào.
+  for (let i = 0; i < ngay - 1; i++) sleep(store);
+  ok(store.getState().tiles[boKhong].tilled, `sau ${ngay - 1} đêm luống vẫn còn`);
+
+  sleep(store);
+  const t = store.getState().tiles[boKhong];
+  ok(!t.tilled, `bỏ đủ ${ngay} đêm thì hết luống`);
+  ok(!t.wet, "và ô khô hẳn");
+  eq(t.prop, "grass_short", "mọc cỏ lại — mất mát phải NHÌN THẤY được");
+  ok(store.getState().tiles[coCay].tilled, "ô đang có cây thì không bị đụng tới");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi luống hoang");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

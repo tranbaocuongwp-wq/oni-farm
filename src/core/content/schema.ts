@@ -694,6 +694,8 @@ export function validateBalance(raw: unknown): string[] {
     ["diseaseNeighbourMul", 0, 1000],
     ["sickYieldMul", 0, 1],
     ["noonDryMinutes", 0, 2880],
+    // 0 = tắt hẳn (luống không bao giờ mọc cỏ lại)
+    ["tilledIdleDays", 0, 999],
   ] as [string, number, number][])
     if (raw[k] !== undefined) c.num(raw, k, min, max);
 

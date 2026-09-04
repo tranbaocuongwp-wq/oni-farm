@@ -253,7 +253,7 @@ Lúc ngủ, phần ban ngày **còn lại** của hôm đó vẫn được cộn
 sớm bị phạt mất tiến độ, mà người chơi chẳng có cách nào đoán ra.
 
 Cỏ dại lan sang ô cỏ trống kề bên mỗi đêm (`grassSpreadChance`), còn ô đã cày mà bỏ không thì
-dần trở lại thành cỏ (`tilledDecayChance`) — bỏ bê là ruộng hoang.
+bỏ không đủ `tilledIdleDays` đêm thì MỌC CỎ và trở lại địa hình ban đầu — bỏ bê là ruộng hoang.
 
 ### Bảng gỡ lỗi
 

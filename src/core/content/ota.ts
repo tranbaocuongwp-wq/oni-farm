@@ -201,7 +201,17 @@ export async function revertToBundled(): Promise<void> {
 }
 
 /** Có pack OTA đang chờ áp dụng không (để hiện nút "Khởi động lại để cập nhật"). */
-export async function pendingContentVersion(): Promise<string | null> {
+export async function pendingContentVersion(runningVersion: string): Promise<string | null> {
   const cached = await kvGetContent<CachedPack>(KEY_PACK);
-  return cached?.contentVersion ?? null;
+  const v = cached?.contentVersion;
+  /* "Đang chờ" nghĩa là ĐÃ TẢI VỀ MÀ CHƯA CHẠY — tức bản trong cache phải MỚI
+     HƠN bản đang chạy.
+
+     Bản trước trả thẳng phiên bản trong cache, không so với gì cả. Nhưng ngay
+     sau lần khởi động kế tiếp thì chính cái pack đó TRỞ THÀNH bản đang chạy —
+     và hàm này vẫn trả về nó. Kết quả: menu báo "có nội dung 1.13.0 đang chờ,
+     tải lại trang để áp dụng" vĩnh viễn, tải lại bao nhiêu lần cũng thế, vì
+     không có gì để áp dụng cả. Người chơi mất niềm tin vào cái thông báo đó,
+     rồi bỏ qua luôn cái thông báo thật. */
+  return v && isNewer(v, runningVersion) ? v : null;
 }

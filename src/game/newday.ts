@@ -35,7 +35,7 @@ import {
   touch,
 } from "./state.ts";
 import { harvestTileIn } from "./actions.ts";
-import { TILE, blockedAtBox, idx, playerOverlapsTile, propDef, weedProp } from "./world.ts";
+import { TILE, blockedAtBox, idx, playerOverlapsTile, propDef, weedProp, youngGrassProp } from "./world.ts";
 import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
@@ -113,7 +113,8 @@ export function growCrops(d: Draft, content: Content, minutes: number): void {
 /**
  * Một đêm trôi qua trên mặt đất của MỘT bản đồ:
  *   · ô cỏ TRỐNG kề một ô có `decor: "tuft"` thì có `grassSpreadChance` mọc cỏ dại;
- *   · ô đã cày mà BỎ KHÔNG thì có `tilledDecayChance` trở lại thành cỏ.
+ *   · ô đã cày mà BỎ KHÔNG đủ `tilledIdleDays` đêm thì MỌC CỎ và trở lại
+ *     địa hình ban đầu.
  *
  * Ngẫu nhiên rút từ `state.seed` nên tái lập được. Ô người chơi đang đứng đè
  * lên thì không mọc gì — không ai bị nhốt trong bụi cỏ lúc đang ngủ (chỉ có
@@ -122,8 +123,10 @@ export function growCrops(d: Draft, content: Content, minutes: number): void {
 function nightGround(d: Draft, content: Content, v: MapView, growMul: number): void {
   const bal = content.balance;
   const spreadChance = Number.isFinite(bal.grassSpreadChance) ? bal.grassSpreadChance : 0;
-  const decayChance = Number.isFinite(bal.tilledDecayChance) ? bal.tilledDecayChance : 0;
+  const idleDays = Number.isFinite(bal.tilledIdleDays) ? Math.floor(bal.tilledIdleDays) : 0;
   const weed = weedProp(content);
+  // Luống hoang mọc CỎ NON, không mọc bụi rậm — xem `youngGrassProp`.
+  const coNon = youngGrassProp(content);
   const w = v.w;
   const h = v.h;
   const gm = Math.max(0, growMul);
@@ -200,20 +203,41 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
     const x = i % w;
     const y = (i - x) / w;
 
-    // đất cày bỏ không → cỏ mọc lại
+    /* Đất cày BỎ KHÔNG → mọc cỏ, trở lại địa hình ban đầu.
+
+       Đếm ngược chứ không tung xúc xắc mỗi đêm. Xác suất thì người chơi không
+       bao giờ học được luật: có luống mất sau một đêm, có luống trụ mười đêm,
+       và cả hai đều trông như bị phạt vô cớ. Đếm ngược thì "bỏ ba ngày là mất
+       luống" là một câu nói được, nhớ được và tính trước được — nó thành một
+       hạn chót thật chứ không phải một cái bẫy. */
     if (t.tilled && !t.crop && t.b === null) {
-      if (decayChance > 0) {
-        const r = nextRandom(d.s.seed);
-        touch(d).seed = r.seed;
-        if (r.v < decayChance) {
-          const m = v.edit(i);
-          if (m) {
-            m.tilled = false;
-            m.wet = false;
-          }
+      if (idleDays > 0) {
+        const bo = (Number.isFinite(t.idle) ? (t.idle as number) : 0) + 1;
+        const m = v.edit(i);
+        if (!m) continue;
+        if (bo < idleDays) {
+          m.idle = bo;
+          continue;
+        }
+        m.tilled = false;
+        m.wet = false;
+        delete m.idle;
+        // …và MỌC CỎ. Không có bước này thì luống chỉ "phẳng lại" — người chơi
+        // đi qua không nhận ra mình vừa mất gì, mà mất mát không nhìn thấy thì
+        // không dạy được ai điều gì.
+        if (coNon && t.g === "grass" && t.prop === null && !(v.active && playerOverlapsTile(d.s, x, y))) {
+          m.prop = coNon.id;
+          m.hp = Math.max(0, Math.floor(coNon.hits ?? 0));
         }
       }
       continue;
+    }
+
+    // Luống có cây / có công trình thì đồng hồ bỏ hoang phải về 0: chăm một
+    // hôm rồi bỏ tiếp thì được tính lại từ đầu, không cộng dồn ngầm.
+    if (t.tilled && t.idle !== undefined) {
+      const m = v.edit(i);
+      if (m) delete m.idle;
     }
 
     // cỏ dại lan sang ô cỏ trống bên cạnh

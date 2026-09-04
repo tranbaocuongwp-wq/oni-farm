@@ -31,7 +31,7 @@
   "growthMinutesPerDay": 700,
   "daylightEndMinutes": 1140,
   "grassSpreadChance": 0.1,
-  "tilledDecayChance": 0.1,
+  "tilledIdleDays": 3,
   "startWater": 24,
   "diseaseChance": 0.02,
   "diseaseNeighbourMul": 3,

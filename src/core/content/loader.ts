@@ -321,6 +321,8 @@ const BALANCE_DEFAULTS = {
   diseaseNeighbourMul: 3,
   sickYieldMul: 0.5,
   noonDryMinutes: 780,
+  // core 1.7 — luống bỏ không mấy đêm thì mọc cỏ lại
+  tilledIdleDays: 3,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */

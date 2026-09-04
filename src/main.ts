@@ -47,6 +47,7 @@ import { createMenus } from "./ui/menus.ts";
 import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
 import { createDevPanel } from "./ui/devpanel.ts";
+import { padButtonName } from "./core/gamepad.ts";
 import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
@@ -146,6 +147,10 @@ async function boot() {
   };
 
   let pendingVersion: string | null = null;
+  /** Đã nhận tay cầm ở khung trước chưa — để chỉ báo MỘT lần lúc vừa cắm. */
+  let padOn = false;
+  /** Đã xem sơ đồ nút tay cầm trên máy này chưa. */
+  const PAD_SEEN = "oni-farm:pad-help-seen";
 
   /* ---- 1. content: pack OTA đã cache, nếu không thì pack đóng kèm ---- */
   let content: Content;
@@ -303,6 +308,7 @@ async function boot() {
     assign: (id, job) => store.dispatch({ t: "ASSIGN", id, job }),
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
+    padInfo: () => input.padInfo(),
     buildMode: () => buildUI.open(),
 
     /* Hỏi HAI thứ trong một lần bấm, vì người chơi chỉ biết một khái niệm
@@ -652,6 +658,15 @@ async function boot() {
   /** Ô cuối đang rê tới — trên điện thoại con trỏ chuột không tồn tại, nên
    *  đường xem trước phải bám vào ĐÂY chứ không bám `cursor`. */
   let lineTo: { x: number; y: number } | null = null;
+  /**
+   * Con trỏ Ô của TAY CẦM trong chế độ xây dựng.
+   *
+   * Tay cầm không có chuột, mà cả chế độ xây dựng dựng trên việc "trỏ vào ô rồi
+   * rê". Nên phải có một con trỏ ảo: cần gạt rê nó đi, A đặt đầu đoạn, A lần
+   * nữa là xây, B thoát. Không có nó thì chế độ xây dựng — thứ DUY NHẤT đặt
+   * được công trình — hoàn toàn không với tới được bằng tay cầm.
+   */
+  let padCursor: { x: number; y: number } | null = null;
 
 
 
@@ -944,10 +959,62 @@ async function boot() {
     return tryAnimal(s, tx, ty) || tryInteract(s, tx, ty) || tryUse(s, tx, ty);
   }
 
+  /* Vòng tiêu điểm vàng chỉ có nghĩa khi tiêu điểm do BÀN PHÍM hoặc TAY CẦM
+     đặt. Bấm chuột xong mà nút vẫn đeo vòng vàng thì trông như bị kẹt. */
+  document.addEventListener("pointerdown", () => document.body.classList.add("pointer-focus"), true);
+  document.addEventListener("keydown", () => document.body.classList.remove("pointer-focus"), true);
+
   const deny = () => {
     play("deny");
     buzz("deny");
   };
+
+  /**
+   * Chuyển tiêu điểm sang phần tử bấm được GẦN NHẤT theo hướng (dx,dy).
+   *
+   * Chọn theo hình học thay vì theo thứ tự DOM vì menu xếp LƯỚI: đi theo thứ
+   * tự DOM thì gạt sang phải ở nút cuối hàng lại nhảy xuống đầu hàng dưới —
+   * đúng nhưng không phải thứ mắt đang nhìn thấy.
+   *
+   * Chấm điểm = khoảng cách dọc theo hướng + phần lệch NGANG nhân bốn. Nhân
+   * bốn để một nút thẳng hàng ở xa vẫn thắng một nút lệch hàng ở gần; không có
+   * hệ số đó thì gạt xuống trong lưới hai cột hay nhảy chéo sang cột kia.
+   */
+  function moveFocus(dx: number, dy: number): void {
+    const root = document.querySelector<HTMLElement>(".sheet, .modal");
+    if (!root) return;
+    const all = [...root.querySelectorAll<HTMLElement>("button:not([disabled]), [tabindex='0']")].filter(
+      (el) => el.offsetParent !== null,
+    );
+    if (!all.length) return;
+
+    const cur = document.activeElement as HTMLElement | null;
+    if (!cur || !root.contains(cur)) {
+      all[0]!.focus();
+      return;
+    }
+    const a = cur.getBoundingClientRect();
+    const ax = a.left + a.width / 2;
+    const ay = a.top + a.height / 2;
+
+    let best: HTMLElement | null = null;
+    let bestScore = Infinity;
+    for (const el of all) {
+      if (el === cur) continue;
+      const b = el.getBoundingClientRect();
+      const bx = b.left + b.width / 2;
+      const by = b.top + b.height / 2;
+      const doc = (bx - ax) * dx + (by - ay) * dy; // đi tới bao xa theo hướng
+      if (doc <= 2) continue; // ở phía sau hoặc ngang hàng: bỏ qua
+      const lech = Math.abs((bx - ax) * dy) + Math.abs((by - ay) * dx);
+      const score = doc + lech * 4;
+      if (score < bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+    (best ?? all[0]!).focus();
+  }
 
   const vpTiles = () => ({
     w: camera.viewport.viewW / TILE,
@@ -962,6 +1029,42 @@ async function boot() {
   let heldFor = 0;
   const loop = createLoop((dt) => {
     elapsed += dt;
+    // Tay cầm là hệ HỎI VÒNG, không phát sự kiện — phải đọc đúng một lần mỗi
+    // khung hình, TRƯỚC khi ai đó hỏi `axis()` hay `drain()`.
+    input.poll(performance.now());
+
+    /* ---- TỰ NHẬN TAY CẦM -------------------------------------------------
+       `body[data-input="pad"]` để CSS giấu joystick ảo và các nút chạm: cầm tay
+       cầm rồi thì mấy thứ đó chỉ che mất nông trại.
+
+       Vì sao phải POLL chứ không chỉ nghe sự kiện `gamepadconnected`: vì lý do
+       chống nhận diện, Chrome và Safari chỉ báo sự kiện đó SAU khi người chơi
+       bấm một nút. Cắm tay cầm rồi ngồi im thì không có sự kiện nào cả — nhưng
+       `poll()` mỗi khung hình thì thấy ngay lúc nút đầu tiên được bấm. */
+    const coPad = input.padConnected();
+    if (coPad !== padOn) {
+      padOn = coPad;
+      document.body.dataset["input"] = coPad ? "pad" : "";
+      if (coPad) {
+        const pi = input.padInfo();
+        hud.setPadKey(padButtonName(pi, 0));
+        const mo = pi.standard ? padButtonName(pi, 11) : padButtonName(pi, 0);
+        toasts.say(`Đã nhận tay cầm — bấm ${mo} để xem sơ đồ nút.`, "good");
+        buzz("success");
+        input.rumble(180);
+        // Bảng nút chỉ tự mở LẦN ĐẦU trên máy này. Mở lại mỗi lần cắm là phiền,
+        // mà không mở lần nào thì người chơi không bao giờ biết Y mở cửa hàng.
+        try {
+          if (!localStorage.getItem(PAD_SEEN)) {
+            localStorage.setItem(PAD_SEEN, "1");
+            if (!menus.isOpen() && !tutorial.isOpen()) menus.openPadHelp();
+          }
+        } catch {
+          /* localStorage bị chặn — thôi không mở tự động, không phải lỗi */
+        }
+      }
+    }
+
     const modal = menus.isOpen() || tutorial.isOpen();
     /* Chế độ xây dựng KHÔNG phải modal: người chơi vẫn đi lại được để ngắm chỗ
        xây, chỉ có ĐỒNG HỒ là đứng. Gộp nó vào `modal` thì nhân vật cứng đơ và
@@ -1095,6 +1198,34 @@ async function boot() {
           break;
         }
         case "use": {
+          /* Trong CHẾ ĐỘ XÂY DỰNG bằng tay cầm, A là "đặt mốc / chốt đoạn" —
+             hai lần bấm thay cho một cú ấn-rê-nhả của ngón tay. */
+          if (building && input.padConnected()) {
+            const cur = padCursor ?? {
+              x: Math.floor(s.player.x / TILE),
+              y: Math.floor(s.player.y / TILE),
+            };
+            padCursor = cur;
+            if (!lineFrom) {
+              lineFrom = { ...cur };
+              lineTo = { ...cur };
+            } else {
+              const bid = buildUI.picked();
+              if (bid)
+                store.dispatch({
+                  t: "BUILD_LINE",
+                  id: bid,
+                  x0: lineFrom.x,
+                  y0: lineFrom.y,
+                  x1: cur.x,
+                  y1: cur.y,
+                  far: true,
+                });
+              lineFrom = null;
+              lineTo = null;
+            }
+            break;
+          }
           if (modal) break;
           /* Cầm công trình mà bấm DÙNG thì MỞ CHẾ ĐỘ XÂY DỰNG, không đặt xuống
              ô đang ngắm. Một cú bấm, và người chơi rơi vào đúng chỗ để quy
@@ -1204,10 +1335,70 @@ async function boot() {
           break;
         }
 
+        /* ---- ĐIỀU HƯỚNG MENU BẰNG TAY CẦM ----------------------------
+           Menu là DOM, tay cầm không có con trỏ. Chọn phần tử kế tiếp theo
+           HÌNH HỌC chứ không theo thứ tự trong DOM: menu xếp lưới hai cột, mà
+           đi theo thứ tự DOM thì gạt sang phải lại nhảy xuống hàng dưới. */
+        case "navDir":
+          moveFocus(it.dx, it.dy);
+          break;
+
+        case "build":
+          if (!modal) buildUI.toggle();
+          break;
+
+        case "padHelp":
+          if (!modal) menus.openPadHelp();
+          break;
+
+        /* Rê con trỏ ô bằng cần gạt. Chỉ có nghĩa trong chế độ xây dựng —
+           ngoài đó thì cần gạt là để ĐI, và ngắm bám theo hướng mặt. */
+        case "padAim": {
+          if (!building) break;
+          const p0 = padCursor ?? {
+            x: Math.floor(s.player.x / TILE),
+            y: Math.floor(s.player.y / TILE),
+          };
+          padCursor = {
+            x: Math.max(0, Math.min(s.w - 1, p0.x + it.dx)),
+            y: Math.max(0, Math.min(s.h - 1, p0.y + it.dy)),
+          };
+          aimed = { ...padCursor };
+          // Đang vẽ dở thì đầu kia của đoạn bám theo con trỏ.
+          if (lineFrom) lineTo = { ...padCursor };
+          break;
+        }
+
+        case "navOk": {
+          const el = document.activeElement as HTMLElement | null;
+          if (el && el.closest(".sheet, .modal")) el.click();
+          else moveFocus(0, 1); // chưa có gì được chọn: chọn nút đầu tiên
+          break;
+        }
+
+        case "navBack":
+          if (tutorial.isOpen()) tutorial.close();
+          else if (menus.isOpen()) menus.close();
+          break;
+
         case "interact": {
+          if (building) {
+            // Đang vẽ dở thì B huỷ đoạn; không vẽ gì thì B thoát chế độ.
+            if (lineFrom) {
+              lineFrom = null;
+              lineTo = null;
+            } else buildUI.close();
+            break;
+          }
           if (modal) break;
           const c = targetTile(s, true);
           if (!c) break;
+          /* Ngắm vào con vật thì B vừa LÀM vừa MỞ BẢNG thông tin. Trên cảm ứng
+             người chơi chạm vào con vật để mở bảng; tay cầm không có cú chạm
+             nào, nên không nối vào đây thì bảng vật nuôi hoàn toàn không mở
+             được bằng tay cầm. */
+          const conVat = animalNear(s, c.x, c.y);
+          if (conVat && inReachOf(s, c.x, c.y)) cardAnimal = conVat.id;
           if (!actOnTile(s, c.x, c.y)) deny();
           break;
         }
@@ -1238,12 +1429,13 @@ async function boot() {
 
     /* Kéo tuyến CHỈ có trong chế độ xây dựng — mọi công trình đều đi qua đó. */
     const dragId = buildUI.isOpen() ? buildUI.picked() : null;
+    if (!buildUI.isOpen() && padCursor) padCursor = null;
     setLineMode(dragId !== null);
     buildUI.update(s, content);
 
     // Xem trước tuyến: từ ô ấn xuống tới ô đang rê tới.
     let lineCells: { x: number; y: number; ok: boolean }[] | null = null;
-    const dich = lineTo ?? cursor;
+    const dich = lineTo ?? padCursor ?? cursor;
     if (dragId && lineFrom && dich) {
       lineCells = linePath(lineFrom.x, lineFrom.y, dich.x, dich.y).map((c) => ({
         x: c.x,
@@ -1336,7 +1528,7 @@ async function boot() {
   for (const w of contentWarnings) toasts.say(w, "bad");
 
   /* ---- 11. OTA: hỏi thăm bản mới, chạy NGẦM, không chặn gì ---- */
-  pendingVersion = await pendingContentVersion();
+  pendingVersion = await pendingContentVersion(content.contentVersion);
   if (CONTENT_URL) {
     void checkForUpdate(content.contentVersion, { contentUrl: CONTENT_URL }).then((r) => {
       if (r.status === "ready") {

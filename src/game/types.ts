@@ -373,7 +373,15 @@ export interface Balance {
   /** Xác suất mỗi đêm một ô cỏ trống mọc thêm cỏ dại từ ô cỏ dại kề bên. */
   grassSpreadChance: number;
   /** Xác suất mỗi đêm một ô đã cày mà bỏ không sẽ trở lại thành cỏ. */
-  tilledDecayChance: number;
+  /**
+   * Bỏ không bao nhiêu ĐÊM thì luống đã cày mọc cỏ trở lại.
+   *
+   * Đếm ngược chứ không phải xác suất mỗi đêm: xác suất thì người chơi không
+   * bao giờ học được luật — có luống mất sau một đêm, có luống trụ mười đêm, và
+   * cả hai đều trông như ngẫu nhiên vô cớ. Đếm ngược thì "bỏ ba ngày là mất
+   * luống" là một câu nói được, nhớ được, và tính trước được.
+   */
+  tilledIdleDays: number;
   /** Lượng nước có sẵn trong bình lúc bắt đầu. */
   startWater: number;
 
@@ -603,6 +611,9 @@ export interface Tile {
   hp: number;
   /** Số "ngày lớn" vật thể đã tích (prop có `grow`). Vắng = 0. */
   age?: number;
+  /** Số đêm liên tiếp ô ĐÃ CÀY này bị bỏ không (không cây, không công trình).
+   *  Đủ `balance.tilledIdleDays` thì cỏ mọc lại và luống mất. Vắng = 0. */
+  idle?: number;
 }
 
 export type Dir = "down" | "up" | "left" | "right";

@@ -123,6 +123,32 @@ export function weedProp(content: Content): PropDef | null {
   return null;
 }
 
+/**
+ * CỎ NON mọc lại trên luống bỏ hoang.
+ *
+ * Không dùng `weedProp()` được: hàm đó tìm vật thể "phá là hết" nên nó trả về
+ * BỤI CÂY — một luống bỏ ba ngày mà mọc lên nguyên một bụi rậm thì vô lý, và
+ * người chơi phải chặt nó đi.
+ *
+ * Suy từ content chứ không viết cứng `"grass_short"`: đây là vật thể vừa MỌC
+ * TIẾP thành thứ khác (cỏ non lớn thành cỏ dày), vừa rụng ra thức ăn cho vật
+ * nuôi, vừa dọn được bằng tay. Ba điều kiện đó mô tả đúng "cỏ non" mà không cần
+ * biết nó tên gì — nên đổi tên hay thêm loại cỏ mới qua OTA vẫn chạy.
+ */
+export function youngGrassProp(content: Content): PropDef | null {
+  const feeds = new Set<string>();
+  for (const id of content.animalOrder) {
+    const f = content.animals[id]?.feed;
+    if (f) feeds.add(f);
+  }
+  for (const id of content.propOrder) {
+    const p = content.props[id];
+    if (!p?.grow || p.tool) continue;
+    if (p.drops?.some((dr) => feeds.has(dr.id))) return p;
+  }
+  return null;
+}
+
 /** Vật thể "cây gỗ nhỏ" (bảng gỡ lỗi rắc cây): cần rìu, cao một ô, phá là hết. */
 export function saplingProp(content: Content): PropDef | null {
   for (const id of content.propOrder) {

@@ -5,14 +5,21 @@
      · người chơi đang muốn đi hướng nào  (axis, vector đã chuẩn hoá)
      · người chơi vừa bấm cái gì          (hàng đợi edge)
 
-   Ba đường vào cùng đổ về một chỗ, nên không có nhánh logic riêng cho cảm ứng:
+   Bốn đường vào cùng đổ về một chỗ, nên không có nhánh logic riêng cho cảm ứng:
      bàn phím  → tập phím đang giữ  ─┐
      joystick  → vector analog      ─┼─▶ axis()
-     nút ảo    → phím giả           ─┘
+     nút ảo    → phím giả           ─┤
+     tay cầm   → cần gạt + D-pad    ─┘
+
+   Tay cầm khác ba đường kia ở một điểm: nó không phát sự kiện, phải HỎI VÒNG
+   mỗi khung hình (xem `core/gamepad.ts`). Nên `poll()` phải được gọi đúng một
+   lần mỗi khung, trước `axis()` và `drain()`.
 
    Toạ độ trỏ được trả về bằng WORLD PX, không phải pixel màn hình — phần còn
    lại của game không bao giờ phải nghĩ bằng đơn vị màn hình.
 ============================================================================ */
+
+import { PAD, createGamepad, type PadInfo } from "./gamepad.ts";
 
 export type Intent =
   | { t: "use" }
@@ -38,7 +45,20 @@ export type Intent =
      và đổ thêm một luồng ý định vào mỗi khung hình ngón tay di chuyển là cách
      nhanh nhất để làm hỏng nó lần nữa. */
   | { t: "drag"; wx: number; wy: number }
-  | { t: "dragEnd" };
+  | { t: "dragEnd" }
+  /* ---- điều hướng MENU bằng tay cầm ------------------------------------
+     Menu là DOM, mà tay cầm không có con trỏ. Ba ý định này để vòng lặp chính
+     tự chuyển tiêu điểm giữa các nút trong tấm sheet đang mở. */
+  | { t: "navDir"; dx: number; dy: number }
+  | { t: "navOk" }
+  | { t: "navBack" }
+  /** Mở chế độ xây dựng (tay cầm: L3). */
+  | { t: "build" }
+  /** Mở sơ đồ nút tay cầm (tay cầm: R3). */
+  | { t: "padHelp" }
+  /** Gạt hướng trên bản đồ khi KHÔNG ở trong menu — dùng để rê con trỏ ô
+   *  trong chế độ xây dựng, nơi tay cầm không có chuột để trỏ. */
+  | { t: "padAim"; dx: number; dy: number };
 
 export interface Input {
   /** hướng đi mong muốn, độ dài <= 1 */
@@ -60,6 +80,15 @@ export interface Input {
   /** Nút DÙNG (Space / nút ảo) đang được GIỮ. Vòng lặp chính dùng nó để tự
    *  chuyển sang ô kế tiếp trong tầm sau khi xong một nhát. */
   useHeld(): boolean;
+  /** Đọc tay cầm cho khung hình này. Gọi ĐÚNG MỘT LẦN, trước `axis()`/`drain()`. */
+  poll(nowMs: number): void;
+  /** Có tay cầm đang cắm không — HUD dùng để đổi gợi ý phím. */
+  padConnected(): boolean;
+  /** Tay cầm nào đang cắm và nó có gì — để hiện ĐÚNG tên nút, và để biết có
+   *  được phép gán các nút phụ hay không. */
+  padInfo(): PadInfo;
+  /** Rung tay cầm (nếu có). */
+  rumble(ms: number, strong?: number): void;
   detach(): void;
 }
 
@@ -93,6 +122,9 @@ export interface InputOptions {
 }
 
 export function createInput(target: HTMLElement, opts: InputOptions): Input {
+  const pad = createGamepad();
+  /** Trạng thái tay cầm của khung hình HIỆN TẠI. */
+  let padState = { connected: false, axis: { x: 0, y: 0 }, running: false, useHeld: false };
   const held = new Set<string>();
   const queue: Intent[] = [];
   let ptr: { x: number; y: number } | null = null;
@@ -329,6 +361,62 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   }
 
   return {
+    poll(nowMs) {
+      const st = pad.poll(nowMs);
+      padState = {
+        connected: st.connected,
+        axis: st.axis,
+        running: st.running,
+        // Giữ A (hoặc cò phải) = giữ nút DÙNG, nên "giữ để làm tiếp ô kế bên"
+        // chạy y hệt như giữ Space.
+        useHeld: st.held.has(PAD.A) || st.held.has(PAD.RT),
+      };
+      if (!st.connected) return;
+
+      const modal = opts.isModalOpen();
+
+      /* Trong MENU thì tay cầm điều khiển TIÊU ĐIỂM, không điều khiển nhân vật.
+         Không tách hai chế độ thì bấm A để chọn "Chơi mới" cũng đồng thời vung
+         cuốc xuống ô dưới chân. */
+      if (modal) {
+        if (st.navDir) push({ t: "navDir", dx: st.navDir.x, dy: st.navDir.y });
+        if (st.pressed.has(PAD.A)) push({ t: "navOk" });
+        if (st.pressed.has(PAD.B) || st.pressed.has(PAD.START)) push({ t: "navBack" });
+        return;
+      }
+
+      /* Sơ đồ nút — mọi thứ trong game phải với tới được bằng tay cầm, không có
+         chức năng nào chỉ mở được bằng chuột hay ngón tay.
+
+         Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó
+         rồi bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới.
+
+         ⚠️ CHỈ gán khi trình duyệt xác nhận "standard mapping". Không standard
+         thì chỉ số nút là thứ tự THÔ của phần cứng và mỗi hãng một kiểu — gán
+         bừa thì người chơi bấm nút phía trên lại ra mở balo, hoặc chẳng ra gì.
+         Lúc đó chỉ giữ hai nút mặt đầu tiên (gần như mọi tay cầm đều xếp nút
+         "xác nhận" và "huỷ" ở đó) cộng cần gạt, và nói thẳng trong sơ đồ nút. */
+      const std = pad.info().standard;
+      if (st.pressed.has(PAD.A) || (std && st.pressed.has(PAD.RT))) push({ t: "use" });
+      if (st.pressed.has(PAD.B)) push({ t: "interact" });
+      if (std) {
+        if (st.pressed.has(PAD.X)) push({ t: "auto" });
+        if (st.pressed.has(PAD.Y)) push({ t: "inventory" });
+        if (st.pressed.has(PAD.LB)) push({ t: "selectDelta", d: -1 });
+        if (st.pressed.has(PAD.RB)) push({ t: "selectDelta", d: 1 });
+        if (st.pressed.has(PAD.BACK)) push({ t: "map" });
+        if (st.pressed.has(PAD.START)) push({ t: "menu" });
+        if (st.pressed.has(PAD.L3)) push({ t: "build" });
+        if (st.pressed.has(PAD.R3)) push({ t: "padHelp" });
+      }
+      // Rê con trỏ Ô: chỉ có nghĩa trong chế độ xây dựng, nhưng phát vô điều
+      // kiện cho gọn — main.ts bỏ qua khi không cần.
+      if (st.navDir) push({ t: "padAim", dx: st.navDir.x, dy: st.navDir.y });
+    },
+    padConnected: () => padState.connected,
+    padInfo: () => pad.info(),
+    rumble: (ms, strong) => pad.rumble(ms, strong),
+
     setDrag(on) {
       dragOn = on;
       if (!on) dragId = null;
@@ -346,6 +434,12 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         x = stick.x;
         y = stick.y;
       }
+      // Tay cầm là đường vào CUỐI: bàn phím và joystick cảm ứng thắng, để cắm
+      // tay cầm rồi vẫn gõ WASD được mà không phải rút ra.
+      if (x === 0 && y === 0 && (padState.axis.x !== 0 || padState.axis.y !== 0)) {
+        x = padState.axis.x;
+        y = padState.axis.y;
+      }
       const len = Math.hypot(x, y);
       // chuẩn hoá để đi chéo không nhanh hơn đi thẳng
       return len > 1 ? { x: x / len, y: y / len } : { x, y };
@@ -360,7 +454,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       held.has("ShiftLeft") ||
       held.has("ShiftRight") ||
       Math.hypot(stick.x, stick.y) >= STICK_RUN,
-    useHeld: () => [...USE_KEYS].some((k) => held.has(k)),
+    useHeld: () => padState.useHeld || [...USE_KEYS].some((k) => held.has(k)),
     detach() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

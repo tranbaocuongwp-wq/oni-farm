@@ -26,12 +26,14 @@
 
 import type { Content, GameState } from "../game/types.ts";
 import { currentSeason, dayOfSeason } from "../game/season.ts";
-import type { Atlas } from "../art/atlas.ts";
+import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
 import type { AnimalStats } from "../game/animals.ts";
 
 export interface Hud {
   update(s: GameState, content: Content, hint: Hint | null): void;
+  /** Tên nút "dùng" của tay cầm đang cắm (A / ✕ / B…). Rỗng = không có tay cầm. */
+  setPadKey(name: string): void;
   /** hotbar bấm được bằng chuột/chạm */
   onSelect(fn: (slot: number) => void): void;
   /** nút balo cạnh hotbar */
@@ -145,6 +147,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <button type="button" id="bag-btn" class="bag-btn" aria-label="Mở balo"><i class="ic" data-ic="bag"></i><span class="n" id="bag-count"></span></button>
       </div>
     </div>
+    <div id="padctx" class="padctx"></div>
     <div id="tip" class="tip" hidden></div>
     <div id="day-banner" class="day-banner" hidden><b></b><span></span></div>`;
 
@@ -313,6 +316,10 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
      cập nhật mỗi khung hình, mà đặt lại `innerHTML` mỗi khung hình thì con trỏ
      chuột nhấp nháy và trình duyệt dựng lại DOM 60 lần một giây cho một thứ
      đứng yên. */
+  /** Tên nút "dùng" hiện trên dải ngữ cảnh. Đọc từ tay cầm thật, không đoán:
+   *  PlayStation là ✕, Nintendo là B, Xbox là A — cùng một chỉ số 0. */
+  let padKey = "A";
+
   const elAnimal = root.querySelector<HTMLElement>("#animal-card")!;
   let animalKey = "";
   let onClose: () => void = () => {};
@@ -327,6 +334,15 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   };
 
   return {
+    setPadKey(name) {
+      if (name && name !== padKey) {
+        padKey = name;
+        // Giá trị KHÔNG THỂ trùng với khoá thật. Đặt "" thì lúc đang mở menu
+        // (hint = null → khoá cũng là "") nó bằng nhau và dải không vẽ lại,
+        // nên đóng menu ra vẫn thấy tên nút của tay cầm cũ.
+        prev.hint = "\u0000";
+      }
+    },
     onAnimalClose(fn) {
       onClose = fn;
     },
@@ -343,32 +359,35 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       if (key === animalKey) return;
       animalKey = key;
 
+      /* Nhãn cột trái là ICON, không phải chữ.
+         Thẻ này rộng chưa tới 170px trên điện thoại, mà "Tuổi", "No", "Sữa bò"
+         chiếm gần nửa bề ngang chỉ để nói một thứ mà một hình 12px nói xong.
+         Icon lấy từ atlas — cùng bộ với HUD, nên người chơi đã biết nghĩa. */
       const rows: string[] = [];
+      const row = (ic: UiIcon, val: string, cls = "") =>
+        `<div class="row"><i class="ri" data-ic="${ic}"></i><b class="${cls}">${val}</b></div>`;
+
       rows.push(
-        st.mature
-          ? `<div class="row"><span>Tuổi</span><b>${st.ageDays}n · đã lớn</b></div>`
-          : `<div class="row"><span>Tuổi</span><b>${st.ageDays}n · lớn sau ${st.daysToMature}n</b></div>`,
+        row("day", st.mature ? `${st.ageDays}n · lớn` : `${st.ageDays}n · lớn sau ${st.daysToMature}n`),
       );
-      const doi = st.hungry
-        ? st.daysToStarve < 0
-          ? "đang kiếm ăn"
-          : `ĐÓI · chết sau ${st.daysToStarve} ngày`
-        : `${Math.round(st.fed * 100)}%`;
       rows.push(
-        `<div class="row"><span>No</span><b class="${st.hungry && st.daysToStarve >= 0 ? "bad" : ""}">${doi}</b></div>` +
-          `<div class="bar"><i style="width:${Math.round(st.fed * 100)}%"></i></div>`,
+        row(
+          "energy",
+          st.hungry ? `ĐÓI · chết sau ${st.daysToStarve}n` : `${Math.round(st.fed * 100)}%`,
+          st.hungry ? "bad" : "",
+        ) + `<div class="bar"><i style="width:${Math.round(st.fed * 100)}%"></i></div>`,
       );
       for (const p of st.products)
         rows.push(
-          `<div class="row"><span>${p.name}</span><b class="${p.ready ? "good" : ""}">${
+          `<div class="row"><i class="ri" data-item="${p.id}"></i><b class="${p.ready ? "good" : ""}">${
             p.ready ? "tới lứa" : !st.mature ? "chờ lớn" : st.hungry ? "đang đói" : wait(p.minutesLeft)
           }</b></div>`,
         );
       // Dòng thịt chỉ có nghĩa khi con vật đã lớn — hiện sớm thì nó chỉ chiếm
-      // chỗ để nói "chưa được đâu", thứ mà dòng Tuổi ngay trên đã nói rồi.
+      // chỗ để nói "chưa được đâu", thứ mà dòng tuổi ngay trên đã nói rồi.
       if (st.meat && st.mature)
         rows.push(
-          `<div class="row"><span>Thịt</span><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
+          `<div class="row"><i class="ri" data-item="${st.meat.id}"></i><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
         );
 
       elAnimal.innerHTML =
@@ -379,6 +398,20 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         e.stopPropagation();
         onClose();
       });
+      // Đổ icon vào các ô nhãn: `data-ic` lấy từ bộ HUD, `data-item` vẽ đúng
+      // vật phẩm (chai sữa, quả trứng) nên không phải nhớ nghĩa của ký hiệu nào.
+      for (const el of elAnimal.querySelectorAll<HTMLElement>("i.ri")) {
+        const src = el.dataset["ic"]
+          ? atlas.ui(el.dataset["ic"] as UiIcon)
+          : atlas.icon(el.dataset["item"] ?? "");
+        if (!src) continue;
+        const c = document.createElement("canvas");
+        c.width = src.width;
+        c.height = src.height;
+        c.getContext("2d")!.drawImage(src, 0, 0);
+        el.appendChild(c);
+      }
+
       const pic = elAnimal.querySelector<HTMLElement>(".pic");
       const src = atlas.animal(st.def, "down", 0);
       if (pic && src) {
@@ -516,6 +549,29 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         if (why) {
           why.textContent = hint?.why ?? "";
           why.hidden = !hint?.why;
+        }
+        /* Dải ngữ cảnh cho TAY CẦM.
+
+           Ở chế độ tay cầm, ba nút tròn bị giấu đi — mà chúng chính là chỗ duy
+           nhất nói "bấm cái này thì chuyện gì xảy ra" và "vì sao chưa làm
+           được". Giấu chúng mà không thay bằng gì thì người chơi mất đúng thứ
+           quan trọng nhất của giao diện này. Dải chữ nhỏ vừa nói được cả hai,
+           vừa không chiếm chỗ như nút. */
+        const pc = document.querySelector<HTMLElement>("#padctx");
+        if (pc) {
+          const lb = hint?.label ?? "DÙNG";
+          pc.innerHTML = "";
+          const k = document.createElement("b");
+          k.textContent = padKey;
+          const t = document.createElement("span");
+          t.textContent = lb;
+          pc.append(k, t);
+          if (hint?.why) {
+            const w = document.createElement("i");
+            w.textContent = hint.why;
+            pc.appendChild(w);
+          }
+          pc.classList.toggle("off", !hint || hint.kind === null);
         }
       }
     },

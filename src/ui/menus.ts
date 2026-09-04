@@ -23,6 +23,7 @@ import type { Atlas, UiIcon } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
+import { padButtonName, type PadInfo } from "../core/gamepad.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
@@ -59,6 +60,8 @@ export interface MenuHandlers {
   contentInfo(): { version: string; source: string; pending: string | null };
   /** Có thể cài PWA không (đã bắt được beforeinstallprompt). */
   canInstall(): boolean;
+  /** Tay cầm nào đang cắm — để bảng nút hiện ĐÚNG tên nút của máy đó. */
+  padInfo(): PadInfo;
   /** Mở chế độ xây dựng (dừng thời gian, kéo thả địa hình). */
   buildMode(): void;
   /** Hỏi server xem có bản mới không. Trả về câu trả lời để hiện ngay. */
@@ -86,6 +89,8 @@ export interface Menus {
   openSettings(): void;
   openBag(): void;
   openHelp(): void;
+  /** Bảng nút tay cầm — mở tự động lần đầu nhận ra tay cầm. */
+  openPadHelp(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
 }
@@ -212,6 +217,26 @@ export function createMenus(
    */
   const iconBtn = (name: UiIcon, label: string, fn: () => void, cls = "") => {
     const b = mkBtn("", fn, `ico-btn ${cls}`.trim());
+    const src = atlas.ui(name);
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext("2d")!.drawImage(src, 0, 0);
+    c.className = "bi";
+    const t = document.createElement("span");
+    t.textContent = label;
+    b.append(c, t);
+    return b;
+  };
+
+  /**
+   * Ô VUÔNG icon-trên-chữ. Menu tạm dừng có mười một mục; xếp thành nút một
+   * hàng thì cao bảy hàng và tràn quá một màn hình điện thoại — nên "Chơi mới",
+   * nút nguy hiểm nhất, lại phải cuộn mới thấy. Ô vuông ba cột thì cả menu gọn
+   * trong bốn hàng và mắt quét một lượt là hết.
+   */
+  const tileBtn = (name: UiIcon, label: string, fn: () => void, cls = "") => {
+    const b = mkBtn("", fn, `tile ${cls}`.trim());
     const src = atlas.ui(name);
     const c = document.createElement("canvas");
     c.width = src.width;
@@ -904,6 +929,145 @@ export function createMenus(
 
   /* ------------------------------------------------------------ GỠ LỖI */
 
+  /* ------------------------------------------------------- BẢNG NÚT TAY CẦM */
+
+  /**
+   * Sơ đồ nút, mở TỰ ĐỘNG lần đầu game nhận ra tay cầm.
+   *
+   * Không tự mở thì người chơi cắm tay cầm vào, bấm loạn vài nút, thấy nhân vật
+   * nhúc nhích rồi tự kết luận "chắc chỉ đi được thôi" — và không bao giờ biết
+   * Y mở cửa hàng. Một màn hình đọc mười giây đổi lấy chuyện đó là đáng.
+   */
+  function openPadHelp() {
+    current = openPadHelp;
+    const info = h.padInfo();
+    const ten = (i: number) => padButtonName(info, i);
+    const { body } = shell(
+      info.connected ? "Đã nhận tay cầm" : "Tay cầm",
+      info.connected
+        ? `${info.id.replace(/\s*\(.*?\)\s*$/, "") || "Không rõ tên"} · ${info.buttons} nút · ${info.axes} trục`
+        : "Chưa thấy tay cầm nào",
+      "sheet",
+    );
+
+    if (window.innerWidth < window.innerHeight)
+      body.appendChild(
+        note(
+          "Bạn đang cầm máy DỌC. Xoay NGANG để thấy rộng hơn hẳn — chơi tay cầm thì " +
+            "không cần chừa chỗ cho ngón tay nữa, cả màn hình dành cho nông trại.",
+          "sub warn",
+        ),
+      );
+
+    if (info.connected && !info.standard)
+      body.appendChild(
+        note(
+          "Trình duyệt KHÔNG nhận ra sơ đồ nút chuẩn của tay cầm này, nên game chỉ " +
+            "dùng cần gạt và hai nút mặt đầu tiên — gán bừa các nút còn lại thì bấm " +
+            "một đằng ra một nẻo. Cắm qua cổng USB, hoặc thử trình duyệt khác, thường " +
+            "là nhận đúng.",
+          "sub warn",
+        ),
+      );
+
+    /* Chỉ bày những nút tay cầm THẬT SỰ có. Quảng cáo "L3 mở chế độ xây" trên
+       một tay cầm mười nút là hướng dẫn người chơi đi bấm một cái không tồn
+       tại — tệ hơn hẳn so với không nhắc tới nó. */
+    const co = (i: number) => info.connected && info.standard && i < info.buttons;
+    const map: [string, string][] = [["Cần trái / D-pad", "Đi. Đẩy mạnh là chạy."]];
+    map.push([ten(0), "Dùng — cày, gieo, tưới, thu. Giữ để làm tiếp ô kế bên."]);
+    map.push([ten(1), "Tương tác — cửa hàng, giường, giếng, kho, con vật."]);
+    if (co(2)) map.push([ten(2), "Bật/tắt tự động làm."]);
+    if (co(3)) map.push([ten(3), "Mở balo."]);
+    if (co(5)) map.push([`${ten(4)} / ${ten(5)}`, "Đổi ô hotbar."]);
+    if (co(6)) map.push([ten(6), "Chạy."]);
+    if (co(7)) map.push([ten(7), `Dùng (thay cho ${ten(0)}).`]);
+    if (co(8)) map.push([ten(8), "Bản đồ nhỏ."]);
+    if (co(9)) map.push([ten(9), "Menu tạm dừng."]);
+    if (co(10)) map.push([ten(10), "Chế độ xây dựng."]);
+    if (co(11)) map.push([ten(11), "Mở lại bảng này."]);
+    map.push(["Trong menu", `Cần gạt chuyển ô, ${ten(0)} chọn, ${ten(1)} thoát.`]);
+    map.push(["Khi xây dựng", `Cần gạt rê ô, ${ten(0)} đặt mốc rồi ${ten(0)} lần nữa để xây, ${ten(1)} huỷ.`]);
+
+    const grid = document.createElement("div");
+    grid.className = "pad-map";
+    for (const [nut, y] of map) {
+      const b = document.createElement("b");
+      b.textContent = nut;
+      const t = document.createElement("span");
+      t.textContent = y;
+      grid.append(b, t);
+    }
+    body.appendChild(grid);
+    body.appendChild(mkBtn("Bắt đầu chơi", () => close(), "primary"));
+  }
+
+  /* ---------------------------------------------------- SAVE RA / VÀO FILE */
+  function openSaveFile() {
+    current = openSaveFile;
+    const { body } = shell("Save ra / vào file", "Mang tiến trình sang máy khác", "sheet");
+    const g = document.createElement("div");
+    g.className = "grid2";
+    g.append(
+      iconBtn("file", "Xuất ra file", () => h.exportSave(), "primary"),
+      iconBtn("file", "Nhập từ file", () => h.importSave()),
+    );
+    body.appendChild(g);
+    body.appendChild(
+      note("File save là JSON thuần — mở xem được, chép đi đâu cũng nhập lại được."),
+    );
+    body.appendChild(mkBtn("← Quay lại", () => openPause()));
+  }
+
+  /* ------------------------------------------------------------- CẬP NHẬT */
+  function openUpdate() {
+    current = openUpdate;
+    const info = h.contentInfo();
+    const c = getContent();
+    const { body } = shell(
+      "Cập nhật",
+      `Nội dung ${info.version} (${info.source}) · core ${CORE_VERSION}`,
+      "sheet",
+    );
+
+    const upNote = note(
+      info.pending
+        ? `Đã tải về nội dung ${info.pending} — bấm "Cập nhật ngay" để áp dụng.`
+        : "Đang chạy bản mới nhất đã tải về. Game tự tìm bản mới khi có mạng.",
+    );
+    body.appendChild(upNote);
+
+    const row = document.createElement("div");
+    row.className = "grid2";
+    const btnCheck = iconBtn("reload", "Kiểm tra", async () => {
+      btnCheck.disabled = true;
+      upNote.textContent = "Đang hỏi máy chủ…";
+      upNote.textContent = await h.checkUpdate();
+      btnCheck.disabled = false;
+    });
+    row.append(
+      btnCheck,
+      iconBtn("install", "Cập nhật ngay", () => {
+        // Xoá sạch cache rồi tải lại — phải hỏi, và phải nói rõ save không mất
+        // (save nằm ở IndexedDB, không nằm trong cache).
+        if (!confirm("Xoá bộ nhớ đệm và tải lại bản mới nhất?\nTiến trình đã lưu KHÔNG mất."))
+          return;
+        void h.forceUpdate();
+      }, "primary"),
+    );
+    body.appendChild(row);
+
+    if (info.source === "ota")
+      body.appendChild(
+        mkBtn(c.strings.ui["contentRevert"] ?? "Hoàn tác về bản đóng kèm", () => {
+          h.revertContent();
+          close();
+        }, "dim"),
+      );
+
+    body.appendChild(mkBtn("← Quay lại", () => openPause()));
+  }
+
   /* ------------------------------------------------------------ TẠM DỪNG */
   function openPause() {
     current = openPause;
@@ -914,70 +1078,35 @@ export function createMenus(
       `Nội dung ${info.version} (${info.source}) · core ${CORE_VERSION}`,
     );
 
-    const grid = document.createElement("div");
-    grid.className = "grid2";
-    grid.append(
-      iconBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
-      iconBtn("load", c.strings.ui["load"] ?? "Tải game", () => h.load()),
-      iconBtn("file", c.strings.ui["export"] ?? "Xuất file", () => h.exportSave()),
-      iconBtn("file", c.strings.ui["import"] ?? "Nhập file", () => h.importSave()),
-    );
-    body.appendChild(grid);
-
-    /* Menu này từng là chín nút xếp DỌC, tràn quá một màn hình điện thoại nên
-       "Chơi mới" (nút nguy hiểm nhất) lại phải cuộn mới thấy. Xếp LƯỚI HAI CỘT
-       thì cả menu vừa một màn, và nút nguy hiểm nằm đúng chỗ mắt nhìn tới cuối. */
-    const list = document.createElement("div");
-    list.className = "grid2";
-    list.append(
-      iconBtn("build", "Xây dựng", () => {
+    /* MỘT lưới ô vuông cho tất cả. Trước đây menu này là bốn khối rời (lưới
+       lưu/tải, danh sách chức năng, ghi chú cập nhật, hai nút cập nhật) — bốn
+       nhịp đọc cho một việc duy nhất là "tôi muốn bấm cái gì". */
+    const tiles = document.createElement("div");
+    tiles.className = "menu-tiles";
+    tiles.append(
+      tileBtn("build", "Xây dựng", () => {
         close();
         h.buildMode();
       }, "accent"),
-      iconBtn("bag", "Balo", () => openBag()),
-      iconBtn("gear", "Cài đặt", () => openSettings()),
-      iconBtn("help", "Hướng dẫn", () => openHelp()),
-    );
-    if (h.canInstall()) list.appendChild(iconBtn("install", "Cài về máy", () => h.install(), "accent"));
-    list.appendChild(
-      iconBtn("bug", "Gỡ lỗi", () => {
+      tileBtn("bag", "Balo", () => openBag()),
+      tileBtn("gear", "Cài đặt", () => openSettings()),
+      tileBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
+      tileBtn("load", c.strings.ui["load"] ?? "Tải game", () => h.load()),
+      tileBtn("file", "Save ra/vào", () => openSaveFile()),
+      tileBtn("help", "Hướng dẫn", () => openHelp()),
+      tileBtn("reload", "Cập nhật", () => openUpdate()),
+      tileBtn("bug", "Gỡ lỗi", () => {
         close();
         h.toggleDevPanel();
       }, "dim"),
     );
-    body.appendChild(list);
+    if (h.canInstall()) tiles.appendChild(tileBtn("install", "Cài về máy", () => h.install(), "accent"));
+    body.appendChild(tiles);
 
-    /* ---- CẬP NHẬT ----------------------------------------------------
-       Service worker giữ bản cũ cho tới khi người chơi đồng ý tải lại (cố ý —
-       xem `registerType: "prompt"` trong vite.config). Nhưng ai mở PWA suốt
-       ngày mà không bao giờ bấm vào thanh báo thì ở lại bản cũ vô thời hạn, và
-       không có cách nào tự thoát ra. Hai nút này là cách thoát đó. */
-    const upNote = note(
-      info.pending
-        ? `Có nội dung ${info.pending} đang chờ — bấm "Cập nhật ngay" để áp dụng.`
-        : "Trò chơi tự tìm bản mới khi có mạng.",
-    );
-    body.appendChild(upNote);
-
-    const upRow = document.createElement("div");
-    upRow.className = "grid2";
-    const btnCheck = iconBtn("reload", "Kiểm tra", async () => {
-      btnCheck.disabled = true;
-      upNote.textContent = "Đang kiểm tra…";
-      upNote.textContent = await h.checkUpdate();
-      btnCheck.disabled = false;
-    });
-    upRow.append(
-      btnCheck,
-      iconBtn("install", "Cập nhật ngay", () => {
-        // Buộc cập nhật XOÁ SẠCH cache rồi tải lại — nên phải hỏi, và phải nói
-        // rõ là save không mất (save nằm ở IndexedDB, không nằm trong cache).
-        if (!confirm("Xoá bộ nhớ đệm và tải lại bản mới nhất?\nTiến trình đã lưu KHÔNG mất."))
-          return;
-        void h.forceUpdate();
-      }, "primary"),
-    );
-    body.appendChild(upRow);
+    // Chỉ còn nhắc khi THẬT SỰ có bản đang chờ — dòng này từng hiện vĩnh viễn
+    // vì `pendingContentVersion` trả về cả bản đang chạy.
+    if (info.pending)
+      body.appendChild(note(`Có nội dung ${info.pending} đang chờ — mở Cập nhật để áp dụng.`));
 
     if (info.source === "ota") {
       body.appendChild(
@@ -1150,6 +1279,7 @@ export function createMenus(
     isOpen: () => root.classList.contains("open"),
     close,
     openShop,
+    openPadHelp,
     openSell,
     openStore,
     openCraft,
