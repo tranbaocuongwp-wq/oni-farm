@@ -3496,6 +3496,54 @@ test("63. luống bỏ không đủ ngày thì MỌC CỎ và trở lại địa
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi luống hoang");
 });
 
+
+test("64. con vật đứng trên luống vừa cày thì tự đi ra", () => {
+  const content = loadContent();
+  const store = createStore(createNewGame(content, 4242), content, { validate: true, strict: true });
+
+  /* Cày ngay dưới chân con bò rồi để yên. Luật "tới gần thì đứng lại" từng giữ
+     nó ở đúng chỗ nó không được ở: người chơi phải đi vòng ra xa mới đuổi nổi. */
+  setState(store, (s) => {
+    const px = Math.floor(s.player.x / TILE);
+    const py = Math.floor(s.player.y / TILE);
+    // dọn một khoảnh cỏ quanh đó để con bò có chỗ mà bước ra
+    for (let dy = -3; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++) {
+        const t = s.tiles[idx(s.w, px + dx, py + dy)];
+        if (!t) continue;
+        t.prop = null; t.b = null; t.crop = null; t.hp = 0;
+        t.g = "grass"; t.tilled = false; t.wet = false;
+      }
+    // ô ngay bên phải nhân vật: CÀY, và đặt con bò đứng đúng đó
+    s.tiles[idx(s.w, px + 1, py)].tilled = true;
+    const id = (s.entSeq || 0) + 1;
+    s.entSeq = id;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: s.mapId,
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 31,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 900, hungryDays: 0, prod: [0] },
+    });
+  });
+
+  const onLuong = () => {
+    const s = store.getState();
+    const b = s.entities[0];
+    return !!s.tiles[idx(s.w, Math.floor(b.x / TILE), Math.floor(b.y / TILE))]?.tilled;
+  };
+  ok(onLuong(), "bắt đầu: con bò đang đứng trên luống");
+
+  // Người chơi vẫn đứng NGAY BÊN CẠNH suốt — đây chính là ca cũ bị kẹt.
+  let thoat = false;
+  for (let i = 0; i < 3600 && !thoat; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (!onLuong()) thoat = true;
+  }
+  ok(thoat, "con bò tự bước ra khỏi luống dù người chơi đứng ngay cạnh");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi nó tránh ra");
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 console.log("\n  ONIFARM — sim\n");

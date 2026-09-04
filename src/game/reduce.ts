@@ -14,6 +14,7 @@ import { applyProgression, commit, dPlayer, draft, storedView, toastKey, toastTe
 import { dirFromVector, movePlayer } from "./player.ts";
 import { buildLine, canUseAt, craft, refill, useAt } from "./actions.ts";
 import { swapSlots } from "./inventory.ts";
+import { itemName } from "./items.ts";
 import { growCrops, growCropsIn, newDay } from "./newday.ts";
 import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
@@ -371,6 +372,20 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "DEBUG": {
       applyDebug(d, content, action.op, action.n);
       if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "DROP": {
+      const i = action.slot | 0;
+      const cur = state.inv[i];
+      if (!cur) return state;
+      // Hai ô công cụ đầu là cố định (xem `openBag`): vứt cái cuốc đi thì
+      // không có gì cày lại được, và không có nút nào lấy lại.
+      if (i < 2) return state;
+      const inv = state.inv.slice();
+      inv[i] = null;
+      touch(d).inv = inv;
+      toastText(d, `Đã bỏ ${itemName(cur.id, content)}.`, "info");
       return commit(d);
     }
 

@@ -894,6 +894,14 @@ export type Action =
   /** Đổi chỗ hai ô túi đồ (kéo từ balo ra hotbar và ngược lại). Cùng id thì
    *  gộp stack vào ô đích. */
   | { t: "SWAP"; a: number; b: number }
+  /**
+   * BỎ hẳn một ô túi đồ.
+   *
+   * Túi có 24 ô và không có cách nào dọn: nhặt phải một chồng gỗ vụn hay mua
+   * nhầm hạt trái mùa là ô đó chiếm chỗ tới hết ván. Bán thì chỉ bán được thứ
+   * quầy thu mua nhận. Nên phải có một đường vứt đi.
+   */
+  | { t: "DROP"; slot: number }
   | { t: "BUY"; id: string; n: number }
   | { t: "SELL"; id: string; n: number }
   | { t: "SELL_ALL" }

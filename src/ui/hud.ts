@@ -218,9 +218,14 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elSelName = root.querySelector<HTMLElement>("#selname")!;
   let selTimer = 0;
 
-  const flashSel = (s: GameState, content: Content) => {
+  const flashSel = (s: GameState, content: Content, hint: Hint | null) => {
     const slot = s.inv[s.sel];
-    elSelName.textContent = slot ? `${itemLabel(slot.id, content)}${slot.n > 1 ? ` ×${slot.n}` : ""}` : "Tay không";
+    const ten = slot ? `${itemLabel(slot.id, content)}${slot.n > 1 ? ` ×${slot.n}` : ""}` : "Tay không";
+    /* Kèm luôn VIỆC nút ngữ cảnh sẽ làm với thứ vừa cầm.
+       Biết mình đang cầm "Hạt cà chua" chưa đủ — câu người chơi thật sự hỏi là
+       "bấm nút kia bây giờ thì chuyện gì xảy ra". Ghép hai câu trả lời vào một
+       dòng thì đổi ô hotbar xong là biết ngay, khỏi liếc thêm xuống nút. */
+    elSelName.textContent = hint?.kind ? `${ten} · ${hint.label}` : ten;
     elSelName.hidden = false;
     elSelName.classList.remove("fade");
     void elSelName.offsetWidth; // ép chạy lại hoạt ảnh
@@ -640,7 +645,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       if (selKey !== prev.sel) {
         // Lần vẽ ĐẦU TIÊN thì không báo: người chơi chưa đổi gì cả, và một cái
         // nhãn nhảy ra ngay khi vừa vào game là nhiễu, không phải thông tin.
-        if (prev.sel !== "") flashSel(s, content);
+        if (prev.sel !== "") flashSel(s, content, hint);
         prev.sel = selKey;
       }
 

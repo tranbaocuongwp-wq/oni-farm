@@ -29,6 +29,8 @@ export interface MenuHandlers {
   buy(id: string, n: number): void;
   /** Đổi chỗ hai ô túi đồ (balo ⇄ hotbar). */
   swap(a: number, b: number): void;
+  /** Bỏ hẳn một ô túi đồ. */
+  drop(slot: number): void;
   craft(id: string): void;
   canCraft(id: string): boolean;
   /** Còn thiếu gì để làm được công thức này. */
@@ -920,11 +922,38 @@ export function createMenus(
       g.addEventListener("pointercancel", onUp);
     }
 
-    foot.appendChild(note(picked >= 0 ? "Chạm ô đích để đổi chỗ, chạm lại để bỏ." : "Hai ô công cụ đầu (cuốc, bình) cố định."));
-    foot.appendChild(mkBtn("Đóng", () => {
+    foot.appendChild(
+      note(
+        picked >= 0
+          ? "Chạm ô đích để đổi chỗ, hoặc bấm BỎ MÓN NÀY để vứt đi."
+          : "Chạm một món để chọn. Hai ô công cụ đầu (cuốc, bình) cố định.",
+      ),
+    );
+
+    /* BỎ MÓN. Túi có 24 ô và không có cách nào dọn: nhặt phải một chồng gỗ vụn
+       hay mua nhầm hạt trái mùa là ô đó chiếm chỗ tới hết ván, mà quầy thu mua
+       thì không nhận mọi thứ. Nút này chỉ hiện khi đã CHỌN một món — nút vứt
+       lúc nào cũng nằm đó là nút chỉ chờ bấm nhầm. */
+    const chon = picked >= 0 ? s.inv[picked] : null;
+    const g2 = document.createElement("div");
+    g2.className = "grid2";
+    if (chon && picked >= 2) {
+      g2.appendChild(
+        mkBtn(`Bỏ ${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}`, () => {
+          if (!confirm(`Bỏ hẳn ${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}? Không lấy lại được.`))
+            return;
+          const i = picked;
+          picked = -1;
+          h.drop(i);
+          openBag();
+        }, "dim"),
+      );
+    }
+    g2.appendChild(mkBtn("Đóng", () => {
       picked = -1;
       close();
     }, "primary"));
+    foot.appendChild(g2);
   }
 
   /* ------------------------------------------------------------ GỠ LỖI */

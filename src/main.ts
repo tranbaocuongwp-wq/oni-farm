@@ -256,6 +256,7 @@ async function boot() {
 
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
+    drop: (slot) => store.dispatch({ t: "DROP", slot }),
     swap: (a, b) => {
       store.dispatch({ t: "SWAP", a, b });
       buzz("tap");

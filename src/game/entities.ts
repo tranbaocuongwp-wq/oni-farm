@@ -28,7 +28,7 @@
 import type { AnimalDef, Content, Dir, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
-import { blockedForActor, idx, TILE } from "./world.ts";
+import { blockedForActor, idx, TILE, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
@@ -196,7 +196,48 @@ export function calmedByPlayer(s: GameState, content: Content, e: Entity): boole
   if (e.kind !== "animal") return false;
   if (animalDef(content, e.def)?.job === "pest") return false;
   if (e.map !== s.mapId) return false;
+  /* Đang đứng trên LUỐNG thì KHÔNG đứng lại — phải đi cho khuất.
+     Nếu không thì cày ngay dưới chân con bò là nó đứng chết trên luống vừa
+     cày: luật "tới gần thì đứng lại" giữ nó ở đúng chỗ nó không được ở, và
+     người chơi phải đi vòng ra xa mới đuổi được nó đi. */
+  if (onFarmTile(s, e)) return false;
   return Math.hypot(e.x - s.player.x, e.y - s.player.y) <= CALM_TILES * TILE;
+}
+
+/** Con vật này có đang đứng trên ô ĐÃ CÀY không. */
+export function onFarmTile(s: GameState, e: Entity): boolean {
+  const t = tileAt(s, Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+  return !!t?.tilled;
+}
+
+/**
+ * Ô KHÔNG PHẢI RUỘNG gần nhất để con vật tránh ra, hoặc null.
+ *
+ * Quét vòng từ trong ra: con vật bị cày dưới chân chỉ cần bước ra khỏi luống,
+ * không cần đi đâu xa — mà bước ngắn thì cũng đỡ giẫm thêm mấy ô khác.
+ */
+function offFarmGoal(
+  s: GameState,
+  content: Content,
+  e: Entity,
+  box: { w: number; h: number },
+): { x: number; y: number } | null {
+  const cx = Math.floor(e.x / TILE);
+  const cy = Math.floor(e.y / TILE);
+  for (let r = 1; r <= 6; r++)
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 1 || y < 1 || x >= s.w - 1 || y >= s.h - 1) continue;
+        const t = tileAt(s, x, y);
+        if (!t || t.tilled || t.crop) continue;
+        if (blockedForActor(s, content, x * TILE + TILE / 2, y * TILE + TILE / 2, box.w, box.h, false))
+          continue;
+        return { x, y };
+      }
+  return null;
 }
 
 /* ------------------------------------------------------------- di chuyển */
@@ -380,6 +421,36 @@ export function actorStep(d: Draft, content: Content): void {
     if (e.ai.until > 0) {
       e.ai.until = Math.max(0, e.ai.until - ACTOR_STEP_MINUTES);
       if (e.ai.until > 0) continue;
+    }
+
+    /* ĐỨNG TRÊN LUỐNG thì việc đầu tiên là đi ra — trước cả chuyện nghỉ ngơi
+       hay gặm cỏ. Người chơi vừa cày ngay dưới chân nó, và một con bò đứng ì
+       giữa luống mới cày là thứ nhìn thấy ngay và thấy là khó chịu. */
+    if (cur.kind === "animal" && onFarmTile(s, cur)) {
+      if (budget > 0 && s.minutes - e.ai.planAt >= REPLAN_COOLDOWN) {
+        const shape = actorShape(content, cur);
+        const ra = shape ? offFarmGoal(s, content, cur, shape.box) : null;
+        if (ra) {
+          e.ai.planAt = s.minutes;
+          budget--;
+          const px = Math.floor(e.x / TILE);
+          const py = Math.floor(e.y / TILE);
+          const p = findPath(s, content, px, py, new Set([idx(s.w, ra.x, ra.y)]), {
+            maxNodes: MAX_NODES_ACTOR,
+            box: shape!.box,
+            swims: shape!.swims,
+            // Cố ý KHÔNG `avoidFarm`: nó đang Ở TRONG ruộng, cấm đi qua ruộng
+            // thì không có đường nào ra cả.
+            leash: { x: px, y: py, r: 8 },
+          });
+          if (p && p.length) {
+            e.ai.path = p.slice(0, MAX_PATH);
+            e.ai.phase = "wander";
+            e.ai.until = 0;
+            continue;
+          }
+        }
+      }
     }
 
     // Hết việc: đứng nghỉ một lát rồi mới lang thang tiếp — con vật đứng yên
