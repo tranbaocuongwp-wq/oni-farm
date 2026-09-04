@@ -1090,12 +1090,49 @@ async function boot() {
   }
 }
 
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch(() => {
-      /* không đăng ký được cũng không sao — game vẫn chạy, chỉ là không offline sẵn */
+/* ---------------------------------------------------------------------------
+   CẬP NHẬT PWA
+
+   `registerType: "prompt"` nghĩa là service worker mới KHÔNG tự chiếm quyền.
+   Lý do: người chơi đang giữa một ngày trong game mà trang tự tải lại thì mất
+   phần chưa lưu. Thay vào đó hiện một thanh nhỏ, bấm mới tải.
+
+   Trước đây bản viết tay gọi `skipWaiting()` ngay lúc cài, nên bản mới lặng lẽ
+   thay bản cũ mà không ai biết — và người chơi mở PWA suốt thì ở lại bản cũ vô
+   thời hạn vì trang không bao giờ được tải lại.
+--------------------------------------------------------------------------- */
+if (import.meta.env.PROD) {
+  void (async () => {
+    const bar = document.querySelector<HTMLElement>("#update-bar");
+    const { registerSW } = await import("virtual:pwa-register");
+    const update = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        if (!bar) return;
+        bar.hidden = false;
+        bar.querySelector<HTMLElement>(".go")?.addEventListener(
+          "click",
+          () => {
+            bar.hidden = true;
+            void update(true);
+          },
+          { once: true },
+        );
+        bar.querySelector<HTMLElement>(".x")?.addEventListener(
+          "click",
+          () => {
+            bar.hidden = true;
+          },
+          { once: true },
+        );
+      },
+      onRegisteredSW(_url, reg) {
+        // Hỏi lại mỗi 30 phút. PWA mở suốt ngày thì không có lần "mở lại trang"
+        // nào để phát hiện bản mới, nên phải chủ động hỏi.
+        if (reg) setInterval(() => void reg.update().catch(() => {}), 30 * 60 * 1000);
+      },
     });
-  });
+  })();
 }
 
 void boot().catch((e) => {

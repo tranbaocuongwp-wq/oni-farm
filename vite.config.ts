@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,41 @@ export default defineConfig({
     strictPort: !process.env.PORT,
     host: "localhost",
   },
+  plugins: [
+    /* PWA. Bản viết tay trước đây cache DẦN theo lúc dùng, nên cài game vào màn
+       hình chính rồi mất mạng NGAY là mở ra trắng: HTML có trong cache nhưng
+       bundle JS thì chưa. Workbox precache đúng danh sách file của lần build,
+       kể cả tên có hash — thứ không thể liệt kê bằng tay.
+
+       `registerType: "prompt"`: KHÔNG tự động chiếm quyền. Người chơi đang giữa
+       một ngày trong game mà trang tự tải lại thì mất phần chưa lưu. Thay vào
+       đó UI hiện một dòng "có bản mới", bấm mới tải lại. */
+    VitePWA({
+      registerType: "prompt",
+      // manifest đã có sẵn trong public/, đừng sinh cái thứ hai đè lên
+      manifest: false,
+      injectRegister: null,
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}"],
+        // Content pack OTA KHÔNG precache: nó có vòng đời riêng (xem docs/OTA),
+        // và bản đóng kèm trong bundle đã bảo chứng offline rồi.
+        globIgnores: ["content/**"],
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
+        runtimeCaching: [
+          {
+            // pack OTA: luôn thử mạng trước, hỏng thì thôi — không bao giờ để
+            // người chơi kẹt ở một pack cũ vì cache.
+            urlPattern: ({ url }) => url.pathname.startsWith("/content/"),
+            handler: "NetworkFirst",
+            options: { cacheName: "oni-content", networkTimeoutSeconds: 4 },
+          },
+        ],
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
+
   build: {
     outDir: resolve(ROOT, "dist"),
     emptyOutDir: true,

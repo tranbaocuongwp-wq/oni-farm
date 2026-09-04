@@ -656,6 +656,26 @@ core 1.0.0 **từ chối**, giữ nguyên nội dung đang chạy.
 
 ---
 
+## PWA: cài về máy, chơi offline, và cập nhật
+
+Cài từ trình duyệt (Chrome: *Cài ứng dụng*; iOS Safari: *Thêm vào màn hình chính*). Sau đó
+game chạy toàn màn hình, không thanh địa chỉ, và **chơi được khi mất mạng**.
+
+**Precache bằng Workbox** (`vite-plugin-pwa`). Bản service worker viết tay trước đây cache
+DẦN theo lúc dùng, nên cài game vào màn hình chính rồi mất mạng *ngay* là mở ra trắng: HTML
+có trong cache nhưng bundle JS thì chưa. Danh sách file có hash trong tên nên không thể liệt
+kê bằng tay — đó đúng là việc của Workbox.
+
+**Content pack OTA KHÔNG precache**, chỉ `NetworkFirst` với timeout 4 giây. Nó có vòng đời
+riêng (xem *Cập nhật OTA*), và bản đóng kèm trong bundle đã bảo chứng offline rồi — cache nó
+chỉ tạo ra một cách để người chơi kẹt ở pack cũ.
+
+**Cập nhật KHÔNG tự động chiếm quyền.** `registerType: "prompt"`: có bản mới thì hiện một
+thanh nhỏ *"Có bản mới — Tải lại"*, bấm mới tải. Người chơi đang giữa một ngày trong game mà
+trang tự làm mới thì mất phần chưa lưu. Bản viết tay trước đây gọi `skipWaiting()` ngay lúc
+cài, nên bản mới lặng lẽ thay bản cũ — và ai mở PWA suốt ngày thì ở lại bản cũ vô thời hạn vì
+trang không bao giờ được tải lại. Nay còn chủ động hỏi lại mỗi 30 phút, đúng vì lý do đó.
+
 ## Lưu game
 
 Ba tầng, tự tụt xuống khi tầng trên không dùng được:

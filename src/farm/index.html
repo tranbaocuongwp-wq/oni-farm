@@ -30,6 +30,14 @@
              hình và mọi mật độ điểm ảnh, không phụ thuộc hệ số phóng của game. -->
         <div id="hud"></div>
         <div id="devpanel" hidden></div>
+
+        <!-- Thanh báo bản mới. KHÔNG tự tải lại: người chơi đang giữa một ngày
+             trong game mà trang tự làm mới thì mất phần chưa lưu. -->
+        <div id="update-bar" hidden role="status">
+          <span class="txt">Có bản mới</span>
+          <button type="button" class="go">Tải lại</button>
+          <button type="button" class="x" aria-label="Để sau">×</button>
+        </div>
         <div id="modal-root"></div>
         <div id="tutorial" hidden></div>
 
