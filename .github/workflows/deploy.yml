@@ -1,0 +1,47 @@
+# Mỗi lần push lên main: build rồi tự đẩy dist/ lên Cloudflare Pages (project oni-farm).
+# Cần 1 secret trong repo: CLOUDFLARE_API_TOKEN  (Settings → Secrets and variables → Actions)
+# CLOUDFLARE_ACCOUNT_ID đã được đặt sẵn.
+name: Deploy Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Kiểm thử (typecheck + sim + OTA)
+        run: npm run test:all
+
+      - name: Build
+        run: npm run build
+
+      - name: Kiểm tra secret Cloudflare
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          [ -n "$CF_API_TOKEN" ] || { echo "::error::Thiếu secret CLOUDFLARE_API_TOKEN. Tạo API token trên Cloudflare rồi thêm vào Settings → Secrets and variables → Actions."; exit 1; }
+          [ -n "$CF_ACCOUNT_ID" ] || { echo "::error::Thiếu secret CLOUDFLARE_ACCOUNT_ID."; exit 1; }
+
+      - name: Deploy lên Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=oni-farm --branch=main --commit-dirty=true
