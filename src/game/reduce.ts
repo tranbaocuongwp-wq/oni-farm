@@ -12,7 +12,8 @@
 import type { Action, Content, GameState, StoredMap } from "./types.ts";
 import { applyProgression, commit, dPlayer, draft, storedView, toastKey, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
-import { craft, refill, useAt } from "./actions.ts";
+import { canUseAt, craft, refill, useAt } from "./actions.ts";
+import { swapSlots } from "./inventory.ts";
 import { growCrops, growCropsIn, newDay } from "./newday.ts";
 import { applyDebug } from "./debug.ts";
 import { buy, sell, sellAll } from "./economy.ts";
@@ -50,6 +51,22 @@ export function reduce(state: GameState, action: Action, content: Content): Game
 
       const s = touch(d);
       if (s.busy > 0) s.busy = Math.max(0, s.busy - dt);
+
+      // ---- thao tác chờ: tới mốc "chạm đất" thì mới có hiệu lực ------------
+      // Bấm USE chỉ khởi động diễn hoạt (giơ công cụ). Khi `busy` trôi qua mốc
+      // actionImpact, cuốc mới chạm đất — đất lật, hạt xuống, nước tưới. Nhờ
+      // vậy mắt thấy đúng thứ tự: vung → chạm → kết quả, và người chơi cảm được
+      // "sức nặng" của mỗi nhát thay vì bấm là xong.
+      if (s.pending) {
+        const total = Math.max(0.0001, bal.actionSeconds ?? 0);
+        const impactAt = total * (1 - Math.max(0, Math.min(1, bal.actionImpact ?? 0.5)));
+        if (s.busy <= impactAt) {
+          const p = s.pending;
+          s.pending = null;
+          useAt(d, content, p.x, p.y);
+          if (d.changed) applyProgression(d, content);
+        }
+      }
       if (!s.player.moving) {
         // anim là đồng hồ tự do: MOVE chạy nó khi đang đi, TICK chạy nốt khi đứng yên
         s.player = { ...s.player, anim: s.player.anim + dt };
@@ -93,25 +110,23 @@ export function reduce(state: GameState, action: Action, content: Content): Game
         if (face !== state.player.dir) dPlayer(d).dir = face;
       }
 
-      const st0 = state.stats;
+      // Thao tác có HIỆU LỰC TRỄ: ở đây chỉ quyết định "có việc để làm không".
+      // Có → khoá `busy` và ghi `pending`; TICK sẽ áp dụng đúng lúc chạm đất.
+      // Không → chạy `useAt` ngay để nó đẩy toast lý do ("Cần rìu", "Bình hết
+      // nước"…) mà không khoá — thao tác HỤT không bị phạt đứng hình.
+      //
+      // `canUseAt` là đúng bộ luật `useAt` dùng (cùng file), nên hai bên không
+      // lệch nhau: nếu nó nói làm được thì lúc chạm đất chắc chắn làm được, trừ
+      // khi thế giới đổi giữa chừng (không thể: đang bận thì không có action
+      // nào khác đụng vào ô).
+      const total = Math.max(0, content.balance.actionSeconds ?? 0);
+      if (canUseAt(state, content, ux, uy) !== null && total > 0) {
+        const s = touch(d);
+        s.busy = total;
+        s.pending = { x: ux, y: uy };
+        return commit(d);
+      }
       useAt(d, content, ux, uy);
-
-      // Chỉ khoá khi THẬT SỰ làm được gì đó. Không dùng `d.changed` được: một
-      // thao tác HỤT vẫn đẩy toast báo lỗi, mà toast cũng là thay đổi state —
-      // dùng nó thì bấm nhầm vào tảng đá cũng bị phạt đứng hình.
-      // Mọi việc THẬT SỰ làm được đều đụng vào lớp ô (cày/tưới/gieo/thu/xây/chặt),
-      // còn thao tác hụt thì cùng lắm chỉ đẩy toast. Vậy nên so tham chiếu mảng
-      // tiles là đủ và bắt được cả việc chặt cây (không có ô thống kê riêng).
-      const st1 = d.s.stats;
-      const didWork =
-        d.s.tiles !== state.tiles ||
-        st1.tilled !== st0.tilled ||
-        st1.planted !== st0.planted ||
-        st1.watered !== st0.watered ||
-        st1.harvested !== st0.harvested ||
-        st1.built !== st0.built;
-
-      if (didWork) touch(d).busy = Math.max(0, content.balance.actionSeconds ?? 0);
       if (d.changed) applyProgression(d, content);
       return commit(d);
     }
@@ -207,7 +222,11 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       p.y = y;
       p.moving = false;
       // Bước qua cửa là dừng mọi thao tác dở: không ai vung cuốc xuyên tường.
-      if (d.s.busy !== 0) touch(d).busy = 0;
+      if (d.s.busy !== 0 || d.s.pending) {
+        const s = touch(d);
+        s.busy = 0;
+        s.pending = null;
+      }
       return commit(d);
     }
 
@@ -226,6 +245,13 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "DEBUG": {
       applyDebug(d, content, action.op, action.n);
       if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "SWAP": {
+      const next = swapSlots(state.inv, action.a | 0, action.b | 0);
+      if (!next) return state;
+      touch(d).inv = next;
       return commit(d);
     }
 

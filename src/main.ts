@@ -50,7 +50,8 @@ import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
-import { facingTile, hintAt, type Hint } from "./game/hint.ts";
+import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
+import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
 const CONTENT_URL = "https://oni-farm.pages.dev";
@@ -70,6 +71,52 @@ window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   installPrompt = e as BeforeInstallPromptEvent;
 });
+
+/* ---- Chặn zoom của trình duyệt trên trang game -------------------------
+   `user-scalable=no` bị iOS bỏ qua từ lâu; thứ iOS tôn trọng là
+   `touch-action: manipulation` (CSS) cho chạm kép, còn véo hai ngón thì phải
+   chặn bằng JS. Ba lớp bảo hiểm: gesturestart (Safari), touchmove nhiều ngón
+   (Chrome/Android), và chạm kép trên phần tử KHÔNG phải nút/ô — nút thì để
+   nguyên, nếu không bấm nhanh hai lần vào +/− sẽ mất một lần. */
+function preventBrowserZoom() {
+  const opts = { passive: false } as AddEventListenerOptions;
+  document.addEventListener("gesturestart", (e) => e.preventDefault(), opts);
+  document.addEventListener("gesturechange", (e) => e.preventDefault(), opts);
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length > 1) e.preventDefault();
+    },
+    opts,
+  );
+  let lastEnd = 0;
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      const now = performance.now();
+      const interactive = (e.target as HTMLElement | null)?.closest?.(
+        "button, .slot, .bslot, .tab, .switch, .segment, a, input, [role=button]",
+      );
+      if (now - lastEnd < 320 && !interactive) e.preventDefault();
+      lastEnd = now;
+    },
+    opts,
+  );
+  document.addEventListener("dblclick", (e) => e.preventDefault(), opts);
+  // Ctrl + lăn chuột / Ctrl +- trên desktop: giữ nguyên tỉ lệ pixel art.
+  document.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.ctrlKey) e.preventDefault();
+    },
+    opts,
+  );
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "-" || e.key === "=" || e.key === "0"))
+      e.preventDefault();
+  });
+}
+preventBrowserZoom();
 
 async function boot() {
   const bootEl = $("#boot");
@@ -172,6 +219,10 @@ async function boot() {
 
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
+    swap: (a, b) => {
+      store.dispatch({ t: "SWAP", a, b });
+      buzz("tap");
+    },
     craft: (id) => store.dispatch({ t: "CRAFT", id }),
     canCraft: (id) => canCraft(store.getState(), content, id),
     missingFor: (id) => missingFor(store.getState(), content, id),
@@ -245,6 +296,11 @@ async function boot() {
   hud.onSelect((slot) => {
     store.dispatch({ t: "SELECT", slot });
     buzz("tap");
+  });
+  hud.onBag(() => {
+    if (tutorial.isOpen()) return;
+    if (menus.isOpen()) menus.close();
+    else menus.openBag();
   });
 
   const minimap = createMinimap($("#minimap"));
@@ -493,11 +549,33 @@ async function boot() {
     }
   }
 
+  /** Loại việc của nhát GẦN NHẤT — để giữ nút thì tiếp tục đúng việc đó. */
+  let lastKind: UseKind = null;
+
   function tryUse(s: GameState, tx: number, ty: number): boolean {
     if (!inReachOf(s, tx, ty)) return false;
     lastUse = { x: tx, y: ty };
+    const kind = canUseAt(s, content, tx, ty);
+    if (kind !== null) lastKind = kind;
     store.dispatch({ t: "USE", x: tx, y: ty });
     return true;
+  }
+
+  /**
+   * Giữ nút DÙNG (hoặc bấm liên tục): xong nhát này thì tự tìm ô KẾ TIẾP trong
+   * tầm công cụ và làm tiếp — ưu tiên cùng loại việc, ưu tiên ô thẳng hàng.
+   * Không tự đi xa: hết ô quanh chân thì dừng, người chơi chạm chỗ khác.
+   * Trả về true nếu đã bắt đầu một nhát mới.
+   */
+  function continueWork(s: GameState): boolean {
+    if (s.busy > 0) return false;
+    // ô đang ngắm vẫn còn việc → làm tiếp ở đó (cày xong đổi hạt là gieo ngay)
+    if (aimed && inReachOf(s, aimed.x, aimed.y) && canUseAt(s, content, aimed.x, aimed.y) !== null)
+      return tryUse(s, aimed.x, aimed.y);
+    const next = nearestTarget(s, content, lastKind, null);
+    if (!next) return false;
+    aimed = { x: next.x, y: next.y };
+    return tryUse(s, next.x, next.y);
   }
 
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
@@ -516,6 +594,10 @@ async function boot() {
 
   /* ---- 10. vòng lặp ---- */
   let elapsed = 0;
+  /** Giữ nút mà quanh chân hết việc thì im cho tới khi nhả nút — không kêu "deny" mỗi khung hình. */
+  let holdCooldown = false;
+  /** Nút DÙNG đã được giữ bao lâu (giây). */
+  let heldFor = 0;
   const loop = createLoop((dt) => {
     elapsed += dt;
     const modal = menus.isOpen() || tutorial.isOpen();
@@ -541,6 +623,24 @@ async function boot() {
         aimed = { x: arrived.tx, y: arrived.ty };
         if (arrived.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) deny();
       }
+
+      // GIỮ nút DÙNG: hết khoá là tự sang ô kế tiếp trong tầm. Cú bấm ĐẦU do
+      // intent "use" xử lý (nó còn lo cả cửa hàng/giường); khối này chỉ tiếp
+      // quản sau khi đã giữ quá 0,2s và nhát trước là một việc trên ô — nên bấm
+      // MUA cạnh cửa hàng không bao giờ bị hiểu nhầm thành cày. Đang tự đi tới
+      // đích (nav) thì tới nơi mới làm.
+      if (input.useHeld()) {
+        heldFor += dt;
+        if (heldFor > 0.2 && lastKind !== null && !nav.target()) {
+          const s = store.getState();
+          if (s.busy <= 0 && !holdCooldown) {
+            if (!continueWork(s)) holdCooldown = true; // hết việc quanh đây: đợi nhả nút
+          }
+        }
+      } else {
+        heldFor = 0;
+        holdCooldown = false;
+      }
     }
 
     for (const it of input.drain()) {
@@ -555,7 +655,8 @@ async function boot() {
           if (!modal) menus.openShop();
           break;
         case "inventory":
-          if (!modal) menus.openHelp();
+          if (!modal) menus.openBag();
+          else if (menus.isOpen()) menus.close();
           break;
         case "map":
           minimap.toggle();
@@ -584,7 +685,15 @@ async function boot() {
           if (c && inReachOf(s, c.x, c.y)) {
             // Với công trình gần đó (cửa hàng, giường…) nút chính cũng tương tác
             // được — người chơi không phải phân biệt DÙNG với E.
-            if (!actOnTile(s, c.x, c.y)) deny();
+            if (nearbyInteract(s, c.x, c.y)) {
+              if (!tryInteract(s, c.x, c.y)) deny();
+            } else if (canUseAt(s, content, c.x, c.y) !== null) {
+              tryUse(s, c.x, c.y);
+            } else if (s.busy <= 0) {
+              // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là tự sang ô kế
+              // tiếp trong tầm công cụ, cùng loại việc.
+              if (!continueWork(s)) deny();
+            }
           } else deny();
           break;
         }

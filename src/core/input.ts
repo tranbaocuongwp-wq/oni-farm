@@ -46,10 +46,14 @@ export interface Input {
   /** Đang muốn CHẠY: giữ Shift, hoặc đẩy joystick gần hết cỡ. Analog nên người
    *  chơi không phải học thêm nút nào — đẩy mạnh là chạy, đúng trực giác. */
   running(): boolean;
+  /** Nút DÙNG (Space / nút ảo) đang được GIỮ. Vòng lặp chính dùng nó để tự
+   *  chuyển sang ô kế tiếp trong tầm sau khi xong một nhát. */
+  useHeld(): boolean;
   detach(): void;
 }
 
 const RUN_KEYS = new Set(["ShiftLeft", "ShiftRight"]);
+const USE_KEYS = new Set(["Space", "Enter"]);
 
 const MOVE_KEYS: Record<string, [number, number]> = {
   KeyW: [0, -1], ArrowUp: [0, -1],
@@ -116,6 +120,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     switch (e.code) {
       case "Space":
       case "Enter":
+        held.add(e.code);
         push({ t: "use" });
         e.preventDefault();
         break;
@@ -140,8 +145,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         e.preventDefault();
         break;
       default: {
-        const m = /^Digit([1-9])$/.exec(e.code);
-        if (m) push({ t: "select", slot: +m[1]! - 1 });
+        // 1–9 → ô 1–9, 0 → ô 10 (hotbar cố định 10 ô)
+        const m = /^Digit([0-9])$/.exec(e.code);
+        if (m) push({ t: "select", slot: m[1] === "0" ? 9 : +m[1]! - 1 });
       }
     }
   };
@@ -301,6 +307,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       held.has("ShiftLeft") ||
       held.has("ShiftRight") ||
       Math.hypot(stick.x, stick.y) >= STICK_RUN,
+    useHeld: () => [...USE_KEYS].some((k) => held.has(k)),
     detach() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);

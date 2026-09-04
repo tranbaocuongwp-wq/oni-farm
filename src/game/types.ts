@@ -165,6 +165,10 @@ export interface Balance {
   /** Thời gian KHOÁ sau mỗi thao tác. Đây là thứ bắt việc diễn ra TUẦN TỰ:
    *  đang vung cuốc thì chưa gieo hạt được, và bấm loạn cũng không nhanh hơn. */
   actionSeconds: number;
+  /** Tỉ lệ 0..1 của `actionSeconds` trôi qua thì thao tác MỚI CÓ HIỆU LỰC
+   *  (khoảnh khắc cuốc chạm đất). Trước đó là diễn hoạt vung tay — nhìn thấy
+   *  giơ cuốc lên rồi mới thấy đất lật, chứ không phải đất đổi ngay lúc bấm. */
+  actionImpact: number;
 
   /** Bao nhiêu PHÚT GAME được tưới ẩm thì cây qua trọn một "ngày lớn".
    *  Đây là thứ biến `crop.growthDays` thành tăng trưởng liên tục theo thời gian
@@ -415,6 +419,10 @@ export interface GameState {
   /** Số giây còn lại của thao tác đang làm. > 0 nghĩa là đang bận: không thao
    *  tác tiếp và không di chuyển được. Đây là cơ chế bắt buộc làm việc tuần tự. */
   busy: number;
+  /** Ô mà thao tác đang vung tới, CHƯA có hiệu lực. TICK áp dụng nó khi `busy`
+   *  trôi qua mốc `actionImpact`, rồi xoá. null = không có thao tác chờ.
+   *  Bất biến: pending ≠ null ⇒ busy > 0. */
+  pending: { x: number; y: number } | null;
 
   /** Nước còn trong bình tưới. Hết thì phải ra giếng hoặc bờ ao múc. */
   water: number;
@@ -437,6 +445,9 @@ export type Action =
   /** tương tác vật thể: cửa nhà = ngủ, máy bán hạt = shop, quầy = bán */
   | { t: "INTERACT"; x: number; y: number }
   | { t: "SELECT"; slot: number }
+  /** Đổi chỗ hai ô túi đồ (kéo từ balo ra hotbar và ngược lại). Cùng id thì
+   *  gộp stack vào ô đích. */
+  | { t: "SWAP"; a: number; b: number }
   | { t: "BUY"; id: string; n: number }
   | { t: "SELL"; id: string; n: number }
   | { t: "SELL_ALL" }

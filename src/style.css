@@ -51,7 +51,12 @@
 
   /* ---- kích thước chạm ---- */
   --tap: 44px;            /* chuẩn ngón tay tối thiểu */
-  --slot: clamp(38px, 9.4vw, 52px);
+  /* Hotbar CỐ ĐỊNH 10 ô + nút balo trên MỘT hàng, không cuộn, không co theo
+     nội dung: cỡ ô tính từ bề ngang khả dụng (trừ lề, khe và nút balo), kẹp
+     trong [30px, 52px]. Phần túi còn lại nằm trong balo. */
+  --hotbar-slots: 10;
+  --slot-gap: 2px;
+  --slot: clamp(26px, calc((100vw - 2 * var(--hud-gap) - 2 * var(--sa-l) - 20px - var(--tap) - var(--hotbar-slots) * var(--slot-gap)) / var(--hotbar-slots)), 52px);
   --btn-a: 72px;          /* nút hành động chính */
   --btn-b: 52px;          /* nút phụ E */
   --gap: 8px;
@@ -73,13 +78,11 @@
 /* Cỡ giao diện do người chơi chọn: ghi đè các token, không đụng thành phần. */
 body[data-ui="small"] {
   --fs: 12px;
-  --slot: 36px;
   --btn-a: 60px;
   --btn-b: 44px;
 }
 body[data-ui="large"] {
   --fs: clamp(15px, 4vw, 18px);
-  --slot: clamp(46px, 11vw, 60px);
   --btn-a: 84px;
   --btn-b: 60px;
 }
@@ -98,6 +101,9 @@ body[data-motion="reduce"] *::after {
 
 * {
   box-sizing: border-box;
+  /* Chặn double-tap zoom ở MỌI phần tử (iOS tôn trọng cái này, không tôn trọng
+     user-scalable=no). Khu chơi và joystick ghi đè thành none. */
+  touch-action: manipulation;
 }
 
 html,
@@ -337,27 +343,63 @@ body[data-hand="left"] .hud-mid {
   justify-content: flex-end;
 }
 
-/* ---- hotbar ---- */
+/* ---- hotbar: VỊ TRÍ và KÍCH THƯỚC cố định ---- */
 .hud-bottom {
   display: flex;
   justify-content: center;
 }
-.hotbar {
+.hotbar-wrap {
   pointer-events: auto;
   display: flex;
-  gap: 4px;
-  padding: 5px;
+  align-items: center;
+  gap: 6px;
+}
+.hotbar {
+  display: flex;
+  gap: var(--slot-gap);
+  padding: 3px;
   background: var(--glass);
   border: 2px solid var(--edge);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-  touch-action: pan-x;
+  flex: none;
+  overflow: hidden;
 }
-.hotbar::-webkit-scrollbar {
+.bag-btn {
+  position: relative;
+  width: var(--tap);
+  height: calc(var(--slot) + 12px);
+  min-height: var(--tap);
+  padding: 0;
+  border-radius: var(--radius);
+  background: var(--glass);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.bag-btn .ic canvas {
+  width: 24px;
+  height: 24px;
+}
+.bag-btn .n {
+  position: absolute;
+  right: -4px;
+  top: -6px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #241a05;
+  font-size: 0.75em;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+.bag-btn .n:empty {
   display: none;
+}
+.bag-btn.has {
+  border-color: var(--edge-hi);
 }
 
 .slot {
@@ -642,6 +684,74 @@ body.touch .slot .k {
   .modal header {
     padding-top: 6px;
   }
+}
+
+/* ---- balo ---- */
+.bag-head {
+  font-size: var(--fs-sm);
+  color: var(--ink-mute);
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+.bag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 6px;
+  touch-action: none;
+}
+.bag-grid.hot {
+  grid-template-columns: repeat(5, 1fr);
+}
+.bslot {
+  position: relative;
+  aspect-ratio: 1;
+  min-height: 50px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+.bslot .icon {
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.bslot.empty {
+  opacity: 0.5;
+}
+.bslot.locked {
+  border-style: dashed;
+  border-color: var(--edge);
+}
+.bslot.sel {
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.bslot.picked {
+  border-color: var(--gold);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(255, 216, 74, 0.5);
+  transform: translateY(-2px);
+}
+.bslot .n {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+  pointer-events: none;
+}
+.bslot.ghost {
+  position: fixed;
+  z-index: 100;
+  width: 52px;
+  height: 52px;
+  transform: translate(-50%, -60%) scale(1.15);
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: var(--shadow-soft);
 }
 
 /* ---- tab trong cửa hàng ---- */
@@ -1139,13 +1249,10 @@ body.touch[data-orientation="portrait"] {
 body.touch[data-orientation="landscape"] {
   --pad-bottom: 6px;
 }
-/* Ngang: hotbar dịch khỏi cụm nút bên phải (hoặc trái). */
-body.touch[data-orientation="landscape"] .hud-bottom {
-  padding-right: calc(var(--btn-a) + var(--btn-b) + 40px);
-}
-body.touch[data-orientation="landscape"][data-hand="left"] .hud-bottom {
-  padding-right: 0;
-  padding-left: calc(var(--btn-a) + var(--btn-b) + 40px);
+/* Ngang: hotbar vẫn cố định ở GIỮA đáy; cỡ ô trừ đi hai bên cụm nút (tính cả
+   hai bên như nhau để tay trái/phải cho cùng một bố cục). */
+body.touch[data-orientation="landscape"] {
+  --slot: clamp(26px, calc((100vw - 2 * (var(--btn-a) + var(--btn-b) + 44px) - 20px - var(--tap) - var(--hotbar-slots) * var(--slot-gap)) / var(--hotbar-slots)), 48px);
 }
 /* Ngang: bản đồ nhỏ nằm góc dưới cạnh hotbar sẽ chạm nút — đẩy lên trên. */
 body.touch[data-orientation="landscape"] .hud-mid {
@@ -1156,7 +1263,6 @@ body.touch[data-orientation="landscape"] .hud-mid {
 @media (max-height: 460px) {
   :root {
     --hud-gap: 5px;
-    --slot: clamp(30px, 7.6vh, 40px);
     --btn-a: 58px;
     --btn-b: 44px;
   }

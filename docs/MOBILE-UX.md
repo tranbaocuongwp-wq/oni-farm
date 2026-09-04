@@ -9,7 +9,14 @@ trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
 ## 1. Nguyên tắc
 
 1. **Ngón tay cái là người dùng.** Mọi thứ bấm được ≥ 44 CSS px (`--tap`). Nút hành
-   động chính 72px, nút phụ 52px, ô hotbar ≥ 38px. Không có nút nào cần hai tay.
+   động chính 72px, nút phụ 52px. Không có nút nào cần hai tay. Ngoại lệ có chủ ý:
+   **hotbar cố định 10 ô** trên một hàng, không cuộn, vị trí và kích thước không đổi
+   theo nội dung — cỡ ô tính từ bề ngang khả dụng (26–52px). Muốn nhiều hơn 10 thì kéo
+   từ balo ra.
+8. **Thao tác có độ trễ và diễn hoạt.** Bấm không đổi ô ngay: giơ công cụ → chạm đất
+   (mốc `actionImpact`) → kết quả. Reducer và renderer đọc cùng một con số.
+9. **Không zoom.** `touch-action: manipulation` toàn cục (khu chơi `none`), cộng JS chặn
+   gesturestart / véo hai ngón / chạm kép ngoài nút / Ctrl+lăn — pixel art giữ đúng tỉ lệ.
 2. **Nhân vật LUÔN ở tâm màn hình.** Với lối chơi chạm-để-đi, tâm là chỗ mắt nhìn.
    Camera không kẹp ở mép bản đồ nữa (`edgeMode: "center"`); phần ngoài biên vẽ
    rừng/tường tối (`atlas.voidOut/voidIn`), không bao giờ là màn đen.
@@ -65,6 +72,8 @@ bảng màu để trang tĩnh và game là một sản phẩm.
 | Chạm 1 lần | đi tới ô (A*), ngắm sẵn ô đó, vòng vàng đánh dấu đích | `main.ts` case "pointer", `core/navigate.ts` |
 | Chạm 2 lần (< 350ms, < 44px) | làm ngay tại ô; xa thì đi tới rồi làm | như trên |
 | Nút hành động | làm việc ghi trên nút với ô đang ngắm; ô xa thì tự đi tới rồi làm | `main.ts` case "use" |
+| **Giữ** nút hành động (> 0,2s) hoặc bấm liên tục | xong nhát này tự sang ô kế tiếp **trong tầm**, cùng loại việc; hết ô thì dừng, không tự đi xa | `game/hint.ts › nearestTarget`, `main.ts › continueWork` |
+| Nút 🎒 / phím `I` | mở balo: hotbar cố định 10 ô + 14 ô balo; chạm-chọn-chạm hoặc kéo thả để đổi chỗ (action `SWAP`) | `ui/menus.ts › openBag` |
 | Nút E | tương tác thứ trước mặt (không theo ô ngắm) | case "interact" |
 | Nhấn giữ ô hotbar (380ms) | tooltip tên + công dụng | `ui/hud.ts` |
 | Chạm bản đồ nhỏ | đi thuần tuý tới ô đó | `ui/minimap.ts` |
@@ -124,7 +133,7 @@ Thêm một loại hành động mới = thêm một dòng vào `LABEL`, kèm te
 |---|---|
 | Nền (cỏ, lối đi, đất, nước, sàn) | KHÔNG viền, để mặt ruộng liền. 6 biến thể cỏ (2 có hoa), 4 lối đi, 2 đất khô/ướt. |
 | Vật thể đứng trên đất (props, cây trồng, công trình `object`, nhân vật, icon) | `outline()` 1px màu `P.outline`. Bóng đổ mờ không bị viền (ngưỡng alpha 128). |
-| Nhân vật | 4 hướng × 6 khung: 0 đứng, 1–4 đi (8 khung/giây), 5 thao tác (`PLAYER_ACT_FRAME`). |
+| Nhân vật | 4 hướng × 7 khung: 0 đứng, 1–4 đi (8 khung/giây), 5 chạm (`PLAYER_ACT_FRAME`), 6 giơ (`PLAYER_RAISE_FRAME`). Pha vung = `1 − busy/actionSeconds`; trước `actionImpact` là giơ, sau là chạm. Công cụ trong tay: `atlas.held(kind, steel)` 8×8, đặt theo hướng và pha. |
 | Cây trồng | vẽ theo tham số `crops.json > art`, viền, quả chỉ khi chín. Renderer thêm sao lấp lánh (`atlas.sparkle`) lệch pha theo toạ độ. |
 | Autotile ở lớp vẽ | `atlas.shore[side][frame]` cho nước giáp đất; `atlas.soilEdge[side]` cho đất cày giáp ô chưa cày; `atlas.voidOut/voidIn` ngoài biên. State không lưu gì. |
 | Icon HUD | `atlas.ui(name)` 12×12: coin, day, sun, moon, energy, water, power, goal. |
@@ -166,7 +175,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 38 kịch bản sim (có 37: hint, 38: settings) + OTA
+npm run test:all       # typecheck + 40 kịch bản sim (37 hint · 38 settings · 17 hiệu lực trễ · 39 SWAP · 40 nearestTarget) + OTA
 npm run build
 ```
 
@@ -176,6 +185,9 @@ Những thứ phải đúng ở mọi khổ:
 
 - [ ] nhân vật ở tâm, không bị HUD/toast che
 - [ ] nút hành động đổi nhãn CÀY → GIEO → TƯỚI khi đổi hotbar trên cùng một ô
+- [ ] giữ nút 3s trên lối đi giữa 6 ô cỏ → cả 6 ô được cày, nhân vật giơ cuốc rồi mới thấy đất lật
+- [ ] hotbar 10 ô + nút balo vừa một hàng ở 360px; kéo hạt từ hotbar xuống balo và ngược lại
+- [ ] chạm kép trên canvas, véo hai ngón: `visualViewport.scale` vẫn 1
 - [ ] hotbar không đè lên cụm nút; ngang thì hotbar không chui dưới nút
 - [ ] modal cuộn được, nút Đóng trong tầm ngón cái, không bị safe-area cắt
 - [ ] tay trái lật đủ: nút, ☰, bản đồ nhỏ, joystick

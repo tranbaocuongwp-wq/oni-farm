@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — mọi con số cân bằng nằm ở đây để chỉnh nhịp game qua OTA, không cần build lại. moveSpeed/runSpeed tính bằng world px mỗi giây (1 ô = 16). actionSeconds là thời gian KHOÁ sau mỗi thao tác — đây là thứ làm cho việc diễn ra tuần tự thay vì bấm loạn là xong hết.\n\ngrowthMinutesPerDay phải NHỎ HƠN MỘT CHÚT độ dài ban ngày (ở đây 780 phút = 1140-360). Đặt bằng đúng 780 thì ngày đầu tiên gieo giữa buổi luôn bị hụt vài chục phút và cây tốn thêm trọn một đêm, tức là con số growthDays trong crops.json không còn đúng nghĩa 'số ngày'. Chừa biên 700 thì gieo bất cứ lúc nào trước ~17:00 vẫn chín đúng số ngày đã ghi; gieo muộn hơn thì mất thêm một đêm — hệ quả dễ hiểu và có chủ ý.",
+  "$comment": "LÀN NHANH — mọi con số cân bằng nằm ở đây để chỉnh nhịp game qua OTA, không cần build lại. moveSpeed/runSpeed tính bằng world px mỗi giây (1 ô = 16). actionSeconds là thời gian KHOÁ sau mỗi thao tác — đây là thứ làm cho việc diễn ra tuần tự thay vì bấm loạn là xong hết. actionImpact (0..1) là mốc trong khoảng đó mà thao tác MỚI CÓ HIỆU LỰC: trước mốc là giơ công cụ lên, tới mốc mới chạm đất. hotbarSlots cố định 10 ô; phần túi còn lại nằm trong balo.\n\ngrowthMinutesPerDay phải NHỎ HƠN MỘT CHÚT độ dài ban ngày (ở đây 780 phút = 1140-360). Đặt bằng đúng 780 thì ngày đầu tiên gieo giữa buổi luôn bị hụt vài chục phút và cây tốn thêm trọn một đêm, tức là con số growthDays trong crops.json không còn đúng nghĩa 'số ngày'. Chừa biên 700 thì gieo bất cứ lúc nào trước ~17:00 vẫn chín đúng số ngày đã ghi; gieo muộn hơn thì mất thêm một đêm — hệ quả dễ hiểu và có chủ ý.",
   "startMoney": 150,
   "startSeeds": {
     "seed:lettuce": 8
@@ -21,10 +21,11 @@
   "lateSleepPenalty": 0.35,
   "passOutEnergy": 0.5,
   "inventorySlots": 24,
-  "hotbarSlots": 9,
+  "hotbarSlots": 10,
   "moveSpeed": 78,
   "runSpeed": 132,
-  "actionSeconds": 0.34,
+  "actionSeconds": 0.42,
+  "actionImpact": 0.5,
   "growthMinutesPerDay": 700,
   "daylightEndMinutes": 1140,
   "grassSpreadChance": 0.1,

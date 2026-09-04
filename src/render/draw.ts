@@ -41,12 +41,16 @@ import {
   TILE,
   CROP_H,
   PLAYER_ACT_FRAME,
+  PLAYER_RAISE_FRAME,
   houseVariantKey,
   variantFor,
   type Atlas,
+  type HeldKind,
   type PlayerDir,
   type Side,
 } from "../art/atlas.ts";
+import { selectedItemId } from "../game/inventory.ts";
+import { parseItem } from "../game/items.ts";
 import type { Camera } from "./camera.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
@@ -434,16 +438,70 @@ export function createRenderer(
     }
   }
 
-  function drawPlayer(s: GameState, items: Item[]) {
+  /** Vật phẩm đang cầm → loại sprite trong tay. */
+  function heldKind(s: GameState, content: Content): { kind: HeldKind; steel: boolean } {
+    const id = selectedItemId(s.inv, s.sel);
+    const it = id ? parseItem(id) : null;
+    if (!it) return { kind: "hand", steel: false };
+    if (it.kind === "tool") {
+      const t = content.tools[it.ref];
+      const a = t?.action;
+      const kind: HeldKind = a === "TILL" || a === "WATER" || a === "CHOP" || a === "MINE" ? a : "hand";
+      return { kind, steel: it.ref.endsWith("2") };
+    }
+    if (it.kind === "seed") return { kind: "seed", steel: false };
+    if (it.kind === "build") return { kind: "build", steel: false };
+    return { kind: "hand", steel: false };
+  }
+
+  function drawPlayer(s: GameState, content: Content, items: Item[]) {
     const p = s.player;
-    const frames = atlas.player[p.dir as PlayerDir];
-    // Đang bận thao tác thì dùng khung vung tay — phản hồi cho cơ chế khoá
-    // tuần tự. Đi thì chạy 4 khung ở 8 khung/giây; đứng yên thì về khung 0.
-    const f = s.busy > 0 ? PLAYER_ACT_FRAME : p.moving ? 1 + (Math.floor(p.anim * 8) % 4) : 0;
+    const dir = p.dir as PlayerDir;
+    const frames = atlas.player[dir];
+    const total = Math.max(0.0001, content.balance.actionSeconds ?? 0);
+    const impact = Math.max(0, Math.min(1, content.balance.actionImpact ?? 0.5));
+    // Pha vung: 0..1 theo thời gian đã trôi của nhát. Trước mốc chạm đất là
+    // GIƠ (công cụ trên đầu), sau mốc là CHẠM (vung xuống) — đúng thứ tự mắt
+    // cần thấy: giơ → bổ → đất lật (reducer áp dụng đúng lúc chuyển pha).
+    const phase = s.busy > 0 ? 1 - s.busy / total : -1;
+    const raising = phase >= 0 && phase < impact;
+    const f =
+      s.busy > 0 ? (raising ? PLAYER_RAISE_FRAME : PLAYER_ACT_FRAME) : p.moving ? 1 + (Math.floor(p.anim * 8) % 4) : 0;
     const img = frames[f] ?? frames[0]!;
     const px = Math.round(p.x - camera.rx) - TILE / 2;
     const py = Math.round(p.y - camera.ry) - 11;
-    items.push({ base: Math.round(p.y) + 5, run: () => g.drawImage(img, px, py) });
+
+    // Công cụ trong tay — chỉ khi đang vung. Giơ: trên đầu, hơi lệch về phía
+    // sau; chạm: trước mặt theo hướng, thấp xuống. Nhấc dần theo pha cho có đà.
+    let tool: { img: HTMLCanvasElement; x: number; y: number } | null = null;
+    if (s.busy > 0) {
+      const { kind, steel } = heldKind(s, content);
+      if (kind !== "hand") {
+        const t = atlas.held(kind, steel);
+        const lift = raising ? Math.round((phase / Math.max(0.0001, impact)) * 3) : 0;
+        let tx = px + 4;
+        let ty = py - 6 - lift;
+        if (!raising) {
+          // chạm đất: đặt về phía ô đang làm
+          if (dir === "left") { tx = px - 5; ty = py + 6; }
+          else if (dir === "right") { tx = px + 13; ty = py + 6; }
+          else if (dir === "up") { tx = px + 4; ty = py - 4; }
+          else { tx = px + 4; ty = py + 12; }
+        } else if (dir === "left") tx = px + 8;
+        else if (dir === "right") tx = px;
+        tool = { img: t, x: tx, y: ty };
+      }
+    }
+    const toolRef = tool;
+    items.push({
+      base: Math.round(p.y) + 5,
+      run: () => {
+        // công cụ vẽ SAU (đè lên) người khi ở trước mặt/dưới, TRƯỚC khi giơ lên phía sau
+        if (toolRef && raising && dir !== "down") g.drawImage(toolRef.img, toolRef.x, toolRef.y);
+        g.drawImage(img, px, py);
+        if (toolRef && !(raising && dir !== "down")) g.drawImage(toolRef.img, toolRef.x, toolRef.y);
+      },
+    });
   }
 
   function drawNight(s: GameState, lights: Light[]) {
@@ -544,7 +602,7 @@ export function createRenderer(
     const items: Item[] = [];
     const lights: Light[] = [];
     collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion);
-    drawPlayer(s, items);
+    drawPlayer(s, content, items);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 
     items.sort((a, b) => a.base - b.base);

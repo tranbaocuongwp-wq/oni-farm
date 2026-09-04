@@ -309,6 +309,7 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   s0.sleeping = false;
   // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
   s0.busy = 0;
+  s0.pending = null;
 
   // Lấy cửa sổ cho MỌI bản đồ đúng một lần, theo thứ tự tất định.
   const views = mapViews(d, content);

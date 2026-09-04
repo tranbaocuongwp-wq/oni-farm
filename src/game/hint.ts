@@ -136,6 +136,52 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
   return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
 }
 
+/**
+ * Ô GẦN NHẤT trong tầm với mà vật phẩm đang cầm làm được việc — để giữ nút
+ * DÙNG (hoặc bấm liên tục) là nhân vật tự chuyển sang ô kế tiếp, không phải
+ * ngắm lại từng ô. "Trong tầm công cụ" là cố ý: không tự đi xa, chỉ quét quanh
+ * chân — muốn sang luống khác thì người chơi chạm.
+ *
+ * `prefer`: loại việc vừa làm (till/water/…) được ưu tiên, để đang cày thì
+ * không nhảy sang thu hoạch một cây chín tình cờ đứng cạnh (thu hoạch vẫn là
+ * việc "làm được" theo `canUseAt`). Không có ô cùng loại thì mới lấy loại khác.
+ * Trả null nếu quanh đây không còn gì.
+ */
+export function nearestTarget(
+  state: GameState,
+  content: Content,
+  prefer: UseKind | null,
+  exclude: { x: number; y: number } | null = null,
+): { x: number; y: number; kind: Exclude<UseKind, null> } | null {
+  const px = state.player.x;
+  const py = state.player.y;
+  const cx = Math.floor(px / 16);
+  const cy = Math.floor(py / 16);
+  let best: { x: number; y: number; kind: Exclude<UseKind, null> } | null = null;
+  let bestScore = Infinity;
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (exclude && exclude.x === x && exclude.y === y) continue;
+      if (!inReach(state, x, y)) continue;
+      const kind = canUseAt(state, content, x, y);
+      if (kind === null) continue;
+      const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
+      // cùng loại việc thắng tuyệt đối; sau đó ô thẳng hàng (không chéo) thắng
+      // ô chéo — nhân vật vung tay theo 4 hướng nên ô chéo trông lệch;
+      // cuối cùng mới tới khoảng cách.
+      const straight = dx === 0 || dy === 0 ? 0 : 1;
+      const score = (prefer && kind !== prefer ? 100 : 0) + straight * 10 + d;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x, y, kind };
+      }
+    }
+  }
+  return best;
+}
+
 /** Ô ngay TRƯỚC MẶT nhân vật — dùng khi không có ô nào đang được ngắm. */
 export function facingTile(state: GameState, tile = 16): { x: number; y: number } {
   const d = state.player.dir;

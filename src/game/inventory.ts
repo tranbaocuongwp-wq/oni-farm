@@ -112,6 +112,29 @@ export function removeForCraft(inv: readonly InvSlot[], id: string, n: number): 
   return out;
 }
 
+/**
+ * Đổi chỗ hai ô (kéo từ balo ra hotbar và ngược lại). Cùng id thì GỘP vào ô
+ * đích. Hai ô công cụ đầu (cuốc/bình tưới) là cố định: không đổi chỗ được —
+ * bất biến "ô 0/1 luôn là cuốc và bình" phải giữ. Trả null nếu không đổi gì.
+ */
+export function swapSlots(inv: readonly InvSlot[], a: number, b: number): InvSlot[] | null {
+  if (!Number.isInteger(a) || !Number.isInteger(b)) return null;
+  if (a < 0 || b < 0 || a >= inv.length || b >= inv.length || a === b) return null;
+  if (a < TOOL_SLOTS || b < TOOL_SLOTS) return null;
+  const sa = inv[a] ?? null;
+  const sb = inv[b] ?? null;
+  if (!sa && !sb) return null;
+  const out = inv.slice();
+  if (sa && sb && sa.id === sb.id) {
+    out[b] = { id: sb.id, n: sa.n + sb.n };
+    out[a] = null;
+    return out;
+  }
+  out[a] = sb;
+  out[b] = sa;
+  return out;
+}
+
 /** Id vật phẩm đang chọn ở hotbar, null nếu slot trống. */
 export function selectedItemId(inv: readonly InvSlot[], sel: number): string | null {
   const s = inv[sel];

@@ -30,7 +30,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 38 kịch bản mô phỏng game (kể cả gợi ý hành động, parse cài đặt), Node thuần |
+| `npm run test:sim` | 40 kịch bản mô phỏng game (gợi ý hành động, parse cài đặt, hiệu lực trễ, SWAP balo, ô kế tiếp), Node thuần |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run icons` | Sinh lại icon PNG |
@@ -48,6 +48,8 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | Chạm 1 lần vào ô | Nhân vật tự **đi tới** (tìm đường, tự chạy khi xa), ngắm sẵn ô đó |
 | Chạm 2 lần | **Làm ngay** tại ô đó |
 | Nút lớn góc dưới | Ghi đúng việc sẽ làm: **CÀY · GIEO · TƯỚI · THU · CHẶT · ĐẬP · ĐẶT · MUA · BÁN · CHẾ · NGỦ · VÀO · MÚC**. Ô xa thì bấm là tự đi tới rồi làm. Không làm được thì nói vì sao |
+| **Giữ** nút lớn (hoặc bấm liên tục) | Xong nhát này tự sang **ô kế tiếp trong tầm công cụ**, cùng loại việc — cày cả luống mà không phải ngắm từng ô. Hết ô quanh chân thì dừng |
+| Nút 🎒 cạnh hotbar | Mở **balo**: hotbar cố định 10 ô, phần túi còn lại (14 ô) nằm trong balo; chạm-chọn hoặc kéo thả để đổi chỗ |
 | Nút E | Tương tác thứ trước mặt |
 | Nhấn giữ ô hotbar | Xem vật phẩm dùng làm gì |
 | Chạm bản đồ nhỏ | Đi xa |
@@ -64,7 +66,9 @@ khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hư�
 | `W A S D` / mũi tên | Di chuyển · giữ `Shift` để chạy |
 | `Space` | Dùng vật phẩm đang cầm lên ô đang ngắm |
 | `E` | Tương tác — cửa, giường, máy bán hạt, quầy, giếng |
-| `1`–`9` / lăn chuột / `Tab` | Chọn ô hotbar |
+| `1`–`9`, `0` / lăn chuột / `Tab` | Chọn ô hotbar (10 ô) |
+| `I` | Mở balo |
+| Giữ `Space` | Tự sang ô kế tiếp trong tầm, cùng loại việc |
 | `B` · `M` | Mở cửa hàng · bật/tắt bản đồ nhỏ |
 | `Esc` | Tạm dừng: lưu, tải, cài đặt, xuất/nhập file save |
 | Bấm chuột 1 / 2 lần | Đi tới ô đó / làm ngay tại ô đó |
@@ -270,24 +274,39 @@ quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn
 resize (xoay máy, có đo lại sau một nhịp vì mobile hay báo chậm), và matchMedia resolution
 (đổi màn hình / đổi mức zoom làm devicePixelRatio đổi).
 
-### Làm việc TUẦN TỰ
+### Làm việc TUẦN TỰ, có ĐỘ TRỄ và DIỄN HOẠT
 
-Mỗi thao tác thành công khoá nhân vật `balance.actionSeconds` (0,34s): trong lúc đó không
-thao tác tiếp và **không bước đi**. Đây là lý do bấm loạn không làm được nhanh hơn — và nó
-làm cho việc cày cuốc có sức nặng thay vì cả ruộng xong trong một giây.
+Mỗi thao tác khoá nhân vật `balance.actionSeconds` (0,42s): trong lúc đó không thao tác
+tiếp và **không bước đi**. Đây là lý do bấm loạn không làm được nhanh hơn — và nó làm cho
+việc cày cuốc có sức nặng thay vì cả ruộng xong trong một giây.
+
+**Hiệu lực TRỄ.** Bấm USE không đổi ô ngay: reducer chỉ khoá `busy` và ghi `pending`
+(ô đang vung tới). Khi `busy` trôi qua mốc `balance.actionImpact` (0,5 = nửa nhát), TICK
+mới gọi `useAt` — lúc đó đất mới lật, hạt mới xuống, nước mới tưới. Renderer đọc cùng con
+số đó: trước mốc là khung **giơ** công cụ lên đầu (sprite công cụ nhấc dần theo pha), sau
+mốc là khung **chạm** với công cụ đặt về phía ô. Mắt thấy đúng thứ tự giơ → bổ → kết quả,
+và âm thanh/hạt/rung (suy từ diff thống kê) tự rơi đúng khoảnh khắc chạm đất.
+Ngủ dậy hay bước qua cửa thì nhát dở bị bỏ (`pending = null`), không mang sang ngày mới.
+`pending` vào save (v6) kèm bất biến `pending ≠ null ⇒ busy > 0`.
+
+**Giữ nút = làm tiếp.** `src/game/hint.ts › nearestTarget` quét 5×5 ô quanh chân, chỉ lấy
+ô **trong tầm với** mà vật phẩm đang cầm làm được việc, ưu tiên cùng loại việc vừa làm
+(đang cày không nhảy sang thu hoạch), rồi ô thẳng hàng, rồi khoảng cách. Không tự đi xa —
+muốn sang luống khác thì chạm. Vòng lặp chính chỉ tiếp quản sau khi đã giữ quá 0,2s và
+nhát trước là một việc trên ô, nên bấm MUA cạnh cửa hàng không bao giờ bị hiểu nhầm.
 
 Ba chi tiết khiến nó không phiền:
 
-- **Thao tác HỤT không bị phạt.** Bấm nhầm vào tảng đá thì không bị đứng hình. Không thể
-  dùng `d.changed` để nhận biết vì toast báo lỗi cũng là thay đổi state — phải so **bộ đếm
-  thống kê** trước/sau (`tilled/planted/watered/harvested/built`).
+- **Thao tác HỤT không bị phạt.** Bấm nhầm vào tảng đá thì không bị đứng hình. Reducer hỏi
+  `canUseAt` (đúng bộ luật `useAt` dùng) trước khi khoá; không có việc thì chạy `useAt` ngay
+  để nó đẩy toast lý do, không khoá, không `pending`.
 - **Nhân vật xoay mặt về ô đang làm**, và có khung hình vung tay riêng. Nhìn là biết đang
   bận chứ không phải game đơ. Chỉ xoay khi ô trong tầm với — nếu không thì `USE` ra ngoài
   tầm sẽ không còn là không-làm-gì tuyệt đối nữa.
 - **Ngủ dậy là hết bận**, không mang thao tác dở dang sang ngày mới.
 
-`state.busy` nằm trong game state nên `SAVE_VERSION` lên **2**, kèm bước migrate điền
-`busy: 0` cho save cũ — thiếu bước này thì mọi phép tính với nó ra `NaN` và bất biến vỡ ngay.
+`state.busy` và `state.pending` nằm trong game state (save v2 và v6), kèm bước migrate điền
+giá trị mặc định cho save cũ — thiếu bước này thì mọi phép tính với nó ra `NaN` và bất biến vỡ ngay.
 
 ### Đi lại
 
@@ -492,10 +511,12 @@ Không có server, không gửi dữ liệu đi đâu.
 bị kiểm sau **mọi** dispatch (tiền không âm, năng lượng trong khoảng, cây không lớn
 khi chưa tưới, người chơi không nằm trong ô đặc…).
 
-Phủ 38 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · drone
+Phủ 40 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · drone
 đứng im khi thiếu điện · save round-trip khớp hoàn toàn · cùng seed cho ra state y
 hệt · **load save cũ với content đã gỡ cây thì không crash** · `reduce` không mutate
-state cũ · **nhãn nút ngữ cảnh đổi đúng CÀY → GIEO → TƯỚI → THU** · parse cài đặt hỏng vẫn ra hợp lệ.
+state cũ · **nhãn nút ngữ cảnh đổi đúng CÀY → GIEO → TƯỚI → THU** · parse cài đặt hỏng vẫn ra hợp lệ ·
+**thao tác có hiệu lực trễ đúng mốc chạm đất, nhát dở bị bỏ khi ngủ** · SWAP balo gộp stack và giữ
+hai ô công cụ · giữ nút tự sang ô kế tiếp cùng loại việc, hết ô thì dừng.
 
 Lớp UI soát bằng Chromium headless ở bốn khổ máy (checklist trong `docs/MOBILE-UX.md`).
 

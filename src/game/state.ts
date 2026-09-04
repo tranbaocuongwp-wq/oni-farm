@@ -322,6 +322,7 @@ export function createNewGame(content: Content, seed = 1): GameState {
     logSeq: 0,
     sleeping: false,
     busy: 0,
+    pending: null,
 
     water: Math.max(0, Math.floor(content.balance.startWater ?? 0)),
   };

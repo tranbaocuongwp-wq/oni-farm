@@ -213,6 +213,7 @@ const BALANCE_DEFAULTS = {
   moveSpeed: 78,
   runSpeed: 132,
   actionSeconds: 0.34,
+  actionImpact: 0.5,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */

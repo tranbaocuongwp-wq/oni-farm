@@ -376,6 +376,7 @@ export function validateBalance(raw: unknown): string[] {
     ["moveSpeed", 8, 400],
     ["runSpeed", 8, 600],
     ["actionSeconds", 0, 5],
+    ["actionImpact", 0, 1],
   ] as [string, number, number][])
     if (raw[k] !== undefined) c.num(raw, k, min, max);
   if (isNum(raw["moveSpeed"]) && isNum(raw["runSpeed"]) && raw["runSpeed"] < raw["moveSpeed"])

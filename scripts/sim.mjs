@@ -14,7 +14,7 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { hintAt, facingTile } from "../src/game/hint.ts";
+import { hintAt, facingTile, nearestTarget } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
@@ -905,48 +905,59 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
 /* 17. Thao tác TUẦN TỰ — bấm loạn không làm được nhanh hơn                    */
 /* ========================================================================== */
 
-test("17. thao tác tuần tự: đang bận thì không làm việc khác, không đi được", () => {
+test("17. thao tác tuần tự + hiệu lực TRỄ: vung → chạm đất → mới đổi ô; đang bận thì không làm việc khác", () => {
   const store = mkStore();
   walkTo(store, HOME.x, HOME.y);
   selectItem(store, "tool:hoe");
   const w = store.getState().w;
-  // HOME là ô LỐI ĐI (không cày được) — dùng các ô cỏ hai bên.
   const A = PLOTS[1];
   const B = PLOTS[4];
+  const impactAt = BAL.actionSeconds * (1 - BAL.actionImpact);
 
   useRaw(store, A.x, A.y);
   const first = store.getState();
-  ok(first.tiles[A.y * w + A.x].tilled, "nhát cuốc đầu ăn");
+  ok(!first.tiles[A.y * w + A.x].tilled, "bấm xong đất CHƯA lật — mới đang giơ cuốc");
   eq(first.busy, BAL.actionSeconds, "khoá đúng bằng balance.actionSeconds");
+  deepEq(first.pending, { x: A.x, y: A.y }, "ghi nhớ ô đang vung tới");
 
   // Bấm loạn khi còn khoá: không nhát nào được ăn.
   const before = store.getState();
   useRaw(store, B.x, B.y);
   useRaw(store, PLOTS[0].x, PLOTS[0].y);
   ok(store.getState() === before, "USE lúc đang bận phải trả về ĐÚNG state cũ");
-  ok(!store.getState().tiles[B.y * w + B.x].tilled, "ô kế bên không bị cày khi đang bận");
 
   // Đang bận thì chân đứng yên.
   const px = store.getState().player.x;
   store.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 0.1 });
   eq(store.getState().player.x, px, "đang bận thì không di chuyển được");
 
+  // Trước mốc chạm đất: vẫn chưa lật. Qua mốc: lật, pending xoá, busy còn chạy nốt.
+  store.dispatch({ t: "TICK", dt: Math.max(0, BAL.actionSeconds - impactAt) * 0.5 });
+  ok(!store.getState().tiles[A.y * w + A.x].tilled, "trước mốc chạm đất vẫn chưa lật");
+  store.dispatch({ t: "TICK", dt: Math.max(0, BAL.actionSeconds - impactAt) * 0.5 + 0.001 });
+  ok(store.getState().tiles[A.y * w + A.x].tilled, "tới mốc chạm đất thì đất lật");
+  eq(store.getState().pending, null, "áp dụng xong thì hết thao tác chờ");
+  ok(store.getState().busy > 0, "vẫn còn khoá nốt phần sau của nhát vung");
+  eq(store.getState().stats.tilled, 1, "thống kê tính đúng lúc chạm đất");
+
   // Hết khoá thì làm tiếp bình thường.
-  store.dispatch({ t: "TICK", dt: BAL.actionSeconds + 0.01 });
+  store.dispatch({ t: "TICK", dt: BAL.actionSeconds });
   eq(store.getState().busy, 0, "hết giờ thì busy về 0");
-  useRaw(store, B.x, B.y);
+  use(store, B.x, B.y);
   ok(store.getState().tiles[B.y * w + B.x].tilled, "hết khoá thì cày được tiếp");
 
-  // Thao tác HỤT không bị phạt khoá.
-  store.dispatch({ t: "TICK", dt: BAL.actionSeconds + 0.01 });
+  // Thao tác HỤT không bị phạt khoá và không có thao tác chờ.
   useRaw(store, B.x, B.y); // đã cày rồi → hụt
   eq(store.getState().busy, 0, "thao tác hụt thì không bị khoá");
+  eq(store.getState().pending, null, "thao tác hụt không để lại pending");
 
-  // Ngủ dậy là hết bận.
+  // Ngủ dậy là hết bận, kể cả nhát đang vung dở.
   useRaw(store, PLOTS[0].x, PLOTS[0].y);
-  ok(store.getState().busy > 0, "đang bận trước khi ngủ");
+  ok(store.getState().busy > 0 && store.getState().pending, "đang vung trước khi ngủ");
   sleep(store);
   eq(store.getState().busy, 0, "ngủ dậy thì busy được xoá");
+  eq(store.getState().pending, null, "ngủ dậy thì thao tác dở bị bỏ");
+  ok(!store.getState().tiles[PLOTS[0].y * w + PLOTS[0].x].tilled, "nhát dở KHÔNG được áp dụng sau khi ngủ");
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến vẫn xanh");
 });
@@ -2107,6 +2118,75 @@ test("38. parseSettings: JSON hỏng/thiếu/sai kiểu luôn ra settings hợp 
   ok(!("extra" in bad), "khoá lạ bị bỏ");
   // idempotent: parse(parse(x)) === parse(x)
   deepEq(parseSettings(bad), bad, "parse hai lần không đổi");
+});
+
+test("39. SWAP: đổi chỗ balo ⇄ hotbar, gộp cùng id, hai ô công cụ cố định", () => {
+  const store = mkStore(800);
+  giveItem(store, "item:wood", 5);
+  const s0 = store.getState();
+  const woodAt = s0.inv.findIndex((v) => v && v.id === "item:wood");
+  const seedAt = s0.inv.findIndex((v) => v && v.id === "seed:lettuce");
+  const bagSlot = BAL.hotbarSlots + 2; // một ô trong balo
+
+  store.dispatch({ t: "SWAP", a: woodAt, b: bagSlot });
+  let s = store.getState();
+  eq(s.inv[bagSlot]?.id, "item:wood", "gỗ vào balo");
+  eq(s.inv[woodAt], null, "ô hotbar cũ trống");
+
+  store.dispatch({ t: "SWAP", a: bagSlot, b: seedAt });
+  s = store.getState();
+  eq(s.inv[seedAt]?.id, "item:wood", "gỗ lên chỗ hạt");
+  eq(s.inv[bagSlot]?.id, "seed:lettuce", "hạt xuống balo");
+
+  // gộp stack cùng id
+  setState(store, (st) => { st.inv[bagSlot + 1] = { id: "seed:lettuce", n: 3 }; });
+  store.dispatch({ t: "SWAP", a: bagSlot + 1, b: bagSlot });
+  s = store.getState();
+  eq(s.inv[bagSlot]?.n, 11, "cùng id thì gộp vào ô đích (8 + 3)");
+  eq(s.inv[bagSlot + 1], null, "ô nguồn trống sau khi gộp");
+
+  // công cụ cố định + đầu vào rác → đúng state cũ
+  const before = store.getState();
+  store.dispatch({ t: "SWAP", a: 0, b: bagSlot });
+  ok(store.getState() === before, "không đổi chỗ được ô cuốc");
+  store.dispatch({ t: "SWAP", a: 5, b: 5 });
+  store.dispatch({ t: "SWAP", a: -1, b: 3 });
+  store.dispatch({ t: "SWAP", a: 3, b: 999 });
+  ok(store.getState() === before, "SWAP vô nghĩa trả về đúng state cũ");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến xanh");
+});
+
+test("40. nearestTarget: giữ nút thì tự sang ô kế tiếp cùng loại việc, trong tầm, ưu tiên thẳng hàng", () => {
+  const store = mkStore(801);
+  walkTo(store, HOME.x, HOME.y);
+  selectItem(store, "tool:hoe");
+  // đứng trên lối đi, 6 ô cỏ hai bên: cày dần hết, mỗi lần hỏi ô kế tiếp
+  const done = [];
+  for (let i = 0; i < 6; i++) {
+    const t = nearestTarget(store.getState(), content, "till", null);
+    ok(t, `lần ${i + 1} còn ô để cày`);
+    eq(t.kind, "till", "loại việc là cày");
+    use(store, t.x, t.y);
+    done.push(`${t.x},${t.y}`);
+  }
+  eq(new Set(done).size, 6, "sáu ô khác nhau");
+  eq(nearestTarget(store.getState(), content, "till", null), null, "hết ô thì trả null (không tự đi xa)");
+
+  // ưu tiên cùng loại: có cây chín kề bên nhưng đang cầm cuốc và còn ô cỏ → vẫn cày
+  const st2 = mkStore(802);
+  walkTo(st2, HOME.x, HOME.y);
+  selectItem(st2, "tool:hoe");
+  const A = PLOTS[0];
+  use(st2, A.x, A.y);
+  selectItem(st2, "seed:lettuce");
+  use(st2, A.x, A.y);
+  ripen(st2, A.x, A.y);
+  selectItem(st2, "tool:hoe");
+  const pick = nearestTarget(st2.getState(), content, "till", null);
+  eq(pick.kind, "till", "đang cày thì không nhảy sang thu hoạch");
+  const pick2 = nearestTarget(st2.getState(), content, "harvest", null);
+  eq(pick2.kind, "harvest", "đang thu thì ưu tiên cây chín");
+  deepEq({ x: pick2.x, y: pick2.y }, A, "đúng cây vừa chín");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

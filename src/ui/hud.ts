@@ -32,6 +32,8 @@ export interface Hud {
   update(s: GameState, content: Content, hint: Hint | null): void;
   /** hotbar bấm được bằng chuột/chạm */
   onSelect(fn: (slot: number) => void): void;
+  /** nút balo cạnh hotbar */
+  onBag(fn: () => void): void;
   /** Hiện thẻ "Ngày N" khi sang ngày mới. */
   dayBanner(day: number, note?: string): void;
 }
@@ -122,7 +124,10 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       <div id="minimap" class="minimap"><canvas></canvas></div>
     </div>
     <div class="hud-bottom">
-      <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
+      <div class="hotbar-wrap">
+        <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
+        <button type="button" id="bag-btn" class="bag-btn" aria-label="Mở balo"><i class="ic" data-ic="bag"></i><span class="n" id="bag-count"></span></button>
+      </div>
     </div>
     <div id="tip" class="tip" hidden></div>
     <div id="day-banner" class="day-banner" hidden><b></b><span></span></div>`;
@@ -158,9 +163,13 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elBanner = $("day-banner");
 
   let selectFn: (slot: number) => void = () => {};
+  let bagFn: () => void = () => {};
+  const elBagBtn = $("bag-btn");
+  const elBagCount = $("bag-count");
+  elBagBtn.addEventListener("click", () => bagFn());
   const prev = {
     money: -1, day: -1, clock: "", night: false, energy: -1, power: -1, water: -1, cap: -1,
-    goal: "", hotbar: "", hint: "",
+    goal: "", hotbar: "", hint: "", bag: -1,
   };
 
   /* ---- mục tiêu: chip bấm để thu gọn ---- */
@@ -228,7 +237,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       el.className = `slot${i === s.sel ? " sel" : ""}${it ? "" : " empty"}`;
       el.dataset["slot"] = String(i);
       el.setAttribute("role", "button");
-      el.innerHTML = `<span class="k">${i + 1}</span>`;
+      el.innerHTML = `<span class="k">${(i + 1) % 10}</span>`;
       if (it) {
         const icon = atlas.icon(it.id);
         if (icon) {
@@ -354,6 +363,15 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
       renderHotbar(s, content);
 
+      // số món trong balo (ngoài hotbar) — để biết có gì để lôi ra
+      let bag = 0;
+      for (let i = content.balance.hotbarSlots; i < s.inv.length; i++) if (s.inv[i]) bag++;
+      if (bag !== prev.bag) {
+        prev.bag = bag;
+        elBagCount.textContent = bag > 0 ? String(bag) : "";
+        elBagBtn.classList.toggle("has", bag > 0);
+      }
+
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
       // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
       const hk = hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : "";
@@ -376,6 +394,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     },
     onSelect(fn) {
       selectFn = fn;
+    },
+    onBag(fn) {
+      bagFn = fn;
     },
     dayBanner(day, note) {
       clearTimeout(bannerTimer);

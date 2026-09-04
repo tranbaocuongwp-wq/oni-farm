@@ -34,9 +34,10 @@ import { hash2, mulberry32 } from "../core/rng.ts";
 export const TILE = 16;
 /** Cây được vẽ trên khung cao hơn ô để cây cao vươn lên trên viền ô. */
 export const CROP_H = 24;
-/** Nhân vật: 0 đứng · 1-4 bước đi · 5 đang thao tác. */
-export const PLAYER_FRAMES = 6;
+/** Nhân vật: 0 đứng · 1-4 bước đi · 5 CHẠM (vung xuống) · 6 GIƠ (công cụ trên đầu). */
+export const PLAYER_FRAMES = 7;
 export const PLAYER_ACT_FRAME = 5;
+export const PLAYER_RAISE_FRAME = 6;
 
 /* ---------------------------------------------------------------------------
    Bảng màu. Gom một chỗ để chỉnh tông cả game bằng vài dòng.
@@ -817,12 +818,14 @@ export type PlayerDir = (typeof DIRS)[number];
 function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const act = frame === PLAYER_ACT_FRAME;
+  const raise = frame === PLAYER_RAISE_FRAME;
   // bước đi: 1 = chân trái trước, 2 = chụm (nhún), 3 = chân phải trước, 4 = chụm
-  const walk = !act && frame > 0;
+  const walk = !act && !raise && frame > 0;
   const step = !walk ? 0 : frame === 1 ? 1 : frame === 3 ? -1 : 0;
   const bob = walk && (frame === 2 || frame === 4) ? 1 : 0;
-  const lx = act ? (dir === "left" ? -1 : dir === "right" ? 1 : 0) : 0;
-  const ly = act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : 0;
+  // chạm: nghiêng người về hướng làm; giơ: ngả nhẹ về phía sau (lấy đà)
+  const lx = act ? (dir === "left" ? -1 : dir === "right" ? 1 : 0) : raise ? (dir === "left" ? 1 : dir === "right" ? -1 : 0) : 0;
+  const ly = act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : raise ? -1 : 0;
 
   s.shadow(8, 15, 4.5, 1.6);
 
@@ -873,6 +876,14 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
       s.rect(12, armY + 3, 2, 4, P.skin);
       s.rect(6, armY + 6, 4, 2, P.metal);
     }
+  } else if (raise) {
+    // Hai tay giơ lên trên đầu (công cụ vẽ riêng ở renderer, chồng lên đây).
+    if (dir === "left") s.rect(4, top - 1, 2, 7, P.skin);
+    else if (dir === "right") s.rect(11, top - 1, 2, 7, P.skin);
+    else {
+      s.rect(3, top, 2, 6, P.skin);
+      s.rect(12, top, 2, 6, P.skin);
+    }
   } else if (dir === "left") {
     s.rect(4, armY + (step > 0 ? -1 : step < 0 ? 1 : 0), 2, 4, P.skin);
   } else if (dir === "right") {
@@ -911,6 +922,63 @@ function makePlayer(dir: PlayerDir, frame: number): HTMLCanvasElement {
     s.rect(4, top + 3, 4, 3, P.hair);
   }
   s.g.restore();
+  return outline(s).c;
+}
+
+/* ---------------------------------------------------------------------------
+   CÔNG CỤ TRONG TAY — sprite nhỏ 8×8, renderer đặt vào tay nhân vật theo hướng
+   và pha vung (giơ lên / chạm xuống). Nhờ vậy "diễn hoạt dùng công cụ" đọc được
+   ngay cả ở cỡ 2×: thấy cái cuốc giơ lên rồi bổ xuống, cái bình nghiêng đổ.
+--------------------------------------------------------------------------- */
+
+export type HeldKind = "TILL" | "WATER" | "CHOP" | "MINE" | "seed" | "build" | "hand";
+
+function makeHeld(kind: HeldKind, steel: boolean): HTMLCanvasElement {
+  const s = surface(8, 8);
+  const head = steel ? "#dde5ee" : "#c3ced9";
+  const headDark = steel ? "#7c8794" : "#5d7186";
+  switch (kind) {
+    case "TILL":
+      for (let i = 0; i < 6; i++) s.px(1 + i, 7 - i, P.wood);
+      s.rect(5, 0, 3, 2, head);
+      s.px(7, 2, head);
+      s.px(5, 1, headDark);
+      break;
+    case "WATER":
+      s.rect(1, 3, 5, 4, head);
+      s.hline(1, 3, 5, "#eef4fa");
+      s.rect(5, 1, 2, 2, head);
+      s.px(7, 0, "#7fb6ec");
+      s.px(2, 1, headDark);
+      s.px(3, 1, headDark);
+      s.hline(1, 6, 5, headDark);
+      break;
+    case "CHOP":
+      for (let i = 0; i < 6; i++) s.px(1 + i, 7 - i, P.wood);
+      s.rect(5, 0, 3, 3, head);
+      s.vline(5, 0, 3, headDark);
+      break;
+    case "MINE":
+      for (let i = 0; i < 6; i++) s.px(1 + i, 7 - i, P.wood);
+      s.rect(4, 0, 4, 2, head);
+      s.px(3, 1, head);
+      s.px(7, 2, headDark);
+      break;
+    case "seed":
+      s.rect(1, 1, 6, 6, P.cloth);
+      s.rect(1, 1, 6, 1, "#c9b48a");
+      s.px(3, 4, "#6cc94f");
+      s.px(4, 4, "#6cc94f");
+      s.px(2, 6, "#a8916a");
+      break;
+    case "build":
+      s.rect(1, 1, 6, 6, P.metalDark);
+      s.rect(2, 2, 4, 4, P.metal);
+      s.px(3, 3, "#4fa3e3");
+      break;
+    case "hand":
+      return s.c;
+  }
   return outline(s).c;
 }
 
@@ -983,7 +1051,7 @@ function makeDrop(): HTMLCanvasElement {
 }
 
 /** Icon 12×12 cho HUD: tiền, giờ, năng lượng, nước, điện, mục tiêu. */
-export type UiIcon = "coin" | "sun" | "moon" | "energy" | "water" | "power" | "goal" | "day";
+export type UiIcon = "coin" | "sun" | "moon" | "energy" | "water" | "power" | "goal" | "day" | "bag";
 
 function makeUiIcon(name: UiIcon): HTMLCanvasElement {
   const s = surface(12, 12);
@@ -1039,6 +1107,17 @@ function makeUiIcon(name: UiIcon): HTMLCanvasElement {
       s.px(9, 2, "#a7e88f");
       s.px(10, 2, "#6cc94f");
       break;
+    case "bag":
+      // balo: thân nâu, nắp, khoá vàng
+      s.rect(2, 3, 8, 8, "#8a5c34");
+      s.rect(2, 3, 8, 3, "#a67a4a");
+      s.rect(4, 1, 4, 2, "#5a3b21");
+      s.rect(4, 6, 4, 3, "#5a3b21");
+      s.px(5, 7, P.gold);
+      s.px(6, 7, P.gold);
+      s.vline(1, 4, 6, "#5a3b21");
+      s.vline(10, 4, 6, "#5a3b21");
+      break;
     case "day":
       s.rect(1, 2, 10, 9, "#f1ede2");
       s.rect(1, 2, 10, 3, P.cap);
@@ -1076,8 +1155,10 @@ export interface Atlas {
   props: Record<string, HTMLCanvasElement>;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
-  /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 thao tác */
+  /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
   player: Record<PlayerDir, HTMLCanvasElement[]>;
+  /** Công cụ trong tay, 8×8, theo loại việc; `steel` cho công cụ thép. */
+  held(kind: HeldKind, steel?: boolean): HTMLCanvasElement;
   /** [cropId][stage] */
   crops: Record<string, HTMLCanvasElement[]>;
   buildings: Record<string, HTMLCanvasElement>;
@@ -1266,6 +1347,17 @@ export function buildAtlas(content: Content): Atlas {
   }
   for (const id of content.buildingOrder) icons.set(`build:${id}`, buildings[id]!);
 
+  const heldCache = new Map<string, HTMLCanvasElement>();
+  const held = (kind: HeldKind, steel = false) => {
+    const k = `${kind}:${steel ? 1 : 0}`;
+    let c = heldCache.get(k);
+    if (!c) {
+      c = makeHeld(kind, steel);
+      heldCache.set(k, c);
+    }
+    return c;
+  };
+
   const uiIcons = new Map<UiIcon, HTMLCanvasElement>();
   const ui = (name: UiIcon) => {
     let c = uiIcons.get(name);
@@ -1293,6 +1385,7 @@ export function buildAtlas(content: Content): Atlas {
     drop: makeDrop(),
     icon: (id) => icons.get(id) ?? null,
     ui,
+    held,
   };
 }
 

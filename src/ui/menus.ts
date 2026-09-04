@@ -25,6 +25,8 @@ import type { Settings } from "../core/settings.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
+  /** Đổi chỗ hai ô túi đồ (balo ⇄ hotbar). */
+  swap(a: number, b: number): void;
   craft(id: string): void;
   canCraft(id: string): boolean;
   /** Còn thiếu gì để làm được công thức này. */
@@ -62,6 +64,7 @@ export interface Menus {
   openDebug(): void;
   openPause(): void;
   openSettings(): void;
+  openBag(): void;
   openHelp(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
@@ -395,6 +398,150 @@ export function createMenus(
     foot.appendChild(note("Gỗ từ chặt cây · đá từ đập đá · sợi từ phát bụi cỏ (tay không)."));
   }
 
+  /* --------------------------------------------------------------- BALO */
+  /** Ô đang được nhấc lên (chạm-để-chọn rồi chạm ô đích), -1 = không. */
+  let picked = -1;
+
+  function openBag() {
+    current = openBag;
+    const s = getState();
+    const c = getContent();
+    const hb = c.balance.hotbarSlots;
+    const total = s.inv.length;
+    const { body, foot } = shell(
+      "Balo",
+      "Hotbar cố định 10 ô. Chạm một món rồi chạm ô đích để đổi chỗ — hoặc kéo thả.",
+      "sheet",
+    );
+
+    const nameOf = (id: string) => {
+      const [kind, ref] = id.split(":") as [string, string];
+      if (kind === "tool") return c.tools[ref]?.name ?? ref;
+      if (kind === "seed") return c.crops[ref]?.seedName ?? ref;
+      if (kind === "crop") return c.crops[ref]?.name ?? ref;
+      if (kind === "build") return c.buildings[ref]?.name ?? ref;
+      if (kind === "item") return c.materials[ref]?.name ?? ref;
+      return id;
+    };
+
+    const mkSlot = (i: number) => {
+      const it = s.inv[i] ?? null;
+      const el = document.createElement("div");
+      el.className = `bslot${it ? "" : " empty"}${i === picked ? " picked" : ""}${i < 2 ? " locked" : ""}${i === s.sel ? " sel" : ""}`;
+      el.dataset["slot"] = String(i);
+      el.setAttribute("role", "button");
+      if (it) {
+        el.appendChild(icon(it.id, 11));
+        if (it.n > 1) {
+          const n = document.createElement("span");
+          n.className = "n";
+          n.textContent = String(it.n);
+          el.appendChild(n);
+        }
+        el.title = nameOf(it.id);
+        el.setAttribute("aria-label", nameOf(it.id));
+      }
+      return el;
+    };
+
+    const section = (title: string, from: number, to: number, cls: string) => {
+      const h = document.createElement("div");
+      h.className = "bag-head";
+      h.textContent = title;
+      const grid = document.createElement("div");
+      grid.className = `bag-grid ${cls}`;
+      for (let i = from; i < to; i++) grid.appendChild(mkSlot(i));
+      body.append(h, grid);
+      return grid;
+    };
+
+    const gHot = section("HOTBAR (1–9, 0)", 0, Math.min(hb, total), "hot");
+    const gBag = section(`BALO (${total - hb} ô)`, hb, total, "bag");
+
+    const tapSlot = (i: number) => {
+      if (picked < 0) {
+        if (!s.inv[i] || i < 2) return; // ô trống / công cụ cố định không nhấc được
+        picked = i;
+        openBag();
+        return;
+      }
+      if (picked === i) {
+        picked = -1;
+        openBag();
+        return;
+      }
+      const from = picked;
+      picked = -1;
+      h.swap(from, i);
+      openBag();
+    };
+
+    // Kéo thả bằng pointer: nhấc ô nguồn, thả lên ô đích. Chạm nhanh (không kéo)
+    // rơi về luật chạm-chọn ở trên nên cả hai cách cùng chạy.
+    let drag: { from: number; ghost: HTMLElement; moved: boolean; id: number } | null = null;
+    const slotAt = (x: number, y: number): number => {
+      const el = document.elementFromPoint(x, y)?.closest<HTMLElement>(".bslot");
+      return el?.dataset["slot"] ? +el.dataset["slot"] : -1;
+    };
+    const onDown = (e: PointerEvent) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".bslot");
+      if (!el?.dataset["slot"]) return;
+      const i = +el.dataset["slot"];
+      if (!s.inv[i] || i < 2) {
+        tapSlot(i);
+        return;
+      }
+      const ghost = el.cloneNode(true) as HTMLElement;
+      ghost.classList.add("ghost");
+      // cloneNode KHÔNG sao chép pixel của canvas — vẽ lại icon vào bản sao
+      const srcCanvas = el.querySelector("canvas");
+      const dstCanvas = ghost.querySelector("canvas");
+      if (srcCanvas && dstCanvas) dstCanvas.getContext("2d")!.drawImage(srcCanvas, 0, 0);
+      ghost.style.left = `${e.clientX}px`;
+      ghost.style.top = `${e.clientY}px`;
+      drag = { from: i, ghost, moved: false, id: e.pointerId };
+      el.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        document.body.appendChild(drag.ghost);
+      }
+      drag.ghost.style.left = `${e.clientX}px`;
+      drag.ghost.style.top = `${e.clientY}px`;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      d.ghost.remove();
+      if (!d.moved) {
+        tapSlot(d.from);
+        return;
+      }
+      const to = slotAt(e.clientX, e.clientY);
+      if (to >= 0 && to !== d.from) {
+        picked = -1;
+        h.swap(d.from, to);
+      }
+      openBag();
+    };
+    for (const g of [gHot, gBag]) {
+      g.addEventListener("pointerdown", onDown);
+      g.addEventListener("pointermove", onMove);
+      g.addEventListener("pointerup", onUp);
+      g.addEventListener("pointercancel", onUp);
+    }
+
+    foot.appendChild(note(picked >= 0 ? "Chạm ô đích để đổi chỗ, chạm lại để bỏ." : "Hai ô công cụ đầu (cuốc, bình) cố định."));
+    foot.appendChild(mkBtn("Đóng", () => {
+      picked = -1;
+      close();
+    }, "primary"));
+  }
+
   /* ------------------------------------------------------------ GỠ LỖI */
   function openDebug() {
     current = openDebug;
@@ -460,6 +607,7 @@ export function createMenus(
     const list = document.createElement("div");
     list.className = "menu-list";
     list.append(
+      mkBtn("🎒 Balo", () => openBag()),
       mkBtn("⚙ Cài đặt", () => openSettings()),
       mkBtn("? Hướng dẫn chơi", () => openHelp()),
     );
@@ -644,6 +792,7 @@ export function createMenus(
     openDebug,
     openPause,
     openSettings,
+    openBag,
     openHelp,
     refresh: () => current?.(),
   };

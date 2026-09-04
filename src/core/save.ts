@@ -123,6 +123,7 @@ export function migrateSave(data: SaveData): GameState | null {
   // để nguyên thì mọi phép tính với nó ra NaN và bất biến vỡ ngay.
   if (s.save === 1) s = { ...s, busy: 0, save: 2 };
 
+
   // v2 → v3: địa hình khai thác được (`Tile.hp`), bình tưới có hạn
   // (`GameState.water`), và cây lớn theo THỜI GIAN (`crop.grow` phút) thay cho
   // `crop.days` (số ngày).
@@ -185,6 +186,10 @@ export function migrateSave(data: SaveData): GameState | null {
     }
     s = { ...s, save: 5, maps };
   }
+
+  // v5 → v6: `pending` — thao tác đang vung, chưa có hiệu lực (core 1.2: thao
+  // tác có diễn hoạt và độ trễ). Save cũ không có thao tác dở → null.
+  if (s.save === 5) s = { ...s, pending: null, save: 6 };
 
   return s.save === SAVE_VERSION ? s : null;
 }
