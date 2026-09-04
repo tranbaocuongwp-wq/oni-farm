@@ -218,13 +218,22 @@ export function checkInvariants(state: GameState, content: Content): string[] {
           if (en.worker.paidDay > state.day)
             e.push(`người làm ${en.id}: paidDay ${en.worker.paidDay} lớn hơn ngày hiện tại`);
         }
+      } else if (en.kind === "vehicle") {
+        if (!content.vehicles[en.def])
+          e.push(`xe ${en.id}: loại '${en.def}' không có trong content`);
+        if (!en.veh) e.push(`xe ${en.id}: thiếu khối veh`);
       } else if (!content.animals[en.def])
         e.push(`thực thể ${en.id}: loài '${en.def}' không có trong content`);
       if (!content.maps[en.map]) e.push(`thực thể ${en.id}: bản đồ '${en.map}' không có trong content`);
       if (!Number.isFinite(en.x) || !Number.isFinite(en.y))
         e.push(`thực thể ${en.id}: toạ độ không hữu hạn`);
       else if (en.map === state.mapId) {
-        const box = en.kind === "worker" ? content.workers.box : content.animals[en.def]?.box;
+        const box =
+          en.kind === "worker"
+            ? content.workers.box
+            : en.kind === "vehicle"
+              ? content.vehicles[en.def]?.box
+              : content.animals[en.def]?.box;
         if (box && blockedAtBox(state, content, en.x, en.y, box.w, box.h))
           e.push(
             `thực thể ${en.id} ('${en.def}') nằm trong ô solid tại ` +
@@ -476,7 +485,12 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
     for (const id of new Set(entPruned.dropped))
       notes.push(`bỏ con vật '${id}' — content mới không còn`);
     const entities = capEntities(entPruned.list).map((en) => {
-      const box = en.kind === "worker" ? content.workers.box : content.animals[en.def]?.box;
+      const box =
+        en.kind === "worker"
+          ? content.workers.box
+          : en.kind === "vehicle"
+            ? content.vehicles[en.def]?.box
+            : content.animals[en.def]?.box;
       const fixed = { ...en, ai: { ...en.ai, path: [] as number[] } };
       const grid = en.map === mapId ? active : rebuilt[en.map];
       if (grid) {

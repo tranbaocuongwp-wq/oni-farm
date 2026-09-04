@@ -445,6 +445,36 @@ export function validateActors(raw: unknown): string[] {
     list.forEach((item, i) => one(item, `${group}[${i}]`));
   }
 
+  const vs = raw["vehicles"];
+  if (vs !== undefined) {
+    const list = c.arr(raw, "vehicles");
+    if (list)
+      list.forEach((item, i) => {
+        const k = new Check(`vehicles[${i}]`);
+        if (!isObj(item)) {
+          c.fail(`vehicles[${i}]`, "phải là object");
+          return;
+        }
+        k.str(item, "id");
+        k.str(item, "name");
+        k.num(item, "price", 0);
+        k.num(item, "capacity", 1, 100000);
+        k.num(item, "speed", 1, 400);
+        if (item["buyBonus"] !== undefined) k.num(item, "buyBonus", 0, 5);
+        const box = k.obj(item, "box");
+        if (box) {
+          k.num(box as Record<string, unknown>, "w", 1, 64);
+          k.num(box as Record<string, unknown>, "h", 1, 64);
+        }
+        const art = k.obj(item, "art");
+        if (art)
+          for (const key of ["body", "dark", "glass", "accent"])
+            if (!isStr(art[key]) || !/^#[0-9a-fA-F]{6}$/.test(art[key] as string))
+              k.fail(`art.${key}`, "phải là mã màu #rrggbb");
+        c.merge(k);
+      });
+  }
+
   const w = raw["workers"];
   if (w !== undefined) {
     const k = new Check("workers");

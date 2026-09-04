@@ -24,6 +24,7 @@ import type {
   PropDef,
   AnimalDef,
   RecipeDef,
+  VehicleDef,
   WorkerContent,
   SeasonDef,
   Strings,
@@ -343,6 +344,7 @@ export function buildContent(raw: RawPack): Content {
   // chuyển, chỉ khác `job`. Tách hai bảng chỉ tổ phải tra hai chỗ.
   const actorPack = (raw.actors ?? null) as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
   const animalList = [...(actorPack?.animals ?? []), ...(actorPack?.pests ?? [])];
+  const vehicleList = (actorPack as { vehicles?: VehicleDef[] } | null)?.vehicles ?? [];
 
   const byId = <T extends { id: string }>(list: T[]): Record<string, T> =>
     Object.fromEntries(list.map((x) => [x.id, x]));
@@ -371,6 +373,8 @@ export function buildContent(raw: RawPack): Content {
     animals: byId(animalList),
     animalOrder: animalList.map((a) => a.id),
     workers: (actorPack as { workers?: WorkerContent } | null)?.workers ?? WORKER_DEFAULTS,
+    vehicles: byId(vehicleList),
+    vehicleOrder: vehicleList.map((v) => v.id),
     seasons: byId(seasonList),
     seasonOrder: seasonList.map((s) => s.id),
     daysPerSeason: Math.max(1, Math.floor(seasonRaw?.daysPerSeason ?? 1)),

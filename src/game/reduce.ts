@@ -10,7 +10,7 @@
 ============================================================================ */
 
 import type { Action, Content, GameState, StoredMap } from "./types.ts";
-import { applyProgression, commit, dPlayer, draft, storedView, toastKey, touch } from "./state.ts";
+import { applyProgression, commit, dPlayer, draft, storedView, toastKey, toastText, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
 import { buildLine, canUseAt, craft, refill, useAt } from "./actions.ts";
 import { swapSlots } from "./inventory.ts";
@@ -21,6 +21,7 @@ import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.t
 import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
 import { feedAnimal, gatherFrom, slaughter } from "./animals.ts";
 import { assignJob, fireWorker, hireWorker } from "./workers.ts";
+import { sendVehicle } from "./vehicles.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
   blockedAt,
@@ -303,13 +304,23 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       }
       const cx = tileCenterX(drop.x);
       const cy = tileCenterY(drop.y);
-      const id = spawnEntity(d, content, { def: action.def, map: drop.map, x: cx, y: cy });
-      if (id === null) {
-        toastKey(d, content, "tooMany", "bad");
-        return commit(d);
+      /* Xe giao hàng chạy từ CỔNG vào rồi mới thả con vật xuống. Không có cổng
+         (content cũ) hoặc không còn chỗ cho xe thì thả thẳng — thà kém tự nhiên
+         còn hơn người chơi mất tiền mà không nhận được gì. */
+      const xe = sendVehicle(d, content, "truck", { kind: "drop", animal: action.def });
+      if (xe === null) {
+        const id = spawnEntity(d, content, { def: action.def, map: drop.map, x: cx, y: cy });
+        if (id === null) {
+          toastKey(d, content, "tooMany", "bad");
+          return commit(d);
+        }
       }
       touch(d).money = d.s.money - def.price;
-      toastKey(d, content, "bought", "good", def.name);
+      toastText(
+        d,
+        xe === null ? `Đã mua ${def.name}.` : `Đã đặt ${def.name} — xe đang chở tới.`,
+        "good",
+      );
       applyProgression(d, content);
       return commit(d);
     }

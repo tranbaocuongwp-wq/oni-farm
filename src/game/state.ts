@@ -226,13 +226,21 @@ export function dEntities(d: Draft): Entity[] {
   return d.s.entities;
 }
 
-/** Bản sao sửa được của thực thể thứ `i`. null nếu chỉ số sai. */
+/**
+ * Bản sao sửa được của thực thể thứ `i`. null nếu chỉ số sai.
+ *
+ * Chú ý chỗ so với `d.base`: thực thể VỪA ĐƯỢC THÊM trong cùng một action nằm
+ * ngoài mảng gốc, và nó đã là một object mới không dùng chung với ai — nên trả
+ * thẳng, không cần clone. Chặn theo `d.base.entities.length` như `dTile` làm
+ * cho ô lưới là SAI ở đây, vì lưới không bao giờ đổi độ dài còn danh sách thực
+ * thể thì có: hệ quả là mọi thứ gán cho con vừa sinh đều rơi vào hư không.
+ */
 export function dEntity(d: Draft, i: number): Entity | null {
-  if (i < 0 || i >= d.base.entities.length) return null;
+  if (i < 0 || i >= d.s.entities.length) return null;
   const list = dEntities(d);
   const cur = list[i];
   if (!cur) return null;
-  if (cur === d.base.entities[i]) {
+  if (i < d.base.entities.length && cur === d.base.entities[i]) {
     const copy: Entity = {
       ...cur,
       ai: { ...cur.ai, path: cur.ai.path.slice() },

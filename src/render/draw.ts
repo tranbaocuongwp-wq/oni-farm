@@ -551,12 +551,14 @@ export function createRenderer(
   function drawActors(s: GameState, content: Content, items: Item[]) {
     for (const e of s.entities) {
       if (e.map !== s.mapId) continue;
-      if (!e.worker && !content.animals[e.def]) continue;
+      if (!e.worker && e.kind !== "vehicle" && !content.animals[e.def]) continue;
       const moving = e.ai.path.length > 0;
       const frame = moving ? 1 + (Math.floor(e.anim * 5) % 2) : 0;
       const img = e.worker
         ? atlas.worker(e.worker.skin, e.dir, moving ? 1 + (Math.floor(e.anim * 8) % 4) : 0)
-        : atlas.animal(e.def, e.dir, frame);
+        : e.kind === "vehicle"
+          ? atlas.vehicle(e.def, e.dir)
+          : atlas.animal(e.def, e.dir, frame);
       if (!img) continue;
       const px = snapDev(e.x - camera.rx) - TILE / 2;
       const py = snapDev(e.y - camera.ry) - TILE + 3;
@@ -564,7 +566,9 @@ export function createRenderer(
       // cho một ý "cái này đang cần bạn để mắt tới".
       const doi = e.worker
         ? e.worker.energy <= content.workers.restBelow
-        : e.animal.fed <= 0;
+        : e.kind === "vehicle"
+          ? false
+          : e.animal.fed <= 0;
       items.push({
         base: Math.round(e.y) + 5,
         run: () => {

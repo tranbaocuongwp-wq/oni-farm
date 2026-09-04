@@ -3124,40 +3124,58 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   eq(st3.getState().entities.length, 1, "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống");
 });
 
-test("58. mua vật nuôi: giao tới ĐIỂM GIAO cố định, chưa mở khoá thì không mua được", () => {
+test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", () => {
   const store = mkStore(925);
   walkTo(store, HOME.x, HOME.y);
   const drop = content.tiles.dropoff;
-  ok(drop, "content có khai điểm giao cố định");
+  const gate = content.tiles.gate;
+  ok(drop && gate, "content có khai điểm giao và cổng vào");
 
   // chưa mở khoá → không mua được, không trừ tiền
   setState(store, (s) => { s.money = 99999; });
   const tien0 = store.getState().money;
   store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
-  eq(store.getState().entities.length, 0, "chưa mở khoá thì không có con nào");
+  eq(store.getState().entities.length, 0, "chưa mở khoá thì không có gì xảy ra");
   eq(store.getState().money, tien0, "và không trừ tiền");
 
-  // mở khoá rồi thì mua được, và con vật xuất hiện ĐÚNG điểm giao
+  // mở khoá rồi: trừ tiền, và XE xuất hiện ở cổng — con vật CHƯA có
   setState(store, (s) => { s.unlocked.push("animal:cow"); });
   store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
   const s1 = store.getState();
-  eq(s1.entities.length, 1, "mua được một con");
   eq(s1.money, tien0 - content.animals.cow.price, "trừ đúng giá");
-  const e = s1.entities[0];
-  eq(Math.floor(e.x / TILE), drop.x, "giao đúng CỘT của điểm giao");
-  eq(Math.floor(e.y / TILE), drop.y, "giao đúng HÀNG của điểm giao");
-  eq(e.map, drop.map, "và đúng bản đồ");
-  deepEq(checkInvariants(s1, content), [], "bất biến sau khi mua");
+  eq(s1.entities.length, 1, "mới chỉ có một thực thể");
+  const xe = s1.entities[0];
+  eq(xe.kind, "vehicle", "và đó là chiếc XE, không phải con bò");
+  eq(Math.floor(xe.x / TILE), gate.x, "xe vào từ đúng CỔNG");
+  eq(Math.floor(xe.y / TILE), gate.y, "…đúng hàng của cổng");
+  eq(xe.veh.errand.kind, "drop", "xe mang việc THẢ HÀNG");
+  eq(xe.veh.errand.animal, "cow", "…đúng con đã mua");
+  ok(
+    !s1.entities.some((e) => e.kind === "animal"),
+    "con bò CHƯA xuất hiện — mua xong bụp một cái hiện ra là thứ phải tránh",
+  );
+  deepEq(checkInvariants(s1, content), [], "bất biến ngay sau khi đặt hàng");
 
-  // không đủ tiền
-  setState(store, (s) => { s.money = 0; });
-  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
-  eq(store.getState().entities.length, 1, "không đủ tiền thì không thêm con nào");
+  // chạy tới khi xe giao xong
+  let giaoXong = false;
+  for (let i = 0; i < 60 * 60 * 4 && !giaoXong; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    giaoXong = store.getState().entities.some((e) => e.kind === "animal" && e.def === "cow");
+  }
+  ok(giaoXong, "xe chạy vào tới nơi và thả con bò xuống");
+  const bo = store.getState().entities.find((e) => e.kind === "animal");
+  const cachDiemGiao = Math.abs(Math.floor(bo.x / TILE) - drop.x) + Math.abs(Math.floor(bo.y / TILE) - drop.y);
+  ok(cachDiemGiao <= 2, `con bò được thả ngay tại điểm giao (lệch ${cachDiemGiao} ô)`);
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi giao xong");
+
+  // xe quay ra rồi biến mất
+  let xeVeChua = false;
+  for (let i = 0; i < 60 * 60 * 6 && !xeVeChua; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    xeVeChua = !store.getState().entities.some((e) => e.kind === "vehicle");
+  }
+  ok(xeVeChua, "giao xong thì xe quay ra khỏi bản đồ, không đậu lại mãi");
 });
-
-/* ========================================================================== */
-/* 59-60. NGƯỜI LÀM THUÊ                                                       */
-/* ========================================================================== */
 
 test("59. thuê người: trừ tiền, tới điểm giao, 3 ngày trả lương một lần, hết tiền thì nghỉ", () => {
   const cfg = content.workers;

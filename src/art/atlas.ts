@@ -1679,6 +1679,8 @@ export interface Atlas {
   animal(defId: string, dir: PlayerDir, frame: number): HTMLCanvasElement | null;
   /** người làm thuê: cùng 28 khung với nhân vật chính, khác bảng màu */
   worker(skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement;
+  /** xe: 4 hướng, không cần khung đi (bánh quay không thấy ở cỡ này) */
+  vehicle(defId: string, dir: PlayerDir): HTMLCanvasElement | null;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
@@ -2013,6 +2015,56 @@ function makeAnimal(art: AnimalArt, dir: PlayerDir, frame: number): HTMLCanvasEl
   return outline(s).c;
 }
 
+/**
+ * Xe tải. Nhìn từ trên xuống nên chỉ có hai dáng thật: DỌC (đi lên/xuống) và
+ * NGANG (đi trái/phải). Ở 16×16 thì bánh xe quay không ai thấy, nên không cần
+ * khung hoạt hoạ — đỡ được 3/4 số canvas mà mắt không nhận ra khác biệt.
+ */
+function makeVehicle(
+  art: { body: string; dark: string; glass: string; accent: string },
+  dir: PlayerDir,
+): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const doc = dir === "up" || dir === "down";
+  const w = doc ? 10 : 14;
+  const h = doc ? 14 : 10;
+  const x0 = Math.round((TILE - w) / 2);
+  const y0 = Math.round((TILE - h) / 2);
+
+  s.shadow(8, TILE - 1, w / 2, 1.5);
+  // thùng xe
+  s.rect(x0, y0, w, h, art.body);
+  s.hline(x0, y0, w, art.dark);
+  s.hline(x0, y0 + h - 1, w, art.dark);
+  s.vline(x0, y0, h, art.dark);
+  s.vline(x0 + w - 1, y0, h, art.dark);
+
+  // ca-bin + kính, đặt về phía ĐẦU xe
+  if (doc) {
+    const cy = dir === "up" ? y0 + 1 : y0 + h - 5;
+    s.rect(x0 + 1, cy, w - 2, 4, art.dark);
+    s.rect(x0 + 2, cy + 1, w - 4, 2, art.glass);
+  } else {
+    const cx = dir === "left" ? x0 + 1 : x0 + w - 5;
+    s.rect(cx, y0 + 1, 4, h - 2, art.dark);
+    s.rect(cx + 1, y0 + 2, 2, h - 4, art.glass);
+  }
+
+  // đèn + sọc
+  if (doc) {
+    const ly = dir === "up" ? y0 : y0 + h - 1;
+    s.px(x0 + 1, ly, art.accent);
+    s.px(x0 + w - 2, ly, art.accent);
+    s.hline(x0 + 1, y0 + Math.round(h / 2), w - 2, art.accent);
+  } else {
+    const lx = dir === "left" ? x0 : x0 + w - 1;
+    s.px(lx, y0 + 1, art.accent);
+    s.px(lx, y0 + h - 2, art.accent);
+    s.vline(x0 + Math.round(w / 2), y0 + 1, h - 2, art.accent);
+  }
+  return outline(s).c;
+}
+
 export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3, 4, 5].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
@@ -2054,6 +2106,19 @@ export function buildAtlas(content: Content): Atlas {
   /* Vật nuôi dựng LƯỜI: 10 loài × 4 hướng × 3 khung = 120 canvas, dựng hết lúc
      khởi động thì màn hình chờ dài thêm mà phần lớn không dùng tới (ván mới
      chưa có con nào). Dựng lần đầu cần đến rồi nhớ luôn. */
+  const vehCache = new Map<string, HTMLCanvasElement>();
+  const vehicleOf = (defId: string, dir: PlayerDir): HTMLCanvasElement | null => {
+    const def = content.vehicles[defId];
+    if (!def) return null;
+    const key = `${defId}|${dir}`;
+    let c = vehCache.get(key);
+    if (!c) {
+      c = makeVehicle(def.art, dir);
+      vehCache.set(key, c);
+    }
+    return c;
+  };
+
   const workerCache = new Map<string, HTMLCanvasElement>();
   const workerOf = (skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement => {
     const skins = content.workers.skins;
@@ -2156,6 +2221,7 @@ export function buildAtlas(content: Content): Atlas {
     autotiles,
     animal: animalOf,
     worker: workerOf,
+    vehicle: vehicleOf,
     tuft: makeTuft(),
     voidOut: [0, 1, 2, 3].map((v) => makeVoid(v, false)),
     voidIn: [0, 1].map((v) => makeVoid(v, true)),

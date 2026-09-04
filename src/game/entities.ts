@@ -31,6 +31,7 @@ import { dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
 import { blockedAtBox, idx, TILE } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
+import { vehicleStep } from "./vehicles.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -71,6 +72,10 @@ export function actorShape(
   e: Entity,
 ): { speed: number; box: { w: number; h: number } } | null {
   if (e.kind === "worker") return { speed: content.workers.speed, box: content.workers.box };
+  if (e.kind === "vehicle") {
+    const v = content.vehicles[e.def];
+    return v ? { speed: v.speed, box: v.box } : null;
+  }
   const def = animalDef(content, e.def);
   return def ? { speed: def.speed, box: def.box } : null;
 }
@@ -115,7 +120,14 @@ export interface SpawnOptions {
  * hình.
  */
 export function spawnEntity(d: Draft, content: Content, o: SpawnOptions): number | null {
-  const def = animalDef(content, o.def);
+  // Tra ĐÚNG bảng theo loại: vật nuôi ở `content.animals`, xe ở
+  // `content.vehicles`. Chỉ hỏi bảng vật nuôi thì xe không bao giờ sinh được —
+  // và lỗi đó lặng lẽ rơi về "thả thẳng con vật xuống", tức là mất luôn tính
+  // năng giao hàng mà không có thông báo nào.
+  const def =
+    o.kind === "vehicle"
+      ? (content.vehicles[o.def] ?? null)
+      : animalDef(content, o.def);
   if (!def) return null;
   if (d.s.entities.length >= MAX_ENTITIES) return null;
 
@@ -133,7 +145,7 @@ export function spawnEntity(d: Draft, content: Content, o: SpawnOptions): number
 
   const e: Entity = {
     id,
-    kind: o.kind ?? (def.job === "pest" ? "pest" : "animal"),
+    kind: o.kind ?? ("job" in def && def.job === "pest" ? "pest" : "animal"),
     def: o.def,
     map: o.map,
     x: o.x,
@@ -142,12 +154,10 @@ export function spawnEntity(d: Draft, content: Content, o: SpawnOptions): number
     anim: 0,
     seed: (r.seed ^ (id * 2654435761)) >>> 0,
     ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
-    animal: {
-      age: 0,
-      fed: def.fedMinutes,
-      hungryDays: 0,
-      prod: def.products.map(() => 0),
-    },
+    animal:
+      "fedMinutes" in def
+        ? { age: 0, fed: def.fedMinutes, hungryDays: 0, prod: def.products.map(() => 0) }
+        : { age: 0, fed: 0, hungryDays: 0, prod: [] },
   };
   setEntities(d, [...s.entities, e]);
   return id;
@@ -268,8 +278,15 @@ export function actorStep(d: Draft, content: Content): void {
   const start = ((s.planCursor % n) + n) % n;
 
   for (let k = 0; k < n; k++) {
-    const i = (start + k) % n;
-    const cur = s.entities[i]!;
+    /* Đọc LẠI mảng mỗi vòng: một lượt của actor có thể THÊM (xe thả con vật
+       xuống) hoặc BỚT (xe ra khỏi bản đồ) phần tử, nên độ dài chốt từ đầu vòng
+       lặp sẽ sai ngay sau đó. Không đọc lại thì `s.entities[i]` ra undefined và
+       cả TICK ném lỗi — âm thầm cho tới đúng lúc chiếc xe đầu tiên rời đi. */
+    const list = s.entities;
+    if (!list.length) break;
+    const i = (start + k) % list.length;
+    const cur = list[i];
+    if (!cur) continue;
     if (cur.map !== s.mapId) continue;
     const def = actorShape(content, cur);
     if (!def) continue;
@@ -279,8 +296,12 @@ export function actorStep(d: Draft, content: Content): void {
 
     // Người làm thuê có bộ não riêng (workers.ts). Trả về true nghĩa là họ đã
     // tự lo xong lượt này — vật nuôi mới đi tiếp nhánh lang thang bên dưới.
+    const budgetFn = () => budget > 0 && (budget--, true);
     if (cur.kind === "worker") {
-      if (workerStep(d, content, i, () => budget > 0 && (budget--, true))) continue;
+      if (workerStep(d, content, i, budgetFn)) continue;
+    }
+    if (cur.kind === "vehicle") {
+      if (vehicleStep(d, content, i, budgetFn)) continue;
     }
 
     const e = dEntity(d, i);
@@ -381,6 +402,13 @@ export function pruneEntities(list: Entity[], content: Content): { list: Entity[
   const out = list.filter((e) => {
     // Người làm thuê không nằm trong bảng loài — họ có bảng cấu hình riêng, nên
     // đừng đem `content.animals` ra hỏi rồi xoá sạch họ lúc cập nhật content.
+    if (e.kind === "vehicle") {
+      if (!content.vehicles[e.def]) {
+        dropped.push(e.def);
+        return false;
+      }
+      return !!content.maps[e.map];
+    }
     if (e.kind !== "worker" && !content.animals[e.def]) {
       dropped.push(e.def);
       return false;

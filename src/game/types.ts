@@ -148,6 +148,20 @@ export interface AnimalDef {
   art: AnimalArt;
 }
 
+/** Một loại xe. Xe giao hàng và xe thu mua dùng chung bộ máy, khác `role`. */
+export interface VehicleDef {
+  id: string;
+  name: string;
+  price: number;
+  /** chở được bao nhiêu món */
+  capacity: number;
+  speed: number;
+  box: { w: number; h: number };
+  /** xe thu mua trả cao hơn quầy bao nhiêu phần (0,15 = +15%) */
+  buyBonus?: number;
+  art: { body: string; dark: string; glass: string; accent: string };
+}
+
 /** Bảng màu một bộ đồ — người làm thuê dùng lại nguyên bộ khung của nhân vật
  *  chính, chỉ đổi màu. Cùng 28 khung vung công cụ, không vẽ thêm gì. */
 export interface CharSkin {
@@ -394,6 +408,8 @@ export interface TilesDef {
   legend: Record<string, TileLegendEntry>;
   /** Bản đồ và ô bắt đầu ván mới. */
   spawn: { map: string; x: number; y: number };
+  /** CỔNG: ô ở mép bản đồ mà xe từ ngoài đi vào. Thiếu thì không có xe nào. */
+  gate?: { map: string; x: number; y: number };
   /**
    * ĐIỂM GIAO HÀNG — chỗ vật nuôi và (sau này) xe được thả xuống.
    *
@@ -507,6 +523,8 @@ export interface Content {
   animals: Record<string, AnimalDef>;
   animalOrder: string[];
   workers: WorkerContent;
+  vehicles: Record<string, VehicleDef>;
+  vehicleOrder: string[];
   seasons: Record<string, SeasonDef>;
   /** thứ tự các mùa trong năm — chính là vòng quay */
   seasonOrder: string[];
@@ -622,7 +640,7 @@ export interface StoredMap {
   awayAt: number;
 }
 
-export type EntityKind = "animal" | "pest" | "worker";
+export type EntityKind = "animal" | "pest" | "worker" | "vehicle";
 
 /** Máy trạng thái của một actor. Nằm TRONG save: tải lại mà con vật quên mình
  *  đang đi đâu là một lỗi thấy được. */
@@ -666,6 +684,25 @@ export interface WorkerState {
   carry: InvSlot[];
 }
 
+/** Việc của một chiếc xe. */
+export type VehicleRole = "delivery" | "buyer";
+
+export interface VehicleState {
+  role: VehicleRole;
+  /** hàng đang chở */
+  cargo: InvSlot[];
+  /**
+   * Việc phải làm khi tới nơi:
+   *   · `drop` — thả con vật này xuống (xe giao hàng)
+   *   · `buy`  — mua sạch nông sản trong kho (xe thu mua)
+   */
+  errand: { kind: "drop"; animal: string } | { kind: "buy" } | null;
+  /** phút game còn phải đứng chờ */
+  wait: number;
+  /** đã làm xong việc chưa — xong thì quay ra khỏi bản đồ */
+  done: boolean;
+}
+
 export interface Entity {
   id: number;
   kind: EntityKind;
@@ -691,6 +728,8 @@ export interface Entity {
   animal: AnimalState;
   /** chỉ có ở `kind === "worker"` */
   worker?: WorkerState;
+  /** chỉ có ở `kind === "vehicle"` */
+  veh?: VehicleState;
 }
 
 export interface GameState {
@@ -852,6 +891,8 @@ export type Action =
   | { t: "FIRE"; id: number }
   /** Đổi việc được giao. */
   | { t: "ASSIGN"; id: number; job: WorkerJob }
+  /** Mua một chiếc xe — cũng được giao tới bằng xe giao hàng. */
+  | { t: "BUY_VEHICLE"; def: string }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
   | { t: "DEBUG"; op: DebugOp; n?: number }

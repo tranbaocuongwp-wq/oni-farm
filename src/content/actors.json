@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — mọi loài vật đều là DỮ LIỆU. Thêm loài mới = thêm một object ở đây, KHÔNG một dòng .ts nào: art.form chọn dáng vẽ (quadruped/bird/fish/critter) rồi bộ sinh pixel dựng hình từ tham số, đúng như cây trồng đang làm.\n\nproducts = thu LẶP LẠI (sữa/trứng/lông), every tính bằng ngày. meat = thu MỘT LẦN khi bán thịt; null nghĩa là không bán thịt được (chó). Con vật 'vừa lấy cái này vừa lấy cái kia' chính là con có cả products lẫn meat.\n\nhousing: pen = phải ở trong hàng rào · free = thả rông tự kiếm ăn · water = sống dưới nước. feed null = tự đi kiếm cỏ quanh sân.\n\njob: patrol = đi tuần đuổi sâu bọ (chó) · pest = phá hoại mùa màng (chuột, sóc).\n\nworkers: cấu hình chung cho người làm thuê. Họ dùng lại NGUYÊN bộ khung hoạt hoạ của nhân vật chính, chỉ đổi bảng màu (skins) — nên thêm một bộ đồ mới là thêm năm mã màu, không phải vẽ 28 khung.",
+  "$comment": "LÀN NHANH — mọi loài vật đều là DỮ LIỆU. Thêm loài mới = thêm một object ở đây, KHÔNG một dòng .ts nào: art.form chọn dáng vẽ (quadruped/bird/fish/critter) rồi bộ sinh pixel dựng hình từ tham số, đúng như cây trồng đang làm.\n\nproducts = thu LẶP LẠI (sữa/trứng/lông), every tính bằng ngày. meat = thu MỘT LẦN khi bán thịt; null nghĩa là không bán thịt được (chó). Con vật 'vừa lấy cái này vừa lấy cái kia' chính là con có cả products lẫn meat.\n\nhousing: pen = phải ở trong hàng rào · free = thả rông tự kiếm ăn · water = sống dưới nước. feed null = tự đi kiếm cỏ quanh sân.\n\njob: patrol = đi tuần đuổi sâu bọ (chó) · pest = phá hoại mùa màng (chuột, sóc).\n\nworkers: cấu hình chung cho người làm thuê. Họ dùng lại NGUYÊN bộ khung hoạt hoạ của nhân vật chính, chỉ đổi bảng màu (skins) — nên thêm một bộ đồ mới là thêm năm mã màu, không phải vẽ 28 khung.\n\nvehicles: xe. Xe giao hàng và xe thu mua dùng CHUNG bộ máy, chỉ khác việc được giao (errand). buyBonus là phần trả cao hơn quầy thu mua — xe tới tận nơi thì mua đắt hơn một chút, đó là lý do để chờ nó.",
   "animals": [
     {
       "id": "cow",
@@ -378,5 +378,42 @@
         "hair": "#1f1710"
       }
     ]
-  }
+  },
+  "vehicles": [
+    {
+      "id": "truck",
+      "name": "Xe tải nhỏ",
+      "price": 2600,
+      "capacity": 60,
+      "speed": 78,
+      "box": {
+        "w": 13,
+        "h": 11
+      },
+      "art": {
+        "body": "#3f6fa8",
+        "dark": "#27466b",
+        "glass": "#bfe0f5",
+        "accent": "#e8c05a"
+      }
+    },
+    {
+      "id": "buyer",
+      "name": "Xe thu mua",
+      "price": 0,
+      "capacity": 200,
+      "speed": 72,
+      "box": {
+        "w": 13,
+        "h": 11
+      },
+      "buyBonus": 0.15,
+      "art": {
+        "body": "#8a4f2f",
+        "dark": "#5c3320",
+        "glass": "#d8e8f0",
+        "accent": "#e8c05a"
+      }
+    }
+  ]
 }
