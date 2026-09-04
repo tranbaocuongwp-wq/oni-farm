@@ -17,7 +17,10 @@ export function createLoop(step: (dt: number) => void, maxDt = 1 / 20): Loop {
 
   const frame = (now: number) => {
     if (!running) return;
-    const dt = Math.min((now - last) / 1000, maxDt);
+    // Kẹp cả SÀN: mốc thời gian của khung hình rAF đầu tiên có thể SỚM hơn
+    // `performance.now()` lúc start(), cho ra dt âm → elapsed âm → chỉ số khung
+    // hình nước âm → drawImage(undefined). Lỗi hiếm, chỉ ở khung hình đầu.
+    const dt = Math.max(0, Math.min((now - last) / 1000, maxDt));
     last = now;
     step(dt);
     raf = requestAnimationFrame(frame);

@@ -9,6 +9,10 @@
 
    Không có đường tắt nào từ UI sửa thẳng state. Muốn thêm cơ chế mới thì thêm
    Action, không phải thêm một biến toàn cục.
+
+   Những thứ KHÔNG phải state (và cố tình không phải): settings của máy, hạt
+   hiệu ứng, rung, thẻ "Ngày N", tutorial, ô đang ngắm, đích đang đi tới. Chúng
+   là ý định nhất thời hoặc sở thích của thiết bị — không đáng nằm trong save.
 ============================================================================ */
 
 import "./style.css";
@@ -17,7 +21,8 @@ import { buildAtlas, TILE } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
 import { alignedTo, createNavigator } from "./core/navigate.ts";
-import { applyControlMode, loadSettings, saveSettings, type ControlMode } from "./core/settings.ts";
+import { applySettings, loadSettings, saveSettings, type Settings } from "./core/settings.ts";
+import { buzz, setHaptics } from "./core/haptics.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -36,23 +41,18 @@ import {
 } from "./core/content/ota.ts";
 import { initAudio, isMuted, play, setMuted } from "./core/sfx.ts";
 import { createCamera } from "./render/camera.ts";
-import { createRenderer, type Cursor } from "./render/draw.ts";
+import { createRenderer, type BurstKind, type Cursor } from "./render/draw.ts";
 import { createHud } from "./ui/hud.ts";
 import { createMenus } from "./ui/menus.ts";
 import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
+import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
+import { facingTile, hintAt, type Hint } from "./game/hint.ts";
 
-/** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline.
- *
- *  Trỏ vào bản đã deploy: cây trồng, công trình, giá cả, bản đồ đổi được mà
- *  KHÔNG cần build lại và deploy lại bundle web. Đây chính là điểm của việc
- *  tách core/content.
- *
- *  Việc hỏi thăm chạy NGẦM và không bao giờ chặn: mất mạng thì game vẫn mở bằng
- *  content đóng kèm như thường. */
+/** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
 const CONTENT_URL = "https://oni-farm.pages.dev";
 
 /** Tầm với: người chơi chỉ thao tác được ô cách tâm mình dưới ngần này pixel. */
@@ -60,18 +60,27 @@ const REACH = TILE * 1.8;
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
+/** Sự kiện cài PWA của Chrome/Edge — bắt sớm, dùng sau ở menu Tạm dừng. */
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+let installPrompt: BeforeInstallPromptEvent | null = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e as BeforeInstallPromptEvent;
+});
+
 async function boot() {
   const bootEl = $("#boot");
   const showError = (msg: string) => {
-    bootEl.innerHTML = `<div class="inner"><h1>ONIFARM</h1>
+    bootEl.innerHTML = `<div class="inner"><div class="logo">ONI<span>FARM</span></div>
       <p>Không khởi động được. Nội dung game có vấn đề:</p>
       <div class="err"></div></div>`;
     (bootEl.querySelector(".err") as HTMLElement).textContent = msg;
     bootEl.style.display = "grid";
   };
 
-  /* Khai báo sớm: menu có thể được mở ngay khung hình đầu tiên, trước khi
-     bước OTA ở cuối hàm chạy tới. */
   let pendingVersion: string | null = null;
 
   /* ---- 1. content: pack OTA đã cache, nếu không thì pack đóng kèm ---- */
@@ -88,18 +97,21 @@ async function boot() {
     return;
   }
 
-  // Ghi phiên bản nội dung ra thẻ <html> — nhìn phát biết người chơi đang chạy
-  // content nào và nó đến từ đâu. Rất đỡ khi hỗ trợ người chơi hoặc soi lỗi OTA.
   const root = document.documentElement;
   root.dataset["content"] = content.contentVersion;
   root.dataset["contentSource"] = contentSource;
   root.dataset["core"] = CORE_VERSION;
 
-  // Chế độ điều khiển là sở thích của MÁY, không thuộc ván chơi — nên nó nằm ở
-  // localStorage riêng, không đi vào save. Nạp SỚM vì menu tham chiếu tới nó
-  // trong closure ngay lúc dựng.
-  const settings = loadSettings();
-  applyControlMode(settings.control);
+  // Cảm ứng: bật lớp điều khiển ảo. Chuột/bàn phím vẫn chạy song song — máy lai
+  // (laptop cảm ứng, tablet có bàn phím) dùng được cả hai mà không phải chọn.
+  const isTouch = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add("touch");
+
+  // Settings là sở thích của MÁY, không thuộc ván chơi — localStorage riêng,
+  // không đi vào save. Nạp SỚM vì menu và camera tham chiếu tới nó lúc dựng.
+  let settings: Settings = loadSettings();
+  applySettings(settings);
+  setHaptics(settings.haptics);
 
   /* ---- 2. mỹ thuật ---- */
   const atlas = buildAtlas(content);
@@ -109,7 +121,6 @@ async function boot() {
   const saved = await loadGame();
   const migrated = saved ? migrateSave(saved) : null;
   if (migrated) {
-    // save có thể được tạo bởi content CŨ — chỉnh lại cho khớp content hiện tại
     const fixed = migrateForContent(migrated, content);
     initial = fixed.state;
     contentWarnings.push(...fixed.notes);
@@ -128,20 +139,36 @@ async function boot() {
   const canvas = $<HTMLCanvasElement>("#game");
   const stage = $("#stage");
 
-  // Camera là chỗ DUY NHẤT biết màn hình to nhỏ ra sao. Mọi thứ khác tính bằng
-  // world px, nên đổi khổ màn hình không đụng tới một dòng logic nào.
   const camera = createCamera({ tile: TILE });
+  camera.setZoom(settings.zoom);
   camera.setWorld(initial.w * TILE, initial.h * TILE);
   const renderer = createRenderer(canvas, atlas, camera);
 
   observeScreen(stage, (info) => {
     if (camera.setSize(info.cssW, info.cssH, info.dpr)) renderer.applyViewport();
-    // Bố cục nút bấm/HUD đổi theo hướng màn — CSS đọc thuộc tính này.
     document.body.dataset["orientation"] = info.orientation;
   });
   camera.jumpTo(initial.player.x, initial.player.y);
   const hud = createHud($("#hud"), atlas);
   const toasts = createToasts($("#toasts"));
+
+  const tutorial = createTutorial($("#tutorial"), () => {
+    if (!settings.tutorialSeen) setSetting("tutorialSeen", true);
+  });
+
+  /** Đổi MỘT khoá settings: lưu, áp dụng lên <body>, camera, rung. */
+  function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Settings {
+    settings = { ...settings, [key]: value };
+    saveSettings(settings);
+    applySettings(settings);
+    setHaptics(settings.haptics);
+    if (key === "zoom" && camera.setZoom(settings.zoom)) {
+      renderer.applyViewport();
+      const p = store.getState().player;
+      camera.jumpTo(p.x, p.y);
+    }
+    return settings;
+  }
 
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
@@ -181,12 +208,8 @@ async function boot() {
       return isMuted();
     },
     isMuted,
-    controlMode: () => settings.control,
-    setControlMode: (mode: ControlMode) => {
-      settings.control = mode;
-      saveSettings(settings);
-      applyControlMode(mode);
-    },
+    settings: () => settings,
+    setSetting,
     revertContent: async () => {
       await revertToBundled();
       toasts.say(content.strings.msg["otaReverted"] ?? "Đã quay về nội dung đóng kèm.", "good");
@@ -196,38 +219,48 @@ async function boot() {
       source: contentSource,
       pending: pendingVersion,
     }),
+    canInstall: () => installPrompt !== null,
+    install: async () => {
+      const p = installPrompt;
+      if (!p) return;
+      installPrompt = null;
+      menus.close();
+      await p.prompt();
+      const r = await p.userChoice;
+      if (r.outcome === "accepted") toasts.say("Đã cài OniFarm về máy.", "good");
+    },
+    replayTutorial: () => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS),
+    isTouch: () => isTouch,
   });
 
-  /** Thay state (tải save, chơi mới): camera phải NHẢY tới chỗ mới. Nếu để nó
-   *  làm mượt thì người chơi sẽ thấy khung hình trượt qua nửa bản đồ. */
+  /** Thay state (tải save, chơi mới): camera phải NHẢY tới chỗ mới. */
   function adoptState(next: GameState) {
     store.replace(next);
     camera.setWorld(next.w * TILE, next.h * TILE);
     camera.jumpTo(next.player.x, next.player.y);
     lastMap = next.mapId;
+    aimed = null;
   }
 
-  hud.onSelect((slot) => store.dispatch({ t: "SELECT", slot }));
+  hud.onSelect((slot) => {
+    store.dispatch({ t: "SELECT", slot });
+    buzz("tap");
+  });
 
-  // Bản đồ nhỏ: vừa để nhìn tổng thể nông trại, vừa để ĐI XA — bấm-để-đi trên
-  // khung chính chỉ tới được chỗ đang nhìn thấy, còn ở đây bấm đâu cũng đi được.
   const minimap = createMinimap($("#minimap"));
   minimap.onPick((tx, ty) => {
     if (menus.isOpen()) return;
-    // act: false — đi thuần tuý. Không thì đang cầm cuốc mà bấm bản đồ là tự cày.
     nav.goTo(store.getState(), content, tx, ty, { act: false });
   });
 
   /* ---- 5. input ---- */
   const stickZone = document.querySelector<HTMLElement>("#stick");
   const input = createInput(canvas, {
-    // Màn hình → world px. Đây là ranh giới duy nhất mà pixel màn hình được
-    // phép xuất hiện; từ đây trở đi mọi thứ là world px.
     toWorld: (cx, cy) => {
       const r = stage.getBoundingClientRect();
       return camera.screenToWorld(cx - r.left, cy - r.top);
     },
-    isModalOpen: () => menus.isOpen(),
+    isModalOpen: () => menus.isOpen() || tutorial.isOpen(),
     ...(stickZone
       ? {
           joystick: {
@@ -239,12 +272,6 @@ async function boot() {
       : {}),
   });
 
-  // Cảm ứng: bật lớp điều khiển ảo. Chuột/bàn phím vẫn chạy song song — máy lai
-  // (laptop cảm ứng, tablet có bàn phím) dùng được cả hai mà không phải chọn.
-  if (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)
-    document.body.classList.add("touch");
-
-
   for (const [sel, code] of [
     ["#abtn .a", "Space"],
     ["#abtn .b", "KeyE"],
@@ -254,26 +281,58 @@ async function boot() {
     if (el) bindTouchButton(el, code);
   }
 
-  /* ---- 6. âm thanh: suy ra từ thay đổi thống kê, không cần action riêng ---- */
+  /* ---- 6. phản hồi: âm thanh + hạt + rung, suy ra từ thay đổi thống kê ---- */
   let lastStats: Stats = store.getState().stats;
   let lastMoney = store.getState().money;
   let lastDay = store.getState().day;
+  /** Ô vừa được USE — để bắn hạt đúng chỗ. */
+  let lastUse: { x: number; y: number } | null = null;
 
   const countBuilt = (st: Stats) => Object.values(st.built).reduce((x, y) => x + y, 0);
+
+  const feedback = (sfx: Parameters<typeof play>[0], fx: BurstKind | null, hap: "success" | "heavy" = "success") => {
+    play(sfx);
+    buzz(hap);
+    if (fx && lastUse) renderer.burst(fx, lastUse.x, lastUse.y);
+  };
 
   store.subscribe((s) => {
     const a = s.stats;
     const b = lastStats;
-    if (a.tilled > b.tilled) play("till");
-    else if (a.watered > b.watered) play("water");
-    else if (a.planted > b.planted) play("plant");
-    else if (a.harvested > b.harvested) play("harvest");
-    else if (countBuilt(a) > countBuilt(b)) play("build");
-    else if (s.money > lastMoney) play("coin");
+    if (a.tilled > b.tilled) feedback("till", "dust");
+    else if (a.watered > b.watered) feedback("water", "water");
+    else if (a.planted > b.planted) feedback("plant", "leaf");
+    else if (a.harvested > b.harvested) feedback("harvest", "leaf");
+    else if (countBuilt(a) > countBuilt(b)) feedback("build", "spark", "heavy");
+    else if (s.money > lastMoney) {
+      play("coin");
+      if (lastUse) renderer.burst("coin", lastUse.x, lastUse.y);
+    }
     if (s.day > lastDay) play("sleep");
     lastStats = a;
     lastMoney = s.money;
     lastDay = s.day;
+  });
+
+  // chặt/đập không có ô thống kê riêng: bắt qua tham chiếu lưới đổi + hp giảm
+  let lastTiles = store.getState().tiles;
+  store.subscribe((s) => {
+    if (s.tiles === lastTiles || !lastUse) {
+      lastTiles = s.tiles;
+      return;
+    }
+    const i = lastUse.y * s.w + lastUse.x;
+    const before = lastTiles[i];
+    const after = s.tiles[i];
+    lastTiles = s.tiles;
+    if (!before || !after || s.mapId !== lastMap) return;
+    if (before.prop && (after.hp < before.hp || after.prop !== before.prop)) {
+      const def = content.props[before.prop];
+      const mine = def?.tool === "MINE";
+      play(mine ? "till" : "harvest");
+      buzz("heavy");
+      renderer.burst(mine ? "stone" : "leaf", lastUse.x, lastUse.y);
+    }
   });
 
   // âm thanh chỉ được phép khởi tạo sau cử chỉ đầu tiên (luật autoplay)
@@ -291,33 +350,32 @@ async function boot() {
     dirtySince = 0;
     await saveGame(store.snapshot());
   };
-  // Theo dõi ngày bằng biến RIÊNG: subscriber âm thanh ở trên cũng cập nhật
-  // lastDay, mà nó chạy trước, nên dùng chung biến sẽ không bao giờ khớp.
-  // Ngày mới còn có thể đến từ TICK (ngất) chứ không chỉ từ SLEEP.
   let savedDay = store.getState().day;
+  /** Mốc bắt đầu hiệu ứng chuyển ngày (giây của vòng lặp), 0 = không có. */
+  let dayFadeAt = 0;
   store.subscribe((s) => {
     if (s.day > savedDay) {
+      const passedOut = s.energy < content.balance.energyMax * 0.75;
       savedDay = s.day;
       void autosave();
+      dayFadeAt = elapsed;
+      hud.dayBanner(s.day, passedOut ? "Bạn ngất giữa đồng — dậy muộn và mệt" : "Một ngày mới trên nông trại");
     } else dirtySince++;
   });
-  // lưu thêm mỗi 30 giây nếu có thay đổi, và khi rời trang
   setInterval(() => {
     if (dirtySince > 0) void autosave();
   }, 30_000);
   addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden" && dirtySince > 0) void autosave();
   });
+  addEventListener("pagehide", () => {
+    if (dirtySince > 0) void autosave();
+  });
 
-  /* ---- 8. ô đang nhắm: theo chuột nếu có, không thì theo hướng nhân vật ---- */
+  /* ---- 8. ô đang nhắm ---- */
   function targetTile(s: GameState, forceFacing = false): Cursor | null {
     const p = forceFacing || input.stickActive() ? null : input.pointer();
 
-    // Thứ tự ưu tiên khi ngắm:
-    //   1. chuột VỪA rê  → theo chuột (desktop ngắm bằng chuột là chính)
-    //   2. ô đã ngắm còn trong tầm → giữ nguyên (cứu màn nhỏ: cày rồi gieo rồi
-    //      tưới cùng một ô mà chỉ phải chạm đúng một lần)
-    //   3. ô trước mặt
     if (!p && !forceFacing && aimed && inReachOf(s, aimed.x, aimed.y))
       return { x: aimed.x, y: aimed.y, ok: tileActionable(s, aimed.x, aimed.y) };
 
@@ -327,16 +385,11 @@ async function boot() {
       tx = Math.max(0, Math.min(s.w - 1, Math.floor(p.x / TILE)));
       ty = Math.max(0, Math.min(s.h - 1, Math.floor(p.y / TILE)));
     } else {
-      const d = s.player.dir;
-      const ox = d === "left" ? -1 : d === "right" ? 1 : 0;
-      const oy = d === "up" ? -1 : d === "down" ? 1 : 0;
-      tx = Math.floor(s.player.x / TILE) + ox;
-      ty = Math.floor(s.player.y / TILE) + oy;
+      const f = facingTile(s, TILE);
+      tx = f.x;
+      ty = f.y;
     }
     if (tx < 0 || ty < 0 || tx >= s.w || ty >= s.h) return null;
-    // Từ khi có bấm-để-đi, "ở xa" không còn là lỗi nữa — nhân vật sẽ tự đi tới.
-    // Nên con trỏ đổi nghĩa: TRẮNG = có việc làm được ở đây, ĐỎ = ô vô nghĩa
-    // (nước, gốc cây, tảng đá, tường nhà).
     return { x: tx, y: ty, ok: tileActionable(s, tx, ty) };
   }
 
@@ -344,16 +397,9 @@ async function boot() {
     return Math.hypot(tx * TILE + TILE / 2 - s.player.x, ty * TILE + TILE / 2 - s.player.y) <= REACH;
   }
 
-  /* ---- 9. bấm-để-đi ------------------------------------------------------
-     Bấm vào ô ở xa: nhân vật TỰ ĐI tới rồi mới xử lý. Đây chỉ là một cách nhập
-     liệu — nó sinh ra action MOVE từng khung hình y như bàn phím, nên game
-     state và định dạng save không đổi gì. */
+  /* ---- 9. bấm-để-đi ---- */
   const nav = createNavigator();
 
-  // Dịch chuyển qua cửa: nhân vật nhảy cả chục ô, VÀ bản đồ có thể đổi hẳn kích
-  // thước (nông trại 40×30 ↔ phòng ngủ 14×8). Camera phải được báo cả hai thứ —
-  // thiếu `setWorld` thì nó vẫn kẹp theo biên bản đồ cũ và khung nhìn lệch hẳn.
-  // Đăng ký SAU khi có `nav` — trước đó biến còn trong vùng chưa khởi tạo.
   let lastPos = { x: store.getState().player.x, y: store.getState().player.y };
   let lastMap = store.getState().mapId;
   store.subscribe((st) => {
@@ -361,6 +407,7 @@ async function boot() {
     if (mapChanged) {
       lastMap = st.mapId;
       camera.setWorld(st.w * TILE, st.h * TILE);
+      aimed = null;
     }
     if (mapChanged || Math.hypot(st.player.x - lastPos.x, st.player.y - lastPos.y) > TILE * 4) {
       camera.jumpTo(st.player.x, st.player.y);
@@ -369,25 +416,8 @@ async function boot() {
     lastPos = { x: st.player.x, y: st.player.y };
   });
 
-  /** Ô cuối cùng người chơi NGẮM tới. Trên màn nhỏ, ô chỉ rộng ~32px nên bắt
-   *  người chơi chạm lại chính xác cho mỗi thao tác là cực hình. Giữ lại ô vừa
-   *  ngắm, chừng nào còn trong tầm với thì nút DÙNG cứ thế làm tiếp ở đó —
-   *  cày rồi gieo rồi tưới cùng một ô mà chỉ phải ngắm đúng một lần.
-   *
-   *  Bị xoá ngay khi người chơi tự di chuyển: lúc đó ý định đã đổi. */
   let aimed: { x: number; y: number } | null = null;
 
-  /**
-   * Nắn cú chạm về ô "có nghĩa" gần nhất.
-   *
-   * Ngón tay rộng cỡ 44px mà ô chỉ 32px, nên chạm vào mép giữa hai ô là chuyện
-   * thường. Ta xét ô vừa chạm cùng 8 ô quanh nó, ưu tiên ô thật sự làm được
-   * việc với thứ đang cầm, rồi mới tới ô gần điểm chạm nhất.
-   *
-   * Bán kính nắn tính bằng PIXEL MÀN HÌNH rồi đổi ngược ra world px: màn hình
-   * càng nhỏ (hệ số phóng càng thấp) thì ngón tay càng che nhiều ô, nên cần nắn
-   * rộng hơn. Trên desktop gần như không nắn gì.
-   */
   function snapTap(s: GameState, wx: number, wy: number): { x: number; y: number } {
     const raw = {
       x: Math.max(0, Math.min(s.w - 1, Math.floor(wx / TILE))),
@@ -406,7 +436,6 @@ async function boot() {
         if (d > radius && !(dx === 0 && dy === 0)) continue;
         const useful =
           canUseAt(s, content, tx, ty, true) !== null || interactAt(s, content, tx, ty) !== null;
-        // Ô làm được việc luôn thắng ô trống, sau đó mới xét gần điểm chạm.
         const score = (useful ? 0 : 1000) + d;
         if (score < bestScore) {
           bestScore = score;
@@ -417,23 +446,16 @@ async function boot() {
     return best ?? raw;
   }
 
-  /** Ô này có gì để làm không (dùng cho màu con trỏ). Nước, cây, đá, tường nhà
-   *  thì đứng sát tận nơi cũng chẳng làm được gì — báo đỏ luôn cho khỏi mất công đi. */
   function tileActionable(s: GameState, tx: number, ty: number): boolean {
     const t = s.tiles[ty * s.w + tx];
     if (!t) return false;
     if (t.prop) {
       const def = content.props[t.prop];
-      // Cây, đá, bụi giờ CHẶT/ĐẬP được nên là ô đáng nhắm; tường với vách nhà
-      // thì vẫn vô nghĩa.
       return !!def && (!!def.hits || !!def.interact);
     }
-    // Bờ nước múc được nước; giữa hồ thì không.
     return t.g !== "water" || !!content.tiles.grounds["water"]?.interact;
   }
 
-  /** Đang cầm công trình ĐẶC? Vậy phải đứng CẠNH ô đích chứ không đứng lên nó,
-   *  nếu không sẽ tự nhốt mình và việc đặt bị từ chối. */
   function holdingSolidBuilding(s: GameState): boolean {
     const held = s.inv[s.sel];
     if (!held?.id.startsWith("build:")) return false;
@@ -441,11 +463,10 @@ async function boot() {
     return !!def && def.kind === "object" && def.solid;
   }
 
-  /** Tương tác với công trình (cửa nhà, máy bán hạt, quầy thu mua).
-   *  KHÔNG đòi thẳng hàng: mở cửa hàng không có động tác vung tay nào để mà lệch. */
   function tryInteract(s: GameState, tx: number, ty: number): boolean {
     const hit = nearbyInteract(s, tx, ty);
     if (!hit) return false;
+    buzz("tap");
     switch (hit.kind) {
       case "SHOP":
         menus.openShop();
@@ -457,11 +478,12 @@ async function boot() {
         menus.openCraft();
         return true;
       case "SLEEP":
-        // Chỉ GIƯỜNG mới ngủ được — cửa nhà giờ chỉ để đi vào phòng.
         store.dispatch({ t: "SLEEP" });
         return true;
       case "REFILL":
+        lastUse = { x: hit.x, y: hit.y };
         store.dispatch({ t: "REFILL" });
+        renderer.burst("water", hit.x, hit.y);
         return true;
       case "PORTAL":
         store.dispatch({ t: "PORTAL", x: hit.x, y: hit.y });
@@ -471,17 +493,21 @@ async function boot() {
     }
   }
 
-  /** Dùng vật phẩm lên ô. Trả false nếu còn ở xa quá. */
   function tryUse(s: GameState, tx: number, ty: number): boolean {
     if (!inReachOf(s, tx, ty)) return false;
+    lastUse = { x: tx, y: ty };
     store.dispatch({ t: "USE", x: tx, y: ty });
     return true;
   }
 
-  /** Làm việc trên ô. Trả false nếu còn ở xa quá, chưa làm được gì. */
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
     return tryInteract(s, tx, ty) || tryUse(s, tx, ty);
   }
+
+  const deny = () => {
+    play("deny");
+    buzz("deny");
+  };
 
   const vpTiles = () => ({
     w: camera.viewport.viewW / TILE,
@@ -492,20 +518,15 @@ async function boot() {
   let elapsed = 0;
   const loop = createLoop((dt) => {
     elapsed += dt;
-    const modal = menus.isOpen();
+    const modal = menus.isOpen() || tutorial.isOpen();
 
     if (modal) nav.cancel();
 
     if (!modal) {
       const ax = input.axis();
       if (ax.x !== 0 || ax.y !== 0) {
-        // Người chơi tự điều khiển thì huỷ đường đi tự động ngay — không giành
-        // tay lái với nhau.
         nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
-        // Người chơi tự cầm lái thì BỎ ô đang ngắm, kể cả nó còn trong tầm.
-        // Giữ lại sẽ gây bất ngờ: xoay người sang hướng khác rồi bấm DÙNG mà
-        // nhân vật vẫn thò tay về ô cũ phía sau lưng.
         aimed = null;
       } else {
         const step = nav.update(store.getState(), content, dt);
@@ -515,15 +536,10 @@ async function boot() {
       }
       store.dispatch({ t: "TICK", dt });
 
-      // Vừa tới nơi thì làm luôn việc mà cú bấm lúc nãy đã hẹn.
       const arrived = nav.takeArrival();
       if (arrived) {
-        // Tới nơi thì ô đó thành ô đang ngắm, kể cả khi chỉ đi chứ không làm gì:
-        // người chơi chạm một lần để đi tới, xong bấm DÙNG là thao tác được ngay,
-        // khỏi phải ngắm lại.
         aimed = { x: arrived.tx, y: arrived.ty };
-        // act=false: đích do chạm MỘT lần hoặc bấm bản đồ nhỏ — chỉ đi, không làm gì.
-        if (arrived.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) play("deny");
+        if (arrived.act && !actOnTile(store.getState(), arrived.tx, arrived.ty)) deny();
       }
     }
 
@@ -531,7 +547,8 @@ async function boot() {
       const s = store.getState();
       switch (it.t) {
         case "menu":
-          if (menus.isOpen()) menus.close();
+          if (tutorial.isOpen()) tutorial.close();
+          else if (menus.isOpen()) menus.close();
           else menus.openPause();
           break;
         case "shop":
@@ -555,27 +572,31 @@ async function boot() {
           break;
         }
         case "use": {
-          // Ngắm bằng chuột chỉ có giá trị khi ô đó trong tầm với; xa quá thì
-          // Space quay về ô TRƯỚC MẶT thay vì bấm hụt vào chỗ con trỏ.
+          if (modal) break;
           let c = targetTile(s);
+          // Nút hành động theo ngữ cảnh: ô đang ngắm ở XA thì đi tới rồi làm,
+          // thay vì bấm hụt. Trên điện thoại đây là đường tắt tự nhiên nhất:
+          // chạm ô, thấy nút ghi CÀY, bấm CÀY — nhân vật tự đi rồi cày.
+          if (c && !inReachOf(s, c.x, c.y) && aimed && settings.contextButton) {
+            if (tileActionable(s, c.x, c.y) && nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
+          }
           if (c && !inReachOf(s, c.x, c.y)) c = targetTile(s, true);
-          if (c && inReachOf(s, c.x, c.y)) store.dispatch({ t: "USE", x: c.x, y: c.y });
-          else play("deny");
+          if (c && inReachOf(s, c.x, c.y)) {
+            // Với công trình gần đó (cửa hàng, giường…) nút chính cũng tương tác
+            // được — người chơi không phải phân biệt DÙNG với E.
+            if (!actOnTile(s, c.x, c.y)) deny();
+          } else deny();
           break;
         }
         case "pointer": {
+          if (modal) break;
           const snapped = snapTap(s, it.wx, it.wy);
           const tx = snapped.x;
           const ty = snapped.y;
           aimed = { x: tx, y: ty };
           nav.cancel();
 
-          // LUẬT ĐIỀU KHIỂN: chạm MỘT lần là ĐI, chạm HAI lần mới THỰC THI.
-          // Tách hai ý định ra vì trên màn nhỏ chúng rất dễ lẫn: định đi ngang
-          // qua ruộng mà lỡ tay cày mất một ô là chuyện bực mình nhất.
           if (!it.double) {
-            // Chỉ đi tới và ngắm sẵn ô đó. Đã đứng trong tầm rồi thì khỏi đi
-            // đâu cả — cú chạm coi như chỉ để ngắm.
             if (!inReachOf(s, tx, ty))
               nav.goTo(s, content, tx, ty, {
                 act: false,
@@ -584,57 +605,59 @@ async function boot() {
             break;
           }
 
-          // Chạm kép.
-          // Công trình thì mở ngay, không cần bước vào cho ngay ngắn.
           if (tryInteract(s, tx, ty)) break;
-          // Với lô đất: chỉ làm ngay khi đã ĐỨNG THẲNG HÀNG. Đứng chéo góc thì
-          // vẫn với tới được, nhưng nhân vật sẽ thò tay theo một hướng chẳng
-          // ăn nhập gì với lô đất — thà bước một bước cho ngang bằng rồi làm.
           if (alignedTo(s, tx, ty) && tryUse(s, tx, ty)) break;
           if (
             !tileActionable(s, tx, ty) ||
             !nav.goTo(s, content, tx, ty, { avoidStandingOn: holdingSolidBuilding(s) })
           )
-            play("deny");
+            deny();
           break;
         }
         case "interact": {
-          // Phím E luôn nhắm ô TRƯỚC MẶT, không theo con trỏ và không tự đi.
+          if (modal) break;
           const c = targetTile(s, true);
           if (!c) break;
-          if (!actOnTile(s, c.x, c.y)) play("deny");
+          if (!actOnTile(s, c.x, c.y)) deny();
           break;
         }
       }
     }
 
     const s = store.getState();
-    // toast: hiện rồi báo cho state biết đã hiện xong
     if (s.log.length) {
       const upTo = toasts.show(s.log);
       if (upTo) store.dispatch({ t: "LOG_SEEN", upTo });
     }
 
-    // Camera bám nhân vật SAU khi state đã cập nhật và TRƯỚC khi vẽ, để khung
-    // hình nào cũng thấy camera khớp với vị trí thật của nhân vật khung đó.
     camera.follow(s.player.x, s.player.y, dt);
-    // Đang trên đường đi thì con trỏ chỉ vào ĐÍCH, để người chơi thấy rõ mình
-    // vừa hẹn làm gì ở đâu.
     const navT = nav.target();
     const cursor: Cursor | null = modal
       ? null
       : navT
         ? { x: navT.tx, y: navT.ty, ok: true }
         : targetTile(s);
-    renderer.draw(s, content, cursor, elapsed);
-    hud.update(s, content);
+
+    // Chuyển ngày: giữ đen 0,35s rồi mở sáng trong 0,9s.
+    let fade = 0;
+    if (dayFadeAt > 0) {
+      const t = elapsed - dayFadeAt;
+      fade = t < 0.35 ? 1 : Math.max(0, 1 - (t - 0.35) / 0.9);
+      if (fade <= 0) dayFadeAt = 0;
+    }
+
+    renderer.draw(s, content, cursor, elapsed, {
+      navTarget: navT ? { x: navT.tx, y: navT.ty } : null,
+      fade,
+      reduceMotion: document.body.dataset["motion"] === "reduce",
+    });
+
+    const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;
+    hud.update(s, content, hint);
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
   });
 
-  /** Tương tác nhận cả ô kề bên ô đang nhắm — đứng chệch một chút vẫn bấm được,
-   *  đỡ phải căn chỉnh từng pixel. Trả về cả TOẠ ĐỘ vì cửa dịch chuyển cần biết
-   *  chính xác mình đang dùng cái cửa nào. */
   function nearbyInteract(s: GameState, x: number, y: number) {
     for (const [dx, dy] of [
       [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0],
@@ -651,13 +674,17 @@ async function boot() {
     return null;
   }
 
-  bootEl.style.display = "none";
+  bootEl.classList.add("done");
+  window.setTimeout(() => {
+    bootEl.style.display = "none";
+  }, 420);
   loop.start();
 
-  /* Cầu test (chỉ ở bản dev). requestAnimationFrame KHÔNG chạy khi document bị
-     ẩn — trong trình duyệt tự động hoá thì trang luôn ở trạng thái hidden, nên
-     không có cầu này thì không cách nào kiểm được game bằng script.
-     Cũng tiện để mô phỏng nhanh: step(1/60) gọi tay chạy nhanh gấp trăm lần thật. */
+  // Hướng dẫn lần đầu: chỉ khi chưa xem và đang là ván mới (save cũ = đã biết chơi).
+  if (!settings.tutorialSeen && !migrated) {
+    window.setTimeout(() => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS), 500);
+  } else if (!settings.tutorialSeen) setSetting("tutorialSeen", true);
+
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>)["__PF"] = {
       store,
@@ -666,6 +693,9 @@ async function boot() {
       menus,
       renderer,
       camera,
+      settings: () => settings,
+      setSetting,
+      tutorial,
       step: (dt = 1 / 60, times = 1) => {
         for (let i = 0; i < times; i++) loop.step(dt);
       },
@@ -674,7 +704,7 @@ async function boot() {
 
   for (const w of contentWarnings) toasts.say(w, "bad");
 
-  /* ---- 10. OTA: hỏi thăm bản mới, chạy NGẦM, không chặn gì ---- */
+  /* ---- 11. OTA: hỏi thăm bản mới, chạy NGẦM, không chặn gì ---- */
   pendingVersion = await pendingContentVersion();
   if (CONTENT_URL) {
     void checkForUpdate(content.contentVersion, { contentUrl: CONTENT_URL }).then((r) => {
@@ -690,8 +720,6 @@ async function boot() {
   }
 }
 
-/* Service worker: chỉ đăng ký ở bản build. Ở dev nó sẽ cache mất module và
-   làm HMR cư xử kỳ quặc — lỗi rất mất thời gian để lần ra. */
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   addEventListener("load", () => {
     void navigator.serviceWorker.register("/sw.js").catch(() => {
@@ -705,7 +733,7 @@ void boot().catch((e) => {
   const el = document.querySelector("#boot");
   if (el instanceof HTMLElement) {
     el.style.display = "grid";
-    el.innerHTML = `<div class="inner"><h1>ONIFARM</h1><p>Lỗi khởi động:</p>
+    el.innerHTML = `<div class="inner"><div class="logo">ONI<span>FARM</span></div><p>Lỗi khởi động:</p>
       <div class="err">${String(e instanceof Error ? e.stack ?? e.message : e)}</div></div>`;
   }
 });

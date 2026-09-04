@@ -6,52 +6,59 @@
          env(safe-area-inset-*) để đẩy nút bấm ra khỏi đó. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1, interactive-widget=resizes-content"
     />
     <meta name="theme-color" content="#14100c" />
+    <meta name="color-scheme" content="dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OniFarm" />
     <meta name="description" content="OniFarm — game nông trại hiện đại pixel art, chơi offline hoàn toàn." />
     <title>OniFarm — Chơi</title>
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
   </head>
   <body>
     <div id="app">
       <!-- #stage là KHUNG CHỨA mà camera đo. Canvas phủ kín nó; khung nhìn được
            căn giữa bên trong bằng offset letterbox do camera tính. -->
       <div id="stage">
-        <canvas id="game"></canvas>
+        <canvas id="game" aria-label="Nông trại"></canvas>
 
         <!-- HUD và modal là DOM, không vẽ lên canvas: chữ sắc nét ở mọi cỡ màn
              hình và mọi mật độ điểm ảnh, không phụ thuộc hệ số phóng của game. -->
         <div id="hud"></div>
-        <div id="toasts"></div>
         <div id="modal-root"></div>
+        <div id="tutorial" hidden></div>
 
         <!-- Điều khiển cảm ứng. Chỉ hiện khi thiết bị có cảm ứng; chuột và bàn
-             phím vẫn chạy song song. -->
+             phím vẫn chạy song song. Bố cục lật theo body[data-hand]. -->
         <div id="touch">
-          <!-- Joystick ĐỘNG: vòng nền mọc ra ngay chỗ ngón tay đặt xuống, nên
-               không phải mò tới một vị trí cố định. -->
           <div id="stick">
             <div class="base"><div class="knob"></div></div>
           </div>
 
           <div id="abtn">
-            <button class="a" aria-label="Dùng vật phẩm">DÙNG</button>
-            <button class="b" aria-label="Tương tác">E</button>
+            <div class="why" hidden></div>
+            <div class="btns">
+              <button type="button" class="b" aria-label="Tương tác">E</button>
+              <button type="button" class="a" aria-label="Dùng vật phẩm">DÙNG</button>
+            </div>
           </div>
 
           <div id="sysbtn">
-            <button class="menu" aria-label="Menu">☰</button>
+            <button type="button" class="menu" aria-label="Menu">
+              <span></span><span></span><span></span>
+            </button>
           </div>
         </div>
       </div>
 
       <div id="boot">
         <div class="inner">
-          <h1>ONIFARM</h1>
+          <div class="sprout" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="logo">ONI<span>FARM</span></div>
           <p>Đang dựng nông trại…</p>
         </div>
       </div>

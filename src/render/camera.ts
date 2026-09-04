@@ -55,6 +55,17 @@ export interface CameraConfig {
   /** tốc độ bám: càng lớn càng bám sát, 0 = không làm mượt */
   followLambda: number;
   maxDpr: number;
+  /**
+   * Ở mép bản đồ thì làm gì:
+   *   · "clamp"  — dừng camera lại, nhân vật rời khỏi tâm (không lộ vùng ngoài).
+   *   · "center" — nhân vật LUÔN ở tâm; renderer vẽ viền rừng cho phần ngoài biên.
+   *
+   * Mặc định "center". Lý do: trên điện thoại dọc, khung nhìn cao ~20 ô mà bản
+   * đồ chỉ 30 hàng, nên ở nửa trên (khu nhà — nơi chơi nhiều nhất) camera kẹp và
+   * nhân vật bị đẩy lên tận dưới HUD, đúng chỗ toast và chip mục tiêu che.
+   * Với lối chơi chạm-để-đi, tâm màn hình phải là nhân vật, mọi lúc.
+   */
+  edgeMode: "clamp" | "center";
 }
 
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
@@ -71,6 +82,7 @@ export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   // từng pixel một, không giật.
   followLambda: 0,
   maxDpr: 2,
+  edgeMode: "center",
 };
 
 export interface Viewport {
@@ -93,6 +105,17 @@ export interface Viewport {
   tilesY: number;
 }
 
+/** Mức phóng do người chơi chọn (Cài đặt → Khung nhìn). Mỗi mức là một DẢI SỐ
+ *  Ô trên cạnh ngắn — vẫn giữ nguyên luật "khung nhìn định nghĩa bằng số ô",
+ *  chỉ dịch dải đi: `near` cho màn nhỏ/mắt kém, `far` cho tablet và desktop. */
+export type ZoomLevel = "near" | "normal" | "far";
+
+export const ZOOM_TILES: Record<ZoomLevel, { min: number; max: number }> = {
+  near: { min: 7, max: 11 },
+  normal: { min: MIN_TILES_SHORT, max: MAX_TILES_SHORT },
+  far: { min: 12, max: 18 },
+};
+
 export interface Camera {
   /** vị trí thực (float) — dùng cho tính toán mượt */
   readonly x: number;
@@ -104,6 +127,8 @@ export interface Camera {
 
   /** đổi kích thước khung chứa → tính lại scale/viewport. true nếu có thay đổi. */
   setSize(cssW: number, cssH: number, dpr: number): boolean;
+  /** đổi mức phóng → tính lại viewport với kích thước hiện có. true nếu có thay đổi. */
+  setZoom(level: ZoomLevel): boolean;
   setWorld(worldW: number, worldH: number): void;
   /** bám mục tiêu: vùng chết → làm mượt → kẹp biên → snap */
   follow(targetX: number, targetY: number, dt: number): void;
@@ -154,6 +179,8 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
 
   let worldW = 0;
   let worldH = 0;
+  /** setZoom đổi dải số ô nhưng kích thước không đổi — phải ép setSize tính lại. */
+  let zoomDirty = false;
   let x = 0;
   let y = 0;
   let rx = 0;
@@ -178,6 +205,12 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
    *  (trả về giá trị âm) — thà để viền nền còn hơn kéo lố ra ngoài bản đồ. */
   function clampAxis(pos: number, view: number, world: number): number {
     if (world <= view) return (world - view) / 2;
+    if (cfg.edgeMode === "center") {
+      // Cho phép lộ tối đa NỬA khung nhìn ngoài biên — đúng bằng mức cần để
+      // nhân vật đứng sát mép vẫn ở tâm. Không hơn, để bấm bản đồ nhỏ không
+      // kéo camera ra hư vô.
+      return Math.max(-view / 2, Math.min(world - view / 2, pos));
+    }
     return Math.max(0, Math.min(world - view, pos));
   }
 
@@ -218,7 +251,8 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       // bấm lệch ô cho tới lần resize kế tiếp.
       if (!(cssW > 0) || !(cssH > 0)) return false;
       const d = Math.max(1, Math.min(cfg.maxDpr, dpr || 1));
-      if (cssW === vp.cssW && cssH === vp.cssH && d === vp.dpr) return false;
+      if (cssW === vp.cssW && cssH === vp.cssH && d === vp.dpr && !zoomDirty) return false;
+      zoomDirty = false;
 
       const short = Math.min(cssW, cssH);
       const { scale, integer } = pickScale(short, cfg);
@@ -246,6 +280,19 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
 
       reclamp();
       return true;
+    },
+
+    setZoom(level) {
+      const z = ZOOM_TILES[level];
+      if (cfg.minTilesShort === z.min && cfg.maxTilesShort === z.max) return false;
+      cfg.minTilesShort = z.min;
+      cfg.maxTilesShort = z.max;
+      zoomDirty = true;
+      if (!(vp.cssW > 0) || !(vp.cssH > 0)) return false;
+      const changed = this.setSize(vp.cssW, vp.cssH, vp.dpr);
+      // Sau khi đổi scale, nhân vật phải về lại tâm ngay — không để camera
+      // "trôi" từ vị trí cũ sang.
+      return changed;
     },
 
     setWorld(w, h) {

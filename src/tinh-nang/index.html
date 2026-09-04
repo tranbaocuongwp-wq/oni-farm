@@ -2,7 +2,8 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14100c" />
     <meta name="description" content="Tính năng của OniFarm: canh tác, ngày đêm, công trình hiện đại, lưu cục bộ, cập nhật nội dung OTA." />
     <title>Tính năng — OniFarm</title>
     <link rel="stylesheet" href="/site/site.css" />
@@ -10,8 +11,8 @@
   <body>
     <nav>
       <div class="wrap">
-        <a class="brand" href="/">ONIFARM</a>
-        <a href="/tinh-nang/">Tính năng</a>
+        <a class="brand" href="/">ONI<span>FARM</span></a>
+        <a href="/tinh-nang/" aria-current="page">Tính năng</a>
         <a href="/huong-dan/">Hướng dẫn</a>
         <a href="/tai-ve/">Cài về máy</a>
         <a class="play" href="/farm/">Chơi ngay</a>
@@ -24,13 +25,49 @@
 
     <section>
       <div class="wrap">
+        <h2>Chơi trên điện thoại</h2>
+        <p class="lead">Thiết kế lại cho ngón tay cái: mọi thứ bấm được đều ≥ 44px, nhân vật luôn ở giữa màn hình, và nút chính tự biết phải làm gì.</p>
+        <div class="grid">
+          <div class="card"><h3>Nút hành động theo ngữ cảnh</h3>
+            <p>Nút to góc dưới ghi <b>CÀY / GIEO / TƯỚI / THU / CHẶT / ĐẬP / ĐẶT / MUA / BÁN / CHẾ / NGỦ / VÀO / MÚC</b> tuỳ ô đang ngắm và vật phẩm đang cầm. Không làm được thì nói vì sao.</p></div>
+          <div class="card"><h3>Chạm để đi, chạm hai lần để làm</h3>
+            <p>Tìm đường A*, tự chạy khi xa, vòng vàng đánh dấu đích. Chạm lệch vẫn trúng ô nhờ nắn cú chạm theo cỡ màn hình.</p></div>
+          <div class="card"><h3>Hướng dẫn lần đầu</h3>
+            <p>Bốn thẻ ngắn khoanh đúng vào nút hành động, hotbar và bản đồ nhỏ. Bỏ qua được, xem lại được trong Cài đặt.</p></div>
+          <div class="card"><h3>Cài đặt của máy</h3>
+            <p>Tay thuận trái/phải, cỡ giao diện, khung nhìn gần/vừa/xa, joystick, rung, âm thanh, giảm chuyển động. Lưu theo máy, không dính vào save.</p></div>
+          <div class="card"><h3>Menu kiểu bottom-sheet</h3>
+            <p>Cửa hàng chia tab, quầy bán có nút ± bán từng phần, chế tạo hiện nguyên liệu dạng chip đỏ/xám. Trượt từ đáy lên, nút Đóng trong tầm ngón cái.</p></div>
+          <div class="card"><h3>Cài như app</h3>
+            <p>PWA: nút "Cài về màn hình chính" ngay trong menu Tạm dừng. Mở toàn màn hình, dọc hay ngang đều được, chơi offline.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Bộ đồ hoạ mới</h2>
+        <p class="lead">Vẫn là pixel art sinh bằng code, nhưng vẽ lại để đọc được trên màn 6 inch.</p>
+        <div class="grid">
+          <div class="card"><h3>Viền cho mọi vật thể</h3><p>Nhân vật, cây, đá, cây trồng, công trình đều có viền 1px — không còn tan vào nền cỏ khi phóng ×2.</p></div>
+          <div class="card"><h3>Nhân vật chibi 6 khung</h3><p>Đầu to, mũ đỏ nhận diện, bước đi 4 khung, khung vung tay riêng khi thao tác.</p></div>
+          <div class="card"><h3>Cây chín lấp lánh</h3><p>Sao vàng nhấp nháy trên cây đã chín — biết chỗ cần thu từ xa, kể cả ban đêm.</p></div>
+          <div class="card"><h3>Bờ nước, mép luống, viền rừng</h3><p>Ao có bọt ở bờ, lô đất có viền, ngoài biên bản đồ là rừng rậm thay vì màn đen.</p></div>
+          <div class="card"><h3>Hiệu ứng hạt</h3><p>Bụi khi cày, giọt nước khi tưới, lá bay khi thu hoạch, tia sáng khi xây — kèm rung nhẹ trên Android.</p></div>
+          <div class="card"><h3>HUD có icon</h3><p>Tiền, ngày, giờ, năng lượng, nước, điện trên một thanh; mặt trời đổi thành trăng khi tối; cảnh báo đỏ khi sắp cạn.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
         <h2>Cây trồng</h2>
-        <table>
+        <div class="table-wrap"><table>
           <tr><th>Cây</th><th>Thời gian</th><th>Hạt</th><th>Bán</th><th>Ghi chú</th></tr>
           <tr><td><b>Xà lách</b></td><td>3 ngày</td><td>12đ</td><td>32đ</td><td>Cây khởi động, vòng quay nhanh</td></tr>
           <tr><td><b>Cà chua</b></td><td>5 ngày</td><td>30đ</td><td>75đ</td><td>Thu xong mọc lại sau 3 ngày</td></tr>
           <tr><td><b>Bí đỏ</b></td><td>8 ngày</td><td>70đ</td><td>220đ</td><td>Đầu tư dài, lãi lớn</td></tr>
-        </table>
+        </table></div>
       </div>
     </section>
 
@@ -38,20 +75,20 @@
       <div class="wrap">
         <h2>Công trình hiện đại</h2>
         <p>Bốn công trình có ràng buộc lẫn nhau qua hệ thống ĐIỆN, không phải bốn món rời rạc.</p>
-        <table>
+        <div class="table-wrap"><table>
           <tr><th>Công trình</th><th>Giá</th><th>Tác dụng</th></tr>
           <tr><td><b>Vòi tưới tự động</b></td><td>350đ</td><td>Mỗi sáng tự tưới 4 ô kề bên</td></tr>
           <tr><td><b>Sàn nhà kính</b></td><td>120đ/ô</td><td>Ô luôn giữ ẩm, cây lớn kể cả hôm quên tưới</td></tr>
           <tr><td><b>Pin mặt trời</b></td><td>500đ</td><td>+45đ mỗi sáng, và cấp 1 điện</td></tr>
           <tr><td><b>Drone thu hoạch</b></td><td>900đ</td><td>Tự thu cây chín bán kính 4 ô — <b>cần 1 điện</b></td></tr>
-        </table>
+        </table></div>
       </div>
     </section>
 
     <section>
       <div class="wrap">
         <h2>Địa hình khai thác được</h2>
-        <table>
+        <div class="table-wrap"><table>
           <tr><th>Thứ</th><th>Cần gì</th><th>Ra gì</th></tr>
           <tr><td><b>Cây gỗ lớn</b></td><td>Rìu · 5 nhát</td><td>3–5 gỗ, để lại gốc cây</td></tr>
           <tr><td><b>Gốc cây</b></td><td>Rìu · 3 nhát</td><td>2–3 gỗ</td></tr>
@@ -59,7 +96,7 @@
           <tr><td><b>Tảng đá</b></td><td>Cuốc chim · 3 nhát</td><td>2–4 đá</td></tr>
           <tr><td><b>Bụi cỏ dại</b></td><td>Tay không</td><td>1–3 sợi cỏ</td></tr>
           <tr><td><b>Giếng nước</b></td><td>Bấm E</td><td>Đầy bình tưới</td></tr>
-        </table>
+        </table></div>
       </div>
     </section>
 
@@ -92,7 +129,9 @@
           <div class="card"><h3>Cây lớn theo thời gian</h3>
             <p>Ô còn ẩm và trời còn sáng thì cây lớn dần trông thấy, không nhảy cóc lúc ngủ. Ngủ sớm vẫn được cộng nốt phần ban ngày còn lại.</p></div>
           <div class="card"><h3>Chơi bằng gì cũng được</h3>
-            <p>Bàn phím, chuột, hoặc nút ảo trên điện thoại. Cài về màn hình chính như một app nhờ PWA.</p></div>
+            <p>Bàn phím, chuột, cảm ứng — cùng một đường xử lý, máy lai dùng cả hai. Cài về màn hình chính như một app nhờ PWA.</p></div>
+          <div class="card"><h3>Kiểm thử headless</h3>
+            <p>38 kịch bản mô phỏng chạy trong Node, gồm cả gợi ý hành động theo ngữ cảnh và bộ parse cài đặt — không cần trình duyệt.</p></div>
         </div>
       </div>
     </section>
@@ -102,5 +141,6 @@
         <a href="/privacy/">Quyền riêng tư</a>
       </div>
     </footer>
+    <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
   </body>
 </html>

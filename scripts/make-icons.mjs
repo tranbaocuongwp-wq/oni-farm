@@ -77,34 +77,36 @@ function encodePng(w, h, rgba) {
 // . trong suốt · các chữ cái tra trong PAL
 const ART = [
   "................",
-  ".....ggggg......",
-  "....gGGGGGg.....",
-  "...gGGGGGGGg....",
+  ".....ooooo......",
+  "....oGGGGGo.....",
+  "...oGgGGGgGo....",
+  "..obbbbbbbbbo...",
   "..bbbbbbbbbbb...",
   "..bwwwwwwwwwb...",
-  "..bwSSwwwSSwb...",
-  "..bwwwwwwwwwb...",
-  "..bbbbbbbbbbb...",
-  "..ddddddddddd...",
-  ".ddLLddLLddLLd..",
-  ".dLLLdLLLdLLLd..",
-  ".ddddddddddddd..",
+  "..bwSSwDDwSSb...",
+  "..bwwwwwDDwwb...",
+  "..obbbbbbbbbo...",
+  ".odddddddddddo..",
   ".dLLddLLddLLdd..",
-  ".ddddddddddddd..",
+  ".dddddddddddd...",
+  ".ddLLddLLddLLd..",
+  ".odddddddddddo..",
   "................",
 ];
 
 const PAL = {
-  g: [61, 138, 63, 255], // lá cây, viền tối
+  o: [28, 20, 16, 255], // viền
+  g: [61, 138, 63, 255], // lá cây tối
   G: [108, 201, 79, 255], // lá cây sáng
-  b: [59, 66, 82, 255], // mái nhà
-  w: [229, 233, 240, 255], // tường
+  b: [60, 70, 88, 255], // mái nhà
+  w: [241, 237, 226, 255], // tường
   S: [94, 129, 172, 255], // cửa sổ
-  d: [111, 76, 48, 255], // luống đất
+  D: [40, 48, 63, 255], // cửa
+  d: [122, 79, 47, 255], // luống đất
   L: [108, 201, 79, 255], // mầm trên luống
 };
 
-const BG = [26, 20, 14, 255];
+const BG = [79, 138, 60, 255]; // nền cỏ — icon maskable cần phủ kín
 
 function render(size) {
   const rgba = new Uint8Array(size * size * 4);

@@ -4,7 +4,11 @@ Game nông trại **hiện đại** phong cách pixel, **chơi offline hoàn to�
 Cày → gieo → tưới → ngủ → thu hoạch → bán, rồi nâng cấp lên vòi tưới tự động,
 nhà kính, pin mặt trời và drone thu hoạch.
 
-**Chơi ngay: https://oni-farm.pages.dev/farm/**
+**Chơi ngay: https://oni-farm.pages.dev/farm/** — điện thoại, tablet hay máy tính.
+
+**Thiết kế cho ngón tay cái:** chạm để đi, nút hành động tự biết việc (CÀY / GIEO /
+TƯỚI / THU / MUA…), nhân vật luôn ở tâm, menu kiểu bottom-sheet, tay thuận trái/phải,
+cỡ chữ, khung nhìn, rung, giảm chuyển động. Chi tiết ở [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
 **Static site thuần** — không server, không backend, không bước đóng gói native.
 `npm run build` ra một thư mục `dist/` thả lên bất kỳ host tĩnh nào là chạy.
@@ -26,7 +30,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 16 kịch bản mô phỏng game, Node thuần, không cần browser |
+| `npm run test:sim` | 38 kịch bản mô phỏng game (kể cả gợi ý hành động, parse cài đặt), Node thuần |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run icons` | Sinh lại icon PNG |
@@ -37,17 +41,33 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 
 ## Chơi thế nào
 
+**Điện thoại / tablet**
+
+| Cử chỉ | Việc |
+|---|---|
+| Chạm 1 lần vào ô | Nhân vật tự **đi tới** (tìm đường, tự chạy khi xa), ngắm sẵn ô đó |
+| Chạm 2 lần | **Làm ngay** tại ô đó |
+| Nút lớn góc dưới | Ghi đúng việc sẽ làm: **CÀY · GIEO · TƯỚI · THU · CHẶT · ĐẬP · ĐẶT · MUA · BÁN · CHẾ · NGỦ · VÀO · MÚC**. Ô xa thì bấm là tự đi tới rồi làm. Không làm được thì nói vì sao |
+| Nút E | Tương tác thứ trước mặt |
+| Nhấn giữ ô hotbar | Xem vật phẩm dùng làm gì |
+| Chạm bản đồ nhỏ | Đi xa |
+| ☰ | Tạm dừng: lưu, tải, **Cài đặt**, hướng dẫn, cài về màn hình chính |
+
+Mặc định không có joystick; bật được trong Cài đặt cùng tay thuận, cỡ giao diện,
+khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hướng dẫn 4 bước khoanh
+đúng vào nút.
+
+**Máy tính**
+
 | Phím | Việc |
 |---|---|
-| `W A S D` / mũi tên | Di chuyển |
-| `Space` | Dùng vật phẩm đang cầm lên ô trước mặt |
-| `E` | Tương tác — cửa nhà = ngủ, máy = mua hạt, quầy = bán |
-| `1`–`9` / lăn chuột | Chọn ô hotbar |
-| `B` | Mở nhanh cửa hàng |
-| `Esc` | Menu: lưu, tải, xuất/nhập file save |
-| Bấm chuột | Làm việc trực tiếp lên ô đó |
-
-Điện thoại: nút ảo tự hiện ở hai góc dưới.
+| `W A S D` / mũi tên | Di chuyển · giữ `Shift` để chạy |
+| `Space` | Dùng vật phẩm đang cầm lên ô đang ngắm |
+| `E` | Tương tác — cửa, giường, máy bán hạt, quầy, giếng |
+| `1`–`9` / lăn chuột / `Tab` | Chọn ô hotbar |
+| `B` · `M` | Mở cửa hàng · bật/tắt bản đồ nhỏ |
+| `Esc` | Tạm dừng: lưu, tải, cài đặt, xuất/nhập file save |
+| Bấm chuột 1 / 2 lần | Đi tới ô đó / làm ngay tại ô đó |
 
 **Luật quan trọng nhất:** cây chỉ lớn nếu ô **được tưới trong đêm đó**. Nhìn màu
 đất là biết — đất sẫm nghĩa là đêm nay cây sẽ lớn.
@@ -81,9 +101,12 @@ src/
   content/     ⭐ LÀN NHANH — dữ liệu thuần, đẩy OTA được, không cần build lại
   core/        ⭐ LÀN CHẬM  — engine, store, save, OTA; phải phát hành mới đổi được
   game/        ⚠️ KHÔNG chạm DOM — logic thuần, chạy thẳng trong Node để test
-  art/         sinh toàn bộ pixel art bằng code
-  render/      vẽ canvas, chỉ ĐỌC state
-  ui/          HUD + modal bằng DOM
+  game/hint.ts ⚠️ gợi ý hành động theo ngữ cảnh cho nút chính — thuần, có test
+  art/         sinh toàn bộ pixel art bằng code (viền, 6 khung nhân vật, autotile bờ/mép, icon HUD)
+  render/      vẽ canvas, chỉ ĐỌC state; hạt hiệu ứng + lấp lánh + viền rừng là trang trí, không vào state
+  ui/          HUD + modal + tutorial bằng DOM
+  core/settings.ts  tuỳ chọn của MÁY (tay thuận, cỡ chữ, zoom, rung…) — parse thuần, không vào save
+  core/haptics.ts   rung nhẹ khi thao tác (Android)
   farm/        vỏ trang game (/farm/)
   index.html + tinh-nang/ + huong-dan/ + tai-ve/ + privacy/   site tĩnh
 ```
@@ -105,7 +128,7 @@ Thể loại này là **lưới ô + máy trạng thái theo ngày**, không ph�
 Phaser/Kaboom kéo state vào object của engine (Sprite, Scene, Body) → khó
 serialize để save, khó nạp nóng content pack, không test headless được. Model
 JSON thuần là thứ làm cho **save + OTA + test** cùng chạy được bằng một cơ chế.
-Bản build hiện tại ~80KB (29KB gzip), zero dependency runtime.
+Bản build hiện tại ~155KB (57KB gzip), zero dependency runtime.
 
 Nếu sau này thật sự cần particle/chiến đấu/nhiều scene: bọc Phaser làm **lớp
 view thuần** bên trên model hiện có — model không phải viết lại.
@@ -230,13 +253,15 @@ thì mỗi khung hình các hàng pixel rơi vào ô màn hình khác nhau và c
 
 **Bám nhân vật: LUÔN ở chính giữa khung nhìn** (không vùng chết, bám tức thì). Với lối chơi
 bấm-để-đi thì tâm màn hình chính là thứ người chơi ngắm vào, nên nhân vật lệch tâm sẽ làm
-việc ước lượng khoảng cách bị sai. Đo thực tế ở giữa bản đồ: lệch **0,5 world px**.
+việc ước lượng khoảng cách bị sai.
 
-**Bản đồ CỐ ĐỊNH 40×30 ô, chỉ khung nhìn co giãn.** Sát mép bản đồ thì camera dừng lại nên
-nhân vật rời khỏi tâm — thà vậy còn hơn lộ vùng trống ngoài bản đồ. Lưu ý thật: trên điện
-thoại dọc khung nhìn cao tới 24 ô mà bản đồ chỉ 30 hàng, nên camera chỉ có 6 ô để chạy theo
-chiều dọc và nhân vật thường không nằm giữa theo trục đó. Muốn thoáng hơn thì **mở rộng bản
-đồ trong `farm.ascii`** — đó là thay đổi thuộc làn nhanh, không cần build lại core.
+**Ở mép bản đồ camera KHÔNG kẹp nữa** (`edgeMode: "center"`, cho phép lộ tối đa nửa khung
+nhìn ngoài biên). Lý do rất cụ thể: trên điện thoại dọc khung nhìn cao ~20 ô mà bản đồ chỉ
+30 hàng, nên ở nửa trên — khu nhà, nơi chơi nhiều nhất — camera cũ kẹp lại và đẩy nhân vật
+lên ngay dưới HUD, đúng chỗ toast và chip mục tiêu che. Phần ngoài biên renderer vẽ **rừng
+rậm** (ngoài trời) hoặc **tường tối** (trong nhà) — đọc ra là "hết đất", không phải lỗi.
+Bản đồ vẫn 40×30 ô cố định, chỉ khung nhìn co giãn; người chơi còn chọn được mức phóng
+gần/vừa/xa trong Cài đặt (`camera.setZoom`, đổi dải số ô chứ không đổi luật).
 
 `MAX_TILES_LONG = 24` là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn ultrawide):
 quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn thấy cả bản đồ.
@@ -352,18 +377,34 @@ thứ nào đụng tới tỉ lệ bản đồ** (bản đồ vẫn 40×30 ô c�
 Bàn phím, chuột và cảm ứng đổ về cùng một chỗ (`axis()` + hàng đợi ý định), nên không có
 nhánh logic riêng cho mobile và máy lai dùng được cả hai cùng lúc.
 
+**Nút hành động theo ngữ cảnh.** Nút DÙNG cố định là một ẩn số trên điện thoại: đang cầm
+gì, ngắm ô nào, ô đó có gì — người chơi phải tự ghép ba thứ trước khi bấm. `src/game/hint.ts`
+ghép giúp: từ state + content + ô đang ngắm trả về ĐÚNG MỘT hành động (CÀY/GIEO/TƯỚI/THU/
+CHẶT/ĐẬP/ĐẶT/MUA/BÁN/CHẾ/NGỦ/VÀO/MÚC) hoặc lý do không làm được ("Cày trước đã", "Hết nước —
+ra giếng", "Cần Rìu gỗ"). Hàm thuần, không DOM, gọi đúng những hàm reducer gọi nên nhãn
+không thể lệch với luật; kịch bản sim 37 kiểm nó. Ô ở xa thì bấm nút là tự đi tới rồi làm.
+
 **Mặc định trên cảm ứng: KHÔNG có joystick.** Vùng nhận joystick phải phủ một mảng lớn góc
-dưới-trái mới bấm thoải mái — mà mảng đó lại **nuốt mọi cú chạm-để-đi rơi vào nó**, tức là
-mất khoảng một phần ba màn hình. Từ khi có chạm-để-đi kèm tìm đường A\*, joystick thành thừa
-với hầu hết người chơi, nên nó chuyển thành tuỳ chọn: `Esc` → **Điều khiển**.
+dưới-trái mới bấm thoải mái — mà mảng đó lại nuốt mọi cú chạm-để-đi rơi vào nó. Từ khi có
+chạm-để-đi kèm tìm đường A\*, joystick thành thừa với hầu hết người chơi, nên nó là tuỳ chọn.
 
-Chế độ điều khiển là sở thích của **máy**, không thuộc ván chơi, nên nó nằm ở
-`src/core/settings.ts` với localStorage riêng và **không đi vào file save** — mang save sang
-máy khác thì cách điều khiển phải theo máy mới. Bật/tắt chỉ là đổi một thuộc tính trên
-`<body>`; `display: none` đủ để vô hiệu hoá hoàn toàn nên không phải gắn/gỡ lại trình xử lý.
+**Cài đặt thuộc MÁY, không thuộc ván** (`src/core/settings.ts`, localStorage riêng, không
+vào save): điều khiển, tay thuận, cỡ giao diện, khung nhìn, rung, giảm chuyển động, nút ngữ
+cảnh, đã xem hướng dẫn. `parseSettings()` là cửa duy nhất — JSON hỏng/cũ/sai kiểu luôn ra
+một bản hợp lệ (kịch bản sim 38). Áp dụng chỉ là đặt data-attribute lên `<body>`; CSS diễn
+giải, JS không đo đạc bố cục.
 
-Còn lại: nút DÙNG / E bên phải (nhỏ hơn ở chế độ chạm) và nút ☰ mở menu. Bố cục đổi theo
-hướng màn qua `body[data-orientation]`, và mọi thứ tôn trọng `env(safe-area-inset-*)`.
+**Phản hồi ba kênh** khi thao tác thành công: tiếng 8-bit, hạt hiệu ứng tại ô (bụi/nước/lá/
+tia sáng/đá), rung nhẹ (`navigator.vibrate`, Android). Tất cả suy ra từ diff thống kê sau
+mỗi dispatch — không cần action riêng, không vào state.
+
+**Hướng dẫn lần đầu** (`src/ui/tutorial.ts`): 4 thẻ ngắn khoanh đúng vào nút hành động,
+hotbar, bản đồ nhỏ. Chỉ chạy ở ván mới, bỏ qua được, xem lại trong Cài đặt.
+
+Còn lại: HUD một thanh có icon pixel (mặt trời đổi thành trăng khi tối, đỏ nhấp nháy khi
+sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằm trong luồng HUD nên không
+bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
+tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
 ### Vì sao pixel art sinh bằng code
 
@@ -371,6 +412,15 @@ Không có file ảnh nào trong repo. Đổi lại: thật sự offline, không
 art tất định theo seed, và **cây trồng vẽ theo tham số** nên thêm cây mới chỉ là
 thêm một object JSON. `src/art/atlas.ts` là **điểm thay thế duy nhất** nếu sau
 này muốn dùng tileset PNG — giữ nguyên hình dạng `Atlas`, đổi ruột các hàm `make*()`.
+
+Ba luật đồ hoạ cho màn hình nhỏ (bản thiết kế lại):
+
+1. **Mọi vật thể có viền 1px** (`outline()`): sprite 16px phóng ×2 mà không viền thì tan
+   vào nền cỏ. Nền đất thì không viền để mặt ruộng liền.
+2. **Đọc bằng hình dạng, không chỉ màu**: đất ướt có vệt nước, cây chín có quả + sao lấp
+   lánh, ao có bọt bờ, lô đất có viền, ngoài biên là rừng — ban đêm màu đổi hết mà vẫn đọc được.
+   Bờ nước và mép luống là autotile ở lớp vẽ (nhìn hàng xóm lúc vẽ), state không lưu gì.
+3. **Nhân vật chibi 6 khung** (đứng, 4 bước đi, vung tay) với mũ đỏ làm điểm nhận diện.
 
 ---
 
@@ -442,15 +492,18 @@ Không có server, không gửi dữ liệu đi đâu.
 bị kiểm sau **mọi** dispatch (tiền không âm, năng lượng trong khoảng, cây không lớn
 khi chưa tưới, người chơi không nằm trong ô đặc…).
 
-Phủ 16 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · drone
+Phủ 38 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · drone
 đứng im khi thiếu điện · save round-trip khớp hoàn toàn · cùng seed cho ra state y
 hệt · **load save cũ với content đã gỡ cây thì không crash** · `reduce` không mutate
-state cũ.
+state cũ · **nhãn nút ngữ cảnh đổi đúng CÀY → GIEO → TƯỚI → THU** · parse cài đặt hỏng vẫn ra hợp lệ.
+
+Lớp UI soát bằng Chromium headless ở bốn khổ máy (checklist trong `docs/MOBILE-UX.md`).
 
 `npm run test:ota` kiểm phần đáng sợ của OTA: pack hỏng/sai schema/sai `requiresCore`
 đều bị **từ chối**, còn sửa content hợp lệ thì được nhận.
 
-Trong bản dev còn có cầu `window.__PF` (`store`, `content`, `step(dt, times)`) để
+Trong bản dev còn có cầu `window.__PF` (`store`, `content`, `camera`, `renderer`, `menus`,
+`settings()`, `setSetting()`, `tutorial`, `step(dt, times)`) để
 script hoá việc kiểm thử trên trình duyệt — cần thiết vì `requestAnimationFrame`
 không chạy khi trang bị ẩn.
 

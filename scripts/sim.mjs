@@ -14,6 +14,8 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
+import { hintAt, facingTile } from "../src/game/hint.ts";
+import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -2013,6 +2015,98 @@ test("36. thời gian ở trong nhà vẫn tính cho ruộng: về cửa đượ
     BAL.dayStartMinutes,
     "sang ngày mới thì mốc vắng mặt lùi về bình minh",
   );
+});
+
+/* ========================================================================== */
+/* 37–38. Lớp UX: gợi ý hành động theo ngữ cảnh + settings                    */
+/* ========================================================================== */
+
+test("37. hintAt: nhãn nút đổi đúng theo vật phẩm đang cầm và trạng thái ô", () => {
+  const store = mkStore(700);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[0];
+  const s0 = store.getState();
+
+  // Cầm cuốc, ô cỏ trống → CÀY, đứng trong tầm → ready
+  selectItem(store, "tool:hoe");
+  let h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, "till", "cuốc + cỏ → till");
+  eq(h.label, "CÀY", "nhãn CÀY");
+  ok(h.ready, "đứng cạnh → ready");
+
+  // Cầm hạt trên ô CHƯA cày → không làm được, có lý do
+  selectItem(store, "seed:lettuce");
+  h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, null, "hạt + cỏ → không có việc");
+  eq(h.why, "Cày trước đã", "lý do rõ ràng");
+
+  // Cày rồi → GIEO
+  selectItem(store, "tool:hoe");
+  use(store, plot.x, plot.y);
+  selectItem(store, "seed:lettuce");
+  h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, "plant", "đất cày + hạt → plant");
+  eq(h.label, "GIEO", "nhãn GIEO");
+
+  // Gieo rồi, cầm bình → TƯỚI; tưới rồi → 'Đã tưới rồi'
+  use(store, plot.x, plot.y);
+  selectItem(store, "tool:can");
+  h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, "water", "cây + bình → water");
+  use(store, plot.x, plot.y);
+  h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, null, "đã ướt → không tưới nữa");
+  eq(h.why, "Đã tưới rồi", "lý do đã tưới");
+
+  // Cây chín → THU, bất kể đang cầm gì
+  ripen(store, plot.x, plot.y);
+  selectItem(store, "tool:hoe");
+  h = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(h.kind, "harvest", "chín → harvest thắng cuốc");
+  eq(h.label, "THU", "nhãn THU");
+
+  // Ô xa → không ready nhưng vẫn biết sẽ làm gì
+  const far = { x: plot.x, y: plot.y + 6 };
+  const s1 = store.getState();
+  const farTile = tileAt(s1, far.x, far.y);
+  if (farTile && farTile.g === "grass" && !farTile.prop) {
+    h = hintAt(s1, content, far.x, far.y);
+    eq(h.kind, "till", "ô xa vẫn báo CÀY");
+    ok(!h.ready, "ô xa → chưa ready");
+  }
+
+  // Cửa hàng → MUA (kể cả khi ngắm ô kề bên), giường trong nhà → NGỦ
+  const shop = (() => {
+    for (let y = 0; y < s0.h; y++)
+      for (let x = 0; x < s0.w; x++) if (s0.tiles[idx(s0.w, x, y)].prop === "shop") return { x, y };
+    return null;
+  })();
+  ok(shop, "bản đồ có máy bán hạt");
+  h = hintAt(store.getState(), content, shop.x, shop.y + 1);
+  eq(h.kind, "shop", "kề cửa hàng → shop");
+  eq(h.label, "MUA", "nhãn MUA");
+
+  // Ô trước mặt tính đúng theo hướng
+  setState(store, (st) => { st.player.dir = "left"; });
+  const f = facingTile(store.getState());
+  eq(f.x, Math.floor(store.getState().player.x / TILE) - 1, "quay trái → ô bên trái");
+});
+
+test("38. parseSettings: JSON hỏng/thiếu/sai kiểu luôn ra settings hợp lệ", () => {
+  deepEq(parseSettings(null), { ...DEFAULT_SETTINGS }, "null → mặc định");
+  deepEq(parseSettings("rác"), { ...DEFAULT_SETTINGS }, "chuỗi → mặc định");
+  const v1 = parseSettings({ control: "stick" }); // bản settings v1 chỉ có control
+  eq(v1.control, "stick", "giữ lựa chọn cũ");
+  eq(v1.v, SETTINGS_VERSION, "nâng phiên bản");
+  eq(v1.zoom, "normal", "khoá mới được điền mặc định");
+  const bad = parseSettings({ control: "gamepad", zoom: 3, haptics: "yes", hand: "left", extra: true });
+  eq(bad.control, "tap", "giá trị lạ → mặc định");
+  eq(bad.zoom, "normal", "sai kiểu → mặc định");
+  eq(bad.haptics, true, "sai kiểu boolean → mặc định");
+  eq(bad.hand, "left", "giá trị hợp lệ được giữ");
+  ok(!("extra" in bad), "khoá lạ bị bỏ");
+  // idempotent: parse(parse(x)) === parse(x)
+  deepEq(parseSettings(bad), bad, "parse hai lần không đổi");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

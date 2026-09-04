@@ -2,7 +2,8 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14100c" />
     <meta name="description" content="Chơi OniFarm ngay trong trình duyệt, hoặc cài về màn hình chính để chơi offline như một app." />
     <title>Cài về máy — OniFarm</title>
     <link rel="stylesheet" href="/site/site.css" />
@@ -11,10 +12,10 @@
   <body>
     <nav>
       <div class="wrap">
-        <a class="brand" href="/">ONIFARM</a>
+        <a class="brand" href="/">ONI<span>FARM</span></a>
         <a href="/tinh-nang/">Tính năng</a>
         <a href="/huong-dan/">Hướng dẫn</a>
-        <a href="/tai-ve/">Cài về máy</a>
+        <a href="/tai-ve/" aria-current="page">Cài về máy</a>
         <a class="play" href="/farm/">Chơi ngay</a>
       </div>
     </nav>
@@ -43,11 +44,11 @@
           <div class="card"><h3>iPhone / iPad</h3>
             <p>Safari → nút Chia sẻ → <b>Thêm vào MH chính</b>. Game mở toàn màn hình, không thanh địa chỉ.</p></div>
           <div class="card"><h3>Android</h3>
-            <p>Chrome → menu ⋮ → <b>Cài đặt ứng dụng</b> (hoặc Thêm vào màn hình chính).</p></div>
+            <p>Trong game: ☰ → <b>Cài về màn hình chính</b>. Hoặc Chrome → menu ⋮ → <b>Cài đặt ứng dụng</b>.</p></div>
           <div class="card"><h3>Máy tính</h3>
             <p>Chrome/Edge → biểu tượng cài đặt ở thanh địa chỉ → <b>Cài đặt OniFarm</b>.</p></div>
           <div class="card"><h3>Mang save đi máy khác</h3>
-            <p>Trong game bấm <kbd>Esc</kbd> → <b>Xuất file save</b>, rồi <b>Nhập file save</b> ở máy kia.</p></div>
+            <p>Trong game bấm ☰ / <kbd>Esc</kbd> → <b>Xuất file save</b>, rồi <b>Nhập file save</b> ở máy kia. Cài đặt (tay thuận, cỡ chữ…) thuộc về máy nên không đi theo.</p></div>
         </div>
       </div>
     </section>
@@ -72,5 +73,6 @@ npm run build    # xuất static site vào dist/</code></pre>
         <a href="/privacy/">Quyền riêng tư</a>
       </div>
     </footer>
+    <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
   </body>
 </html>

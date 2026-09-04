@@ -9,7 +9,7 @@
    Không precache danh sách file cứng: tên file Vite có hash, danh sách cứng sẽ
    lệch sau mỗi lần build. Cache dần theo lúc dùng đơn giản và không bao giờ sai. */
 
-const CACHE = "oni-farm-v1";
+const CACHE = "oni-farm-v2";
 const SHELL = ["/", "/farm/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (e) => {

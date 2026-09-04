@@ -1,18 +1,39 @@
 /* ============================================================================
-   HUD — tiền, ngày, đồng hồ, năng lượng, điện, mục tiêu, hotbar.
+   HUD — thanh trạng thái, mục tiêu, hotbar, nút hành động theo ngữ cảnh.
 
    Chỉ đọc state. Cập nhật theo kiểu "so rồi mới sửa": chỉ ghi vào DOM khi giá
    trị thật sự đổi. HUD được gọi mỗi khung hình nên nếu ghi vô điều kiện thì
    trình duyệt phải tính lại layout 60 lần/giây một cách vô ích.
+
+   Bố cục thiết kế lại cho điện thoại:
+
+     ┌ tiền · ngày/giờ · năng lượng · nước ───────────────── [☰] ┐   ← thanh trên, 1 hàng
+     │ 🎯 mục tiêu (chip, bấm để ẩn/hiện)                        │
+     │                                                            │
+     │                    (thế giới)                              │
+     │                                                            │
+     │ [bản đồ nhỏ]                        [E]  [ CÀY ]           │   ← nút hành động
+     └────────── [hotbar 9 ô, ô to ≥ 44px] ──────────────────────┘
+
+   · Thanh trên gom MỌI con số vào một hàng có icon, thay vì một hộp 5 dòng chữ
+     che mất góc ruộng.
+   · Mục tiêu là một "chip" bấm được: mặc định hiện, bấm là thu gọn.
+   · Nút hành động chính đổi NHÃN theo ô đang ngắm (CÀY/GIEO/TƯỚI/THU/MUA…).
+     Nhãn do src/game/hint.ts tính — HUD chỉ in.
+   · Năng lượng thấp / nước cạn: vòng đỏ nhấp nháy quanh con số, không cần
+     đọc chữ.
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
 import type { Atlas } from "../art/atlas.ts";
+import type { Hint } from "../game/hint.ts";
 
 export interface Hud {
-  update(s: GameState, content: Content): void;
+  update(s: GameState, content: Content, hint: Hint | null): void;
   /** hotbar bấm được bằng chuột/chạm */
   onSelect(fn: (slot: number) => void): void;
+  /** Hiện thẻ "Ngày N" khi sang ngày mới. */
+  dayBanner(day: number, note?: string): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -41,34 +62,89 @@ export function itemLabel(id: string, content: Content): string {
   }
 }
 
+/** Mô tả ngắn cho tooltip nhấn giữ trên hotbar. */
+export function itemHint(id: string, content: Content): string {
+  const [kind, ref] = id.split(":") as [string, string];
+  switch (kind) {
+    case "tool": {
+      const t = content.tools[ref];
+      if (!t) return "";
+      if (t.action === "TILL") return "Cày ô cỏ thành luống";
+      if (t.action === "WATER") return `Tưới luống · chứa ${t.capacity ?? 0} nước`;
+      if (t.action === "CHOP") return `Chặt cây lấy gỗ · ${t.power ?? 1} nhát/lần`;
+      if (t.action === "MINE") return `Đập đá lấy đá · ${t.power ?? 1} nhát/lần`;
+      return "";
+    }
+    case "seed": {
+      const c = content.crops[ref];
+      if (!c) return "";
+      const days = c.growthDays.reduce((a, b) => a + b, 0);
+      return `Gieo lên luống đã cày · ${days} ngày · bán ${c.sellPrice}đ`;
+    }
+    case "crop": {
+      const c = content.crops[ref];
+      return c ? `Bán ${c.sellPrice}đ/cái ở quầy thu mua` : "";
+    }
+    case "build": {
+      const b = content.buildings[ref];
+      return b ? b.desc : "";
+    }
+    case "item": {
+      const m = content.materials[ref];
+      return m ? `Vật liệu chế tạo · bán ${m.sellPrice}đ` : "";
+    }
+    default:
+      return "";
+  }
+}
+
 export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   root.innerHTML = `
-    <div class="hud-row">
-      <div class="hud-col">
-      <div class="hud-box">
-        <div class="hud-line"><span>Tiền</span><b id="hud-money">0</b></div>
-        <div class="hud-line"><span>Ngày</span><span><span id="hud-day">1</span> · <span class="clock" id="hud-clock">6:00</span></span></div>
-        <div class="hud-line"><span>Năng lượng</span><span id="hud-energy">100</span></div>
-        <div class="bar" id="hud-bar"><i style="width:100%"></i></div>
-        <div class="hud-line" id="hud-water-line"><span>Nước</span><span id="hud-water">0</span></div>
-        <div class="hud-line" id="hud-power-line"><span>Điện</span><span id="hud-power">0</span></div>
+    <div class="hud-top">
+      <div class="stat-bar" role="status" aria-live="off">
+        <span class="stat money"><i class="ic" data-ic="coin"></i><b id="hud-money">0</b></span>
+        <span class="stat day"><i class="ic" data-ic="day"></i><span id="hud-day">1</span></span>
+        <span class="stat clock"><i class="ic" data-ic="sun" id="hud-clock-ic"></i><span id="hud-clock">6:00</span></span>
+        <span class="stat energy" id="hud-energy-stat">
+          <i class="ic" data-ic="energy"></i>
+          <span class="meter" id="hud-bar"><i style="width:100%"></i></span>
+          <span id="hud-energy">100</span>
+        </span>
+        <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
+        <span class="stat power" id="hud-power-line"><i class="ic" data-ic="power"></i><span id="hud-power">0</span></span>
       </div>
-      <div id="minimap"><canvas></canvas></div>
-      </div>
-      <div class="hud-box" id="goal-box">
-        <div class="hud-line"><span>Mục tiêu</span></div>
-        <div id="goal">—</div>
-      </div>
+      <button class="goal-chip" id="goal-box" type="button" aria-label="Mục tiêu hiện tại">
+        <i class="ic" data-ic="goal"></i><span id="goal">—</span>
+      </button>
+      <div id="toasts" aria-live="polite"></div>
     </div>
-    <div class="hud-row" style="justify-content:center">
-      <div id="hotbar"></div>
-    </div>`;
+    <div class="hud-mid">
+      <div id="minimap" class="minimap"><canvas></canvas></div>
+    </div>
+    <div class="hud-bottom">
+      <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
+    </div>
+    <div id="tip" class="tip" hidden></div>
+    <div id="day-banner" class="day-banner" hidden><b></b><span></span></div>`;
+
+  // icon HUD lấy từ atlas — cùng bộ pixel với thế giới
+  for (const el of root.querySelectorAll<HTMLElement>("i.ic[data-ic]")) {
+    const name = el.dataset["ic"] as Parameters<Atlas["ui"]>[0];
+    const src = atlas.ui(name);
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext("2d")!.drawImage(src, 0, 0);
+    el.appendChild(c);
+  }
 
   const $ = <T extends HTMLElement>(id: string) => root.querySelector(`#${id}`) as T;
   const elMoney = $("hud-money");
   const elDay = $("hud-day");
   const elClock = $("hud-clock");
+  const elClockIc = $("hud-clock-ic");
   const elEnergy = $("hud-energy");
+  const elEnergyStat = $("hud-energy-stat");
   const elBar = $("hud-bar");
   const elBarFill = elBar.querySelector("i") as HTMLElement;
   const elPower = $("hud-power");
@@ -76,15 +152,61 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elWater = $("hud-water");
   const elWaterLine = $("hud-water-line");
   const elGoal = $("goal");
+  const elGoalBox = $("goal-box");
   const elHotbar = $("hotbar");
+  const elTip = $("tip");
+  const elBanner = $("day-banner");
 
   let selectFn: (slot: number) => void = () => {};
-  // ghi nhớ giá trị đã vẽ để bỏ qua lần cập nhật không đổi gì
   const prev = {
-    money: -1, day: -1, clock: "", energy: -1, power: -1, water: -1, cap: -1,
-    goal: "", hotbar: "",
+    money: -1, day: -1, clock: "", night: false, energy: -1, power: -1, water: -1, cap: -1,
+    goal: "", hotbar: "", hint: "",
   };
 
+  /* ---- mục tiêu: chip bấm để thu gọn ---- */
+  elGoalBox.addEventListener("click", () => elGoalBox.classList.toggle("collapsed"));
+
+  /* ---- hotbar: chạm chọn, nhấn giữ xem mô tả ---- */
+  let holdTimer = 0;
+  let holdSlot: HTMLElement | null = null;
+  const hideTip = () => {
+    elTip.hidden = true;
+    holdSlot = null;
+  };
+  elHotbar.addEventListener("pointerdown", (e) => {
+    const slot = (e.target as HTMLElement).closest<HTMLElement>(".slot");
+    if (!slot?.dataset["slot"]) return;
+    holdSlot = slot;
+    clearTimeout(holdTimer);
+    holdTimer = window.setTimeout(() => {
+      if (holdSlot !== slot) return;
+      const name = slot.dataset["name"];
+      const desc = slot.dataset["desc"];
+      if (!name) return;
+      elTip.innerHTML = "";
+      const b = document.createElement("b");
+      b.textContent = name;
+      elTip.appendChild(b);
+      if (desc) {
+        const d = document.createElement("span");
+        d.textContent = desc;
+        elTip.appendChild(d);
+      }
+      elTip.hidden = false;
+      // đặt tooltip ngay trên ô đang giữ, kẹp trong khung
+      const r = slot.getBoundingClientRect();
+      const hr = root.getBoundingClientRect();
+      elTip.style.left = `${Math.max(8, Math.min(hr.width - 8, r.left + r.width / 2 - hr.left))}px`;
+      elTip.style.bottom = `${hr.bottom - r.top + 8}px`;
+    }, 380);
+  });
+  const endHold = () => {
+    clearTimeout(holdTimer);
+    window.setTimeout(hideTip, 900);
+  };
+  elHotbar.addEventListener("pointerup", endHold);
+  elHotbar.addEventListener("pointercancel", endHold);
+  elHotbar.addEventListener("pointerleave", endHold);
   elHotbar.addEventListener("click", (e) => {
     const slot = (e.target as HTMLElement).closest<HTMLElement>(".slot");
     if (slot?.dataset["slot"]) selectFn(+slot.dataset["slot"]);
@@ -92,7 +214,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
   function renderHotbar(s: GameState, content: Content) {
     const n = content.balance.hotbarSlots;
-    // khoá nhận diện: đổi thì mới vẽ lại, tránh dựng lại DOM mỗi khung hình
     const key = `${s.sel}|${s.inv
       .slice(0, n)
       .map((x) => (x ? `${x.id}x${x.n}` : "-"))
@@ -104,8 +225,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     for (let i = 0; i < n; i++) {
       const it = s.inv[i] ?? null;
       const el = document.createElement("div");
-      el.className = `slot${i === s.sel ? " sel" : ""}`;
+      el.className = `slot${i === s.sel ? " sel" : ""}${it ? "" : " empty"}`;
       el.dataset["slot"] = String(i);
+      el.setAttribute("role", "button");
       el.innerHTML = `<span class="k">${i + 1}</span>`;
       if (it) {
         const icon = atlas.icon(it.id);
@@ -122,7 +244,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
           nEl.textContent = String(it.n);
           el.appendChild(nEl);
         }
-        el.title = itemLabel(it.id, content);
+        const name = itemLabel(it.id, content);
+        el.title = name;
+        el.dataset["name"] = name;
+        el.dataset["desc"] = itemHint(it.id, content);
+        el.setAttribute("aria-label", name);
       }
       elHotbar.appendChild(el);
     }
@@ -131,11 +257,10 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   function currentGoal(s: GameState, content: Content): string {
     const g = content.goals.find((x) => !s.goalsDone.includes(x.id));
     if (!g) return "Xong hết mục tiêu — cứ thoải mái làm nông!";
-    // hiện thêm tiến độ với mục tiêu đếm được
     const [k, need] = Object.entries(g.require)[0] ?? [];
     if (!k || need === undefined) return g.text;
     const have = readStat(s, k);
-    return have < need ? `${g.text} <b>(${have}/${need})</b>` : g.text;
+    return have < need && need > 1 ? `${g.text} <b>${have}/${need}</b>` : g.text;
   }
 
   function readStat(s: GameState, key: string): number {
@@ -145,11 +270,19 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     return (s.stats as unknown as Record<string, number>)[key] ?? 0;
   }
 
+  let bannerTimer = 0;
+
   return {
-    update(s, content) {
+    update(s, content, hint) {
       if (s.money !== prev.money) {
+        const up = prev.money >= 0 && s.money > prev.money;
         prev.money = s.money;
         elMoney.textContent = s.money.toLocaleString("vi-VN") + "đ";
+        if (up) {
+          elMoney.classList.remove("bump");
+          void elMoney.offsetWidth;
+          elMoney.classList.add("bump");
+        }
       }
       if (s.day !== prev.day) {
         prev.day = s.day;
@@ -160,18 +293,29 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         prev.clock = clock;
         elClock.textContent = clock;
       }
+      const night = s.minutes >= content.balance.daylightEndMinutes;
+      if (night !== prev.night) {
+        prev.night = night;
+        const src = atlas.ui(night ? "moon" : "sun");
+        const c = elClockIc.querySelector("canvas");
+        if (c) {
+          c.width = src.width;
+          c.height = src.height;
+          c.getContext("2d")!.drawImage(src, 0, 0);
+        }
+        elClockIc.classList.toggle("night", night);
+      }
       const energy = Math.round(s.energy);
       if (energy !== prev.energy) {
         prev.energy = energy;
         const max = content.balance.energyMax;
-        elEnergy.textContent = `${energy}/${max}`;
+        elEnergy.textContent = String(energy);
         elBarFill.style.width = `${Math.max(0, Math.min(100, (energy / max) * 100))}%`;
         const ratio = energy / max;
-        elBar.className = `bar${ratio < 0.15 ? " crit" : ratio < 0.35 ? " low" : ""}`;
+        elBar.className = `meter${ratio < 0.15 ? " crit" : ratio < 0.35 ? " low" : ""}`;
+        elEnergyStat.classList.toggle("warn", ratio < 0.15);
       }
 
-      // Nước trong bình: chỉ hiện khi người chơi thật sự có bình tưới, và tô đỏ
-      // khi sắp cạn để họ biết đường ghé giếng trước khi ra ruộng.
       let cap = 0;
       for (const slot of s.inv) {
         if (!slot?.id.startsWith("tool:")) continue;
@@ -183,8 +327,8 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         prev.water = water;
         prev.cap = cap;
         elWater.textContent = `${water}/${cap}`;
-        elWater.style.color = cap > 0 && water <= cap * 0.15 ? "var(--red)" : "";
-        elWaterLine.style.display = cap > 0 ? "" : "none";
+        elWaterLine.classList.toggle("warn", cap > 0 && water <= cap * 0.15);
+        elWaterLine.hidden = cap <= 0;
       }
 
       let power = 0;
@@ -195,20 +339,55 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       if (power !== prev.power) {
         prev.power = power;
         elPower.textContent = String(power);
-        // chỉ hiện dòng Điện khi nông trại đã có thiết bị điện — đỡ rối lúc đầu game
-        elPowerLine.style.display = power > 0 ? "" : "none";
+        elPowerLine.hidden = power <= 0;
       }
 
       const goal = currentGoal(s, content);
       if (goal !== prev.goal) {
         prev.goal = goal;
         elGoal.innerHTML = goal;
+        elGoalBox.classList.remove("collapsed");
+        elGoalBox.classList.remove("flash");
+        void elGoalBox.offsetWidth;
+        elGoalBox.classList.add("flash");
       }
 
       renderHotbar(s, content);
+
+      // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
+      // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
+      const hk = hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : "";
+      if (hk !== prev.hint) {
+        prev.hint = hk;
+        const btn = document.querySelector<HTMLElement>("#abtn .a");
+        const why = document.querySelector<HTMLElement>("#abtn .why");
+        if (btn) {
+          btn.textContent = hint?.label ?? "DÙNG";
+          btn.dataset["kind"] = hint?.kind ?? "none";
+          btn.classList.toggle("ready", !!hint?.ready);
+          btn.classList.toggle("far", !!hint && !hint.ready && hint.kind !== null);
+          btn.setAttribute("aria-label", hint?.label ?? "Dùng vật phẩm");
+        }
+        if (why) {
+          why.textContent = hint?.why ?? "";
+          why.hidden = !hint?.why;
+        }
+      }
     },
     onSelect(fn) {
       selectFn = fn;
+    },
+    dayBanner(day, note) {
+      clearTimeout(bannerTimer);
+      (elBanner.querySelector("b") as HTMLElement).textContent = `Ngày ${day}`;
+      (elBanner.querySelector("span") as HTMLElement).textContent = note ?? "";
+      elBanner.hidden = false;
+      elBanner.classList.remove("show");
+      void elBanner.offsetWidth;
+      elBanner.classList.add("show");
+      bannerTimer = window.setTimeout(() => {
+        elBanner.hidden = true;
+      }, 2400);
     },
   };
 }

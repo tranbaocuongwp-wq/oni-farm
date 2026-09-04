@@ -2,16 +2,18 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="OniFarm — game nông trại hiện đại phong cách pixel, chơi offline hoàn toàn trên trình duyệt hoặc máy tính." />
-    <title>OniFarm — Nông trại hiện đại pixel, chơi offline</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14100c" />
+    <meta name="description" content="OniFarm — game nông trại hiện đại phong cách pixel, chơi offline hoàn toàn trên điện thoại, tablet hay máy tính." />
+    <title>OniFarm — Nông trại hiện đại pixel, chơi offline trên mọi thiết bị</title>
     <link rel="stylesheet" href="/site/site.css" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
   </head>
   <body>
     <nav>
       <div class="wrap">
-        <a class="brand" href="/">ONIFARM</a>
+        <a class="brand" href="/" aria-current="page">ONI<span>FARM</span></a>
         <a href="/tinh-nang/">Tính năng</a>
         <a href="/huong-dan/">Hướng dẫn</a>
         <a href="/tai-ve/">Cài về máy</a>
@@ -21,7 +23,7 @@
 
     <header class="hero">
       <div class="wrap">
-        <h1>ONIFARM</h1>
+        <h1>ONI<span>FARM</span></h1>
         <p class="tag">
           Cày đất, gieo hạt, tưới nước, ngủ một đêm rồi ra thu hoạch. Rồi lắp vòi tưới
           tự động, dựng pin mặt trời, thả drone đi hái thay bạn.
@@ -30,9 +32,32 @@
           <a class="cta" href="/farm/">Chơi ngay trong trình duyệt</a>
           <a class="cta ghost" href="/huong-dan/">Xem cách chơi</a>
         </div>
+        <div class="devices" aria-label="Thiết bị hỗ trợ">
+          <span>📱 Điện thoại</span><span>📟 Tablet</span><span>💻 Máy tính</span><span>📴 Offline</span>
+        </div>
         <p class="note">Không cần tài khoản · không cần mạng · tiến trình lưu ngay trên máy bạn</p>
       </div>
     </header>
+
+    <section>
+      <div class="wrap">
+        <h2>Làm cho ngón tay cái</h2>
+        <p class="lead">
+          OniFarm được thiết kế lại để chơi thoải mái bằng một tay trên điện thoại,
+          và vẫn đầy đủ bàn phím – chuột trên máy tính.
+        </p>
+        <div class="grid">
+          <div class="card"><div class="ico">👆</div><h3>Chạm để đi, chạm hai lần để làm</h3>
+            <p>Cả màn hình là chỗ chạm. Nhân vật tự tìm đường vòng qua nhà, cây, đá và tự chạy khi xa.</p></div>
+          <div class="card"><div class="ico">🟢</div><h3>Nút hành động biết việc</h3>
+            <p>Nút to góc dưới đổi thành <b>CÀY · GIEO · TƯỚI · THU · MUA · NGỦ</b> theo ô bạn đang ngắm và thứ đang cầm.</p></div>
+          <div class="card"><div class="ico">🎯</div><h3>Ngắm một lần, làm ba việc</h3>
+            <p>Ô đã ngắm được giữ lại: cày xong đổi hạt rồi bấm, đổi bình rồi bấm — không cần chạm lại.</p></div>
+          <div class="card"><div class="ico">⚙️</div><h3>Tuỳ theo tay và mắt bạn</h3>
+            <p>Tay trái/phải, cỡ chữ, khung nhìn gần/xa, joystick, rung, giảm chuyển động — tất cả trong Cài đặt.</p></div>
+        </div>
+      </div>
+    </section>
 
     <section>
       <div class="wrap">
@@ -59,11 +84,11 @@
       <div class="wrap">
         <h2>Bắt đầu trong ba mươi giây</h2>
         <ol class="steps">
-          <li><b>Cầm cuốc, cày một ô cỏ.</b> Bấm <kbd>1</kbd> chọn cuốc rồi <kbd>Space</kbd> vào ô trước mặt.</li>
-          <li><b>Gieo hạt xà lách.</b> Chọn gói hạt trong hotbar, bấm <kbd>Space</kbd> lên ô vừa cày.</li>
-          <li><b>Tưới nước.</b> Cầm bình tưới, tưới đúng ô đó — đất chuyển màu sẫm là được.</li>
-          <li><b>Về nhà ngủ.</b> Đứng trước cửa, bấm <kbd>E</kbd>. Sáng hôm sau cây lớn thêm một giai đoạn.</li>
-          <li><b>Thu hoạch và bán.</b> Cây chín thì bấm <kbd>Space</kbd>, rồi ra quầy thu mua bấm <kbd>E</kbd>.</li>
+          <li><b>Chạm vào một ô cỏ.</b> Nhân vật tự đi tới. Nút góc dưới ghi <span class="btn-pill">CÀY</span> — bấm nó. (Máy tính: <kbd>1</kbd> rồi <kbd>Space</kbd>.)</li>
+          <li><b>Chọn gói hạt ở hotbar.</b> Nút đổi thành <span class="btn-pill">GIEO</span>. Bấm.</li>
+          <li><b>Chọn bình tưới.</b> Nút đổi thành <span class="btn-pill">TƯỚI</span>. Đất chuyển màu sẫm là được.</li>
+          <li><b>Về nhà ngủ.</b> Chạm vào cửa nhà để <span class="btn-pill">VÀO</span>, lên giường bấm <span class="btn-pill">NGỦ</span>. Sáng hôm sau cây lớn thêm.</li>
+          <li><b>Thu hoạch và bán.</b> Cây chín lấp lánh — bấm <span class="btn-pill">THU</span>, rồi ra quầy bấm <span class="btn-pill">BÁN</span>.</li>
         </ol>
       </div>
     </section>
@@ -73,5 +98,6 @@
         <a href="/privacy/">Quyền riêng tư</a>
       </div>
     </footer>
+    <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
   </body>
 </html>

@@ -5,40 +5,95 @@
    ảnh và mọi hệ số phóng của game. Chữ vẽ lên canvas sẽ phóng to nhỏ theo camera
    — trên điện thoại thì bé xíu, trên desktop thì răng cưa.
 
-   Bố cục thích ứng theo BA trục, không chỉ theo chiều rộng:
-     · hướng màn  → [data-orientation] trên <body>, do core/screen.ts đặt
-     · chiều rộng → cỡ hotbar, cỡ chữ
-     · chiều CAO  → màn thấp (điện thoại nằm ngang) phải nén HUD lại
+   HỆ TOKEN — mọi màu, cỡ, khoảng cách của UI khai ở :root, và CHỈ ở :root.
+   Bên dưới không có số "ma" nào: một thành phần cần cỡ mới thì thêm token.
+   Đây là cách giữ giao diện thống nhất giữa game, site và các trang tĩnh
+   (site.css dùng chung tông màu).
+
+   Bố cục thích ứng theo BỐN trục, do JS đặt lên <body> dưới dạng data-attr:
+     · hướng màn     → [data-orientation]  (core/screen.ts)
+     · tay thuận     → [data-hand]         (settings)
+     · cỡ giao diện  → [data-ui]           (settings; auto = clamp theo bề ngang)
+     · chuyển động   → [data-motion]       (settings + prefers-reduced-motion)
+   CSS là nơi DUY NHẤT diễn giải chúng — JS không đo đạc bố cục.
 ============================================================================ */
 
 :root {
+  /* ---- màu ---- */
   --bg: #14100c;
   --panel: #2b2118;
   --panel-2: #3a2c20;
+  --panel-3: #4a3826;
   --edge: #6b4f37;
   --edge-hi: #a37850;
-  --ink: #f4e9d8;
+  --ink: #f6ecdc;
   --ink-dim: #b9a68d;
-  --gold: #f5c542;
+  --ink-mute: #8a7a66;
+  --gold: #ffd84a;
+  --gold-dark: #c9931a;
   --green: #6cc94f;
+  --green-dark: #3d6b2a;
   --red: #e05d5d;
+  --red-dark: #6b2a2a;
   --blue: #5aa9e6;
+  --glass: rgba(43, 33, 24, 0.9);
   --shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
 
-  /* Ô hotbar co giãn theo bề ngang: 9 ô luôn vừa màn 360px mà không bị tràn,
-     nhưng không phình quá to trên desktop. */
-  --slot: clamp(30px, 8.6vw, 44px);
-  --ui-font: 13px;
-  --hud-gap: 10px;
+  /* ---- chữ ---- */
+  /* Sans hệ thống cho chữ tiếng Việt: monospace hiển thị dấu rất tệ ở cỡ nhỏ.
+     Số dùng tabular-nums để HUD không nhảy bề ngang khi tiền đổi. */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --fs: clamp(12.5px, 3.4vw, 15px);
+  --fs-sm: 0.86em;
+  --fs-lg: 1.15em;
 
-  /* Vùng an toàn (tai thỏ, thanh gesture). 0 trên máy không có. */
+  /* ---- kích thước chạm ---- */
+  --tap: 44px;            /* chuẩn ngón tay tối thiểu */
+  --slot: clamp(38px, 9.4vw, 52px);
+  --btn-a: 72px;          /* nút hành động chính */
+  --btn-b: 52px;          /* nút phụ E */
+  --gap: 8px;
+  --hud-gap: clamp(6px, 1.6vw, 12px);
+  --radius: 8px;
+  --radius-sm: 5px;
+
+  /* ---- vùng an toàn (tai thỏ, thanh gesture) ---- */
   --sa-t: env(safe-area-inset-top, 0px);
   --sa-b: env(safe-area-inset-bottom, 0px);
   --sa-l: env(safe-area-inset-left, 0px);
   --sa-r: env(safe-area-inset-right, 0px);
 
-  /* Chiều cao dành cho cụm điều khiển cảm ứng, HUD phải né ra. */
+  /* chiều cao dành cho cụm điều khiển cảm ứng, hotbar phải né ra */
   --pad-bottom: 0px;
+  --anim: 0.18s;
+}
+
+/* Cỡ giao diện do người chơi chọn: ghi đè các token, không đụng thành phần. */
+body[data-ui="small"] {
+  --fs: 12px;
+  --slot: 36px;
+  --btn-a: 60px;
+  --btn-b: 44px;
+}
+body[data-ui="large"] {
+  --fs: clamp(15px, 4vw, 18px);
+  --slot: clamp(46px, 11vw, 60px);
+  --btn-a: 84px;
+  --btn-b: 60px;
+}
+
+/* Giảm chuyển động: tắt mọi transition/animation trang trí. */
+body[data-motion="reduce"] {
+  --anim: 0s;
+}
+body[data-motion="reduce"] *,
+body[data-motion="reduce"] *::before,
+body[data-motion="reduce"] *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
 }
 
 * {
@@ -51,15 +106,16 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
-  font-size: var(--ui-font);
+  font-family: var(--font);
+  font-size: var(--fs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
   overflow: hidden;
   overscroll-behavior: none;
-  -webkit-font-smoothing: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 #app {
@@ -76,7 +132,6 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  /* Chặn cuộn/zoom bằng ngón tay: mọi cử chỉ trên khu chơi là của game. */
   touch-action: none;
 }
 
@@ -86,15 +141,30 @@ canvas#game {
   inset: 0;
   width: 100%;
   height: 100%;
-  /* Hai dòng này + tắt smoothing trong code là điều kiện để pixel art sắc cạnh.
-     Thiếu nó thì trình duyệt nội suy song tuyến và cả game trông như bị bôi mỡ. */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #0b0907;
   touch-action: none;
 }
 
-/* ------------------------------------------------------------------- HUD */
+/* Icon pixel trong HUD: canvas 12×12 phóng ×2 giữ nét. */
+.ic {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5em;
+  height: 1.5em;
+  flex: none;
+}
+.ic canvas {
+  width: 1.4em;
+  height: 1.4em;
+  image-rendering: pixelated;
+}
+
+/* =========================================================================
+   HUD — ba tầng: trên (số liệu + mục tiêu), giữa (bản đồ nhỏ), dưới (hotbar).
+   pointer-events: none ở lớp gốc — chỉ những thứ bấm được mới bật lại.
+   ========================================================================= */
 #hud {
   position: absolute;
   inset: 0;
@@ -102,241 +172,365 @@ canvas#game {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   padding: calc(var(--hud-gap) + var(--sa-t)) calc(var(--hud-gap) + var(--sa-r))
-    calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom))
-    calc(var(--hud-gap) + var(--sa-l));
-  /* CAO HƠN lớp điều khiển cảm ứng (#touch, z-index 20). Bản thân #hud không
-     nhận sự kiện chuột (pointer-events:none), chỉ hotbar nhận — nên chạm vào
-     hotbar thì trúng hotbar, chạm chỗ khác vẫn rơi xuống joystick bên dưới.
-     Không có dòng này thì vùng joystick nuốt mất cú chạm vào hotbar trên màn dọc. */
+    calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom)) calc(var(--hud-gap) + var(--sa-l));
   z-index: 25;
 }
 
-.hud-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.hud-box {
-  background: rgba(43, 33, 24, 0.92);
-  border: 2px solid var(--edge);
-  border-radius: 4px;
-  box-shadow: var(--shadow);
-  padding: 5px 8px;
+.hud-top {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
   min-width: 0;
-  line-height: 1.3;
 }
 
-.hud-line {
+/* Trên cảm ứng, nút ☰ nằm đè góc phải-trên: chừa chỗ. */
+body.touch .hud-top {
+  padding-right: calc(var(--tap) + 8px);
+}
+body.touch[data-hand="left"] .hud-top {
+  padding-right: 0;
+  padding-left: calc(var(--tap) + 8px);
+}
+
+/* ---- thanh số liệu: một hàng, có icon, cuộn ngang nếu chật ---- */
+.stat-bar {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: center;
+  gap: 2px 10px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  padding: 4px 10px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-weight: 600;
   white-space: nowrap;
 }
-
-.hud-line b {
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+}
+.stat.money b {
   color: var(--gold);
   font-weight: 700;
 }
-
-.hud-line .clock {
+.stat.money b.bump {
+  animation: bump 0.35s ease-out;
+}
+.stat.clock {
   color: var(--blue);
 }
-
-.bar {
-  position: relative;
-  height: 8px;
-  background: #1b140e;
-  border: 1px solid #000;
-  border-radius: 2px;
-  overflow: hidden;
+.stat.clock .ic.night {
+  filter: drop-shadow(0 0 2px #cfd8ea);
+}
+.stat.energy {
+  gap: 6px;
+}
+.stat.water,
+.stat.power {
+  color: var(--ink-dim);
+}
+.stat[hidden] {
+  display: none;
+}
+.stat.warn {
+  color: var(--red);
+  animation: warn-pulse 1.1s ease-in-out infinite;
 }
 
-.bar > i {
+.meter {
+  position: relative;
+  display: inline-block;
+  width: clamp(40px, 12vw, 64px);
+  height: 9px;
+  background: #1b140e;
+  border: 1px solid #000;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.meter > i {
   display: block;
   height: 100%;
   background: linear-gradient(#8ede6a, #4c9c36);
-  transition: width 0.18s linear;
+  transition: width var(--anim) linear;
 }
-
-.bar.low > i {
+.meter.low > i {
   background: linear-gradient(#f0a35c, #d05a2a);
 }
-
-.bar.crit > i {
+.meter.crit > i {
   background: linear-gradient(#f07070, #b02828);
 }
 
-/* Cột trái của HUD: khung thông số + bản đồ nhỏ xếp dọc. */
-.hud-col {
-  display: flex;
-  flex-direction: column;
+/* ---- chip mục tiêu: bấm để thu gọn ---- */
+.goal-chip {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  align-items: flex-start;
-  min-width: 0;
+  max-width: min(72vw, 420px);
+  min-height: 30px;
+  padding: 4px 10px 4px 8px;
+  background: var(--glass);
+  border: 2px solid var(--edge);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.goal-chip #goal {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.goal-chip #goal b {
+  color: var(--green);
+}
+.goal-chip.collapsed #goal {
+  display: none;
+}
+.goal-chip.collapsed {
+  padding-right: 8px;
+}
+.goal-chip.flash {
+  animation: goal-flash 0.9s ease-out;
 }
 
-/* --------------------------------------------------------- bản đồ nhỏ */
+/* ---- bản đồ nhỏ ---- */
+.hud-mid {
+  display: flex;
+  align-items: flex-end;
+  flex: 1;
+  min-height: 0;
+}
 #minimap {
   pointer-events: auto;
   padding: 3px;
-  background: rgba(43, 33, 24, 0.92);
+  background: var(--glass);
   border: 2px solid var(--edge);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   line-height: 0;
-  width: clamp(84px, 17vw, 148px);
+  width: clamp(84px, 18vw, 150px);
   touch-action: none;
 }
-
 #minimap.hidden {
   display: none;
 }
-
 #minimap canvas {
   display: block;
   width: 100%;
   height: auto;
-  /* 1 pixel = 1 ô, phóng to bằng CSS — phải giữ nét, không nội suy. */
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: pointer;
 }
-
-#goal-box {
-  max-width: 44%;
+body[data-hand="left"] .hud-mid {
+  justify-content: flex-end;
 }
 
-/* Trên cảm ứng, nút ☰ nằm đè góc phải-trên. Chừa chỗ cho nó, không thì hộp
-   "Mục tiêu" chui xuống dưới nút và bị che mất chữ. */
-body.touch #hud .hud-row:first-child {
-  padding-right: 50px;
+/* ---- hotbar ---- */
+.hud-bottom {
+  display: flex;
+  justify-content: center;
 }
-
-#goal {
-  color: var(--ink-dim);
-  font-size: 0.92em;
-  white-space: normal;
-}
-
-#goal b {
-  color: var(--green);
-}
-
-/* --------------------------------------------------------------- hotbar */
-#hotbar {
+.hotbar {
   pointer-events: auto;
   display: flex;
-  gap: 3px;
-  align-self: center;
-  padding: 4px;
-  background: rgba(43, 33, 24, 0.92);
+  gap: 4px;
+  padding: 5px;
+  background: var(--glass);
   border: 2px solid var(--edge);
-  border-radius: 4px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
   max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.hotbar::-webkit-scrollbar {
+  display: none;
 }
 
 .slot {
   position: relative;
+  flex: none;
   width: var(--slot);
   height: var(--slot);
   background: var(--panel-2);
   border: 2px solid #1b140e;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   cursor: pointer;
   touch-action: manipulation;
+  transition: transform var(--anim) ease-out, border-color var(--anim);
 }
-
+.slot.empty {
+  opacity: 0.55;
+}
 .slot.sel {
   border-color: var(--gold);
-  background: #4a3826;
-  box-shadow: 0 0 0 1px var(--gold);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 1px var(--gold), 0 0 10px rgba(255, 216, 74, 0.35);
+  transform: translateY(-3px);
 }
-
 .slot canvas {
   image-rendering: pixelated;
-  width: 78%;
-  height: 78%;
+  width: 74%;
+  height: 74%;
 }
-
 .slot .n {
   position: absolute;
-  right: 1px;
-  bottom: -1px;
-  font-size: 0.85em;
+  right: 2px;
+  bottom: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
   color: var(--ink);
-  text-shadow: 1px 1px 0 #000, -1px 1px 0 #000;
+  text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
 }
-
 .slot .k {
   position: absolute;
-  left: 2px;
-  top: -2px;
-  font-size: 0.7em;
-  color: var(--ink-dim);
+  left: 3px;
+  top: 0;
+  font-size: 0.68em;
+  color: var(--ink-mute);
 }
-
-/* Trên cảm ứng, số phím 1–9 vô nghĩa — bỏ đi cho đỡ rối. */
 body.touch .slot .k {
   display: none;
 }
 
-/* --------------------------------------------------------------- toast */
-#toasts {
+/* tooltip nhấn giữ trên hotbar */
+.tip {
+  position: absolute;
+  transform: translateX(-50%);
+  max-width: min(78vw, 320px);
+  padding: 6px 10px;
+  background: rgba(20, 15, 10, 0.96);
+  border: 2px solid var(--edge-hi);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  font-size: var(--fs-sm);
+  pointer-events: none;
+  z-index: 35;
+  animation: toast-in var(--anim) ease-out;
+}
+.tip b {
+  display: block;
+  color: var(--gold);
+}
+.tip span {
+  color: var(--ink-dim);
+}
+
+/* thẻ "Ngày N" */
+.day-banner {
   position: absolute;
   left: 50%;
-  top: calc(58px + var(--sa-t));
-  transform: translateX(-50%);
+  top: 38%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 36;
+  opacity: 0;
+}
+.day-banner.show {
+  animation: banner 2.4s ease-out forwards;
+}
+.day-banner b {
+  display: block;
+  font-size: 2.2em;
+  letter-spacing: 3px;
+  color: var(--gold);
+  text-shadow: 0 3px 0 #6b4f37, 0 0 24px rgba(0, 0, 0, 0.8);
+}
+.day-banner span {
+  color: var(--ink-dim);
+  text-shadow: 0 1px 0 #000;
+}
+
+/* =========================================================================
+   TOAST — giữa-trên, dưới thanh số liệu. Gộp trùng, tối đa 3 dòng.
+   ========================================================================= */
+#toasts {
+  /* Nằm trong luồng của .hud-top, ngay dưới chip mục tiêu: không bao giờ đè HUD,
+     và nhân vật (luôn ở tâm) không bao giờ bị toast che. */
+  align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   align-items: center;
   pointer-events: none;
-  z-index: 30;
-  width: max-content;
-  max-width: 86vw;
+  margin-top: 4px;
 }
-
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   background: rgba(20, 15, 10, 0.94);
   border: 2px solid var(--edge);
-  border-radius: 4px;
-  padding: 4px 11px;
-  animation: toast-in 0.18s ease-out;
+  border-radius: 999px;
+  padding: 6px 14px 6px 10px;
+  animation: toast-in var(--anim) ease-out;
   text-align: center;
+  font-size: var(--fs-sm);
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
 }
-
+.toast .ico {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.8em;
+  flex: none;
+}
+.toast .ico:empty {
+  display: none;
+}
+.toast .n:empty {
+  display: none;
+}
+.toast .n {
+  color: var(--gold);
+  font-weight: 700;
+}
 .toast.good {
   border-color: var(--green);
   color: #d8f5c8;
+}
+.toast.good .ico {
+  background: var(--green);
+  color: #0e2a08;
 }
 .toast.bad {
   border-color: var(--red);
   color: #f8d2d2;
 }
-
+.toast.bad .ico {
+  background: var(--red);
+  color: #2a0808;
+}
 .toast.fade {
   opacity: 0;
-  transition: opacity 0.4s ease-out;
+  transform: translateY(-4px);
+}
+.toast.bump {
+  animation: bump 0.3s ease-out;
 }
 
-@keyframes toast-in {
-  from {
-    transform: translateY(-6px);
-    opacity: 0;
-  }
-}
-
-/* --------------------------------------------------------------- modal */
+/* =========================================================================
+   MODAL — hộp giữa màn hình trên desktop, BOTTOM SHEET trên màn dọc.
+   ========================================================================= */
 #modal-root {
   position: absolute;
   inset: 0;
@@ -345,57 +539,71 @@ body.touch .slot .k {
   justify-content: center;
   background: rgba(8, 6, 4, 0.72);
   z-index: 40;
-  padding: calc(12px + var(--sa-t)) calc(12px + var(--sa-r))
-    calc(12px + var(--sa-b)) calc(12px + var(--sa-l));
+  padding: calc(12px + var(--sa-t)) calc(12px + var(--sa-r)) calc(12px + var(--sa-b)) calc(12px + var(--sa-l));
 }
-
 #modal-root.open {
   display: flex;
 }
 
 .modal {
+  position: relative;
   background: var(--panel);
   border: 3px solid var(--edge-hi);
-  border-radius: 5px;
-  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
   width: min(560px, 100%);
   max-height: 100%;
   display: flex;
   flex-direction: column;
+  animation: modal-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
+.modal .grip {
+  display: none;
+}
 .modal header {
-  padding: 9px 12px;
+  padding: 10px 12px;
   border-bottom: 2px solid var(--edge);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
 }
-
+.modal .hd {
+  min-width: 0;
+}
 .modal h2 {
   margin: 0;
-  font-size: 1.15em;
-  letter-spacing: 0.5px;
+  font-size: var(--fs-lg);
+  letter-spacing: 0.3px;
   color: var(--gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
 .modal .sub {
-  font-size: 0.9em;
+  font-size: var(--fs-sm);
   color: var(--ink-dim);
 }
-
+.modal .x {
+  width: var(--tap);
+  height: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.1em;
+  flex: none;
+}
 .modal .body {
-  padding: 9px 10px;
+  padding: 10px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
-
 .modal footer {
-  padding: 8px 10px;
+  padding: 8px 10px calc(8px + var(--sa-b));
   border-top: 2px solid var(--edge);
   display: flex;
   gap: 8px;
@@ -403,87 +611,219 @@ body.touch .slot .k {
   flex-wrap: wrap;
   align-items: center;
 }
-
-/* ----------------------------------------------------------- hàng trong shop */
-.row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 7px;
-  background: var(--panel-2);
-  border: 2px solid #1b140e;
-  border-radius: 3px;
-}
-
-.row.locked {
-  opacity: 0.5;
-}
-
-.row canvas {
-  image-rendering: pixelated;
-  width: 30px;
-  height: 30px;
-  flex: none;
-}
-
-.row .info {
+.modal footer .sub {
   flex: 1;
   min-width: 0;
 }
 
-.row .info .desc {
-  font-size: 0.85em;
+/* Bottom sheet: màn dọc và hẹp */
+@media (max-width: 640px) and (orientation: portrait) {
+  #modal-root {
+    align-items: flex-end;
+    padding: calc(24px + var(--sa-t)) 0 0;
+  }
+  .modal.sheet,
+  .modal {
+    width: 100%;
+    max-height: min(88dvh, 100%);
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    animation: sheet-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .modal .grip {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 8px auto 0;
+    border-radius: 2px;
+    background: var(--edge-hi);
+    opacity: 0.7;
+  }
+  .modal header {
+    padding-top: 6px;
+  }
+}
+
+/* ---- tab trong cửa hàng ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: #1b140e;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+}
+.tabs .tab {
+  flex: 1;
+  border: 2px solid transparent;
+  border-bottom-width: 2px;
+  background: transparent;
+  color: var(--ink-dim);
+  min-height: var(--tap);
+}
+.tabs .tab.on {
+  background: var(--panel-2);
+  border-color: var(--edge-hi);
+  color: var(--gold);
+}
+.tabs .tab:active {
+  transform: none;
+}
+
+/* ---- hàng trong shop / quầy / chế tạo ---- */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: var(--radius-sm);
+}
+.row.locked {
+  opacity: 0.55;
+}
+.row .icon {
+  image-rendering: pixelated;
+  flex: none;
+}
+.row .info {
+  flex: 1;
+  min-width: 0;
+}
+.row .name {
+  font-weight: 600;
+}
+.row .desc {
+  font-size: var(--fs-sm);
   color: var(--ink-dim);
   white-space: normal;
 }
-
+.row .desc.dim {
+  opacity: 0.75;
+}
+.row .need {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 3px;
+  background: #1b140e;
+  border-radius: 999px;
+  color: var(--ink-dim);
+}
+.chip .icon {
+  image-rendering: pixelated;
+}
+.chip.short {
+  color: #f8b0b0;
+  background: #3a1a1a;
+}
+.row .right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+}
 .row .price {
   color: var(--gold);
+  font-weight: 700;
   white-space: nowrap;
 }
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.stepper button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 1.2em;
+  line-height: 1;
+}
+.stepper span {
+  min-width: 46px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+}
 
+/* ---- nút ---- */
 button {
   font: inherit;
-  font-size: 0.92em;
+  font-weight: 600;
   color: var(--ink);
   background: var(--panel-2);
   border: 2px solid var(--edge);
   border-bottom-width: 4px;
-  border-radius: 3px;
-  padding: 6px 11px;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
   cursor: pointer;
   touch-action: manipulation;
-  /* Vùng chạm tối thiểu — ngón tay không bấm trúng nút 20px. */
-  min-height: 34px;
+  min-height: var(--tap);
+  transition: transform 0.08s, background var(--anim);
 }
-
 button:hover:not(:disabled) {
-  background: #4a3826;
+  background: var(--panel-3);
   border-color: var(--edge-hi);
 }
-
 button:active:not(:disabled) {
   border-bottom-width: 2px;
   transform: translateY(2px);
 }
-
 button:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
-
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
 button.primary {
-  background: #3d6b2a;
+  background: var(--green-dark);
   border-color: #5c9b40;
 }
-
 button.primary:hover:not(:disabled) {
   background: #4c8535;
 }
-
 button.danger {
-  background: #6b2a2a;
+  background: var(--red-dark);
   border-color: #9b4040;
+}
+button.accent {
+  background: #3d4f7a;
+  border-color: #6b86c0;
+}
+button.dim {
+  color: var(--ink-dim);
+}
+button.ghost {
+  background: transparent;
+}
+button.wide {
+  flex: 1;
+  width: 100%;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.menu-list button {
+  text-align: left;
 }
 
 kbd {
@@ -493,26 +833,120 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 3px;
   padding: 0 5px;
+  font-family: var(--mono);
   font-size: 0.85em;
   color: var(--ink);
+  margin: 0 1px;
+}
+.mono {
+  font-family: var(--mono);
 }
 
 .help-grid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 5px 12px;
-  font-size: 0.92em;
+  gap: 7px 12px;
+  font-size: var(--fs-sm);
   align-items: center;
 }
-
 .help-grid .k {
   text-align: right;
+  color: var(--gold);
+  font-weight: 600;
+}
+.help-text {
+  margin-top: 8px;
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+.help-text p {
+  margin: 0 0 8px;
+}
+.help-text b {
+  color: var(--ink);
+}
+
+/* ---- cài đặt ---- */
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid #1b140e;
+}
+.setting.toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.st-head {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.st-head b {
+  color: var(--ink);
+}
+.st-head .sub {
+  font-size: var(--fs-sm);
+}
+.segment {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: #1b140e;
+  border-radius: var(--radius);
+}
+.segment button {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-dim);
+  padding: 6px 4px;
+}
+.segment button.on {
+  background: var(--panel-3);
+  border-color: var(--edge-hi);
+  color: var(--gold);
+}
+.switch {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  background: #1b140e;
+  border: 2px solid var(--edge);
+  border-bottom-width: 2px;
+}
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  transition: left var(--anim), background var(--anim);
+}
+.switch.on {
+  background: var(--green-dark);
+  border-color: #5c9b40;
+}
+.switch.on i {
+  left: 27px;
+  background: var(--green);
+}
+.switch:active {
+  transform: none;
 }
 
 /* =========================================================================
    ĐIỀU KHIỂN CẢM ỨNG
-   Chỉ hiện trên thiết bị có cảm ứng; chuột/bàn phím vẫn chạy song song nên
-   máy lai (laptop cảm ứng) dùng được cả hai.
    ========================================================================= */
 #touch {
   position: absolute;
@@ -521,21 +955,11 @@ kbd {
   pointer-events: none;
   z-index: 20;
 }
-
 body.touch #touch {
   display: block;
 }
 
-/* Vùng nhận joystick. Không vẽ gì cả — vòng nền chỉ hiện khi có ngón tay đặt
-   xuống, nên lúc bình thường màn hình sạch. */
-/* MẶC ĐỊNH BỊ TẮT. Để bấm thoải mái, vùng nhận joystick phải phủ một mảng lớn
-   góc dưới-trái — mà mảng đó lại NUỐT mọi cú chạm-để-đi rơi vào nó. Từ khi có
-   chạm-để-đi kèm tìm đường, joystick thành thừa với hầu hết người chơi nên nó
-   chuyển thành tuỳ chọn: Esc → Điều khiển.
-
-   `display: none` là đủ để vô hiệu hoá hoàn toàn (phần tử ẩn không nhận sự kiện
-   trỏ), nên đổi chế độ chỉ là đổi một thuộc tính chứ không phải gắn/gỡ lại
-   trình xử lý sự kiện. */
+/* Joystick — MẶC ĐỊNH TẮT (xem core/settings.ts). */
 #stick {
   display: none;
   position: absolute;
@@ -544,197 +968,287 @@ body.touch #touch {
   pointer-events: auto;
   touch-action: none;
 }
-
 body[data-control="stick"] #stick {
   display: block;
 }
-
+body[data-control="stick"][data-hand="left"] #stick {
+  left: auto;
+  right: 0;
+}
 #stick .base {
   position: absolute;
-  width: 108px;
-  height: 108px;
-  margin: -54px 0 0 -54px;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
   border-radius: 50%;
-  background: rgba(20, 15, 10, 0.34);
-  border: 2px solid rgba(163, 120, 80, 0.55);
+  background: rgba(20, 15, 10, 0.36);
+  border: 2px solid rgba(163, 120, 80, 0.6);
   opacity: 0;
   transition: opacity 0.12s ease-out;
   pointer-events: none;
 }
-
 #stick .knob {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 46px;
-  height: 46px;
-  margin: 0;
+  width: 48px;
+  height: 48px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: rgba(245, 197, 66, 0.72);
+  background: rgba(255, 216, 74, 0.78);
   border: 2px solid rgba(20, 15, 10, 0.6);
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
 }
 
+/* ---- cụm nút hành động ---- */
 #abtn {
   position: absolute;
   right: calc(12px + var(--sa-r));
   bottom: calc(14px + var(--sa-b));
   display: flex;
+  flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
+  gap: 6px;
   pointer-events: auto;
 }
-
+body[data-hand="left"] #abtn {
+  right: auto;
+  left: calc(12px + var(--sa-l));
+  align-items: flex-start;
+}
+#abtn .btns {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+body[data-hand="left"] #abtn .btns {
+  flex-direction: row-reverse;
+}
 #abtn button {
   border-radius: 50%;
   padding: 0;
-  opacity: 0.92;
-  font-size: 0.85em;
+  opacity: 0.94;
   background: rgba(58, 44, 32, 0.92);
+  font-weight: 800;
+  letter-spacing: 0.5px;
 }
-
-/* Nút chính to hơn nút phụ — ngón cái tìm được mà không cần nhìn. */
 #abtn .a {
-  width: 74px;
-  height: 74px;
-  min-height: 74px;
+  width: var(--btn-a);
+  height: var(--btn-a);
+  min-height: var(--btn-a);
+  font-size: 0.95em;
   background: rgba(61, 107, 42, 0.94);
   border-color: #5c9b40;
+  box-shadow: 0 0 0 0 rgba(108, 201, 79, 0);
+  transition: box-shadow 0.25s, background 0.2s, transform 0.08s;
 }
-
+/* Nút ngữ cảnh: SÁNG khi làm được ngay, mờ hơn khi phải đi tới, xám khi không có gì */
+#abtn .a.ready {
+  background: rgba(76, 133, 53, 0.98);
+  box-shadow: 0 0 0 3px rgba(108, 201, 79, 0.35), 0 0 16px rgba(108, 201, 79, 0.45);
+}
+#abtn .a.far {
+  background: rgba(61, 90, 130, 0.94);
+  border-color: #5aa9e6;
+}
+#abtn .a[data-kind="none"] {
+  background: rgba(58, 44, 32, 0.9);
+  border-color: var(--edge);
+  color: var(--ink-dim);
+}
+#abtn .a[data-kind="harvest"] {
+  background: rgba(201, 147, 26, 0.95);
+  border-color: var(--gold);
+  color: #241a05;
+}
 #abtn .b {
-  width: 56px;
-  height: 56px;
-  min-height: 56px;
+  width: var(--btn-b);
+  height: var(--btn-b);
+  min-height: var(--btn-b);
+  font-size: 1.05em;
 }
-
 #abtn button.down {
   transform: translateY(2px);
   border-bottom-width: 2px;
 }
+/* lý do không làm được — dòng nhỏ trên nút */
+#abtn .why {
+  max-width: 46vw;
+  padding: 3px 9px;
+  background: rgba(20, 15, 10, 0.9);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  text-align: center;
+  animation: toast-in var(--anim) ease-out;
+}
+#abtn .why[hidden] {
+  display: none;
+}
+/* tắt nút ngữ cảnh → nút luôn ghi DÙNG, không đổi màu */
+body[data-ctx="off"] #abtn .why {
+  display: none;
+}
 
+/* ---- nút menu ---- */
 #sysbtn {
   position: absolute;
   right: calc(10px + var(--sa-r));
   top: calc(10px + var(--sa-t));
   pointer-events: auto;
 }
-
+body[data-hand="left"] #sysbtn {
+  right: auto;
+  left: calc(10px + var(--sa-l));
+}
 #sysbtn .menu {
-  width: 42px;
-  height: 42px;
+  width: var(--tap);
+  height: var(--tap);
+  min-height: var(--tap);
   padding: 0;
-  border-radius: 6px;
-  font-size: 1.15em;
-  background: rgba(43, 33, 24, 0.92);
+  border-radius: var(--radius);
+  background: var(--glass);
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  align-content: center;
+}
+#sysbtn .menu span {
+  display: block;
+  width: 18px;
+  height: 3px;
+  background: var(--ink);
+  border-radius: 2px;
 }
 
-/* ---- bố cục theo HƯỚNG MÀN --------------------------------------------- */
-
-/* Ngang: cụm điều khiển nằm hai góc dưới, hotbar ở giữa nên không đụng nhau. */
+/* ---- bố cục theo HƯỚNG MÀN ---- */
 body[data-orientation="landscape"] #stick {
   width: 38%;
   height: 62%;
 }
-
-/* Dọc: màn hẹp mà cao — joystick ăn nửa dưới bên trái, và HUD phải chừa chỗ
-   cho cả cụm điều khiển bên dưới hotbar. */
 body[data-orientation="portrait"] #stick {
   width: 55%;
   height: 30%;
 }
-
+/* Dọc: cụm nút nằm dưới, hotbar phải né lên trên. */
 body.touch[data-orientation="portrait"] {
-  --pad-bottom: 96px;
+  /* nút hành động + dòng lý do phía trên nó */
+  --pad-bottom: calc(var(--btn-a) + 54px);
 }
-
 body.touch[data-orientation="landscape"] {
-  --pad-bottom: 8px;
+  --pad-bottom: 6px;
+}
+/* Ngang: hotbar dịch khỏi cụm nút bên phải (hoặc trái). */
+body.touch[data-orientation="landscape"] .hud-bottom {
+  padding-right: calc(var(--btn-a) + var(--btn-b) + 40px);
+}
+body.touch[data-orientation="landscape"][data-hand="left"] .hud-bottom {
+  padding-right: 0;
+  padding-left: calc(var(--btn-a) + var(--btn-b) + 40px);
+}
+/* Ngang: bản đồ nhỏ nằm góc dưới cạnh hotbar sẽ chạm nút — đẩy lên trên. */
+body.touch[data-orientation="landscape"] .hud-mid {
+  align-items: flex-start;
 }
 
-/* Không có joystick thì cụm nút gọn hơn hẳn, HUD lấy lại được chỗ. */
-body.touch[data-control="tap"][data-orientation="portrait"] {
-  --pad-bottom: 74px;
-}
-
-/* Ở chế độ chạm, nút nhỏ lại: chúng chỉ còn là lối tắt, việc chính đã là chạm
-   thẳng vào thế giới. Càng ít thứ che mặt ruộng càng tốt. */
-body[data-control="tap"] #abtn {
-  gap: 8px;
-  opacity: 0.9;
-}
-
-body[data-control="tap"] #abtn .a {
-  width: 62px;
-  height: 62px;
-  min-height: 62px;
-}
-
-body[data-control="tap"] #abtn .b {
-  width: 48px;
-  height: 48px;
-  min-height: 48px;
-}
-
-/* Ngang trên máy nhỏ: hotbar dịch sang trái một chút để không nằm dưới cụm nút
-   tròn bên phải. */
-body.touch[data-orientation="landscape"] #hotbar {
-  margin-right: 150px;
-}
-
-/* ---- màn hẹp: nén chữ và khung lại ------------------------------------- */
-@media (max-width: 560px) {
-  :root {
-    --ui-font: 11.5px;
-    --hud-gap: 7px;
-  }
-  #goal-box {
-    max-width: 50%;
-  }
-}
-
-/* ---- màn THẤP (điện thoại nằm ngang): chiều cao mới là thứ khan hiếm ---- */
+/* ---- màn THẤP (điện thoại nằm ngang): chiều cao là thứ khan hiếm ---- */
 @media (max-height: 460px) {
   :root {
-    --ui-font: 11px;
-    --hud-gap: 6px;
-    --slot: clamp(26px, 7.4vh, 36px);
+    --hud-gap: 5px;
+    --slot: clamp(30px, 7.6vh, 40px);
+    --btn-a: 58px;
+    --btn-b: 44px;
   }
-  #toasts {
-    top: calc(44px + var(--sa-t));
+  .meter {
+    height: 7px;
   }
-  .bar {
-    height: 6px;
+  #minimap {
+    width: clamp(72px, 15vw, 110px);
   }
-  #abtn .a {
-    width: 60px;
-    height: 60px;
-    min-height: 60px;
-  }
-  #abtn .b {
-    width: 46px;
-    height: 46px;
-    min-height: 46px;
+  .goal-chip {
+    max-width: 50vw;
   }
   #stick .base {
     width: 92px;
     height: 92px;
     margin: -46px 0 0 -46px;
   }
-  #minimap {
-    width: clamp(72px, 15vw, 110px);
-  }
 }
 
-/* ---- màn rất nhỏ: bỏ bớt thứ không sống còn ---------------------------- */
-@media (max-width: 380px) {
-  #goal-box {
+/* ---- màn rất hẹp: bớt số liệu phụ trên thanh ---- */
+@media (max-width: 360px) {
+  .stat.day {
     display: none;
   }
 }
 
-/* ------------------------------------------------------------- màn hình chờ */
+/* =========================================================================
+   TUTORIAL — vòng khoanh + thẻ
+   ========================================================================= */
+#tutorial {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  background: rgba(8, 6, 4, 0.55);
+  pointer-events: auto;
+}
+#tutorial[hidden] {
+  display: none;
+}
+.tut-ring {
+  position: absolute;
+  border: 3px solid var(--gold);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(8, 6, 4, 0.55), 0 0 18px rgba(255, 216, 74, 0.6);
+  animation: ring 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.tut-card {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 420px);
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 3px solid var(--edge-hi);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  animation: modal-in 0.22s ease-out;
+}
+.tut-card.top {
+  top: calc(16px + var(--sa-t) + 60px);
+}
+.tut-card.bottom {
+  bottom: calc(16px + var(--sa-b) + 60px);
+}
+.tut-card.center {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.tut-step {
+  font-size: var(--fs-sm);
+  color: var(--ink-mute);
+}
+.tut-card h3 {
+  margin: 2px 0 6px;
+  color: var(--gold);
+  font-size: var(--fs-lg);
+}
+.tut-card p {
+  margin: 0 0 12px;
+  color: var(--ink-dim);
+  line-height: 1.55;
+}
+.tut-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* =========================================================================
+   MÀN HÌNH CHỜ
+   ========================================================================= */
 #boot {
   position: absolute;
   inset: 0;
@@ -744,36 +1258,162 @@ body.touch[data-orientation="landscape"] #hotbar {
   z-index: 60;
   text-align: center;
   padding: 16px;
+  transition: opacity 0.4s ease-out;
 }
-
+#boot.done {
+  opacity: 0;
+  pointer-events: none;
+}
 #boot .inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
 }
-
-#boot h1 {
-  margin: 0;
-  font-size: 1.7em;
+.logo {
+  font-size: 2em;
+  font-weight: 900;
+  letter-spacing: 4px;
   color: var(--gold);
-  letter-spacing: 2px;
+  text-shadow: 0 3px 0 #6b4f37;
 }
-
+.logo span {
+  color: var(--green);
+}
 #boot p {
   margin: 0;
   color: var(--ink-dim);
-  font-size: 0.92em;
+  font-size: var(--fs-sm);
   max-width: 360px;
   line-height: 1.6;
 }
-
 #boot .err {
   color: var(--red);
   white-space: pre-wrap;
   text-align: left;
+  font-family: var(--mono);
   font-size: 0.85em;
   max-width: 90vw;
   max-height: 40vh;
   overflow: auto;
+}
+/* mầm cây lớn dần — loader */
+.sprout {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 28px;
+}
+.sprout i {
+  display: block;
+  width: 8px;
+  background: var(--green);
+  border-radius: 2px 2px 0 0;
+  animation: grow 1.1s ease-in-out infinite;
+}
+.sprout i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.sprout i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+/* ====================================================================== */
+@keyframes toast-in {
+  from {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+@keyframes modal-in {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes warn-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes goal-flash {
+  0% {
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(255, 216, 74, 0.5);
+  }
+  100% {
+    border-color: var(--edge);
+    box-shadow: var(--shadow);
+  }
+}
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+}
+@keyframes ring {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+@keyframes grow {
+  0%,
+  100% {
+    height: 8px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 28px;
+    opacity: 1;
+  }
+}
+
+/* Màn ngang: chiều cao khan hiếm, .hud-top xếp thanh số liệu + chip + toast xuống
+   gần giữa màn và che nhân vật. Đưa toast xuống ngay trên hotbar, xếp ngược lên. */
+body[data-orientation="landscape"] #toasts {
+  position: absolute;
+  left: 50%;
+  top: auto;
+  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + var(--slot) + 24px);
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+  width: max-content;
+  max-width: 70vw;
 }

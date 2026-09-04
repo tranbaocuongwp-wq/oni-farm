@@ -2,17 +2,18 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Hướng dẫn chơi OniFarm: phím điều khiển, vòng lặp canh tác, hệ thống điện và công trình." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14100c" />
+    <meta name="description" content="Hướng dẫn chơi OniFarm trên điện thoại và máy tính: chạm để đi, nút hành động, vòng lặp canh tác, hệ thống điện và công trình." />
     <title>Hướng dẫn chơi — OniFarm</title>
     <link rel="stylesheet" href="/site/site.css" />
   </head>
   <body>
     <nav>
       <div class="wrap">
-        <a class="brand" href="/">ONIFARM</a>
+        <a class="brand" href="/">ONI<span>FARM</span></a>
         <a href="/tinh-nang/">Tính năng</a>
-        <a href="/huong-dan/">Hướng dẫn</a>
+        <a href="/huong-dan/" aria-current="page">Hướng dẫn</a>
         <a href="/tai-ve/">Cài về máy</a>
         <a class="play" href="/farm/">Chơi ngay</a>
       </div>
@@ -24,25 +25,43 @@
 
     <section>
       <div class="wrap">
-        <h2>Phím điều khiển</h2>
+        <h2>Trên điện thoại</h2>
+        <div class="table-wrap">
         <table>
-          <tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>Di chuyển (hoặc phím mũi tên)</td></tr>
-          <tr><td><kbd>Space</kbd></td><td>Dùng vật phẩm đang cầm lên ô trước mặt</td></tr>
-          <tr><td><kbd>E</kbd></td><td>Tương tác: cửa nhà = ngủ, máy bán hạt = mua, quầy = bán</td></tr>
-          <tr><td><kbd>1</kbd> – <kbd>9</kbd></td><td>Chọn ô hotbar (hoặc lăn chuột)</td></tr>
-          <tr><td><kbd>Shift</kbd></td><td>Chạy — giữ cùng phím di chuyển</td></tr>
-          <tr><td><kbd>M</kbd></td><td>Bật/tắt bản đồ nhỏ</td></tr>
-          <tr><td><kbd>B</kbd></td><td>Mở nhanh cửa hàng</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>Menu: lưu, tải, xuất/nhập file save</td></tr>
-          <tr><td>Chạm/bấm <b>1 lần</b></td><td>Nhân vật <b>đi tới</b> ô đó và ngắm sẵn ô đó</td></tr>
-          <tr><td>Chạm/bấm <b>2 lần</b></td><td><b>Thực thi</b> — cày, gieo, tưới, dùng công cụ</td></tr>
+          <tr><th>Cử chỉ</th><th>Việc</th></tr>
+          <tr><td><b>Chạm 1 lần</b> vào ô</td><td>Nhân vật <b>đi tới</b> ô đó và ngắm sẵn ô đó. Vòng vàng cho biết đích đang tới.</td></tr>
+          <tr><td><b>Chạm 2 lần</b> vào ô</td><td><b>Làm ngay</b> tại ô đó: cày, gieo, tưới, thu, chặt…</td></tr>
+          <tr><td>Nút lớn góc dưới</td><td>Ghi đúng việc sẽ làm với ô đang ngắm: <span class="btn-pill">CÀY</span> <span class="btn-pill">GIEO</span> <span class="btn-pill">TƯỚI</span> <span class="btn-pill">THU</span> <span class="btn-pill">MUA</span> <span class="btn-pill">NGỦ</span>… Ô ở xa thì bấm là tự đi tới rồi làm.</td></tr>
+          <tr><td>Nút <b>E</b></td><td>Tương tác với thứ ngay trước mặt: cửa, giường, quầy, giếng</td></tr>
+          <tr><td>Chạm ô hotbar</td><td>Chọn vật phẩm · <b>nhấn giữ</b> để xem nó dùng làm gì</td></tr>
+          <tr><td>Chạm bản đồ nhỏ</td><td>Đi xa tới chỗ ngoài tầm nhìn; ô vàng = cây chín</td></tr>
+          <tr><td>Chạm chip mục tiêu</td><td>Thu gọn / mở lại dòng mục tiêu</td></tr>
+          <tr><td>Nút ☰</td><td>Tạm dừng: lưu, tải, cài đặt, hướng dẫn</td></tr>
         </table>
+        </div>
         <p class="note">
-          <b>Trên điện thoại mặc định KHÔNG có joystick.</b> Cả màn hình là chỗ chạm: chạm đâu
-          nhân vật đi đó, chạm hai lần thì làm việc. Nút DÙNG và E nằm góc phải làm lối tắt.
-          Ai quen điều khiển trực tiếp thì bật joystick ở <kbd>Esc</kbd> → <b>Điều khiển</b> —
-          đổi lại, góc dưới-trái sẽ dành cho joystick và không chạm-để-đi được ở đó nữa.
+          Mặc định <b>không có joystick</b> — cả màn hình là chỗ chạm. Ai quen điều khiển trực
+          tiếp thì bật ở ☰ → <b>Cài đặt</b> → Điều khiển. Ở đó cũng có <b>tay thuận</b> (lật
+          nút sang trái), <b>cỡ giao diện</b>, <b>khung nhìn</b> gần/xa, <b>rung</b> và
+          <b>giảm chuyển động</b>.
         </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Trên máy tính</h2>
+        <div class="table-wrap">
+        <table>
+          <tr><td><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></td><td>Di chuyển (hoặc phím mũi tên) · giữ <kbd>Shift</kbd> để chạy</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Dùng vật phẩm đang cầm lên ô đang ngắm (chuột) hoặc ô trước mặt</td></tr>
+          <tr><td><kbd>E</kbd></td><td>Tương tác: cửa, giường, máy bán hạt, quầy, giếng</td></tr>
+          <tr><td><kbd>1</kbd> – <kbd>9</kbd></td><td>Chọn ô hotbar (hoặc lăn chuột / <kbd>Tab</kbd>)</td></tr>
+          <tr><td><kbd>M</kbd> · <kbd>B</kbd></td><td>Bật/tắt bản đồ nhỏ · mở nhanh cửa hàng</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Tạm dừng: lưu, tải, cài đặt, xuất/nhập file save</td></tr>
+          <tr><td>Bấm chuột <b>1 / 2 lần</b></td><td>Đi tới ô đó / làm ngay tại ô đó</td></tr>
+        </table>
+        </div>
       </div>
     </section>
 
@@ -52,46 +71,30 @@
         <p class="lead">
           <b>Chạm một lần là ĐI, chạm hai lần mới LÀM.</b> Tách hai ý định ra như vậy thì đi
           ngang qua ruộng không còn lỡ tay cày mất một ô. Đường đi tự vòng qua nhà và gốc cây,
-          đi xa thì tự chuyển sang chạy.
+          đi xa thì tự chuyển sang chạy. Nhân vật <b>luôn ở giữa màn hình</b>, kể cả sát mép
+          bản đồ — ngoài biên là rừng, không đi vào được.
         </p>
         <p>
-          Nhân vật luôn <b>tiến vào cho thẳng hàng với lô đất</b> rồi mới ra tay — đứng chéo
-          góc thì tuy với tới được nhưng nhìn xiên, nên nó sẽ bước thêm một bước cho ngay ngắn.
-        </p>
-        <p>
-          Tới nơi rồi thì ô đó vẫn đang được ngắm, nên bấm nút <b>DÙNG</b> (hoặc <kbd>Space</kbd>)
-          là làm việc ngay — không cần chạm lại. Cửa hàng, quầy thu mua và cửa nhà thì đi tới
-          rồi bấm <kbd>E</kbd>.
-        </p>
-        <p>
-          Muốn tới chỗ ngoài tầm nhìn thì bấm thẳng lên <b>bản đồ nhỏ</b> ở góc trên-trái.
-          Khung trắng trên đó cho biết bạn đang xem khúc nào của nông trại, chấm trắng là bạn,
-          còn ô vàng là cây đã chín — nhìn phát biết chỗ nào cần ra thu.
+          Tới nơi rồi thì ô đó vẫn đang được ngắm, nên bấm nút hành động là làm việc ngay —
+          không cần chạm lại. Cửa hàng, quầy thu mua và cửa nhà thì chạm tới rồi bấm nút
+          <span class="btn-pill">MUA</span> / <span class="btn-pill">BÁN</span> / <span class="btn-pill">VÀO</span>.
         </p>
       </div>
     </section>
 
     <section>
       <div class="wrap">
-        <h2>Ngắm ô trên điện thoại</h2>
+        <h2>Ngắm ô trên màn hình nhỏ</h2>
         <p class="lead">
           Khung sáng nhấp nháy cho biết bạn đang nhắm ô nào. Ô trên màn nhỏ hẹp hơn đầu ngón
           tay, nên <b>chạm hơi lệch vẫn trúng</b> — game tự nắn về ô có nghĩa gần nhất.
         </p>
         <p>
           Ô đã ngắm được <b>giữ lại</b> chừng nào bạn còn đứng gần nó: cày xong chỉ cần đổi
-          sang hạt rồi bấm DÙNG, đổi sang bình tưới rồi bấm DÙNG — cả ba việc trên cùng một ô
-          mà chỉ phải chạm đúng một lần. Tự đi chỗ khác thì ô ngắm được bỏ.
+          sang hạt rồi bấm <span class="btn-pill">GIEO</span>, đổi sang bình rồi bấm
+          <span class="btn-pill">TƯỚI</span> — cả ba việc trên cùng một ô mà chỉ phải chạm đúng
+          một lần. Không làm được thì dòng nhỏ trên nút nói vì sao ("Chưa cày", "Hết nước"…).
         </p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <h2>Làm từng việc một</h2>
-        <p>
-          Mỗi thao tác mất một nhịp ngắn mới xong. Đang vung cuốc thì chưa bước đi và chưa
-          làm việc khác được, nên bấm loạn cũng không nhanh hơn — làm nông là chuyện tuần tự.
       </div>
     </section>
 
@@ -99,13 +102,14 @@
       <div class="wrap">
         <h2>Luật quan trọng nhất</h2>
         <p class="lead">
-          <b>Cây chỉ lớn nếu ô ĐƯỢC TƯỚI trong đêm đó.</b> Tưới xong đất chuyển màu sẫm —
-          nhìn màu đất là biết đêm nay cây có lớn hay không. Sáng ra đất khô lại,
+          <b>Cây chỉ lớn nếu ô ĐƯỢC TƯỚI trong đêm đó.</b> Tưới xong đất chuyển màu sẫm và có
+          vệt nước — nhìn màu đất là biết đêm nay cây có lớn hay không. Sáng ra đất khô lại,
           phải tưới tiếp, trừ khi bạn đã lắp vòi tưới tự động hoặc sàn nhà kính.
         </p>
         <p>
-          Mỗi thao tác tốn năng lượng. Hết năng lượng thì không cày được nữa, phải về ngủ.
-          Quá 2 giờ sáng mà chưa ngủ là ngất giữa đồng, sáng hôm sau dậy chỉ hồi được nửa sức.
+          Mỗi thao tác tốn năng lượng và mất một nhịp ngắn — bấm loạn không nhanh hơn. Hết năng
+          lượng thì phải về ngủ. Quá 2 giờ sáng mà chưa ngủ là ngất giữa đồng, sáng hôm sau chỉ
+          hồi được nửa sức. Cây <b>chín thì lấp lánh</b>, nhìn từ xa cũng thấy.
         </p>
       </div>
     </section>
@@ -114,52 +118,28 @@
       <div class="wrap">
         <h2>Khai thác địa hình</h2>
         <p class="lead">
-          Cây và đá không còn chỉ là vật cản. Chế <b>rìu</b> rồi chặt cây lớn, cây nhỏ, gốc cây
-          lấy <b>gỗ</b>; <b>cuốc chim</b> đập đá lấy <b>đá</b>; bụi cỏ dại thì tay không cũng
-          phát được, ra <b>sợi cỏ</b>. Chặt xong ô đó thành đất trống, đi qua được và cày được.
+          Chế <b>rìu</b> rồi chặt cây lớn, cây nhỏ, gốc cây lấy <b>gỗ</b>; <b>cuốc chim</b> đập
+          đá lấy <b>đá</b>; bụi cỏ dại thì tay không cũng phát được, ra <b>sợi cỏ</b>. Chặt xong
+          ô đó thành đất trống, đi qua được và cày được.
         </p>
         <p>
-          Vạch vàng nhỏ trên đầu vật thể cho biết còn mấy nhát nữa. Cầm sai công cụ thì không
-          ăn nhát nào — rìu không đập được đá.
+          Vạch vàng nhỏ trên đầu vật thể cho biết còn mấy nhát nữa. Cầm sai công cụ thì nút
+          hành động báo ngay "Cần Rìu gỗ".
         </p>
       </div>
     </section>
 
     <section>
       <div class="wrap">
-        <h2>Bình tưới có hạn</h2>
+        <h2>Bình tưới có hạn · vào nhà · chế tạo</h2>
         <p>
-          Mỗi lần tưới tốn một nước. Cạn bình thì ra <b>giếng nước</b> hoặc đứng bờ ao bấm
-          <kbd>E</kbd> để múc đầy. Chế được <b>bình tưới lớn</b> thì chứa 60 thay vì 24.
-        </p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <h2>Vào nhà, lên giường, chế tạo</h2>
-        <p class="lead">
-          Bấm <kbd>E</kbd> ở cửa nhà để <b>đi vào trong</b>. Cửa không còn là chỗ ngủ —
-          phải lên <b>giường</b> rồi bấm <kbd>E</kbd> mới ngủ được.
+          Mỗi lần tưới tốn một nước. Cạn bình thì ra <b>giếng nước</b> hoặc bờ ao bấm
+          <span class="btn-pill">MÚC</span>. Chế được <b>bình tưới lớn</b> thì chứa 60 thay vì 24.
         </p>
         <p>
-          Trong phòng còn có <b>bàn chế tạo</b>: ghép vật liệu và công cụ cũ thành đồ tốt hơn.
-          Bấm <kbd>E</kbd> ở cửa trong phòng để ra lại nông trại.
-        </p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <h2>Cây lớn theo thời gian</h2>
-        <p class="lead">
-          Cây không còn nhảy cóc mỗi lần ngủ. Ô còn <b>ẩm</b> và trời còn <b>sáng</b> thì cây
-          lớn dần trông thấy ngay trong ngày.
-        </p>
-        <p>
-          Trời tối là cây ngừng lớn. Ngủ sớm cũng không thiệt: phần ban ngày còn lại của hôm đó
-          vẫn được tính. Cỏ dại thì tự lan ra mỗi đêm, còn ô đã cày mà bỏ không thì dần trở lại
-          thành cỏ — bỏ bê là ruộng hoang.
+          Bấm <span class="btn-pill">VÀO</span> ở cửa nhà để đi vào trong. Lên <b>giường</b> bấm
+          <span class="btn-pill">NGỦ</span>. Trong phòng còn có <b>bàn chế tạo</b>: ghép vật liệu
+          và công cụ cũ thành đồ tốt hơn. Ngủ trong nhà thì ruộng ngoài kia vẫn lớn cây.
         </p>
       </div>
     </section>
@@ -183,5 +163,6 @@
         <a href="/privacy/">Quyền riêng tư</a>
       </div>
     </footer>
+    <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
   </body>
 </html>
