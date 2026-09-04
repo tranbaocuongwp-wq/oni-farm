@@ -136,6 +136,8 @@ export interface AnimalDef {
   name: string;
   price: number;
   housing: Housing;
+  /** KHU CHUỒNG loài này về (id trong `tiles.pens`). Vắng = thả rông thật. */
+  pen?: string;
   /** vật phẩm dùng làm thức ăn; null = tự đi kiếm cỏ quanh sân */
   feed: string | null;
   /** một lần ăn no được bao nhiêu PHÚT GAME */
@@ -246,6 +248,14 @@ export interface BuildingDef {
   solid: boolean;
   /** Tự nối hình theo hàng xóm cùng loại (hàng rào). Vắng = một sprite cố định. */
   autotile?: AutotileKind;
+  /**
+   * Người chơi MUA và XÂY được không. Vắng = được (mọi công trình cũ).
+   *
+   * `false` nghĩa là công trình chỉ do BẢN ĐỒ dựng sẵn: hàng rào các khu
+   * chuồng. Nó vẫn cần một def đầy đủ để vẽ và để tính đặc, chỉ là không có
+   * mặt ở cửa hàng, ở chế độ xây dựng, ở công thức chế tạo và ở thư viện.
+   */
+  buildable?: boolean;
   effects: BuildingEffects;
   power: { produce: number; consume: number };
   art: { body: string; dark: string; accent: string };
@@ -402,6 +412,15 @@ export interface Balance {
   sickYieldMul?: number;
   /** Ngày nắng gắt: qua mốc phút này thì ô ẩm không tự tưới bị khô. */
   noonDryMinutes?: number;
+
+  /* ---- khu chuồng (core 1.8; thiếu thì loader điền mặc định) ---- */
+  /**
+   * Máng chứa tối đa bao nhiêu PHẦN thức ăn.
+   *
+   * Một phần = một bữa no của một con. Trần này là toàn bộ quyết định của cái
+   * máng: đổ đầy rồi đi vắng được mấy ngày, hay phải chạy về đổ mỗi sáng.
+   */
+  troughMax?: number;
 }
 
 export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt";
@@ -411,6 +430,39 @@ export interface TileLegendEntry {
   ground: GroundKind;
   prop?: string;
   decor?: string;
+  /**
+   * CÔNG TRÌNH dựng sẵn trên ô này (hàng rào các khu chuồng).
+   *
+   * Phải là lớp `b` chứ không phải `prop`: hàng rào tự nối hình theo hàng xóm
+   * (`autotile`), mà bộ sprite nối hình chỉ dựng cho công trình. Người chơi
+   * không xây được nó — `buildable: false` trong buildings.json.
+   */
+  build?: string;
+}
+
+/**
+ * KHU CHUỒNG dựng sẵn: hình chữ nhật RUỘT (phần đi được bên trong hàng rào).
+ *
+ * Có mặt trong content chứ không suy từ bản đồ, vì hai câu hỏi khác nhau —
+ * "ô này có rào không" thì nhìn bản đồ là biết, còn "con bò này thuộc khu nào"
+ * thì bản đồ không trả lời được. Loài thuộc khu nào do `AnimalDef.pen` nói.
+ */
+export interface PenDef {
+  id: string;
+  name: string;
+  map: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Máng trong khu ăn thức ăn gì. Vắng = khu không có máng (gà vịt mổ sâu). */
+  feed?: string;
+  /**
+   * Khu DƯỚI NƯỚC (cái ao). Ruột khu là ô nước — đặc với mọi loài đi bộ, đi
+   * được với loài bơi — nên luật "ruột phải đi được" đảo ngược ở đây, và khu
+   * không cần hàng rào: bờ ao đã là rào rồi.
+   */
+  swim?: boolean;
 }
 
 /** Tính chất của NỀN (nước đi không qua và múc được nước, void là mép bản đồ). */
@@ -452,6 +504,8 @@ export interface TilesDef {
   dropoff?: { map: string; x: number; y: number };
   /** Bản đồ TRONG NHÀ: mưa không tưới, bão không quật. Thiếu = mọi bản đồ ngoài trời. */
   indoorMaps?: string[];
+  /** Các KHU CHUỒNG dựng sẵn. Vắng = nông trại không chia lô. */
+  pens?: PenDef[];
 }
 
 /**
@@ -622,6 +676,9 @@ export interface Tile {
   /** Số đêm liên tiếp ô ĐÃ CÀY này bị bỏ không (không cây, không công trình).
    *  Đủ `balance.tilledIdleDays` thì cỏ mọc lại và luống mất. Vắng = 0. */
   idle?: number;
+  /** Số PHẦN thức ăn còn trong máng (`prop === "trough"`). Vắng = máng rỗng.
+   *  Loại thức ăn không nằm ở đây mà ở `feed` của KHU chứa cái máng. */
+  trough?: number;
 }
 
 export type Dir = "down" | "up" | "left" | "right";

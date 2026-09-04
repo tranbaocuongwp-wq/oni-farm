@@ -202,6 +202,9 @@ const HOUSING = {
   water: "Sống dưới ao",
 };
 
+/** Khu chuồng dựng sẵn theo id, hoặc null. */
+const penOf = (a) => (content.tiles.pens ?? []).find((q) => q.id === a.pen) ?? null;
+
 const JOB = {
   patrol: "Đi tuần, đuổi chuột và sóc",
   pest: "Phá hoại — không nuôi được",
@@ -223,12 +226,13 @@ function animalCard(a) {
             <h3>${esc(a.name)}</h3>
             <p class="ent-sub">${a.price ? `${tien(a.price)}đ một con` : "Không mua được"}</p>
             <div class="chips">
-              <span class="chip">${esc(HOUSING[a.housing] ?? a.housing)}</span>
+              <span class="chip">${esc(penOf(a)?.name ?? HOUSING[a.housing] ?? a.housing)}</span>
               ${a.job ? `<span class="chip alt">${esc(JOB[a.job] ?? a.job)}</span>` : ""}
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>${ngay(a.matureDays)}</dd></div>
               <div><dt>Ăn gì</dt><dd>${a.feed ? esc(itemName(a.feed)) : "Tự kiếm ăn"}</dd></div>
+              <div><dt>Về đâu</dt><dd>${penOf(a) ? `${esc(penOf(a).name)}${penOf(a).feed ? ", có máng" : ""}` : "Không có chuồng — đi khắp nông trại"}</dd></div>
               <div><dt>Bỏ đói</dt><dd>${a.feed ? `Chết sau ${ngay(a.starveDays)} nhịn liên tiếp` : "Không chết đói"}</dd></div>
             </dl>
             ${sp || thit ? `<ul class="prods">${sp}${thit}</ul>` : ""}
@@ -265,6 +269,32 @@ function animalsPage() {
         <p class="lead">Mua ở cửa hàng, xe sẽ chở tới điểm giao gần quầy bán rồi con vật tự đi vào chuồng. Đứng cạnh con vật là nút hành động đổi thành <span class="btn-pill">CHO ĂN</span> hoặc <span class="btn-pill">THU</span>.</p>
         <div class="ents">
 ${nuoi.map(animalCard).join("\n")}
+        </div>
+      </div>
+    </section>
+    <section>
+      <div class="wrap">
+        <h2>Khu chuồng</h2>
+        <p class="lead">Nông trại chia lô sẵn: rào đã đóng, máng đã đặt, cổng để mở. Bạn không phải xây gì cả — mua con vật là nó tự đi về khu của mình. Loài nào ăn cùng một thứ thì ở chung khu và chung một cái máng.</p>
+        <div class="ents">
+${(content.tiles.pens ?? [])
+  .map((pen) => {
+    const o = content.animalOrder
+      .map((id) => content.animals[id])
+      .filter((a) => a && a.pen === pen.id);
+    return `        <article class="ent sm">
+          <div class="ent-main">
+            <h3>${esc(pen.name)}</h3>
+            <p class="ent-sub">${pen.w}×${pen.h} ô${pen.swim ? " · dưới nước, không cần rào" : " · có rào, cổng mở ra đường"}</p>
+            <p>${o.length ? `Nuôi: ${o.map((a) => esc(a.name)).join(", ")}.` : "Chưa loài nào ở đây."} ${
+              pen.feed
+                ? `Máng trong khu nhận ${esc(itemName(pen.feed))} — đứng cạnh máng, cầm ${esc(itemName(pen.feed))} rồi bấm ĐỔ MÁNG. Máng chứa ${content.balance.troughMax ?? 12} phần; con vật đói tự tới ăn, mỗi bữa một phần.`
+                : "Khu này không có máng: gà vịt mổ sâu trên cỏ nên không cần ai đổ gì."
+            }</p>
+          </div>
+        </article>`;
+  })
+  .join("\n")}
         </div>
       </div>
     </section>
@@ -361,7 +391,7 @@ const HANH_DONG = [
     nut: "CHẶT",
     ten: "Chặt cây lấy gỗ",
     can: "tool:axe",
-    y: "Cây to cần chặt vài nhát mới đổ. Gỗ dùng để chế công cụ, dựng hàng rào và xây công trình.",
+    y: "Cây to cần chặt vài nhát mới đổ. Gỗ dùng để chế công cụ và xây công trình.",
     meo: "Rìu thép chặt một nhát bằng rìu gỗ hai nhát, và tốn cùng ngần ấy sức.",
   },
   {
@@ -375,7 +405,7 @@ const HANH_DONG = [
     nut: "XÂY",
     ten: "Chế độ xây dựng",
     can: null,
-    y: "Mọi công trình — vòi tưới, nhà kính, pin mặt trời, drone, đường nhựa, hàng rào — đều dựng ở đây. Bấm XÂY là thời gian dừng lại; ấn ở đầu đoạn, rê tới cuối, nhả tay là cả đoạn hiện ra.",
+    y: "Mọi công trình — vòi tưới, nhà kính, pin mặt trời, drone, đường nhựa — đều dựng ở đây. Bấm XÂY là thời gian dừng lại; ấn ở đầu đoạn, rê tới cuối, nhả tay là cả đoạn hiện ra. Hàng rào thì không: các khu chuồng đã rào sẵn từ đầu.",
     meo: "Vẽ bao nhiêu ô thì trả tiền bấy nhiêu, không phải mua trước rồi đoán xem cần mấy ô.",
   },
   {
@@ -459,7 +489,9 @@ function actionsPage() {
 
   const ct = content.buildingOrder
     .map((id) => content.buildings[id])
-    .filter(Boolean)
+    // Hàng rào là địa hình dựng sẵn của khu chuồng, không phải hàng xây được —
+    // liệt kê nó ở bảng "xây được những gì" là hứa một thứ không có.
+    .filter((b) => b && b.buildable !== false)
     .map(
       (b) => `        <article class="ent sm">
           <div class="ent-art">${cx(`build:${b.id}`, 40, b.name)}</div>

@@ -105,8 +105,8 @@
     {
       "id": "fence",
       "name": "Hàng rào",
-      "desc": "Phân lô và nhốt vật nuôi. Tự nối liền với hàng rào bên cạnh.",
-      "price": 14,
+      "desc": "Rào các khu chuồng dựng sẵn. Không mua, không xây — nông trại đã chia lô từ đầu.",
+      "price": 0,
       "kind": "object",
       "solid": true,
       "autotile": "fence",
@@ -119,7 +119,8 @@
         "body": "#a97d4e",
         "dark": "#6b4a2c",
         "accent": "#c49a68"
-      }
+      },
+      "buildable": false
     }
   ]
 }

@@ -271,9 +271,63 @@ export function validatePack(raw: RawPack): string[] {
     errors.push(`tiles.spawn: (${spawn.x},${spawn.y}) nằm ngoài bản đồ '${spawn.map}'`);
 
   // Mọi prop dùng trong legend phải có định nghĩa, không thì ô đó thành vô hình.
-  for (const [ch, e] of Object.entries(tilesDef.legend))
+  for (const [ch, e] of Object.entries(tilesDef.legend)) {
     if (e.prop && !propIds.has(e.prop))
       errors.push(`tiles.legend '${ch}': prop '${e.prop}' không có trong props.json`);
+    if (e.build && !buildingIdSet.has(e.build))
+      errors.push(`tiles.legend '${ch}': build '${e.build}' không có trong buildings.json`);
+  }
+
+  /* ---- KHU CHUỒNG dựng sẵn --------------------------------------------
+     Một khu sai là thứ không thấy được lúc nhìn bản đồ mà lại hỏng hẳn lối
+     chơi: con vật không bao giờ về được chuồng của nó, hoặc cái máng đứng
+     ngoài rào. Kiểm ở đây để pack sai không bao giờ tới tay người chơi. */
+  const penIds = new Set<string>();
+  for (const pen of tilesDef.pens ?? []) {
+    penIds.add(pen.id);
+    const pm = maps?.[pen.map];
+    if (!pm) {
+      errors.push(`tiles.pens '${pen.id}': bản đồ '${pen.map}' không tồn tại`);
+      continue;
+    }
+    if (pen.x < 0 || pen.y < 0 || pen.x + pen.w > pm.w || pen.y + pen.h > pm.h) {
+      errors.push(`tiles.pens '${pen.id}': ruột khu tràn ra ngoài bản đồ '${pen.map}'`);
+      continue;
+    }
+    if (pen.feed && !knownItem(pen.feed))
+      errors.push(`tiles.pens '${pen.id}': feed '${pen.feed}' không có vật phẩm này`);
+
+    /* Ruột khu phải ĐI ĐƯỢC và phải chứa MÁNG nếu khu có `feed`. Ô đặc lọt vào
+       ruột (một gốc cây quên dọn) thì tính diện tích nói dối; khu có `feed` mà
+       không có máng thì đổ thức ăn vào đâu. */
+    let troughs = 0;
+    let sai = 0;
+    for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++) {
+        const e = tilesDef.legend[pm.rows[y]?.[x] ?? "."];
+        const nuoc = e?.ground === "water";
+        if (e?.prop === "trough") troughs++;
+        else if (pen.swim ? !nuoc : nuoc || e?.build || (e?.prop && props.find((q) => q.id === e.prop)?.solid))
+          sai++;
+      }
+    const solid = sai;
+    if (pen.feed && troughs === 0)
+      errors.push(`tiles.pens '${pen.id}': khu ăn '${pen.feed}' nhưng trong ruột không có máng nào`);
+    if (!pen.feed && troughs > 0)
+      errors.push(`tiles.pens '${pen.id}': có máng nhưng khu không khai 'feed' — máng đó đổ gì cũng không vào`);
+    if (solid > 0)
+      errors.push(
+        pen.swim
+          ? `tiles.pens '${pen.id}': ${solid} ô CẠN nằm trong ruột khu dưới nước — loài bơi không lên bờ được`
+          : `tiles.pens '${pen.id}': ${solid} ô đặc nằm trong ruột khu — dọn hoặc thu nhỏ khu lại`,
+      );
+  }
+  if (raw.actors !== undefined) {
+    const ar2 = raw.actors as { animals?: AnimalDef[] } | null;
+    for (const a of ar2?.animals ?? [])
+      if (a.pen && !penIds.has(a.pen))
+        errors.push(`actors '${a.id}': pen '${a.pen}' không có trong tiles.json:pens`);
+  }
 
   for (const rc of recipes) {
     if (!knownItem(rc.out.id)) errors.push(`recipes '${rc.id}': làm ra '${rc.out.id}' không tồn tại`);
@@ -323,6 +377,8 @@ const BALANCE_DEFAULTS = {
   noonDryMinutes: 780,
   // core 1.7 — luống bỏ không mấy đêm thì mọc cỏ lại
   tilledIdleDays: 3,
+  // core 1.8 — máng ăn trong khu chuồng dựng sẵn
+  troughMax: 12,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */

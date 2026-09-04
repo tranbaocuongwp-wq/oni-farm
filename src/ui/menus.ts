@@ -520,7 +520,11 @@ export function createMenus(
               ? [
                   sanPham || (thit ? `thịt: ${thit}` : ""),
                   a.feed ? `ăn ${itemLabel(a.feed, c)}` : "tự kiếm ăn",
-                  a.housing === "pen" ? "cần rào" : a.housing === "water" ? "dưới ao" : "thả rông",
+                  /* Nói TÊN KHU nó sẽ về, không nói "cần rào" nữa: nông trại
+                     đã chia lô sẵn nên người chơi không phải chuẩn bị gì, chỉ
+                     cần biết mua xong ra đâu mà tìm con vật. */
+                  c.tiles.pens?.find((q) => q.id === a.pen)?.name ??
+                    (a.housing === "water" ? "dưới ao" : "thả rông"),
                 ]
               : ["chưa mở"],
             price: money(a.price),
@@ -546,6 +550,10 @@ export function createMenus(
       const gb = cardGrid();
       for (const id of c.buildingOrder) {
         const b = c.buildings[id]!;
+        // Hàng rào là ĐỊA HÌNH dựng sẵn của các khu chuồng, không phải hàng.
+        // Để nó nằm trong bảng giá thì người chơi sẽ đi tìm chỗ mua cho bằng
+        // được — một cuộc đi tìm không có đích.
+        if (b.buildable === false) continue;
         const mo = s.unlocked.includes(id);
         /* KHÔNG có nút Mua nữa: công trình trả tiền theo SỐ Ô VẼ trong chế độ
            xây dựng. Bán theo chồng thì người chơi phải đoán "cần bao nhiêu ô

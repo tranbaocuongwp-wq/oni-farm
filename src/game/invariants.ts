@@ -357,9 +357,22 @@ function mergeGrid(
         const keep = prev.prop === t.prop && Number.isFinite(prev.hp) && prev.hp > 0;
         t.hp = keep ? Math.min(Math.floor(prev.hp), full) : full;
 
+        /* Công trình do BẢN ĐỒ dựng (hàng rào các khu chuồng, `buildable:
+           false`) THẮNG công trình cũ của người chơi ở cùng ô. Nếu để bên kia
+           thắng thì một ô đường nhựa lát từ ván trước sẽ khoét thủng hàng rào
+           mới, và cái chuồng đó thành cái chuồng không bao giờ đóng được. */
+        const capBanDo = t.b;
         if (prev.b) {
-          if (content.buildings[prev.b]) t.b = prev.b;
-          else log.builds.add(prev.b);
+          if (!content.buildings[prev.b]) log.builds.add(prev.b);
+          else if (capBanDo === null) t.b = prev.b;
+          else log.lostToTerrain++;
+        }
+
+        // Thức ăn còn trong máng là của người chơi đổ vào, giữ lại — miễn ô đó
+        // vẫn còn là cái máng sau khi content đổi.
+        if (t.prop === "trough" && prev.prop === "trough") {
+          const con = Number(prev.trough);
+          if (Number.isFinite(con) && con > 0) t.trough = Math.floor(con);
         }
         if (prev.crop && typeof prev.crop.id === "string") {
           const def = content.crops[prev.crop.id];
@@ -377,11 +390,11 @@ function mergeGrid(
         if (t.prop !== null && prev.prop === t.prop && Number.isFinite(prev.age) && (prev.age as number) > 0)
           t.age = Math.floor(prev.age as number);
 
-        // địa hình mới có thể đã biến ô thành cây/đá/nước → dọn cho sạch
-        if (t.prop !== null || t.g === "water") {
-          if (t.crop || t.b || t.tilled) log.lostToTerrain++;
+        // địa hình mới có thể đã biến ô thành cây/đá/nước/HÀNG RÀO → dọn cho sạch
+        if (t.prop !== null || t.g === "water" || (capBanDo !== null && content.buildings[capBanDo]?.solid)) {
+          if (t.crop || t.tilled || (t.b && t.b !== capBanDo)) log.lostToTerrain++;
           t.crop = null;
-          t.b = null;
+          t.b = capBanDo; // giữ hàng rào bản đồ vừa dựng, bỏ mọi thứ chồng lên
           t.tilled = false;
           t.wet = false;
         }

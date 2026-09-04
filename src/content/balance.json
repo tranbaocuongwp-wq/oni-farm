@@ -36,5 +36,6 @@
   "diseaseChance": 0.02,
   "diseaseNeighbourMul": 3,
   "sickYieldMul": 0.5,
-  "noonDryMinutes": 780
+  "noonDryMinutes": 780,
+  "troughMax": 12
 }

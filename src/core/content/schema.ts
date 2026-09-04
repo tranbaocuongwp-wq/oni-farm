@@ -206,6 +206,8 @@ export function validateBuildings(raw: unknown): string[] {
     k.enumStr(item, "kind", ["floor", "object"] as const);
     if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
     if (item["autotile"] !== undefined) k.enumStr(item, "autotile", ["fence"] as const);
+    if (item["buildable"] !== undefined && typeof item["buildable"] !== "boolean")
+      k.fail("buildable", "phải là boolean (false = chỉ bản đồ dựng sẵn, người chơi không xây)");
 
     const eff = k.obj(item, "effects");
     if (eff) {
@@ -401,6 +403,8 @@ export function validateActors(raw: unknown): string[] {
     k.str(item, "name");
     k.num(item, "price", 0);
     k.enumStr(item, "housing", HOUSINGS);
+    if (item["pen"] !== undefined && !isStr(item["pen"]))
+      k.fail("pen", "phải là id một khu trong tiles.json:pens");
     const feed = item["feed"];
     if (feed !== null && !isStr(feed)) k.fail("feed", "phải là id vật phẩm hoặc null");
     k.num(item, "fedMinutes", 1, 100000);
@@ -698,6 +702,7 @@ export function validateBalance(raw: unknown): string[] {
     ["noonDryMinutes", 0, 2880],
     // 0 = tắt hẳn (luống không bao giờ mọc cỏ lại)
     ["tilledIdleDays", 0, 999],
+    ["troughMax", 1, 999],
   ] as [string, number, number][])
     if (raw[k] !== undefined) c.num(raw, k, min, max);
 
@@ -755,9 +760,43 @@ export function validateTiles(raw: unknown): string[] {
       }
       const k = new Check(`legend.${ch}`);
       k.enumStr(v, "ground", GROUNDS);
+      if (v["build"] !== undefined && !isStr(v["build"]))
+        k.fail("build", "phải là id một công trình trong buildings.json");
       c.merge(k);
     }
   }
+  const pens = raw["pens"];
+  if (pens !== undefined) {
+    if (!Array.isArray(pens)) c.fail("pens", "phải là mảng các khu chuồng");
+    else {
+      const seenPen = new Set<string>();
+      pens.forEach((v, i) => {
+        const k = new Check(`pens[${i}]`);
+        if (!isObj(v)) {
+          c.fail(`pens[${i}]`, "phải là object");
+          return;
+        }
+        const id = k.str(v, "id");
+        if (id) {
+          if (seenPen.has(id)) k.fail("id", `trùng id '${id}'`);
+          seenPen.add(id);
+        }
+        k.str(v, "name");
+        k.str(v, "map");
+        k.num(v, "x", 0, 1000);
+        k.num(v, "y", 0, 1000);
+        // Ruột phải có thật: khu rộng 0 ô là khu mà không con nào về được.
+        k.num(v, "w", 1, 1000);
+        k.num(v, "h", 1, 1000);
+        if (v["feed"] !== undefined && !isStr(v["feed"]))
+          k.fail("feed", "phải là id vật phẩm mà máng trong khu này nhận");
+        if (v["swim"] !== undefined && typeof v["swim"] !== "boolean")
+          k.fail("swim", "phải là boolean (true = khu dưới nước, ruột là ô nước)");
+        c.merge(k);
+      });
+    }
+  }
+
   const spawn = c.obj(raw, "spawn");
   if (spawn) c.merge(numsIn(spawn, ["x", "y"], "spawn"));
   const indoor = raw["indoorMaps"];

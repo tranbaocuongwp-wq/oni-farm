@@ -34,6 +34,7 @@ import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
 import { patrolCatch, isHungry } from "./animals.ts";
 import { grazeHere, nearestGraze } from "./graze.ts";
+import { eatFromTrough, penGoal } from "./pen.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -465,7 +466,12 @@ export function actorStep(d: Draft, content: Content): void {
     /* ĐÓI thì đi kiếm ăn, và đó là ưu tiên cao hơn mọi thứ khác.
        Đang đứng trên bãi cỏ rồi thì ăn luôn, khỏi lập đường. */
     const dinhDuong = cur.kind === "animal" ? animalDef(content, cur.def) : null;
-    if (dinhDuong && dinhDuong.job !== "pest" && isHungry(cur)) {
+    const doi = !!dinhDuong && dinhDuong.job !== "pest" && isHungry(cur);
+    if (doi) {
+      // Đứng sát MÁNG mà máng còn thức ăn thì ăn ngay — bữa chắc chắn, và no
+      // HẲN. Xét trước cỏ: con vật đứng cạnh máng đầy mà vẫn cúi gặm cỏ là thứ
+      // nhìn vào thấy sai ngay, và làm cái máng thành vô nghĩa.
+      if (eatFromTrough(d, content, i)) continue;
       if (grazeHere(d, content, i)) continue;
     }
 
@@ -475,11 +481,22 @@ export function actorStep(d: Draft, content: Content): void {
        nghĩa, đúng thứ người chơi sẽ nhận ra ngay sau vài đêm. */
     let g: { x: number; y: number } | null = null;
 
+    /* VỀ KHU của mình. Hai vai:
+         · đói + máng còn ăn → nhắm thẳng ô kề máng (bữa chắc chắn hơn đi tìm cỏ)
+         · đang ở NGOÀI khu   → nhắm về ruột khu
+       Rào có cổng nên đây là "tự về chuồng", không phải "bị nhốt": máng cạn thì
+       nhánh tìm cỏ bên dưới vẫn dắt nó ra ngoài gặm như trước. */
+    let veKhu = false;
+    if (cur.kind === "animal") {
+      g = penGoal(s, content, cur, doi);
+      veKhu = g !== null;
+    }
+
     /* Đói thì nhắm thẳng vào bãi cỏ gần nhất thay vì lang thang. Bán kính hẹp
        (8 ô) cho ban ngày: con vật đi trong vài phút game thì không thể băng cả
        nông trại, và quét rộng mỗi bước cho từng con là thứ giết fps trước tiên.
        Đêm thì `grazeNight` quét rộng hơn hẳn — cả một đêm thì nó đi được xa. */
-    if (dinhDuong && dinhDuong.job !== "pest" && isHungry(cur)) {
+    if (!g && doi && dinhDuong) {
       g = nearestGraze(s, content, dinhDuong, cur, 8);
     }
 
@@ -509,7 +526,17 @@ export function actorStep(d: Draft, content: Content): void {
       avoidFarm: neRuong && animalDef(content, cur.def)?.job !== "patrol",
       // Loài bơi bị nhốt trong cái ao của nó: bán kính nhỏ, không đi lang thang
       // sang ao khác qua đường bộ (mà nó cũng không đi bộ được).
-      leash: { x: cx, y: cy, r: def.swims ? 6 : LEASH_TILES },
+      /* Dây buộc là HỘP quanh tâm, và ô XUẤT PHÁT không được kiểm — nên hộp
+         phải chứa CẢ con vật lẫn đích, nếu không con bò đi lạc quá 20 ô sẽ
+         không bao giờ tìm được đường về chuồng (mọi ô kề đều rơi ra ngoài
+         hộp). Về khu thì nới hộp ra vừa đủ ôm hai đầu; còn lại giữ nguyên. */
+      leash: veKhu
+        ? {
+            x: Math.round((cx + g.x) / 2),
+            y: Math.round((cy + g.y) / 2),
+            r: Math.max(Math.abs(cx - g.x), Math.abs(cy - g.y)) / 2 + 6,
+          }
+        : { x: cx, y: cy, r: def.swims ? 6 : LEASH_TILES },
     });
     if (path && path.length) {
       e.ai.path = path.slice(0, MAX_PATH);

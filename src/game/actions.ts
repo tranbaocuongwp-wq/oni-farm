@@ -16,6 +16,7 @@ import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch 
 import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { cureTile, pullTile } from "./disease.ts";
+import { canPourInto, pourIntoTrough, troughFeedAt, troughMax, troughStock } from "./pen.ts";
 import { cropInSeason, currentSeason, tileAllSeason } from "./season.ts";
 import {
   anyEntityOverlapsTile,
@@ -350,9 +351,9 @@ export function buildLine(
     /* VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU.
        Có sẵn trong túi thì dùng trước; hết thì mua ngay tại chỗ theo đơn giá.
        Hai đường thay vì một là có chủ ý: người chơi cũ đã trót mua cả chồng
-       hàng rào thì số hàng đó vẫn dùng được (không thành rác trong balo), còn
-       người chơi mới thì không phải đoán "cần bao nhiêu ô rào" trước khi vẽ —
-       mà đoán sai con số đó chính là lý do người ta ngại vẽ dài. */
+       vật liệu thì số hàng đó vẫn dùng được (không thành rác trong balo), còn
+       người chơi mới thì không phải đoán "cần bao nhiêu ô" trước khi vẽ — mà
+       đoán sai con số đó chính là lý do người ta ngại vẽ dài. */
     const left = removeItem(d.s.inv, `build:${id}`, 1);
     if (left) setInv(d, left);
     else {
@@ -459,6 +460,8 @@ export type UseKind =
   | "pull"
   /** TAY KHÔNG nhấc một vật thể vác được lên (khúc gỗ, hòn đá) */
   | "lift"
+  /** đổ thức ăn đang cầm vào MÁNG của khu chuồng */
+  | "pour"
   /** đang vác thì ĐẶT xuống một ô trống */
   | "putdown"
   | null;
@@ -506,6 +509,11 @@ export function canUseAt(
 
   if (isRipe(cur, content)) return "harvest";
 
+  /* MÁNG ăn: xét TRƯỚC nhánh vật thể chung. Cái máng không có `hits` nên nhánh
+     dưới sẽ trả null cho nó — tức là đứng trước máng, cầm bó rơm, mà nút bảo
+     không làm được gì. */
+  if (cur.prop === "trough" && canPourInto(state, content, x, y)) return "pour";
+
   // Vật thể trên ô chặn mọi việc khác: hoặc phá được nó, hoặc không làm gì.
   if (cur.prop !== null) {
     const def = propDef(content, cur.prop);
@@ -551,8 +559,8 @@ export function canUseAt(
   /* Công trình KHÔNG đặt được bằng nút DÙNG nữa — chúng đi qua CHẾ ĐỘ XÂY
      DỰNG (`src/ui/buildmode.ts`).
 
-     Đặt từng ô là thao tác của việc sửa, mà dựng hàng rào quanh chuồng hay kéo
-     một con đường ra kho là việc quy hoạch: nghĩ theo đoạn, không theo ô. Trộn
+     Đặt từng ô là thao tác của việc sửa, mà kéo một con đường ra kho hay trải
+     một vạt sàn nhà kính là việc quy hoạch: nghĩ theo đoạn, không theo ô. Trộn
      hai đường vào một nút là cách chắc chắn nhất để ra địa hình lởm chởm — mỗi
      ô một lần ước lượng bằng mắt, hai mươi lần thì không lần nào giống nhau.
 
@@ -620,6 +628,19 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
   if (isRipe(cur, content)) {
     const r = harvestTile(d, content, i, true);
     if (r.ok && r.overflow > 0) toastKey(d, content, "invFull", "bad");
+    return;
+  }
+
+  // MÁNG ăn: đổ thức ăn đang cầm vào. Cùng thứ tự với `canUseAt`.
+  if (cur.prop === "trough") {
+    if (canPourInto(d.s, content, x, y)) {
+      pourIntoTrough(d, content, x, y);
+      return;
+    }
+    const feed = troughFeedAt(d.s, content, x, y);
+    if (!feed) toastText(d, "Máng này không thuộc khu nào — không đổ được gì.", "bad");
+    else if (troughStock(d.s, x, y) >= troughMax(content)) toastText(d, "Máng đã đầy.", "info");
+    else toastText(d, `Cầm ${itemName(feed, content)} rồi đổ vào máng.`, "bad");
     return;
   }
 

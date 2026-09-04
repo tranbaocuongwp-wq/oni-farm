@@ -205,7 +205,11 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
     case "unlockAll": {
       const all = new Set(d.s.unlocked);
       for (const id of content.cropOrder) all.add(`seed:${id}`);
-      for (const id of content.buildingOrder) all.add(id);
+      // `buildable: false` là ĐỊA HÌNH dựng sẵn (hàng rào các khu chuồng), không
+      // phải hàng chưa mở khoá. Mở nó ra thì cửa hàng bán một thứ mà cả bộ luật
+      // xây dựng từ chối đặt — nút "mở hết" hoá ra tạo thêm một món hỏng.
+      for (const id of content.buildingOrder)
+        if (content.buildings[id]?.buildable !== false) all.add(id);
       // Vật nuôi cũng phải mở — nút này hứa "mở hết", mà từ khi có chăn nuôi thì
       // nó vẫn chỉ mở cây với công trình, nên bấm xong tab Vật nuôi vẫn khoá
       // sạch. Duyệt thẳng content chứ không liệt kê tay, để loài thêm sau tự có.
@@ -346,6 +350,18 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       // lần một loài khác, chứ không phải mười con bò.
       const id = list[Number.isFinite(n) ? k : d.s.entities.length % list.length]!;
       const def = content.animals[id]!;
+
+      /* VẬT NUÔI đi ĐÚNG đường mua thật: xe chạy từ cổng vào, thả xuống điểm
+         giao, rồi con vật tự đi về khu của nó. Bảng gỡ lỗi mà sinh ra con vật
+         theo một đường riêng thì nó chỉ kiểm được cái đường riêng đó — đúng
+         lúc cần nhất (xem chuyến giao hàng có mượt không) thì nó lại không
+         chạy qua chỗ ấy. Sâu bọ thì không: chúng bò ra từ bụi rậm, không ai
+         chở chuột tới bằng xe tải. */
+      if (op === "spawnAnimal" && sendVehicle(d, content, "truck", { kind: "drop", animal: id }) !== null) {
+        toastText(d, `[debug] xe đang chở ${def.name} tới`, "good");
+        return;
+      }
+
       const spot = spotNear(d, content, def.box);
       if (!spot) {
         toastText(d, "[debug] không có chỗ trống để thả", "bad");

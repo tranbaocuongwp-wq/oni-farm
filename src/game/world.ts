@@ -17,6 +17,7 @@ import type {
   GroundDef,
   GroundKind,
   InteractKind,
+  PenDef,
   PropDef,
   StoredMap,
   Tile,
@@ -235,6 +236,10 @@ export function buildFromMap(content: Content, mapId: string): StoredMap | null 
       const ch = row[x] ?? ".";
       const e = content.tiles.legend[ch];
       const prop = e?.prop ?? null;
+      // Công trình DỰNG SẴN (hàng rào các khu chuồng) đến từ legend, không phải
+      // từ tay người chơi. Id lạ thì bỏ qua — validatePack đã chặn, đây chỉ là
+      // lưới an toàn cho pack cũ đã cache.
+      const build = e?.build && content.buildings[e.build] ? e.build : null;
       tiles[idx(w, x, y)] = {
         g: e?.ground ?? "grass",
         prop,
@@ -242,7 +247,7 @@ export function buildFromMap(content: Content, mapId: string): StoredMap | null 
         tilled: false,
         wet: false,
         crop: null,
-        b: null,
+        b: build,
         hp: propDef(content, prop)?.hits ?? 0,
       };
     }
@@ -323,6 +328,10 @@ export function canPlaceBuilding(
   const def = content.buildings[id];
   const t = tileAt(state, x, y);
   if (!def || !t) return false;
+  // Hàng rào là ĐỊA HÌNH do bản đồ dựng sẵn, không phải thứ xây được. Chặn ở
+  // đây (chứ không chỉ dựa vào việc nó không nằm trong `unlocked`) để một save
+  // cũ còn sót `build:fence` trong túi cũng không dựng thêm được ô rào nào.
+  if (def.buildable === false) return false;
   if (t.b !== null) return false;
   if (t.prop !== null) return false;
   if (groundDef(content, t.g)?.solid === true) return false; // không xây trên nước
@@ -416,6 +425,48 @@ export function anyEntityOverlapsTile(
       return true;
   }
   return false;
+}
+
+/* ------------------------------------------------------------ khu chuồng */
+
+/** Khu chuồng theo id, hoặc null. */
+export function penById(content: Content, id: string | null | undefined): PenDef | null {
+  if (!id) return null;
+  return content.tiles.pens?.find((p) => p.id === id) ?? null;
+}
+
+/** Khu của một LOÀI. Loài thả rông (chó) không có khu — trả null. */
+export function penOfAnimal(content: Content, defId: string): PenDef | null {
+  return penById(content, content.animals[defId]?.pen);
+}
+
+/** Ô (x,y) có nằm trong RUỘT khu này không. */
+export function inPen(pen: PenDef, x: number, y: number): boolean {
+  return x >= pen.x && x < pen.x + pen.w && y >= pen.y && y < pen.y + pen.h;
+}
+
+/** Tâm khu, tính bằng Ô (dùng làm mốc dây buộc và mốc đường về). */
+export function penCenter(pen: PenDef): { x: number; y: number } {
+  return { x: pen.x + (pen.w - 1) / 2, y: pen.y + (pen.h - 1) / 2 };
+}
+
+/**
+ * Ô MÁNG trong khu, hoặc null.
+ *
+ * Quét ruột khu thay vì chép toạ độ máng vào content: cái máng đã nằm trên bản
+ * đồ rồi, khai thêm một lần nữa là hai nguồn sự thật, và nguồn thứ hai sẽ lệch
+ * ngay lần đầu ai đó xê dịch cái máng trong farm.ascii.
+ */
+export function troughIn(
+  state: GameState,
+  pen: PenDef,
+  mapId = state.mapId,
+): { x: number; y: number } | null {
+  if (pen.map !== mapId) return null;
+  for (let y = pen.y; y < pen.y + pen.h; y++)
+    for (let x = pen.x; x < pen.x + pen.w; x++)
+      if (tileAt(state, x, y)?.prop === "trough") return { x, y };
+  return null;
 }
 
 /** Hitbox tại (cx,cy) có đè lên ô solid nào không. Vỏ mỏng cho kích thước

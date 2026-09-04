@@ -364,6 +364,16 @@
         "dark": "#4a4f56",
         "accent": "#e0b45a"
       }
+    },
+    {
+      "id": "trough",
+      "name": "Máng thức ăn",
+      "solid": true,
+      "art": {
+        "body": "#a97d4e",
+        "dark": "#6b4a2c",
+        "accent": "#d8c08a"
+      }
     }
   ]
 }

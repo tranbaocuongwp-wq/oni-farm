@@ -513,6 +513,36 @@ function makeBed(art: PropArt): HTMLCanvasElement {
 }
 
 /** Bàn chế tạo. */
+/**
+ * MÁNG THỨC ĂN — cái máng gỗ trong khu chuồng.
+ *
+ * Hình chữ V nông nhìn từ trên chếch xuống, hai đầu cao hơn thành: nhìn một cái
+ * là biết đây là thứ ĐỔ ĐỒ VÀO, chứ không phải một cái ghế hay một cái thùng.
+ * Vạt rơm vàng ở lòng máng cố ý vẽ CỐ ĐỊNH, không theo số phần còn lại — vẽ
+ * theo mức thì mỗi lần con vật ăn một miếng là cả ô nhấp nháy, mà người chơi
+ * cần biết mức thì đứng vào là nút đã nói.
+ */
+function makeTrough(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 13, 11, 2);
+  // hai chân
+  s.rect(3, 11, 2, 3, art.dark);
+  s.rect(11, 11, 2, 3, art.dark);
+  // lòng máng
+  s.rect(2, 6, 12, 6, art.dark);
+  s.rect(3, 7, 10, 4, art.body);
+  // vạt thức ăn
+  s.rect(4, 8, 8, 2, art.accent);
+  s.hline(4, 8, 8, "#f0dca0");
+  // thành trước, và hai đầu nhô cao
+  s.hline(2, 11, 12, art.dark);
+  s.rect(2, 5, 2, 7, art.body);
+  s.rect(12, 5, 2, 7, art.body);
+  s.hline(2, 5, 2, "#c9a06a");
+  s.hline(12, 5, 2, "#c9a06a");
+  return outline(s).c;
+}
+
 function makeBench(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 14, 6, 2);
@@ -779,6 +809,7 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "well": return makeWell(art);
     case "bed": return makeBed(art);
     case "bench": return makeBench(art);
+    case "trough": return makeTrough(art);
     case "wall": return makeWall(art);
     case "door_in": return makeDoorIn(art);
     case "shop": return makeShop();

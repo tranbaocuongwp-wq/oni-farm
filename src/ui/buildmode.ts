@@ -4,8 +4,8 @@
    Vì sao cần một chế độ riêng thay vì cứ đặt từng ô như cũ:
 
    Đặt từng ô là thao tác của việc SỬA — thêm một cái vòi tưới vào chỗ còn
-   thiếu. Nhưng dựng hàng rào quanh chuồng, kéo một con đường ra kho, lát sân
-   trước nhà là việc QUY HOẠCH: nó nghĩ theo đoạn và theo mảng, không theo ô.
+   thiếu. Nhưng kéo một con đường ra kho, lát sân trước nhà, trải một vạt sàn
+   nhà kính là việc QUY HOẠCH: nó nghĩ theo đoạn và theo mảng, không theo ô.
    Làm việc quy hoạch bằng công cụ sửa thì địa hình ra lởm chởm — đúng thứ
    Cường mô tả là "rối địa hình" — vì mỗi ô là một lần ước lượng lại bằng mắt,
    và ước lượng bằng mắt hai mươi lần thì không lần nào giống lần nào.
@@ -93,7 +93,8 @@ export function createBuildMode(
       const items: { id: string; n: number; def: Content["buildings"][string] }[] = [];
       for (const id of content.buildingOrder) {
         const def = content.buildings[id];
-        if (!def || !s.unlocked.includes(id)) continue;
+        if (!def || def.buildable === false) continue;
+        if (!s.unlocked.includes(id)) continue;
         let n = 0;
         for (const v of s.inv) if (v?.id === `build:${id}`) n += v.n;
         items.push({ id, n, def });
@@ -151,7 +152,7 @@ export function createBuildMode(
   host.querySelector<HTMLElement>(".bm-x")!.addEventListener("click", () => api.close());
 
   // Nuốt cú chạm của chính bảng: không để nó rơi xuống bản đồ thành một đoạn
-  // hàng rào dựng ngay dưới ngón tay vừa bấm nút "Xong".
+  // đường nhựa lát ngay dưới ngón tay vừa bấm nút "Xong".
   for (const ev of ["pointerdown", "pointerup", "click"] as const)
     host.addEventListener(ev, (e) => e.stopPropagation());
 

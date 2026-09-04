@@ -15,7 +15,8 @@
 import type { Content, GameState, InteractKind } from "./types.ts";
 import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
-import { parseItem } from "./items.ts";
+import { itemName, parseItem } from "./items.ts";
+import { troughFeedAt, troughMax, troughStock } from "./pen.ts";
 import { inReach, interactAt, isRipe, tileAt, propDef } from "./world.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
@@ -63,6 +64,7 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   feed: "CHO ĂN",
   lift: "NHẤC",
   putdown: "ĐẶT XUỐNG",
+  pour: "ĐỔ MÁNG",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -104,6 +106,12 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
     return "Không đặt xuống được ở đây";
   }
 
+  if (t.prop === "trough") {
+    const feed = troughFeedAt(state, content, x, y);
+    if (!feed) return "Máng ngoài khu chuồng";
+    if (troughStock(state, x, y) >= troughMax(content)) return "Máng đã đầy";
+    return `Cầm ${itemName(feed, content)} để đổ`;
+  }
   if (t.prop) {
     const def = propDef(content, t.prop);
     if (!def) return null;

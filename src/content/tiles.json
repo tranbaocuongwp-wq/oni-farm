@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feed` nói máng trong khu ăn thức ăn gì — loài nào có `feed` trùng thì dùng CHUNG máng đó, nên bò/dê/cừu chia nhau một máng rơm. Khu không có `feed` (gia cầm) thì không có máng: gà vịt mổ sâu trên cỏ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.",
   "grounds": {
     "water": {
       "solid": true,
@@ -112,6 +112,14 @@
     "k": {
       "ground": "path",
       "prop": "store_door"
+    },
+    "F": {
+      "ground": "grass",
+      "build": "fence"
+    },
+    "M": {
+      "ground": "grass",
+      "prop": "trough"
     }
   },
   "spawn": {
@@ -148,5 +156,46 @@
         "y": 11
       }
     ]
-  }
+  },
+  "pens": [
+    {
+      "id": "cattle",
+      "name": "Khu gia súc",
+      "map": "farm",
+      "x": 29,
+      "y": 14,
+      "w": 8,
+      "h": 4,
+      "feed": "item:hay"
+    },
+    {
+      "id": "pigpen",
+      "name": "Khu heo",
+      "map": "farm",
+      "x": 29,
+      "y": 21,
+      "w": 8,
+      "h": 2,
+      "feed": "item:fodder"
+    },
+    {
+      "id": "coop",
+      "name": "Khu gia cầm",
+      "map": "farm",
+      "x": 29,
+      "y": 26,
+      "w": 8,
+      "h": 2
+    },
+    {
+      "id": "pond",
+      "name": "Ao cá",
+      "map": "farm",
+      "x": 3,
+      "y": 2,
+      "w": 4,
+      "h": 5,
+      "swim": true
+    }
+  ]
 }

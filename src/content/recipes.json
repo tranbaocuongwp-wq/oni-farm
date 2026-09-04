@@ -190,21 +190,6 @@
           "n": 3
         }
       ]
-    },
-    {
-      "id": "fence",
-      "name": "Hàng rào ×4",
-      "desc": "Đốn gỗ đóng rào.",
-      "out": {
-        "id": "build:fence",
-        "n": 4
-      },
-      "in": [
-        {
-          "id": "item:wood",
-          "n": 3
-        }
-      ]
     }
   ]
 }

@@ -304,9 +304,44 @@ luật như thế sẽ đá nhau với heuristic. Kèm theo một ràng buộc b
 chia cho `speedMul` lớn nhất trong content, nếu không nó ước lượng THỪA và A\* âm thầm mất
 tính tối ưu — vẫn ra đường hợp lệ, chỉ là không phải đường ngắn nhất.
 
-**Hàng rào** (`build:fence`, chế từ gỗ) tự nối hình theo hàng xóm — 16 biến thể bitmask dựng
-sẵn một lần, sinh từ tham số màu trong content nên thêm kiểu rào mới không cần code. Nó nằm ở
-lớp thực thể có `base` chứ không phải lớp nền, vì hàng rào phải che được nhân vật đi phía sau.
+**Hàng rào** (`build:fence`) tự nối hình theo hàng xóm — 16 biến thể bitmask dựng sẵn một lần,
+sinh từ tham số màu trong content nên thêm kiểu rào mới không cần code. Nó nằm ở lớp thực thể
+có `base` chứ không phải lớp nền, vì hàng rào phải che được nhân vật đi phía sau.
+
+Từ core 1.8 hàng rào **không còn là thứ mua/chế/xây được**: nó mang `buildable: false` và chỉ
+do BẢN ĐỒ dựng, qua ô `build` trong legend. Xem mục "Khu chuồng dựng sẵn" bên dưới.
+
+### Khu chuồng dựng sẵn (core 1.8)
+
+Trước 1.8, "chuồng" chỉ là chữ `housing: "pen"` trong `AnimalDef` — không có gì trong game ứng
+với nó. Con vật mua về lang thang cả bản đồ, và muốn nhốt lại thì người chơi phải tự đóng rào.
+Đóng rào bằng tay thì mỗi ván ra một hình khác nhau, và không hình nào ra cái chuồng.
+
+Giờ nông trại **chia lô sẵn**, và cả ba mảnh đều nằm trong content:
+
+| Mảnh | Ở đâu | Nói gì |
+|---|---|---|
+| Ruột khu | `tiles.json:pens[]` | hình chữ nhật đi được bên trong rào, `feed` của máng |
+| Hàng rào | `maps/farm.ascii` ký tự `F` | legend `{ ground, build: "fence" }` |
+| Ai ở khu nào | `actors.json` ô `pen` | id khu, vắng = thả rông thật (con chó) |
+
+Bốn khu: **gia súc** (bò/dê/cừu — cùng ăn rơm nên **chung một máng**), **heo** (cỏ khô, máng
+riêng), **gia cầm** (gà/vịt `feed: null`, mổ sâu trên cỏ nên khu **cố ý không có máng**), và
+**ao cá** (`swim: true` — ruột là ô nước, không cần rào vì bờ ao đã là rào).
+
+**Máng** (`src/game/pen.ts`) là chỗ thức ăn NẰM LẠI, không phải chỗ bấm cho ăn: đổ một lần,
+máng giữ tới `balance.troughMax` phần, con vật đói tự tới ăn một phần mỗi bữa. Vì thế đi vắng
+vài ngày vẫn có cái cho chúng ăn. Số phần nằm ở `Tile.trough` (tuỳ chọn, vắng = rỗng, cùng
+kiểu với `age`/`idle` nên save cũ không cần migration), còn LOẠI thức ăn thì không nằm ở ô mà
+ở `pen.feed` — một máng không thuộc khu nào thì không đổ được gì vào, cố ý.
+
+Một luật đáng nhớ: **đói mà máng cạn thì `penGoal` trả `null`**, chứ không gọi con vật về. Gọi
+về thì nó bỏ lại đúng vạt cỏ đang đứng để đi tới một cái máng rỗng rồi chết đói cạnh đó. Rào
+có cổng, nên đây là "tự về chuồng" chứ không phải "bị nhốt".
+
+`validatePack` chặn năm cách làm hỏng mà nhìn content không thấy: khu tràn ra ngoài bản đồ,
+loài trỏ vào khu không tồn tại, khu khai `feed` mà trong ruột không có máng (và ngược lại), ô
+đặc lọt vào ruột khu cạn, ô cạn lọt vào ruột khu nước.
 
 **Xây theo tuyến**: cầm công trình → nút TUYẾN → chạm ô đầu, chạm ô cuối. Tuyến đi hình chữ L
 (ngang rồi dọc) chứ không phải đường chéo — pixel art đi chéo trông gãy khúc, mà người chơi
@@ -716,9 +751,10 @@ không chạy khi trang bị ẩn.
 ## Chế độ xây dựng
 
 Công trình KHÔNG đặt được bằng nút DÙNG. Tất cả — vòi tưới, nhà kính, pin mặt
-trời, drone, đường nhựa, hàng rào — đi qua `src/ui/buildmode.ts`.
+trời, drone, đường nhựa — đi qua `src/ui/buildmode.ts`. Hàng rào KHÔNG: nó là địa hình
+dựng sẵn của các khu chuồng (`buildable: false`).
 
-Vì sao: đặt từng ô là thao tác của việc SỬA, còn dựng hàng rào quanh chuồng hay
+Vì sao: đặt từng ô là thao tác của việc SỬA, còn kéo một tuyến đường ra kho hay
 kéo một con đường ra kho là việc QUY HOẠCH — nghĩ theo đoạn, không theo ô. Trộn
 hai đường vào một nút thì ra địa hình lởm chởm: mỗi ô là một lần ước lượng bằng
 mắt, và hai mươi lần ước lượng thì không lần nào giống nhau.
@@ -732,7 +768,7 @@ Ba điều làm chế độ này khác:
   luồng vào mỗi khung hình là cách nhanh nhất làm hỏng lại nó.
 · **Vẽ bao nhiêu tính tiền bấy nhiêu** — `buildLine()` dùng hàng có sẵn trong
   balo trước, hết thì trừ tiền tại chỗ theo `def.price`. Bán theo chồng ở cửa
-  hàng nghĩa là bắt người chơi đoán "cần bao nhiêu ô rào", mà đoán sai con số đó
+  hàng nghĩa là bắt người chơi đoán "cần bao nhiêu ô đường", mà đoán sai con số đó
   chính là lý do người ta ngại vẽ dài. Tab "Công trình" trong cửa hàng vì thế
   chỉ còn là BẢNG GIÁ.
 

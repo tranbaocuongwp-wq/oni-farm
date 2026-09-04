@@ -150,6 +150,38 @@ reject("props: stormFell.chance > 1", (p) => {
 reject("tiles.indoorMaps trỏ vào bản đồ không có", (p) => (p.tiles.indoorMaps = ["hamMo"]));
 reject("balance.diseaseChance > 1", (p) => (p.balance.diseaseChance = 2));
 
+/* KHU CHUỒNG — mỗi luật ở đây tương ứng một cách làm hỏng ván chơi mà nhìn
+   content thì không thấy: chuồng nằm ngoài bản đồ, con vật thuộc một khu không
+   tồn tại, máng không đổ được gì vào, hay một gốc cây quên dọn giữa chuồng. */
+reject("khu chuồng tràn ra ngoài bản đồ", (p) => (p.tiles.pens[0].x = 9000));
+reject("khu chuồng trỏ vào bản đồ không có", (p) => (p.tiles.pens[0].map = "hamMo"));
+reject("loài thuộc một khu không tồn tại", (p) => (p.actors.animals[0].pen = "khuMaQuai"));
+reject("khu ăn một thứ không phải vật phẩm", (p) => (p.tiles.pens[0].feed = "item:khongCoThat"));
+reject("khu khai feed nhưng trong ruột không có máng", (p) => {
+  const pen = p.tiles.pens.find((q) => q.feed);
+  for (let y = pen.y; y < pen.y + pen.h; y++) {
+    const r = p.maps.farm.rows[y].split("");
+    for (let x = pen.x; x < pen.x + pen.w; x++) if (r[x] === "M") r[x] = ".";
+    p.maps.farm.rows[y] = r.join("");
+  }
+});
+reject("có máng nhưng khu không khai feed", (p) => {
+  delete p.tiles.pens.find((q) => q.feed).feed;
+});
+reject("ô đặc lọt vào ruột khu chuồng", (p) => {
+  const pen = p.tiles.pens.find((q) => !q.swim);
+  const r = p.maps.farm.rows[pen.y].split("");
+  r[pen.x] = "T"; // một cây gỗ lớn mọc giữa chuồng
+  p.maps.farm.rows[pen.y] = r.join("");
+});
+reject("khu dưới nước lại có ô cạn trong ruột", (p) => {
+  const pen = p.tiles.pens.find((q) => q.swim);
+  const r = p.maps.farm.rows[pen.y].split("");
+  r[pen.x] = ".";
+  p.maps.farm.rows[pen.y] = r.join("");
+});
+reject("legend dựng một công trình không có thật", (p) => (p.tiles.legend.F.build = "raoMaQuai"));
+
 console.log("\n── Sửa content HỢP LỆ thì phải được chấp nhận ──");
 const accept = (name, mutate) => {
   const p = clone(rawPack());
@@ -190,6 +222,11 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   for (const pr of p.props.props)
     if (pr.portal) pr.portal = { map: pr.portal.map === "farm" ? "farm" : "house", x: 2, y: 1 };
   p.maps.house = { w: 5, h: 3, rows: ["WWWWW", "W___W", "WWWWW"] };
+  // …và KHU CHUỒNG cũng vậy: ruột khu cũ nằm ngoài cái bản đồ 5×3 này. Đổi map
+  // mà quên `pens` thì con vật có một cái chuồng ở ngoài rìa thế giới — nên bỏ
+  // luôn cả khu lẫn ô `pen` của từng loài, đúng việc một bản OTA thật phải làm.
+  delete p.tiles.pens;
+  for (const a of p.actors.animals) delete a.pen;
 });
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });
