@@ -120,8 +120,13 @@
       "sellPrice": 165
     },
     {
+      "id": "goatmeat",
+      "name": "Thịt dê",
+      "sellPrice": 150
+    },
+    {
       "id": "fishmeat",
-      "name": "Cá thịt",
+      "name": "Thịt cá",
       "sellPrice": 95
     },
     {

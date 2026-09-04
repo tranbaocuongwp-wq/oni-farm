@@ -9,14 +9,22 @@
   --bg-2: #1d1710;
   --panel: #2b2118;
   --panel-2: #3a2c20;
+  --panel-3: #4a3826;
   --edge: #6b4f37;
   --edge-hi: #a37850;
   --ink: #f6ecdc;
   --ink-dim: #b9a68d;
+  --ink-mute: #8a7a66;
   --gold: #ffd84a;
   --gold-dark: #c9931a;
   --green: #6cc94f;
+  --green-dark: #3d6b2a;
+  --red: #e05d5d;
+  --red-dark: #6b2a2a;
   --blue: #5aa9e6;
+  --glass: rgba(43, 33, 24, 0.9);
+  --shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --sa-b: env(safe-area-inset-bottom, 0px);
@@ -246,7 +254,7 @@ p {
   border: 2px solid var(--edge);
   border-radius: 10px;
   padding: 16px 18px;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
 }
 
 .card p {
@@ -358,7 +366,7 @@ kbd {
   display: inline-block;
   padding: 1px 9px;
   border-radius: 999px;
-  background: #3d6b2a;
+  background: var(--green-dark);
   border: 1px solid #5c9b40;
   color: #fff;
   font-size: 12px;
@@ -417,4 +425,351 @@ footer a {
   body {
     padding-bottom: 0;
   }
+}
+
+/* ==========================================================================
+   THƯ VIỆN — thẻ tra cứu cây trồng, vật nuôi, hành động.
+
+   Ba trục thích ứng, cùng một bộ thẻ:
+     · điện thoại  → một cột, hình nằm cạnh chữ, số liệu xếp hai cột
+     · tablet      → hai cột
+     · máy tính    → ba cột, khung rộng hơn (body.wide)
+
+   Cố ý KHÔNG dùng breakpoint cứng cho lưới thẻ: `auto-fill` + `minmax` tự chọn
+   số cột theo bề ngang thật, nên màn hình lạ (gập, chia đôi, cửa sổ hẹp) cũng
+   ra bố cục đúng mà không phải thêm một điểm ngắt nào.
+   ========================================================================== */
+
+/* Trang tra cứu cần bề ngang hơn trang giới thiệu: một thẻ cây có hình, chip
+   mùa, bốn con số và dải giai đoạn. Nhét vào 880px thì chữ gãy khắp nơi. */
+body.wide .wrap {
+  max-width: 1180px;
+}
+
+/* ------------------------------------------------------------ hình sprite */
+/* Pixel art: cấm mọi làm mượt, ở cả bốn họ trình duyệt. Thiếu dòng nào là hình
+   nhoè trên đúng trình duyệt đó và rất khó nhận ra khi chỉ thử một máy. */
+canvas.sp {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  flex: none;
+}
+
+/* ---------------------------------------------------------- thanh nhảy mục */
+.jump-bar {
+  padding: 12px 0;
+  position: sticky;
+  top: 56px;
+  z-index: 8;
+  background: rgba(20, 16, 12, 0.94);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--edge);
+}
+.jumps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.jumps::-webkit-scrollbar {
+  display: none;
+}
+.jump {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-dim);
+  text-decoration: none;
+  font-size: 14px;
+}
+.jump b {
+  color: var(--gold);
+}
+.jump:hover {
+  border-color: var(--edge-hi);
+  color: var(--ink);
+}
+
+/* --------------------------------------------------------------- thẻ mục */
+.ents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.ents.cols {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.ent {
+  display: flex;
+  gap: 14px;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* Ô hình cố định: 61 thẻ mà mỗi thẻ rộng một kiểu theo cỡ cây thì cả lưới
+   nhấp nhô. Khung cố định, hình căn giữa trong đó. */
+.ent-art {
+  flex: none;
+  /* `align-self` chứ không để giãn: thẻ trên điện thoại cao gấp ba lần ô hình,
+     mà `stretch` mặc định của flex sẽ kéo cái khung rỗng cao theo cả thẻ. */
+  align-self: flex-start;
+  width: 84px;
+  height: 84px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+.ent.sm .ent-art {
+  width: 60px;
+  height: 60px;
+}
+.ent-main {
+  min-width: 0;
+  flex: 1;
+}
+.ent-sub {
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin: 0 0 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+.chip {
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  color: var(--ink-dim);
+}
+.chip.alt {
+  background: var(--green-dark);
+  border-color: #5c9b40;
+  color: #eaf7e2;
+}
+
+/* Số liệu: hai cột trên mọi cỡ. Nhãn nhỏ mờ ở trên, số sáng ở dưới — mắt quét
+   theo cột số chứ không phải đọc từng dòng "nhãn: giá trị". */
+dl.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 10px;
+}
+dl.facts div {
+  min-width: 0;
+}
+dl.facts dt {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+dl.facts dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+dl.facts dd.up {
+  color: var(--green);
+  font-weight: 700;
+}
+dl.facts dd.down {
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* Dải giai đoạn lớn: đọc từ trái sang phải là thấy cây cao dần. */
+.grow {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-2);
+}
+.grow-lbl {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  align-self: center;
+  margin-right: 2px;
+}
+
+ul.prods {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  color: var(--ink-dim);
+}
+ul.prods li {
+  margin-bottom: 3px;
+}
+
+/* --------------------------------------------------------- thẻ hành động */
+.acts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.act {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+.act-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.act p {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.act .meo {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-2);
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.act .meo b {
+  color: var(--gold);
+}
+
+/* Nút giả in đúng chữ trên nút hành động thật trong game — người chơi nhận ra
+   ngay chữ mình vẫn bấm, không phải dịch từ mô tả sang nút. */
+.btn-pill.big {
+  font-size: 14px;
+  padding: 6px 14px;
+  border-bottom-width: 3px;
+  border-bottom-style: solid;
+  border-bottom-color: #2b4d1c;
+}
+
+/* ------------------------------------------------------------- trang hub */
+.hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+.hub-card {
+  display: block;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 16px 18px;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+.hub-card:hover {
+  border-color: var(--edge-hi);
+  background: var(--panel-2);
+}
+.hub-card h3 {
+  color: var(--gold);
+}
+.hub-card h3 b {
+  color: var(--ink-mute);
+  font-weight: 400;
+  font-size: 13px;
+  margin-left: 4px;
+}
+.hub-card p {
+  margin: 0;
+  font-size: 14px;
+}
+/* Dải hình mẫu CAO CỐ ĐỊNH, cắt phần thừa: bốn thẻ hub nằm cạnh nhau, thẻ nào
+   có nhiều hình hơn mà xuống dòng là cả hàng cao lệch. */
+.hub-art {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 48px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+/* Thẻ hẹp (điện thoại): số liệu về một cột. Hai cột ở bề ngang này làm nhãn
+   "TRỒNG BAO LÂU" xuống dòng, và khi một nhãn xuống dòng còn nhãn bên cạnh thì
+   không, hai con số lệch nhau — mắt đọc thành sai cặp. */
+@media (max-width: 430px) {
+  dl.facts {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+/* --------------------------------------------------------------- callout */
+/* Câu quan trọng nhất của mỗi mục. Vạch vàng bên trái thay cho việc in đậm cả
+   đoạn — in đậm nhiều thì không còn gì nổi bật nữa. */
+p.callout {
+  margin-top: 18px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-left: 4px solid var(--gold);
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+}
+p.callout b {
+  color: var(--ink);
+}
+
+/* ------------------------------------------------- nav dài: cuộn trên mobile */
+/* Nav giờ có sáu mục; trên màn hẹp nó cuộn ngang (đã có sẵn `overflow-x`).
+   Nhưng "Chơi ngay" phải LUÔN thấy được, nên ghim nó vào mép phải. */
+@media (max-width: 719px) {
+  /* Nav sáu mục thì trên màn hẹp nó cuộn ngang, và nút vàng ghim bên phải sẽ
+     đè lên mục đang cuộn qua dưới nó — trông như lỗi. Bỏ hẳn nút trong nav:
+     thanh "Chơi ngay" dính đáy đã luôn ở đó rồi, hai nút cùng việc là thừa. */
+  nav a.play {
+    display: none;
+  }
+  /* Trang thư viện có thanh nhảy mục dính dưới nav — cộng dồn hai thanh dính
+     trên màn hẹp thì mất gần một phần ba màn hình. Thanh nhảy thôi dính. */
+  .jump-bar {
+    position: static;
+  }
+}
+
+/* Dải hình mẫu dưới hero: hình THẬT của game thay cho ảnh chụp màn hình. Ảnh
+   chụp thì cũ đi theo mỗi bản; những con này thì không. */
+.showcase {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+  padding: 14px 16px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: rgba(43, 33, 24, 0.5);
+  min-height: 72px;
 }

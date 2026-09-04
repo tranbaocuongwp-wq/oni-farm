@@ -143,7 +143,9 @@ src/
   core/settings.ts  tuỳ chọn của MÁY (tay thuận, cỡ chữ, zoom, rung…) — parse thuần, không vào save
   core/haptics.ts   rung nhẹ khi thao tác (Android)
   farm/        vỏ trang game (/farm/)
-  index.html + tinh-nang/ + huong-dan/ + tai-ve/ + privacy/   site tĩnh
+  site/sprites.ts   đổ sprite của GAME vào trang tài liệu (một bản sự thật)
+  index.html + tinh-nang/ + huong-dan/ + cach-hoat-dong/ + tai-ve/ + privacy/
+  thu-vien/{,cay-trong,vat-nuoi,hanh-dong}/   ⚙️ SINH RA — scripts/build-site.mjs
 ```
 
 Ba ràng buộc giữ kiến trúc không mục theo thời gian:
@@ -711,21 +713,48 @@ không chạy khi trang bị ẩn.
 
 ---
 
+## Trang tài liệu (`/thu-vien/`)
+
+Bốn trang tra cứu — cây trồng, vật nuôi, hành động, và "cách game vận hành" —
+**sinh ra từ chính content** bằng `scripts/build-site.mjs` (chạy trong
+`npm run build`, trước `vite build` vì vite phải thấy file HTML mới quét được).
+
+Hai quyết định đáng nhớ:
+
+**Số liệu sinh lúc build, hình vẽ lúc chạy.** Viết tay 61 thẻ cây nghĩa là mỗi
+lần chỉnh giá phải sửa hai chỗ, và chỉ cần quên một lần là trang tài liệu nói
+sai — tệ hơn hẳn so với không có trang tài liệu. Nên số liệu đọc thẳng từ
+`crops.json`/`actors.json`. Còn hình thì `src/site/sprites.ts` gọi đúng
+`buildAtlas()` mà game gọi, nên không có file ảnh nào để cũ đi. Tắt JS thì trang
+vẫn đọc được trọn vẹn — chỉ mất phần minh hoạ.
+
+**Cắt viền trong suốt trước khi phóng to.** Sprite cây cao 24px nhưng cây xà
+lách chỉ chiếm 9px dưới đáy (phần trên chừa cho cây cao như ngô). Vẽ nguyên ô là
+một cây bé xíu nằm dưới đáy một khung rỗng. `trim()` đo khung nhỏ nhất còn chứa
+hết phần có vẽ, nhớ lại bằng `WeakMap`, rồi phóng theo hệ số NGUYÊN.
+
+Chữ trên các trang này cố ý không có từ kỹ thuật nào: không "reducer", không
+"tick", không "state". "Cây chỉ lớn khi bạn ngủ" là câu người chơi cần, còn
+`newday.ts` là chuyện của README này.
+
+---
+
 ## Chưa có (cố ý)
 
-Mùa & thời tiết, NPC & quan hệ, hầm mỏ & chiến đấu, chăn nuôi, chế biến, cảnh nội
-thất, nhiều bản đồ, nhạc nền. Đây là **vertical slice**: một vòng lặp trọn vẹn làm
-cho tử tế, thay vì mười thứ làm dở. Kiến trúc content-driven đã chừa sẵn chỗ cho
-tất cả — xem "Lộ trình mở rộng" bên dưới.
+NPC & quan hệ, hầm mỏ & chiến đấu, chế biến nông sản (sữa → phô mai), nhạc nền,
+nhiều ngôn ngữ. Mùa, thời tiết, chăn nuôi, người làm thuê, xe cộ và nhiều bản đồ
+thì **đã có** — xem các mục tương ứng ở trên.
 
 ### Lộ trình mở rộng đề xuất
 
-1. **Mùa + thời tiết** — thêm `seasons.json`, cây có danh sách mùa; mưa tự tưới cả
-   ruộng. Gần như toàn bộ là content, core chỉ cần thêm khái niệm mùa vào `newday`.
-2. **Nhiều bản đồ** — `maps/` đã là danh sách; thêm cổng dịch chuyển vào `tiles.json`
-   và một action `TRAVEL`.
-3. **Nhà kính thật** (công trình nhiều ô) — cần core hỗ trợ công trình chiếm nhiều ô.
-4. **Chăn nuôi** — cơ chế mới, làn chậm; tái dùng được vòng "sang ngày mới".
-5. **Tiled editor** — định dạng map đã là JSON `{w,h,rows}`, viết một bộ chuyển từ
-   Tiled sang là dùng được editor đồ hoạ.
-6. **Tileset PNG** — thay ruột `atlas.ts`, không đụng file nào khác.
+1. **Chế biến** — máy làm phô mai, lò sấy. Là công trình `kind: "object"` có kho
+   riêng; tái dùng nguyên vòng "sang ngày mới".
+2. **Nhà kính thật** (công trình nhiều ô) — cần core hỗ trợ công trình chiếm
+   nhiều ô, thứ mà "nhóm khối" của hàng rào/kho đã dọn sẵn một nửa đường.
+3. **Nhiều ngôn ngữ** — `strings.json` đã tách sẵn theo `lang`; thêm ngôn ngữ là
+   thêm một file vào manifest, không đụng code.
+4. **Tiled editor** — định dạng map đã là JSON `{w,h,rows}`, viết một bộ chuyển
+   từ Tiled sang là dùng được editor đồ hoạ.
+5. **Tileset PNG** — thay ruột `atlas.ts`, không đụng file nào khác. Lưu ý: trang
+   thư viện cũng đọc atlas, nên đổi ruột là đổi luôn hình trên trang tài liệu —
+   đúng ý đồ.

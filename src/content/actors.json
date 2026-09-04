@@ -58,7 +58,7 @@
         }
       ],
       "meat": {
-        "id": "item:mutton",
+        "id": "item:goatmeat",
         "min": 1,
         "max": 2
       },

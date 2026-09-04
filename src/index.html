@@ -9,13 +9,16 @@
     <link rel="stylesheet" href="/site/site.css" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <script type="module" src="/site/sprites.ts"></script>
   </head>
   <body>
     <nav>
       <div class="wrap">
         <a class="brand" href="/" aria-current="page">ONI<span>FARM</span></a>
         <a href="/tinh-nang/">Tính năng</a>
+        <a href="/thu-vien/">Thư viện</a>
         <a href="/huong-dan/">Hướng dẫn</a>
+        <a href="/cach-hoat-dong/">Cách game vận hành</a>
         <a href="/tai-ve/">Cài về máy</a>
         <a class="play" href="/farm/">Chơi ngay</a>
       </div>
@@ -36,6 +39,18 @@
           <span>📱 Điện thoại</span><span>📟 Tablet</span><span>💻 Máy tính</span><span>📴 Offline</span>
         </div>
         <p class="note">Không cần tài khoản · không cần mạng · tiến trình lưu ngay trên máy bạn</p>
+        <div class="showcase" aria-label="Một vài thứ có trong game">
+          <canvas class="sp" data-sprite="player" data-size="44" role="img" aria-label="Nhân vật"></canvas>
+          <canvas class="sp" data-sprite="animal:cow" data-size="44" role="img" aria-label="Bò"></canvas>
+          <canvas class="sp" data-sprite="animal:chicken" data-size="44" role="img" aria-label="Gà"></canvas>
+          <canvas class="sp" data-sprite="animal:dog" data-size="44" role="img" aria-label="Chó"></canvas>
+          <canvas class="sp" data-sprite="crop:tomato" data-size="44" role="img" aria-label="Cà chua"></canvas>
+          <canvas class="sp" data-sprite="crop:corn" data-size="44" role="img" aria-label="Ngô"></canvas>
+          <canvas class="sp" data-sprite="crop:pumpkin" data-size="44" role="img" aria-label="Bí đỏ"></canvas>
+          <canvas class="sp" data-sprite="build:sprinkler" data-size="44" role="img" aria-label="Vòi tưới"></canvas>
+          <canvas class="sp" data-sprite="build:solar" data-size="44" role="img" aria-label="Pin mặt trời"></canvas>
+          <canvas class="sp" data-sprite="vehicle:truck" data-size="44" role="img" aria-label="Xe tải"></canvas>
+        </div>
       </div>
     </header>
 
@@ -82,6 +97,50 @@
 
     <section>
       <div class="wrap">
+        <h2>Tra cứu mọi thứ trong game</h2>
+        <p class="lead">
+          Không phải đoán. Mỗi loại cây, mỗi con vật và mỗi việc nhân vật làm được đều có
+          trang riêng, với số liệu lấy thẳng từ bản bạn đang chơi.
+        </p>
+        <div class="hub">
+          <a class="hub-card" href="/thu-vien/cay-trong/">
+            <div class="hub-art">
+              <canvas class="sp" data-sprite="crop:lettuce" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="crop:carrot" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="crop:tomato" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="crop:pumpkin" data-size="34"></canvas>
+            </div>
+            <h3>Cây trồng <b>61</b></h3>
+            <p>Trồng mấy ngày, thu bao nhiêu, bán được bao nhiêu, hợp mùa nào.</p>
+          </a>
+          <a class="hub-card" href="/thu-vien/vat-nuoi/">
+            <div class="hub-art">
+              <canvas class="sp" data-sprite="animal:cow" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="animal:goat" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="animal:chicken" data-size="34"></canvas>
+              <canvas class="sp" data-sprite="animal:dog" data-size="34"></canvas>
+            </div>
+            <h3>Vật nuôi <b>8</b></h3>
+            <p>Ăn gì, mấy ngày một lứa sữa, trứng, lông. Bỏ đói thì sao.</p>
+          </a>
+          <a class="hub-card" href="/thu-vien/hanh-dong/">
+            <div class="hub-art">
+              <span class="btn-pill big">CÀY</span><span class="btn-pill big">THU</span><span class="btn-pill big">NGỦ</span>
+            </div>
+            <h3>Hành động</h3>
+            <p>Từng việc nhân vật làm được, cần cầm gì, và mẹo cho mỗi việc.</p>
+          </a>
+          <a class="hub-card" href="/cach-hoat-dong/">
+            <div class="hub-art">🌗 ☔ ⚡</div>
+            <h3>Cách game vận hành</h3>
+            <p>Vì sao cây lớn khi bạn ngủ, thời tiết ảnh hưởng gì, tiền từ đâu ra.</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
         <h2>Bắt đầu trong ba mươi giây</h2>
         <ol class="steps">
           <li><b>Chạm vào một ô cỏ.</b> Nhân vật tự đi tới. Nút góc dưới ghi <span class="btn-pill">CÀY</span> — bấm nó. (Máy tính: <kbd>1</kbd> rồi <kbd>Space</kbd>.)</li>
@@ -95,6 +154,7 @@
     <footer>
       <div class="wrap">
         OniFarm · game offline, save nằm trên máy bạn ·
+        <a href="/thu-vien/">Thư viện</a> ·
         <a href="/privacy/">Quyền riêng tư</a>
       </div>
     </footer>

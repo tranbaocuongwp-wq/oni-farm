@@ -1,5 +1,9 @@
 node_modules/
 dist/
 public/content/
+# Thư viện sinh từ content — cùng lý do với pack OTA ở trên: file dẫn xuất,
+# `npm run dev`/`build` tự dựng lại. Commit vào là mỗi lần chỉnh giá một cây lại
+# có 4 file HTML lạc vào diff.
+src/thu-vien/
 .DS_Store
 *.log
