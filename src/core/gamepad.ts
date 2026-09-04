@@ -39,6 +39,16 @@ const RUN = 0.85;
  *  này nên chúng hành xử y hệt nút thường. */
 const PRESS = 0.5;
 
+/** Ngưỡng BẬT và NHẢ của một nấc gạt. Khác nhau (trễ ngưỡng) để cần gạt để hờ
+ *  quanh ngưỡng không làm ô chọn nhảy qua nhảy lại mỗi khung hình. */
+const ON = 0.6;
+const OFF = 0.35;
+
+/** Giữ nguyên hướng bao lâu thì mới bắt đầu lặp, và sau đó lặp mỗi bao lâu.
+ *  Bấm một cái phải đi đúng MỘT ô — đó là lý do quãng chờ đầu phải dài. */
+const HOLD_MS = 420;
+const REPEAT_MS = 150;
+
 /** Tên nút, đánh theo chỉ số của standard mapping. */
 export const PAD = {
   A: 0,
@@ -73,6 +83,15 @@ export interface PadState {
   /** Hướng vừa GẠT trên cần trái / D-pad, dùng để chuyển tiêu điểm trong menu.
    *  Gạt và giữ thì lặp lại chậm, y như giữ phím mũi tên. */
   navDir: { x: number; y: number } | null;
+  /**
+   * Hướng vừa GẠT trên CẦN PHẢI. Cùng nhịp lặp với `navDir`.
+   *
+   * Cần trái đi, cần phải chọn đồ — đúng thói quen của người chơi Don't Starve
+   * Together, và nó giải phóng D-pad khỏi việc phải kiêm hai vai. Hai ngón cái
+   * làm hai việc khác nhau cùng lúc: vừa chạy vừa đổi công cụ mà không phải
+   * dừng lại.
+   */
+  aimDir: { x: number; y: number } | null;
 }
 
 /** Hãng tay cầm — quyết định TÊN nút hiện cho người chơi, không đổi chỉ số. */
@@ -114,6 +133,7 @@ const EMPTY: PadState = {
   pressed: new Set(),
   held: new Set(),
   navDir: null,
+  aimDir: null,
 };
 
 /** Đoán hãng từ chuỗi `id`. Chỉ để hiện ĐÚNG TÊN nút — Switch gọi nút mặt dưới
@@ -146,9 +166,11 @@ const NO_PAD: PadInfo = { connected: false, id: "", brand: "generic", standard: 
 
 export function createGamepad(): Gamepad2 {
   let prev = new Set<number>();
-  /** Lần gạt hướng gần nhất trong menu, và hướng đó. */
+  /** Lần gạt hướng gần nhất, và hướng đó — cho từng cần gạt. */
   let navAt = 0;
   let navLast = { x: 0, y: 0 };
+  let aimAt = 0;
+  let aimLast = { x: 0, y: 0 };
   let padIndex: number | null = null;
 
   /** Tay cầm ĐANG dùng. Ưu tiên cái vừa có tín hiệu, để cắm hai cái không loạn. */
@@ -236,21 +258,54 @@ export function createGamepad(): Gamepad2 {
       /* Gạt hướng trong MENU: bấm một cái ăn một bước, giữ thì lặp lại chậm.
          Không có nhịp lặp này thì một cú gạt nhảy qua cả menu trong ba khung
          hình, mà cũng không giữ để đi nhanh xuống cuối danh sách được. */
-      let navDir: PadState["navDir"] = null;
-      const dx = Math.abs(ax) > 0.6 ? Math.sign(ax) : 0;
-      const dy = Math.abs(ay) > 0.6 ? Math.sign(ay) : 0;
-      if (dx === 0 && dy === 0) {
-        navLast = { x: 0, y: 0 };
-        navAt = 0;
-      } else {
-        const doi = dx !== navLast.x || dy !== navLast.y;
-        const lap = nowMs - navAt > (navAt === 0 ? 0 : 220);
-        if (doi || lap) {
-          navDir = { x: dx, y: dy };
-          navLast = { x: dx, y: dy };
-          navAt = nowMs;
-        }
-      }
+      /**
+       * Gạt-MỘT-NẤC dùng chung cho cả hai cần và cho D-pad.
+       *
+       * Hai chi tiết, cả hai đều là thứ sai thì lộ ra ngay:
+       *
+       * · CHỜ LÂU RỒI MỚI LẶP. Bấm D-pad một cái phải đi đúng MỘT ô. Không có
+       *   quãng chờ đầu thì giữ nút 250ms — nhanh hơn một cú bấm bình thường —
+       *   đã nhảy hai ô, và người chơi không bao giờ đứng được đúng ô mình
+       *   muốn. Chờ `HOLD_MS` rồi mới lặp theo `REPEAT_MS`, đúng như phím mũi
+       *   tên của bàn phím.
+       * · TRỄ NGƯỠNG (hysteresis). Cần gạt để hờ quanh 0,6 thì mỗi khung hình
+       *   nó vượt rồi lại tụt, và ô chọn nhảy qua nhảy lại — đúng cái "rung"
+       *   đó. Bật ở 0,6 nhưng chỉ nhả khi tụt dưới 0,35.
+       */
+      const nac = (
+        vx: number,
+        vy: number,
+        last: { x: number; y: number },
+        at: number,
+      ): { dir: { x: number; y: number } | null; last: { x: number; y: number }; at: number } => {
+        const nguong = (v: number, cu: number) => (Math.abs(v) > (cu !== 0 ? OFF : ON) ? Math.sign(v) : 0);
+        const dx = nguong(vx, last.x);
+        const dy = nguong(vy, last.y);
+        if (dx === 0 && dy === 0) return { dir: null, last: { x: 0, y: 0 }, at: 0 };
+        const doi = dx !== last.x || dy !== last.y;
+        if (doi) return { dir: { x: dx, y: dy }, last: { x: dx, y: dy }, at: nowMs };
+        // Giữ nguyên hướng: lần lặp ĐẦU phải chờ lâu, các lần sau nhanh dần.
+        const cho = at < 0 ? REPEAT_MS : HOLD_MS;
+        if (nowMs - Math.abs(at) < cho) return { dir: null, last, at };
+        // `at` âm = đã qua lần lặp đầu, từ giờ dùng nhịp nhanh.
+        return { dir: { x: dx, y: dy }, last, at: -nowMs };
+      };
+
+      const nv = nac(ax, ay, navLast, navAt);
+      const navDir = nv.dir;
+      navLast = nv.last;
+      navAt = nv.at;
+
+      /* CẦN PHẢI: trục 2 và 3 ở standard mapping. Không standard thì không đọc
+         — trục 2 của một tay cầm lạ có thể là cò, và cò nghỉ ở -1 nên hotbar
+         sẽ tự chạy mãi mà không ai chạm vào gì. */
+      const std = pad.mapping === "standard";
+      const rx = std ? (pad.axes[2] ?? 0) : 0;
+      const ry = std ? (pad.axes[3] ?? 0) : 0;
+      const av = nac(rx, ry, aimLast, aimAt);
+      const aimDir = av.dir;
+      aimLast = av.last;
+      aimAt = av.at;
 
       return {
         connected: true,
@@ -260,6 +315,7 @@ export function createGamepad(): Gamepad2 {
         pressed,
         held,
         navDir,
+        aimDir,
       };
     },
 

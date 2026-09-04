@@ -683,6 +683,18 @@ export interface AiState {
   path: number[];
   /** phút game của lần tính đường gần nhất — để nguội replan */
   planAt: number;
+  /**
+   * Những ô người làm vừa KHÔNG TỚI ĐƯỢC, giữ theo chỉ số ô.
+   *
+   * Không có danh sách này thì họ đứng đơ: `pickTask` luôn trả về đúng cái ô
+   * gần nhất, A* không tìm ra đường tới nó (bị hàng rào, bị vật thể chắn, hoặc
+   * ô đó nằm trong một khoảnh khép kín), rồi lượt sau lại chọn đúng ô đó. Vòng
+   * lặp đó chạy mãi và nhìn từ ngoài thì y hệt treo máy.
+   *
+   * Xoá sạch mỗi sáng: người chơi có thể đã phá cái hàng rào chắn đường trong
+   * ngày, và nhớ mãi một chỗ không tới được là nhớ một thứ đã cũ.
+   */
+  bad?: number[];
 }
 
 export interface AnimalState {

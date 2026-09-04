@@ -58,7 +58,9 @@ export type Intent =
   | { t: "padHelp" }
   /** Gạt hướng trên bản đồ khi KHÔNG ở trong menu — dùng để rê con trỏ ô
    *  trong chế độ xây dựng, nơi tay cầm không có chuột để trỏ. */
-  | { t: "padAim"; dx: number; dy: number };
+  | { t: "padAim"; dx: number; dy: number }
+  /** Cuộn nội dung menu bằng cần phải. */
+  | { t: "navScroll"; dy: number };
 
 export interface Input {
   /** hướng đi mong muốn, độ dài <= 1 */
@@ -382,6 +384,13 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         if (st.navDir) push({ t: "navDir", dx: st.navDir.x, dy: st.navDir.y });
         if (st.pressed.has(PAD.A)) push({ t: "navOk" });
         if (st.pressed.has(PAD.B) || st.pressed.has(PAD.START)) push({ t: "navBack" });
+        // Cần phải cuộn nội dung menu — cửa hàng có bốn mươi thẻ hạt.
+        if (st.aimDir?.y) push({ t: "navScroll", dy: st.aimDir.y });
+        // Vai đổi TAB trong menu — main.ts hiểu `selectDelta` theo ngữ cảnh.
+        if (pad.info().standard) {
+          if (st.pressed.has(PAD.LB)) push({ t: "selectDelta", d: -1 });
+          if (st.pressed.has(PAD.RB)) push({ t: "selectDelta", d: 1 });
+        }
         return;
       }
 
@@ -412,6 +421,11 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       // Rê con trỏ Ô: chỉ có nghĩa trong chế độ xây dựng, nhưng phát vô điều
       // kiện cho gọn — main.ts bỏ qua khi không cần.
       if (st.navDir) push({ t: "padAim", dx: st.navDir.x, dy: st.navDir.y });
+
+      /* CẦN PHẢI = chọn đồ ở hotbar. Cần trái đi, cần phải chọn — hai ngón cái
+         làm hai việc cùng lúc, nên vừa chạy vừa đổi công cụ mà không phải dừng
+         lại. Gạt lên/xuống cũng đổi ô, để không phải nhớ chỉ có trái/phải. */
+      if (st.aimDir) push({ t: "selectDelta", d: st.aimDir.x || st.aimDir.y });
     },
     padConnected: () => padState.connected,
     padInfo: () => pad.info(),

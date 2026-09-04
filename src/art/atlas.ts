@@ -1982,17 +1982,38 @@ export function tileMaskKey(n: Neighbors): string {
   return `${n.up ? 1 : 0}${n.down ? 1 : 0}${n.left ? 1 : 0}${n.right ? 1 : 0}`;
 }
 
-function makeSeedIcon(def: CropDef): HTMLCanvasElement {
+/**
+ * Gói hạt — mang HÌNH CÂY SẼ MỌC RA trên nhãn.
+ *
+ * Bản trước vẽ đúng một cái túi giấy giống hệt nhau cho cả sáu mươi mốt loại,
+ * khác nhau ở một chấm màu 2px. Ở cỡ 16px trên hotbar thì sáu mươi mốt gói đó
+ * là một gói: người chơi không phân biệt được hạt cà chua với hạt bí đỏ, và
+ * phải nhấn giữ từng ô để đọc tên. Nhãn có hình cây thì nhìn là biết — đúng
+ * cùng lý do cửa hàng bày thẻ có ảnh cây chín thay vì một danh sách chữ.
+ *
+ * Nhận sẵn khung cây CHÍN thay vì tự vẽ lại: một nguồn hình duy nhất, nên đổi
+ * dáng cây qua OTA thì gói hạt đổi theo mà không phải nhớ sửa hai chỗ.
+ */
+function makeSeedIcon(def: CropDef, ripe?: HTMLCanvasElement): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  // gói hạt: túi giấy có nhãn màu quả
-  s.rect(3, 3, 10, 11, P.cloth);
+  // Giấy túi ngả theo màu lá: thêm một tầng phân biệt nữa ở cỡ nhỏ, khi hình
+  // trên nhãn mới chỉ còn vài pixel.
+  s.rect(3, 3, 10, 11, shade(def.art.leaf, 1.55));
   s.rect(3, 3, 10, 2, "#c9b48a");
   s.hline(3, 13, 10, "#a8916a");
-  s.rect(4, 6, 8, 6, "#fbf7ee");
-  s.disc(8, 9, 2, def.art.fruit);
-  s.px(7, 8, def.art.fruitDark);
-  s.px(8, 6, def.art.leafDark);
-  s.px(9, 6, def.art.leaf);
+  // cửa sổ nhãn — nền sáng để hình cây nổi lên
+  s.rect(4, 5, 8, 8, "#fbf7ee");
+
+  if (ripe) {
+    /* Cây cao 24px nhưng phần có vẽ nằm ở ĐÁY. Lấy 12px dưới cùng rồi ép vào ô
+       8×8: nếu lấy cả 24px thì hai phần ba nhãn là khoảng trống. */
+    s.g.imageSmoothingEnabled = false;
+    s.g.drawImage(ripe, 2, ripe.height - 12, 12, 12, 4, 5, 8, 8);
+  } else {
+    s.disc(8, 9, 2, def.art.fruit);
+    s.px(7, 8, def.art.fruitDark);
+  }
+
   // vài hạt lộ ra ở miệng túi
   s.px(5, 2, "#8a6440");
   s.px(9, 2, "#8a6440");
@@ -2528,7 +2549,8 @@ export function buildAtlas(content: Content): Atlas {
   for (const id of content.materialOrder) icons.set(`item:${id}`, makeMaterialIcon(id));
   for (const id of content.cropOrder) {
     const def = content.crops[id]!;
-    icons.set(`seed:${id}`, makeSeedIcon(def));
+    const frames = crops[id];
+    icons.set(`seed:${id}`, makeSeedIcon(def, frames?.[frames.length - 1]));
     icons.set(`crop:${id}`, makeCropIcon(def));
   }
   for (const id of content.buildingOrder) icons.set(`build:${id}`, buildings[id]!);

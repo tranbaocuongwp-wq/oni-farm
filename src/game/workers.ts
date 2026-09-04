@@ -23,7 +23,7 @@ import { dEntity, randInt, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd } from "./inventory.ts";
 import { setStore } from "./storage.ts";
 import { removeEntity } from "./entities.ts";
-import { TILE, tileIndexAt } from "./world.ts";
+import { TILE, tileIndexAt, idx } from "./world.ts";
 import { animalDef, entityAt } from "./entities.ts";
 import { readyProduct } from "./animals.ts";
 
@@ -182,6 +182,15 @@ export function payWages(d: Draft, content: Content): { paid: number; quit: numb
   for (let i = 0; i < d.s.entities.length; i++) {
     const cur = d.s.entities[i]!;
     if (!isWorker(cur)) continue;
+
+    /* Xoá SỔ ĐEN mỗi sáng. Người chơi có thể đã phá cái hàng rào chắn đường
+       trong ngày hôm qua, và nhớ mãi một chỗ không tới được là nhớ một thứ đã
+       cũ — người làm sẽ bỏ qua vĩnh viễn một góc ruộng đã thông từ lâu. */
+    if (cur.ai.bad?.length) {
+      const e0 = dEntity(d, i);
+      if (e0) delete e0.ai.bad;
+    }
+
     const w = cur.worker!;
     if (d.s.day - w.paidDay < cfg.wageEveryDays) continue;
 
@@ -235,6 +244,13 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
   const w = e.worker;
   if (!w) return null;
 
+  /* Ô đã thử mà KHÔNG TỚI ĐƯỢC thì đừng chọn lại. Không có bộ lọc này thì
+     người làm đứng đơ: hàm này luôn trả về ô gần nhất, A* không tìm ra đường
+     tới nó, lượt sau lại trả về đúng ô đó. Nhìn từ ngoài y hệt treo máy. */
+  const bad = e.ai.bad;
+  const xau = (x: number, y: number): boolean =>
+    !!bad?.length && bad.includes(idx(s.w, x, y));
+
   // Đầy tay thì việc duy nhất là về kho. Đứng trước mọi thứ khác — người thật
   // cũng vậy, không ai ôm đầy tay rồi còn cúi xuống nhặt thêm.
   if (carried(w) >= content.workers.carryMax) {
@@ -261,6 +277,7 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
       const kind: TaskKind | null =
         readyProduct(a, content) >= 0 ? "gather" : def.feed && a.animal.fed <= 0 ? "feed" : null;
       if (!kind) continue;
+      if (xau(ax, ay)) continue;
       // thu luôn thắng cho ăn: sản phẩm để lâu không mất, nhưng tay đang rảnh
       // thì nên nhặt trước
       const score = (kind === "gather" ? 0 : 1000) + dist;
@@ -274,7 +291,7 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
 
   // Việc trên RUỘNG. Dùng chính bộ chấm điểm của `nearestTarget` nhưng đo từ vị
   // trí NGƯỜI LÀM chứ không phải từ người chơi, nên phải tự quét ở đây.
-  const job = cropTask(s, content, cx, cy, R);
+  const job = cropTask(s, content, cx, cy, R, xau);
   if (job) return job;
 
   // Hết việc mà tay còn hàng thì tranh thủ về kho đổ.
@@ -309,6 +326,8 @@ function cropTask(
   cx: number,
   cy: number,
   R: number,
+  /** Ô người làm này vừa không tới được — xem `AiState.bad`. */
+  xau: (x: number, y: number) => boolean,
 ): Task | null {
   let best: Task | null = null;
   let bestScore = Infinity;
@@ -324,6 +343,7 @@ function cropTask(
         else if (t.tilled && !t.wet) uu = 2; // khô
       } else if (t.tilled && !t.wet) uu = 2;
       if (uu < 0) continue;
+      if (xau(x, y)) continue;
       const score = uu * 1000 + Math.abs(x - cx) + Math.abs(y - cy);
       if (score < bestScore) {
         bestScore = score;

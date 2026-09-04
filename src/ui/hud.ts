@@ -359,35 +359,49 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       if (key === animalKey) return;
       animalKey = key;
 
-      /* Nhãn cột trái là ICON, không phải chữ.
-         Thẻ này rộng chưa tới 170px trên điện thoại, mà "Tuổi", "No", "Sữa bò"
-         chiếm gần nửa bề ngang chỉ để nói một thứ mà một hình 12px nói xong.
-         Icon lấy từ atlas — cùng bộ với HUD, nên người chơi đã biết nghĩa. */
-      const rows: string[] = [];
-      const row = (ic: UiIcon, val: string, cls = "") =>
-        `<div class="row"><i class="ri" data-ic="${ic}"></i><b class="${cls}">${val}</b></div>`;
+      /* THANH thay cho CHỮ.
 
+         Ba con số duy nhất người chơi cần đọc ở đây — lớn tới đâu, no tới đâu,
+         còn bao lâu tới lứa — đều là "phần trăm của một quãng". Thanh nói điều
+         đó trong một liếc mắt và cao 6px; câu chữ "còn 14 giờ" nói cùng chuyện
+         đó bằng một hàng chữ cao 20px mà vẫn phải đọc mới hiểu. Thẻ từ hơn
+         trăm pixel xuống còn khoảng sáu mươi.
+
+         Con số chỉ còn lại ở chỗ thanh KHÔNG nói được: mấy ngày nữa thì chết
+         đói, và bán thịt được mấy phần. */
+      const rows: string[] = [];
+      const bar = (ic: UiIcon, pct: number, cls: string, tip: string) =>
+        `<div class="mrow" title="${tip}"><i class="ri" data-ic="${ic}"></i>` +
+        `<span class="mbar ${cls}"><i style="width:${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%"></i></span></div>`;
+
+      // lớn tới đâu — đầy là trưởng thành
+      const lon = st.mature ? 1 : st.ageDays / Math.max(1, st.ageDays + st.daysToMature);
       rows.push(
-        row("day", st.mature ? `${st.ageDays}n · lớn` : `${st.ageDays}n · lớn sau ${st.daysToMature}n`),
+        bar("day", lon, st.mature ? "ok" : "", st.mature ? "Đã trưởng thành" : `Lớn sau ${st.daysToMature} ngày`),
       );
+      // no tới đâu
       rows.push(
-        row(
-          "energy",
-          st.hungry ? `ĐÓI · chết sau ${st.daysToStarve}n` : `${Math.round(st.fed * 100)}%`,
-          st.hungry ? "bad" : "",
-        ) + `<div class="bar"><i style="width:${Math.round(st.fed * 100)}%"></i></div>`,
+        bar("energy", st.fed, st.hungry ? "bad" : "", st.hungry ? `Đói — chết sau ${st.daysToStarve} ngày` : `No ${Math.round(st.fed * 100)}%`),
       );
-      for (const p of st.products)
+      if (st.hungry)
+        rows.push(`<div class="mnote bad">Đói · chết sau ${st.daysToStarve} ngày</div>`);
+
+      for (const p of st.products) {
+        // Tiến độ = phần chu kỳ ĐÃ trôi qua. Chưa lớn hay đang đói thì đồng hồ
+        // đứng, nên thanh cũng phải đứng — vẽ nó chạy tiếp là nói dối.
+        const pct = p.ready ? 1 : 1 - p.minutesLeft / Math.max(1, p.everyMinutes);
+        const vi = !st.mature ? "chờ lớn" : st.hungry ? "đang đói" : p.ready ? "tới lứa" : wait(p.minutesLeft);
         rows.push(
-          `<div class="row"><i class="ri" data-item="${p.id}"></i><b class="${p.ready ? "good" : ""}">${
-            p.ready ? "tới lứa" : !st.mature ? "chờ lớn" : st.hungry ? "đang đói" : wait(p.minutesLeft)
-          }</b></div>`,
+          `<div class="mrow" title="${p.name} — ${vi}">` +
+            `<i class="ri" data-item="${p.id}"></i>` +
+            `<span class="mbar ${p.ready ? "ok" : ""}"><i style="width:${Math.round(pct * 100)}%"></i></span></div>`,
         );
-      // Dòng thịt chỉ có nghĩa khi con vật đã lớn — hiện sớm thì nó chỉ chiếm
-      // chỗ để nói "chưa được đâu", thứ mà dòng tuổi ngay trên đã nói rồi.
+      }
+      // Thịt là một con SỐ, không phải một quãng — thanh không nói được gì.
       if (st.meat && st.mature)
         rows.push(
-          `<div class="row"><i class="ri" data-item="${st.meat.id}"></i><b>${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
+          `<div class="mrow"><i class="ri" data-item="${st.meat.id}"></i>` +
+            `<b class="mval">${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
         );
 
       elAnimal.innerHTML =
@@ -534,7 +548,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
       // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
-      const hk = hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : "";
+      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}`;
       if (hk !== prev.hint) {
         prev.hint = hk;
         const btn = document.querySelector<HTMLElement>("#abtn .a");
@@ -559,12 +573,25 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
            vừa không chiếm chỗ như nút. */
         const pc = document.querySelector<HTMLElement>("#padctx");
         if (pc) {
-          const lb = hint?.label ?? "DÙNG";
           pc.innerHTML = "";
+          /* THỨ ĐANG CẦM đứng đầu dải. Nhãn "DÙNG" một mình không đủ: cùng
+             chữ đó, cầm cuốc là cày còn cầm hạt là gieo. Người chơi tay cầm
+             không thấy ô hotbar nào sáng lên trong tầm mắt lúc đang nhìn nhân
+             vật, nên phải mang thứ đang cầm tới ngay cạnh cái nhãn. */
+          const heldId = s.inv[s.sel]?.id;
+          const src = heldId ? atlas.icon(heldId) : null;
+          if (src) {
+            const c = document.createElement("canvas");
+            c.width = src.width;
+            c.height = src.height;
+            c.getContext("2d")!.drawImage(src, 0, 0);
+            c.className = "it";
+            pc.appendChild(c);
+          }
           const k = document.createElement("b");
           k.textContent = padKey;
           const t = document.createElement("span");
-          t.textContent = lb;
+          t.textContent = hint?.label ?? "DÙNG";
           pc.append(k, t);
           if (hint?.why) {
             const w = document.createElement("i");

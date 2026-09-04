@@ -94,7 +94,11 @@ export function workerStep(
       return true;
     }
     if (e.ai.path.length) return true; // còn đường thì cứ đi
-    // hết đường mà chưa tới: bỏ việc này, chọn việc khác
+    /* Hết đường mà CHƯA TỚI: ghi ô này vào sổ đen rồi chọn việc khác.
+       Đây là chỗ người làm hay đứng đơ nhất — `pickTask` luôn trả về ô gần
+       nhất, mà nếu ô đó bị chắn thì lượt sau nó lại trả về đúng ô đó, mãi mãi.
+       Bỏ hướng đó đi tìm hướng khác mới là thứ một người thật làm. */
+    markBad(e, idx(d.s.w, e.ai.tx, e.ai.ty));
     e.ai.phase = "idle";
     e.ai.tx = -1;
     e.ai.ty = -1;
@@ -156,13 +160,29 @@ export function workerStep(
   });
   if (path && path.length) e.ai.path = path.slice(0, MAX_PATH);
   else {
-    // không tới được: bỏ việc này để lượt sau chọn việc khác
+    // A* không tìm ra đường: ghi sổ đen để lượt sau không chọn lại đúng ô này.
+    markBad(e, idx(d.s.w, task.tx, task.ty));
     e.ai.phase = "idle";
     e.ai.tx = -1;
     e.ai.ty = -1;
     e.ai.until = 2;
   }
   return true;
+}
+
+/** Số ô tối đa giữ trong sổ đen. Nhỏ thôi: nó nằm trong save, và nhớ nhiều thì
+ *  người làm bỏ qua cả những ô chỉ tình cờ bị chắn một lúc. */
+const MAX_BAD = 12;
+
+/** Ghi một ô là "không tới được" cho riêng người làm này. */
+function markBad(e: { ai: { bad?: number[] } }, i: number): void {
+  if (i < 0) return;
+  const list = e.ai.bad ?? [];
+  if (list.includes(i)) return;
+  list.push(i);
+  // Bỏ ô cũ nhất khi đầy — sổ đen là trí nhớ ngắn hạn, không phải bản đồ cấm.
+  if (list.length > MAX_BAD) list.shift();
+  e.ai.bad = list;
 }
 
 /**

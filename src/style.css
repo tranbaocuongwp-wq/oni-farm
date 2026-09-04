@@ -381,40 +381,47 @@ body[data-hand="left"] .mid-col {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
 }
-.animal-card .row {
+/* Một dòng = một ICON + một THANH, cao 14px. Ba con số người chơi cần đọc ở
+   đây đều là "phần trăm của một quãng"; thanh nói điều đó trong một liếc mắt,
+   còn câu "còn 14 giờ" nói cùng chuyện bằng một hàng chữ cao gấp rưỡi mà vẫn
+   phải đọc mới hiểu. */
+.animal-card .mrow {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+  height: 14px;
 }
-.animal-card .row span {
-  color: var(--ink-mute);
-  flex: none;
-}
-.animal-card .row b {
-  color: var(--ink);
-  text-align: right;
-  font-weight: 600;
+.animal-card .mbar {
+  flex: 1;
+  height: 6px;
   min-width: 0;
-}
-.animal-card .row b.good {
-  color: var(--green);
-}
-.animal-card .row b.bad {
-  color: var(--red);
-}
-/* Thanh no: cùng ngôn ngữ với thanh năng lượng trên đầu màn hình. */
-.animal-card .bar {
-  height: 3px;
-  margin: 2px 0 3px;
   background: var(--panel-3);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
-.animal-card .bar i {
+.animal-card .mbar i {
   display: block;
   height: 100%;
   background: var(--green);
 }
+.animal-card .mbar.ok i {
+  background: var(--gold);
+}
+.animal-card .mbar.bad i {
+  background: var(--red);
+}
+.animal-card .mval {
+  color: var(--ink);
+  font-weight: 700;
+}
+.animal-card .mnote {
+  font-size: 0.88em;
+  line-height: 1.3;
+}
+.animal-card .mnote.bad {
+  color: var(--red);
+}
+
 /* ---- cửa hàng dạng LƯỚI THẺ: 40 loại hạt xếp dọc thì không ai đọc hết ---- */
 .shop-grid {
   display: grid;
@@ -2111,11 +2118,14 @@ body[data-input="pad"] #abtn {
 .padctx {
   display: none;
 }
+/* GÓC màn hình, không phải giữa: giữa màn hình là chỗ mắt đang nhìn nhân vật,
+   và một dải chữ đứng ngay đó che mất đúng thứ người chơi cần thấy. Góc dưới —
+   cùng phía với nút hành động khi chơi cảm ứng — thì liếc một cái là đọc được
+   mà không rời mắt khỏi ruộng. Đổi bên theo tay thuận, y như nút hành động. */
 body[data-input="pad"] .padctx {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + 8px);
+  right: calc(12px + var(--sa-r));
+  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + 34px);
   z-index: 20;
   display: flex;
   align-items: center;
@@ -2129,8 +2139,21 @@ body[data-input="pad"] .padctx {
   font-size: var(--fs-sm);
   pointer-events: none;
 }
+body[data-hand="left"][data-input="pad"] .padctx {
+  right: auto;
+  left: calc(12px + var(--sa-l));
+}
 body[data-input="pad"] .padctx.off {
-  opacity: 0.4;
+  opacity: 0.45;
+}
+/* Thứ đang cầm, ngay trước nhãn: cùng chữ "DÙNG" mà cầm cuốc là cày, cầm hạt
+   là gieo — cái nhãn một mình không nói đủ. */
+.padctx .it {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 18px;
+  height: auto;
+  flex: none;
 }
 .padctx b {
   flex: none;
@@ -2175,4 +2198,91 @@ body[data-input="pad"] .padctx.off {
   image-rendering: crisp-edges;
   width: 14px;
   height: auto;
+}
+
+/* ==========================================================================
+   THANH CHỈ DẪN NÚT TAY CẦM — overlay nói đúng nút dùng được NGAY LÚC NÀY.
+
+   Sơ đồ nút hiện một lần lúc cắm thì người chơi đọc xong là quên, và nó cũng
+   không nói được điều quan trọng nhất: cùng một nút vai đổi ô hotbar ngoài
+   ruộng nhưng đổi TAB khi đang mở cửa hàng.
+   ========================================================================== */
+#padbar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--sa-b) + 6px);
+  z-index: 60;
+  display: flex;
+  gap: 4px;
+  max-width: 96vw;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 4px 6px;
+  background: rgba(20, 15, 10, 0.92);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: calc(var(--fs-sm) * 0.86);
+  pointer-events: none;
+  white-space: nowrap;
+}
+#padbar[hidden] {
+  display: none;
+}
+#padbar::-webkit-scrollbar {
+  display: none;
+}
+#padbar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px;
+}
+#padbar b {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge-hi);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+#padbar i {
+  font-style: normal;
+  color: var(--ink-dim);
+}
+/* Thanh này ngồi ngay dưới hotbar, nên hotbar phải nhích lên khi nó hiện. */
+body[data-input="pad"] .hud-bottom {
+  padding-bottom: 26px;
+}
+
+/* Nút ✕ của popup đeo TÊN NÚT HUỶ của tay cầm đang cắm. Không có nó thì người
+   chơi phải gạt cần lên tận tiêu đề để đóng một tấm sheet — trong khi nút huỷ
+   trên tay cầm làm việc đó ngay. */
+body[data-input="pad"] .modal [data-x][data-pad]::after {
+  content: attr(data-pad);
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge-hi);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+}
+body[data-input="pad"] .modal [data-x] {
+  position: relative;
+  overflow: visible;
 }

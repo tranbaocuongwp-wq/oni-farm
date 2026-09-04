@@ -149,6 +149,8 @@ async function boot() {
   let pendingVersion: string | null = null;
   /** Đã nhận tay cầm ở khung trước chưa — để chỉ báo MỘT lần lúc vừa cắm. */
   let padOn = false;
+  /** Đã đặt tiêu điểm cho menu đang mở chưa. */
+  let menuFocused = false;
   /** Đã xem sơ đồ nút tay cầm trên máy này chưa. */
   const PAD_SEEN = "oni-farm:pad-help-seen";
 
@@ -964,6 +966,63 @@ async function boot() {
   document.addEventListener("pointerdown", () => document.body.classList.add("pointer-focus"), true);
   document.addEventListener("keydown", () => document.body.classList.remove("pointer-focus"), true);
 
+  /* ---- THANH CHỈ DẪN NÚT ------------------------------------------------
+     Overlay nhỏ nói ĐÚNG những nút dùng được NGAY LÚC NÀY.
+
+     Vì sao không chỉ có sơ đồ nút một lần lúc cắm: người chơi đọc bảng đó xong
+     là quên, và nó cũng không nói được điều quan trọng nhất — cùng một nút vai
+     đổi ô hotbar ngoài ruộng nhưng đổi TAB khi đang mở cửa hàng, cùng một nút
+     mặt dưới là "cày" ngoài ruộng nhưng là "chọn" trong menu. Thanh này đổi
+     theo ngữ cảnh nên nó luôn đúng, và người chơi không phải nhớ gì cả. */
+  const padBar = $("#padbar");
+  /** Dấu vân tay lần vẽ trước — thanh này được hỏi mỗi khung hình. */
+  let padBarKey = "";
+
+  function drawPadBar(inMenu: boolean, inBuild: boolean, inTut: boolean): void {
+    if (!padOn) {
+      if (padBarKey !== "") {
+        padBarKey = "";
+        padBar.hidden = true;
+        padBar.innerHTML = "";
+      }
+      return;
+    }
+    const pi = input.padInfo();
+    const b = (i: number) => padButtonName(pi, i);
+    const std = pi.standard;
+
+    const hints: [string, string][] = [];
+    if (inTut) {
+      hints.push([b(0), "Tiếp"], [b(1), "Bỏ qua"]);
+    } else if (inMenu) {
+      hints.push(["✛", "Chuyển"], [b(0), "Chọn"], [b(1), "Đóng"]);
+      if (std && document.querySelector(".modal .tabs button")) hints.push([`${b(4)}/${b(5)}`, "Đổi tab"]);
+    } else if (inBuild) {
+      hints.push(["✛", "Rê ô"], [b(0), lineFrom ? "Xây" : "Đặt mốc"], [b(1), lineFrom ? "Huỷ" : "Thoát"]);
+      if (std) hints.push([`${b(4)}/${b(5)}`, "Đổi công trình"]);
+    } else {
+      hints.push([b(1), "Tương tác"]);
+      if (std) {
+        hints.push([b(2), "Tự động"], [b(3), "Balo"], ["Cần phải", "Hotbar"], [b(9), "Tạm dừng"]);
+      }
+    }
+
+    const key = hints.map(([k, v]) => k + v).join("|");
+    if (key === padBarKey) return;
+    padBarKey = key;
+    padBar.innerHTML = "";
+    for (const [k, v] of hints) {
+      const wrap = document.createElement("span");
+      const kb = document.createElement("b");
+      kb.textContent = k;
+      const t = document.createElement("i");
+      t.textContent = v;
+      wrap.append(kb, t);
+      padBar.appendChild(wrap);
+    }
+    padBar.hidden = false;
+  }
+
   const deny = () => {
     play("deny");
     buzz("deny");
@@ -980,8 +1039,13 @@ async function boot() {
    * bốn để một nút thẳng hàng ở xa vẫn thắng một nút lệch hàng ở gần; không có
    * hệ số đó thì gạt xuống trong lưới hai cột hay nhảy chéo sang cột kia.
    */
+  /** Khung đang nhận tiêu điểm: tấm sheet của menu, hoặc thẻ hướng dẫn. */
+  function focusRoot(): HTMLElement | null {
+    return document.querySelector<HTMLElement>(".modal, .tut-card");
+  }
+
   function moveFocus(dx: number, dy: number): void {
-    const root = document.querySelector<HTMLElement>(".sheet, .modal");
+    const root = focusRoot();
     if (!root) return;
     const all = [...root.querySelectorAll<HTMLElement>("button:not([disabled]), [tabindex='0']")].filter(
       (el) => el.offsetParent !== null,
@@ -990,7 +1054,7 @@ async function boot() {
 
     const cur = document.activeElement as HTMLElement | null;
     if (!cur || !root.contains(cur)) {
-      all[0]!.focus();
+      focusIn(all[0]!);
       return;
     }
     const a = cur.getBoundingClientRect();
@@ -1013,7 +1077,32 @@ async function boot() {
         best = el;
       }
     }
-    (best ?? all[0]!).focus();
+    focusIn(best ?? all[0]!);
+  }
+
+  /** Đặt tiêu điểm VÀ kéo nó vào tầm nhìn. Cửa hàng có bốn mươi thẻ hạt cuộn
+   *  dọc; chuyển tiêu điểm xuống thẻ thứ ba mươi mà không cuộn theo thì màn
+   *  hình đứng yên và người chơi tưởng cần gạt hỏng. */
+  function focusIn(el: HTMLElement): void {
+    el.focus();
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  /**
+   * Đổi TAB trong menu bằng LB/RB.
+   *
+   * Cửa hàng chia bốn tab, mà tab là những nút nằm trên cùng — với tay cầm thì
+   * phải gạt lên mấy lần mới tới, rồi lại gạt xuống mấy lần để về chỗ cũ. Vai
+   * là chỗ đúng cho việc đó, y như mọi game có tab.
+   */
+  function cycleTab(d: number): boolean {
+    const root = focusRoot();
+    const tabs = root ? [...root.querySelectorAll<HTMLButtonElement>(".tabs button")] : [];
+    if (tabs.length < 2) return false;
+    const i = tabs.findIndex((b) => b.classList.contains("on"));
+    const n = tabs.length;
+    tabs[(((i < 0 ? 0 : i) + d) % n + n) % n]!.click();
+    return true;
   }
 
   const vpTiles = () => ({
@@ -1193,6 +1282,11 @@ async function boot() {
           store.dispatch({ t: "SELECT", slot: it.slot });
           break;
         case "selectDelta": {
+          // Đang mở menu thì vai là nút ĐỔI TAB, không phải đổi ô hotbar.
+          if (modal) {
+            if (!cycleTab(it.d)) focusRoot()?.querySelector(".body")?.scrollBy({ top: it.d * 120 });
+            break;
+          }
           const n = content.balance.hotbarSlots;
           store.dispatch({ t: "SELECT", slot: (s.sel + it.d + n) % n });
           break;
@@ -1343,6 +1437,10 @@ async function boot() {
           moveFocus(it.dx, it.dy);
           break;
 
+        case "navScroll":
+          focusRoot()?.querySelector(".body")?.scrollBy({ top: it.dy * 90 });
+          break;
+
         case "build":
           if (!modal) buildUI.toggle();
           break;
@@ -1371,7 +1469,7 @@ async function boot() {
 
         case "navOk": {
           const el = document.activeElement as HTMLElement | null;
-          if (el && el.closest(".sheet, .modal")) el.click();
+          if (el && el.closest(".modal, .tut-card")) el.click();
           else moveFocus(0, 1); // chưa có gì được chọn: chọn nút đầu tiên
           break;
         }
@@ -1381,6 +1479,18 @@ async function boot() {
           else if (menus.isOpen()) menus.close();
           break;
 
+        /* ---- NÚT TƯƠNG TÁC, TÁCH HẲN KHỎI NÚT NGỮ CẢNH ------------------
+           Hai nút này trả lời hai câu khác nhau, nên gộp chúng là hỏng cả hai:
+
+             · Nút NGỮ CẢNH (A / DÙNG) — "làm gì với Ô này bằng thứ đang cầm":
+               cày, gieo, tưới, thu, và THU sản phẩm của con vật.
+             · Nút TƯƠNG TÁC (B / E) — "nói chuyện với thứ ĐỨNG ở đây": mở cửa
+               hàng, lên giường, múc nước, mở kho, và XEM con vật.
+
+           Trước đây B làm cả hai: bấm vào con bò là nó vắt sữa luôn. Nên không
+           có cách nào chỉ XEM con vật — mà xem là việc người chơi làm nhiều
+           hơn hẳn, nhất là khi đang tính xem con nào sắp tới lứa. Giờ B mở
+           bảng, A vắt sữa. */
         case "interact": {
           if (building) {
             // Đang vẽ dở thì B huỷ đoạn; không vẽ gì thì B thoát chế độ.
@@ -1393,13 +1503,20 @@ async function boot() {
           if (modal) break;
           const c = targetTile(s, true);
           if (!c) break;
-          /* Ngắm vào con vật thì B vừa LÀM vừa MỞ BẢNG thông tin. Trên cảm ứng
-             người chơi chạm vào con vật để mở bảng; tay cầm không có cú chạm
-             nào, nên không nối vào đây thì bảng vật nuôi hoàn toàn không mở
-             được bằng tay cầm. */
-          const conVat = animalNear(s, c.x, c.y);
-          if (conVat && inReachOf(s, c.x, c.y)) cardAnimal = conVat.id;
-          if (!actOnTile(s, c.x, c.y)) deny();
+
+          /* Con vật thì CHỈ XEM — không vắt sữa, không cho ăn. Đó là việc của
+             nút ngữ cảnh. Bấm lại lần nữa thì đóng bảng, nên một nút vừa mở
+             vừa đóng và không cần nhớ thêm gì. */
+          const conVat = inReachOf(s, c.x, c.y) ? animalNear(s, c.x, c.y) : null;
+          if (conVat) {
+            cardAnimal = cardAnimal === conVat.id ? null : conVat.id;
+            buzz("tap");
+            break;
+          }
+
+          // Không có con vật nào: đây là tương tác với VẬT THỂ (cửa hàng,
+          // giường, giếng, kho, cửa nhà).
+          if (!tryInteract(s, c.x, c.y)) deny();
           break;
         }
       }
@@ -1476,6 +1593,27 @@ async function boot() {
         : (s.entities.find((e) => e.id === cardAnimal && e.map === s.mapId) ?? null);
     if (cardAnimal !== null && !shown) cardAnimal = null;
     hud.showAnimal(shown ? animalStats(shown, content) : null);
+    drawPadBar(menus.isOpen(), buildUI.isOpen(), tutorial.isOpen());
+    /* Menu vừa mở bằng tay cầm mà không có gì đeo vòng vàng thì người chơi gạt
+       cần một cái mới thấy nó "bật lên" — nửa giây tưởng máy treo. Đặt tiêu
+       điểm ngay vào nút đầu tiên. */
+    const dangMo = menus.isOpen() || tutorial.isOpen();
+    if (padOn && dangMo && !menuFocused) {
+      menuFocused = true;
+      const r = focusRoot();
+      /* Đặt tiêu điểm vào nút đầu tiên TRONG THÂN, không phải nút ✕ ở tiêu đề.
+         Nút đầu tiên theo DOM chính là ✕ — mở menu ra mà vòng vàng nằm trên nút
+         đóng thì bấm "chọn" theo phản xạ là đóng luôn cái vừa mở. */
+      const first =
+        r?.querySelector<HTMLElement>(".body button:not([disabled])") ??
+        r?.querySelector<HTMLElement>("button:not([disabled])");
+      if (first) focusIn(first);
+      // Nút ✕ đeo tên nút HUỶ của tay cầm: người chơi thấy ngay là bấm nút đó
+      // cũng đóng được, khỏi phải gạt cần lên tận tiêu đề.
+      const x = r?.querySelector<HTMLElement>("[data-x]");
+      if (x) x.dataset["pad"] = padButtonName(input.padInfo(), 1);
+    } else if (!dangMo) menuFocused = false;
+
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
     devPanel.update(s, content);

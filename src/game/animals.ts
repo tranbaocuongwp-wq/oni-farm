@@ -82,6 +82,9 @@ export interface ProductLine {
   ready: boolean;
   /** Phút game còn lại tới lứa sau. 0 khi đã tới lứa. */
   minutesLeft: number;
+  /** Cả một chu kỳ dài bao nhiêu phút game — để vẽ được THANH tiến độ.
+   *  Không có nó thì UI chỉ nói được "còn 14 giờ", một câu phải đọc mới hiểu. */
+  everyMinutes: number;
 }
 
 /** Mọi thứ người chơi cần biết về một con vật, ở dạng DỮ LIỆU thuần. */
@@ -126,6 +129,7 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
       // luật với `readyProduct`, chứ không phải một cách tính thứ hai.
       ready: mature && !isHungry(e) && has >= need,
       minutesLeft: Math.max(0, need - has),
+      everyMinutes: need,
     };
   });
   return {
