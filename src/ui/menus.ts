@@ -494,23 +494,30 @@ export function createMenus(
       for (const id of c.buildingOrder) {
         const b = c.buildings[id]!;
         const mo = s.unlocked.includes(id);
+        /* KHÔNG có nút Mua nữa: công trình trả tiền theo SỐ Ô VẼ trong chế độ
+           xây dựng. Bán theo chồng thì người chơi phải đoán "cần bao nhiêu ô
+           rào" trước khi vẽ, mà đoán sai con số đó chính là lý do người ta ngại
+           vẽ dài. Tab này giờ là BẢNG GIÁ: xem có gì, bao nhiêu một ô. */
         gb.appendChild(
           buyCard({
             art: `build:${id}`,
             name: mo ? b.name : "???",
             subs: [mo ? b.desc : "chưa mở khoá"],
-            price: money(b.price),
+            price: `${money(b.price)}/ô`,
             locked: !mo,
-            disabled: !mo || s.money < b.price,
-            onClick: () => {
-              h.buy(id, 1);
-              openShop();
-            },
+            disabled: true,
+            onClick: () => {},
           }),
         );
       }
       body.appendChild(gb);
-      foot.appendChild(note("Chọn ở hotbar rồi bấm ĐẶT lên ô trống. Hàng khoá sẽ mở theo tiến trình."));
+      foot.appendChild(
+        note(
+          "Đây là BẢNG GIÁ. Công trình xây trong CHẾ ĐỘ XÂY DỰNG (menu Tạm dừng, " +
+            "hoặc nút XÂY cạnh nút hành động): thời gian dừng lại, ấn rồi rê để kéo " +
+            "cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu. Hàng khoá mở theo tiến trình.",
+        ),
+      );
     }
   }
 

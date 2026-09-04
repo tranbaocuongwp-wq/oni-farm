@@ -47,7 +47,7 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   till: "CÀY",
   water: "TƯỚI",
   plant: "GIEO",
-  build: "ĐẶT",
+  build: "XÂY",
   chop: "CHẶT",
   mine: "ĐẬP",
   cure: "CHỮA",
@@ -154,6 +154,14 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
     const kind = INTERACT_KIND[ik];
     return { kind, label: LABEL[kind], ready: inReach(state, x, y), why: null };
   }
+  /* Đang cầm CÔNG TRÌNH: nút ghi XÂY và mở chế độ quy hoạch, chứ không đặt
+     xuống ô đang ngắm. Đặt ở đây (chứ không trong `canUseAt`) vì nó không phụ
+     thuộc vào Ô nào cả — cầm công trình lên là đã ở trong ý định xây rồi. */
+  const held = selectedItemId(state.inv, state.sel);
+  const hi = held ? parseItem(held) : null;
+  if (hi?.kind === "build" && content.buildings[hi.ref])
+    return { kind: "build", label: LABEL.build, ready: true, why: null };
+
   const use = canUseAt(state, content, x, y, true);
   if (use !== null) {
     return { kind: use, label: LABEL[use], ready: inReach(state, x, y), why: null };

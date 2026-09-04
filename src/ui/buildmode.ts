@@ -21,14 +21,18 @@
      không phải là cách qua mặt cân bằng — chỉ là không bắt người chơi lê từng
      bước tới sát mỗi ô rào.
 
-   Bảng chọn chỉ bày thứ ĐANG CÓ TRONG TÚI. Bày cả những thứ chưa mua thì đây
-   thành cửa hàng thứ hai, mà cửa hàng đã có một cái rồi.
+   VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU. Bảng chọn bày mọi công trình đã mở khoá;
+   có sẵn trong balo thì dùng trước, hết thì trừ tiền ngay theo đơn giá mỗi ô.
+   Bắt mua trước rồi mới được vẽ nghĩa là bắt người chơi đoán "cần bao nhiêu ô
+   rào" — và đoán sai con số đó chính là lý do người ta ngại vẽ dài.
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
 import type { Atlas } from "../art/atlas.ts";
 
 export interface BuildMode {
+  /** Công trình đang chọn để vẽ, hoặc null. */
+  picked(): string | null;
   isOpen(): boolean;
   open(): void;
   close(): void;
@@ -38,8 +42,8 @@ export interface BuildMode {
 }
 
 export interface BuildHandlers {
-  /** Chọn ô hotbar này (chính là cách "cầm" công trình lên). */
-  select(slot: number): void;
+  /** Người chơi đổi sang công trình này. */
+  select(id: string): void;
 }
 
 export function createBuildMode(
@@ -48,6 +52,10 @@ export function createBuildMode(
   h: BuildHandlers,
 ): BuildMode {
   let open = false;
+  /** Công trình đang chọn. Sống ở ĐÂY chứ không phải ở `state.sel`: từ khi tiền
+   *  trả theo số ô vẽ thì không cần "cầm" nó trên hotbar nữa, và bắt nó chiếm
+   *  một ô hotbar chỉ để chọn là làm hỏng hotbar của người chơi. */
+  let sel: string | null = null;
   /** Dấu vân tay của bảng chọn lần vẽ trước — chỉ dựng lại DOM khi thật sự đổi. */
   let last = "";
 
@@ -62,6 +70,7 @@ export function createBuildMode(
   const pal = host.querySelector<HTMLElement>(".bm-pal")!;
 
   const api: BuildMode = {
+    picked: () => sel,
     isOpen: () => open,
     open() {
       open = true;
@@ -76,19 +85,21 @@ export function createBuildMode(
 
     update(s, content) {
       if (!open) return;
-      /* Chỉ những ô HOTBAR đang cầm được công trình. Cố ý không quét cả balo:
-         "cầm lên" trong game này = chọn một ô hotbar, nên thứ không ở hotbar
-         thì không cầm được, và bày nó ra chỉ để bấm vào không có gì xảy ra. */
-      const slots = Math.max(0, content.balance.hotbarSlots | 0);
-      const items: { slot: number; id: string; n: number; def: Content["buildings"][string] }[] = [];
-      for (let i = 0; i < slots; i++) {
-        const v = s.inv[i];
-        if (!v?.id.startsWith("build:")) continue;
-        const def = content.buildings[v.id.slice(6)];
-        if (def) items.push({ slot: i, id: v.id.slice(6), n: v.n, def });
+      /* Bày MỌI công trình đã mở khoá, không chỉ thứ đang có trong túi.
+         Vì tiền trả theo SỐ Ô VẼ: có sẵn trong balo thì dùng trước, hết thì
+         mua ngay tại chỗ. Nên bắt người chơi phải mua trước rồi mới thấy nó
+         trong bảng là bắt họ đoán "cần bao nhiêu ô rào" — mà đoán sai con số
+         đó chính là lý do người ta ngại vẽ dài. */
+      const items: { id: string; n: number; def: Content["buildings"][string] }[] = [];
+      for (const id of content.buildingOrder) {
+        const def = content.buildings[id];
+        if (!def || !s.unlocked.includes(id)) continue;
+        let n = 0;
+        for (const v of s.inv) if (v?.id === `build:${id}`) n += v.n;
+        items.push({ id, n, def });
       }
 
-      const key = items.map((it) => `${it.slot}:${it.id}:${it.n}`).join("|") + `#${s.sel}`;
+      const key = items.map((it) => `${it.id}:${it.n}`).join("|") + `#${sel}#${s.money}`;
       if (key === last) return;
       last = key;
 
@@ -96,17 +107,19 @@ export function createBuildMode(
       if (!items.length) {
         const p = document.createElement("div");
         p.className = "bm-empty";
-        p.textContent = "Chưa có gì để xây — mua ở cửa hàng rồi để vào hotbar.";
+        p.textContent = "Chưa mở khoá công trình nào — chơi tiếp để mở.";
         pal.appendChild(p);
         return;
       }
+      if (sel && !items.some((it) => it.id === sel)) sel = null;
+      if (!sel) sel = items[0]!.id;
 
       for (const it of items) {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = `bm-item${s.sel === it.slot ? " on" : ""}`;
+        b.className = `bm-item${sel === it.id ? " on" : ""}`;
         b.setAttribute("role", "option");
-        b.setAttribute("aria-selected", String(s.sel === it.slot));
+        b.setAttribute("aria-selected", String(sel === it.id));
 
         const src = atlas.buildings[it.id];
         if (src) {
@@ -120,11 +133,16 @@ export function createBuildMode(
         const nm = document.createElement("span");
         nm.className = "nm";
         nm.textContent = it.def.name;
-        const n = document.createElement("span");
-        n.className = "n";
-        n.textContent = String(it.n);
-        b.append(nm, n);
-        b.addEventListener("click", () => h.select(it.slot));
+        const pr = document.createElement("span");
+        pr.className = "pr";
+        // Có sẵn trong balo thì nói rõ là dùng đồ có sẵn, không trừ tiền.
+        pr.textContent = it.n > 0 ? `có ${it.n}` : `${it.def.price}đ/ô`;
+        b.append(nm, pr);
+        b.addEventListener("click", () => {
+          sel = it.id;
+          last = "";
+          h.select(it.id);
+        });
         pal.appendChild(b);
       }
     },

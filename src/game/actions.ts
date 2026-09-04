@@ -294,24 +294,46 @@ export function buildLine(
   const out = { placed: 0, wanted: 0 };
   const def = content.buildings[id];
   if (!def) return out;
-  if (selectedItemId(d.s.inv, d.s.sel) !== `build:${id}`) return out;
+  if (!far && selectedItemId(d.s.inv, d.s.sel) !== `build:${id}`) return out;
   if (!far && !inReach(d.s, x0, y0)) {
     toastKey(d, content, "tooFar", "bad");
+    return out;
+  }
+  // Chưa mở khoá thì không xây được, kể cả khi đủ tiền — mốc tiến trình là mốc.
+  if (!d.s.unlocked.includes(id)) {
+    toastKey(d, content, "locked", "bad");
     return out;
   }
 
   const cells = linePath(x0 | 0, y0 | 0, x1 | 0, y1 | 0);
   out.wanted = cells.length;
   const cost = content.balance.energyCost.build;
+  let mua = 0; // số ô phải trả tiền tại chỗ
+  let hetTien = false;
 
   for (const c of cells) {
     const i = tileIndexAt(d.s, c.x, c.y);
     if (i < 0) continue;
     if (!canPlaceBuilding(d.s, content, id, c.x, c.y)) continue;
     if (!hasEnergy(d, cost)) break;
+
+    /* VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU.
+       Có sẵn trong túi thì dùng trước; hết thì mua ngay tại chỗ theo đơn giá.
+       Hai đường thay vì một là có chủ ý: người chơi cũ đã trót mua cả chồng
+       hàng rào thì số hàng đó vẫn dùng được (không thành rác trong balo), còn
+       người chơi mới thì không phải đoán "cần bao nhiêu ô rào" trước khi vẽ —
+       mà đoán sai con số đó chính là lý do người ta ngại vẽ dài. */
     const left = removeItem(d.s.inv, `build:${id}`, 1);
-    if (!left) break;
-    setInv(d, left);
+    if (left) setInv(d, left);
+    else {
+      if (d.s.money < def.price) {
+        hetTien = true;
+        break;
+      }
+      touch(d).money = d.s.money - def.price;
+      mua++;
+    }
+
     const t = dTile(d, i);
     if (!t) break;
     t.b = id;
@@ -321,34 +343,13 @@ export function buildLine(
     out.placed++;
   }
 
-  if (out.placed === 0) toastKey(d, content, "cannotBuild", "bad");
-  else toastText(d, `${def.name}: đã xây ${out.placed}/${out.wanted} ô`, "good");
+  if (out.placed === 0) toastKey(d, content, hetTien ? "noMoney" : "cannotBuild", "bad");
+  else {
+    const tien = mua > 0 ? ` · ${mua * def.price}đ` : "";
+    toastText(d, `${def.name}: đã xây ${out.placed}/${out.wanted} ô${tien}`, "good");
+    if (hetTien) toastKey(d, content, "noMoney", "bad");
+  }
   return out;
-}
-
-function build(d: Draft, content: Content, i: number, x: number, y: number, id: string): void {
-  const def = content.buildings[id];
-  if (!def) return;
-  if (!canPlaceBuilding(d.s, content, id, x, y)) {
-    toastKey(d, content, "cannotBuild", "bad");
-    return;
-  }
-  const cost = content.balance.energyCost.build;
-  if (!hasEnergy(d, cost)) {
-    toastKey(d, content, "noEnergy", "bad");
-    return;
-  }
-  const left = removeItem(d.s.inv, `build:${id}`, 1);
-  if (!left) return;
-  setInv(d, left);
-
-  const t = dTile(d, i);
-  if (!t) return;
-  t.b = id;
-  spend(d, cost);
-  const st = dStats(d);
-  st.built[id] = (st.built[id] ?? 0) + 1;
-  toastKey(d, content, "built", "good", def.name);
 }
 
 /* ------------------------------------------------------------- chặt / đập */
@@ -493,9 +494,18 @@ export function canUseAt(
     if (!cropInSeason(it.ref, state.day, content) && !tileAllSeason(cur, content)) return null;
     return "plant";
   }
-  if (it.kind === "build") {
-    return canPlaceBuilding(state, content, it.ref, x, y) ? "build" : null;
-  }
+  /* Công trình KHÔNG đặt được bằng nút DÙNG nữa — chúng đi qua CHẾ ĐỘ XÂY
+     DỰNG (`src/ui/buildmode.ts`).
+
+     Đặt từng ô là thao tác của việc sửa, mà dựng hàng rào quanh chuồng hay kéo
+     một con đường ra kho là việc quy hoạch: nghĩ theo đoạn, không theo ô. Trộn
+     hai đường vào một nút là cách chắc chắn nhất để ra địa hình lởm chởm — mỗi
+     ô một lần ước lượng bằng mắt, hai mươi lần thì không lần nào giống nhau.
+
+     Trả `null` ở đây (chứ không trả "build" rồi để `useAt` lặng lẽ bỏ qua) là
+     có chủ ý: `canUseAt` và `useAt` phải LUÔN nói cùng một câu, nếu không thì
+     nút báo làm được mà bấm không có gì xảy ra — đúng lớp lỗi vừa phải đi tìm
+     mất nửa buổi ở chỗ tầm với 1,6 với 1,8 ô. */
   return null;
 }
 
@@ -554,7 +564,7 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
       plant(d, content, i, cur, it.ref);
       return;
     case "build":
-      build(d, content, i, x, y, it.ref);
+      // Công trình đi qua CHẾ ĐỘ XÂY DỰNG, không qua nút DÙNG — xem `canUseAt`.
       return;
     case "crop":
     case "item":

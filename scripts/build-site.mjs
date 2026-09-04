@@ -372,11 +372,11 @@ const HANH_DONG = [
     meo: "Đá đập hết sẽ mọc lại sau vài ngày, không lo cạn.",
   },
   {
-    nut: "ĐẶT",
-    ten: "Xây công trình",
+    nut: "XÂY",
+    ten: "Chế độ xây dựng",
     can: null,
-    y: "Cầm công trình trên hotbar rồi bấm vào ô muốn đặt. Vòi tưới, nhà kính, pin mặt trời, drone.",
-    meo: "Đường nhựa và hàng rào xây theo TUYẾN: chạm ô đầu, chạm ô cuối, cả đoạn dựng một lần.",
+    y: "Mọi công trình — vòi tưới, nhà kính, pin mặt trời, drone, đường nhựa, hàng rào — đều dựng ở đây. Bấm XÂY là thời gian dừng lại; ấn ở đầu đoạn, rê tới cuối, nhả tay là cả đoạn hiện ra.",
+    meo: "Vẽ bao nhiêu ô thì trả tiền bấy nhiêu, không phải mua trước rồi đoán xem cần mấy ô.",
   },
   {
     nut: "MUA",

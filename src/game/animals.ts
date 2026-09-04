@@ -22,6 +22,7 @@ import { addItem, canAdd, countItem, removeItem } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
+import { grazeNight } from "./graze.ts";
 
 /** Con vật đã trưởng thành chưa — chưa lớn thì chưa cho sản phẩm, chưa bán thịt được. */
 export function isMature(e: Entity, content: Content): boolean {
@@ -136,7 +137,7 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
     fed: def.fedMinutes > 0 ? Math.max(0, Math.min(1, e.animal.fed / def.fedMinutes)) : 1,
     hungry: isHungry(e),
     hungryDays: e.animal.hungryDays,
-    daysToStarve: def.feed === null ? -1 : Math.max(0, def.starveDays - e.animal.hungryDays),
+    daysToStarve: Math.max(0, def.starveDays - e.animal.hungryDays),
     feed: def.feed ?? null,
     products,
     meat: def.meat ? { id: def.meat.id, min: def.meat.min, max: def.meat.max } : null,
@@ -173,7 +174,9 @@ export function animalMood(
   const pose: PoseName = dangDi ? "walk" : dem ? "sleep" : "eat";
 
   let emote: EmoteName = null;
-  if (isHungry(e) && def?.feed) emote = "hungry";
+  // Gà vịt cũng báo đói: từ khi cỏ là thức ăn thật thì chúng cũng chết đói
+  // được, nên giấu tín hiệu đi là giấu đúng thứ người chơi cần biết.
+  if (isHungry(e) && def) emote = "hungry";
   else if (readyProduct(e, content) >= 0) emote = "ready";
   // Vừa được cho ăn: `fed` gần đầy. Suy ra từ con số sẵn có thay vì thêm một
   // trường mốc-thời-gian vào save — trường mới thì phải migrate, mà cái này chỉ
@@ -332,10 +335,16 @@ export function animalNight(
     e.animal.fed = Math.max(0, e.animal.fed - dayMinutes);
 
     if (e.animal.fed <= 0) {
-      if (def.feed === null) {
-        // tự kiếm ăn: coi như đêm qua kiếm được, no lại một phần
-        e.animal.fed = def.fedMinutes * 0.5;
-      } else {
+      /* ĐI TÌM CỎ. Trước đây loài `feed: null` cứ mỗi đêm tự no lại một nửa từ
+         hư không — kể cả khi cả nông trại đã lát nhựa — còn loài có `feed` thì
+         đứng giữa bãi cỏ dày mà chết đói. Cả hai đều là con số thay cho hành
+         vi. Giờ cỏ trên bản đồ là thức ăn thật, cho MỌI loài, và hết cỏ thì
+         chết đói thật.
+
+         Phải làm ở đây chứ không chỉ trong TICK: người chơi ngủ là cả đêm trôi
+         qua trong một action, không có khung hình nào để con vật đi tới bãi cỏ.
+         Thiếu bước này thì ngủ vài đêm là cả đàn chết dù nông trại đầy cỏ. */
+      if (!grazeNight(d, content, i)) {
         e.animal.hungryDays += 1;
         rep.hungry++;
         if (e.animal.hungryDays >= def.starveDays) {

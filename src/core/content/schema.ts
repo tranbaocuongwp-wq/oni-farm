@@ -206,8 +206,6 @@ export function validateBuildings(raw: unknown): string[] {
     k.enumStr(item, "kind", ["floor", "object"] as const);
     if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
     if (item["autotile"] !== undefined) k.enumStr(item, "autotile", ["fence"] as const);
-    if (item["drag"] !== undefined && typeof item["drag"] !== "boolean")
-      k.fail("drag", "phải là boolean");
 
     const eff = k.obj(item, "effects");
     if (eff) {

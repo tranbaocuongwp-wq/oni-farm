@@ -32,7 +32,8 @@ import { blockedForActor, idx, TILE } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
-import { patrolCatch } from "./animals.ts";
+import { patrolCatch, isHungry } from "./animals.ts";
+import { grazeHere, nearestGraze } from "./graze.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -395,12 +396,28 @@ export function actorStep(d: Draft, content: Content): void {
     // Vật nuôi tránh ruộng; sâu bọ thì KHÔNG — phá cây là việc của chúng.
     const neRuong = cur.kind === "animal";
 
+    /* ĐÓI thì đi kiếm ăn, và đó là ưu tiên cao hơn mọi thứ khác.
+       Đang đứng trên bãi cỏ rồi thì ăn luôn, khỏi lập đường. */
+    const dinhDuong = cur.kind === "animal" ? animalDef(content, cur.def) : null;
+    if (dinhDuong && dinhDuong.job !== "pest" && isHungry(cur)) {
+      if (grazeHere(d, content, i)) continue;
+    }
+
     /* Con chó ĐI TUẦN chứ không lang thang: nó nhắm thẳng vào con sâu bọ gần
        nhất. Không có cái này thì nó đi ngẫu nhiên trên bản đồ 40×30 và gần như
        không bao giờ đứng đủ gần con chuột nào để đuổi — nuôi chó thành ra vô
        nghĩa, đúng thứ người chơi sẽ nhận ra ngay sau vài đêm. */
     let g: { x: number; y: number } | null = null;
-    if (animalDef(content, cur.def)?.job === "patrol") {
+
+    /* Đói thì nhắm thẳng vào bãi cỏ gần nhất thay vì lang thang. Bán kính hẹp
+       (8 ô) cho ban ngày: con vật đi trong vài phút game thì không thể băng cả
+       nông trại, và quét rộng mỗi bước cho từng con là thứ giết fps trước tiên.
+       Đêm thì `grazeNight` quét rộng hơn hẳn — cả một đêm thì nó đi được xa. */
+    if (dinhDuong && dinhDuong.job !== "pest" && isHungry(cur)) {
+      g = nearestGraze(s, content, dinhDuong, cur, 8);
+    }
+
+    if (!g && animalDef(content, cur.def)?.job === "patrol") {
       let bestD = Infinity;
       for (const p of s.entities) {
         if (p.map !== s.mapId || animalDef(content, p.def)?.job !== "pest") continue;

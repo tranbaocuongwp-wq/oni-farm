@@ -713,6 +713,54 @@ không chạy khi trang bị ẩn.
 
 ---
 
+## Chế độ xây dựng
+
+Công trình KHÔNG đặt được bằng nút DÙNG. Tất cả — vòi tưới, nhà kính, pin mặt
+trời, drone, đường nhựa, hàng rào — đi qua `src/ui/buildmode.ts`.
+
+Vì sao: đặt từng ô là thao tác của việc SỬA, còn dựng hàng rào quanh chuồng hay
+kéo một con đường ra kho là việc QUY HOẠCH — nghĩ theo đoạn, không theo ô. Trộn
+hai đường vào một nút thì ra địa hình lởm chởm: mỗi ô là một lần ước lượng bằng
+mắt, và hai mươi lần ước lượng thì không lần nào giống nhau.
+
+Ba điều làm chế độ này khác:
+
+· **Thời gian đứng yên** — vòng lặp không dispatch TICK. Nhân vật vẫn đi lại
+  được để ngắm chỗ; chỉ đồng hồ là dừng.
+· **Kéo thành đoạn** — `input.setDrag()` mở luồng ý định `drag`/`dragEnd`. Phải
+  bật thủ công: đường bấm-để-đi đã chỉnh rất kỹ để không giật, và đổ thêm một
+  luồng vào mỗi khung hình là cách nhanh nhất làm hỏng lại nó.
+· **Vẽ bao nhiêu tính tiền bấy nhiêu** — `buildLine()` dùng hàng có sẵn trong
+  balo trước, hết thì trừ tiền tại chỗ theo `def.price`. Bán theo chồng ở cửa
+  hàng nghĩa là bắt người chơi đoán "cần bao nhiêu ô rào", mà đoán sai con số đó
+  chính là lý do người ta ngại vẽ dài. Tab "Công trình" trong cửa hàng vì thế
+  chỉ còn là BẢNG GIÁ.
+
+`canUseAt` trả `null` cho công trình (chứ không trả `"build"` rồi để `useAt`
+lặng lẽ bỏ qua): hai hàm đó phải luôn nói cùng một câu, nếu không thì nút báo
+làm được mà bấm không có gì xảy ra.
+
+---
+
+## Vật nuôi tự đi tìm cỏ
+
+`src/game/graze.ts`. Trước đây bỏ đói chỉ là một cái đồng hồ đếm ngược: con bò
+đứng giữa bãi cỏ dày vẫn chết đói sau bốn ngày, còn gà vịt thì mỗi đêm tự no
+lại một nửa từ hư không kể cả khi cả nông trại đã lát nhựa. Cả hai đều là con
+số thay cho hành vi.
+
+Giờ cỏ trên bản đồ là thức ăn thật. Con vật đói nhắm tới bụi cỏ gần nhất, đi
+tới, ăn — và bụi cỏ BIẾN MẤT. Một đàn đông sẽ gặm trụi khu quanh chuồng, nên
+người chơi phải chừa cỏ hoặc phải cắt cỏ tích rơm. Hết cỏ thì vẫn chết đói theo
+đúng `starveDays` cũ, chỉ là giờ nó có nguyên nhân nhìn thấy được.
+
+Ai ăn được gì do CONTENT nói: loài có `feed` tìm bụi cỏ nào RỤNG RA đúng thứ
+đó; loài `feed: null` (gà, vịt) mổ sâu trên nền cỏ thường nên gần như không bao
+giờ chết đói. `grazeNight()` chạy lúc sang ngày vì người chơi ngủ là cả đêm trôi
+qua trong một action — không có khung hình nào để con vật đi tới bãi cỏ.
+
+---
+
 ## Trang tài liệu (`/thu-vien/`)
 
 Bốn trang tra cứu — cây trồng, vật nuôi, hành động, và "cách game vận hành" —

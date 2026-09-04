@@ -150,6 +150,15 @@ function use(store, x, y) {
   clearBusy(store);
 }
 
+/**
+ * Đặt MỘT công trình. Từ khi công trình chỉ đi qua chế độ quy hoạch thì không
+ * còn đường "USE lên ô" nữa — một ô cũng là một tuyến dài một ô.
+ */
+function place(store, id, x, y) {
+  store.dispatch({ t: "BUILD_LINE", id, x0: x, y0: y, x1: x, y1: y, far: true });
+  clearBusy(store);
+}
+
 /** Thao tác THÔ, không chờ — dùng riêng cho test kiểm luật tuần tự. */
 function useRaw(store, x, y) {
   store.dispatch({ t: "USE", x, y });
@@ -346,8 +355,7 @@ test("3. vòi tưới: ngủ dậy 4 ô kề đều ướt và cây lớn dù kh
 
   store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
   ok(store.getState().inv.some((v) => v && v.id === "build:sprinkler"), "đã mua vòi tưới");
-  selectItem(store, "build:sprinkler");
-  use(store, PLOTS[4].x, PLOTS[4].y);
+  place(store, "sprinkler", PLOTS[4].x, PLOTS[4].y);
   eq(tile(store, PLOTS[4].x, PLOTS[4].y).b, "sprinkler", "vòi tưới đã đặt");
   eq(store.getState().stats.built.sprinkler, 1, "stats.built.sprinkler");
 
@@ -395,8 +403,7 @@ test("4. sàn nhà kính giữ ẩm qua nhiều ngày, cây lớn không cần t
   selectItem(store, "tool:hoe");
   use(store, p.x, p.y);
   store.dispatch({ t: "BUY", id: "greenhouse", n: 1 });
-  selectItem(store, "build:greenhouse");
-  use(store, p.x, p.y);
+  place(store, "greenhouse", p.x, p.y);
   eq(tile(store, p.x, p.y).b, "greenhouse", "sàn nhà kính đã đặt");
 
   selectItem(store, "seed:lettuce");
@@ -793,19 +800,17 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
     if (built === 0 && s.unlocked.includes("sprinkler") && s.money > 500) {
       store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
       if (store.getState().inv.some((v) => v && v.id === "build:sprinkler")) {
-        selectItem(store, "build:sprinkler");
         // đặt vật thể solid lên chính ô mình đứng → phải bị từ chối (không tự nhốt mình)
-        use(store, HOME.x, HOME.y);
+        place(store, "sprinkler", HOME.x, HOME.y);
         ok(tile(store, HOME.x, HOME.y).b === null, "không được đặt công trình solid lên ô người chơi đứng");
-        use(store, PLOTS[4].x, PLOTS[4].y);
+        place(store, "sprinkler", PLOTS[4].x, PLOTS[4].y);
         if (tile(store, PLOTS[4].x, PLOTS[4].y).b === "sprinkler") built = 1;
       }
     }
     if (solared === 0 && store.getState().unlocked.includes("solar") && store.getState().money > 700) {
       store.dispatch({ t: "BUY", id: "solar", n: 1 });
       if (store.getState().inv.some((v) => v && v.id === "build:solar")) {
-        selectItem(store, "build:solar");
-        use(store, PLOTS[3].x, PLOTS[3].y);
+        place(store, "solar", PLOTS[3].x, PLOTS[3].y);
         if (tile(store, PLOTS[3].x, PLOTS[3].y).b === "solar") solared = 1;
       }
     }
@@ -1726,8 +1731,7 @@ test("31. ngủ trong nhà thì cây ngoài ruộng vẫn lớn và vòi tưới
   }
   // vòi tưới đứng cạnh PLOTS[3], KHÔNG tưới tay ô đó
   store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
-  selectItem(store, "build:sprinkler");
-  use(store, PLOTS[4].x, PLOTS[4].y);
+  place(store, "sprinkler", PLOTS[4].x, PLOTS[4].y);
   eq(farmTile(store, PLOTS[4].x, PLOTS[4].y).b, "sprinkler", "vòi tưới đã đặt ngoài ruộng");
 
   // ô còn lại thì tưới tay
@@ -2873,20 +2877,36 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   eq(countInv(st2, "build:fence"), 20, "ngoài tầm với: không tốn vật phẩm nào");
   ok(truoc.tiles === sau.tiles, "và không đụng vào lưới ô");
 
-  // thiếu vật liệu: dựng được bao nhiêu thì dựng, không nợ
+  /* VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU: hết hàng trong balo thì mua tại chỗ. */
   const st3 = mkStore(907);
   walkTo(st3, HOME.x, HOME.y);
   const q = st3.getState().player;
   const qx = Math.floor(q.x / TILE), qy = Math.floor(q.y / TILE);
-  setState(st3, (s) => { s.inv[3] = { id: "build:fence", n: 2 }; s.energy = 100; });
+  const gia = content.buildings.fence.price;
+  setState(st3, (s) => { s.inv[3] = { id: "build:fence", n: 2 }; s.energy = 100; s.money = 9999; });
   selectItem(st3, "build:fence");
-  st3.dispatch({ t: "BUILD_LINE", id: "fence", x0: qx + 1, y0: qy, x1: qx + 8, y1: qy });
-  eq(countInv(st3, "build:fence"), 0, "dùng hết đúng số vật phẩm đang có");
+  const tien0 = st3.getState().money;
+  st3.dispatch({ t: "BUILD_LINE", id: "fence", x0: qx + 1, y0: qy, x1: qx + 8, y1: qy, far: true });
+  eq(countInv(st3, "build:fence"), 0, "dùng hết hàng có sẵn trước");
   const s3 = st3.getState();
   let d3 = 0;
   for (let i = 1; i <= 8; i++) if (s3.tiles[idx(s3.w, qx + i, qy)]?.b === "fence") d3++;
-  ok(d3 <= 2, `không dựng quá số vật phẩm có: ${d3} ô`);
-  deepEq(checkInvariants(s3, content), [], "bất biến sau khi xây thiếu vật liệu");
+  ok(d3 > 2, `hết hàng thì mua tiếp, dựng được ${d3} ô chứ không dừng ở 2`);
+  eq(tien0 - s3.money, (d3 - 2) * gia, `trả đúng ${d3 - 2} ô × ${gia}đ, hai ô đầu dùng hàng có sẵn`);
+  deepEq(checkInvariants(s3, content), [], "bất biến sau khi vừa dùng hàng vừa mua");
+
+  /* …nhưng KHÔNG NỢ: hết cả hàng lẫn tiền thì dừng đúng chỗ đó. */
+  const st4 = mkStore(9071);
+  walkTo(st4, HOME.x, HOME.y);
+  const r4 = st4.getState().player;
+  const rx = Math.floor(r4.x / TILE), ry = Math.floor(r4.y / TILE);
+  setState(st4, (s) => { s.inv[3] = null; s.energy = 100; s.money = gia * 3; });
+  st4.dispatch({ t: "BUILD_LINE", id: "fence", x0: rx + 1, y0: ry, x1: rx + 8, y1: ry, far: true });
+  const s4 = st4.getState();
+  let d4 = 0;
+  for (let i = 1; i <= 8; i++) if (s4.tiles[idx(s4.w, rx + i, ry)]?.b === "fence") d4++;
+  eq(d4, 3, "chỉ dựng đúng số ô tiền mua nổi");
+  eq(s4.money, 0, "tiêu hết tiền, không âm");
 });
 
 test("54. kho tập trung: cất/lấy giữ nguyên tổng số món, bán từ kho vào đúng tiền", () => {
@@ -3090,10 +3110,14 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   store.dispatch({ t: "GATHER", x: px + 1, y: py });
   eq(countInv(store, "item:milk"), sua1, "chưa tới lứa thì không vắt được nữa");
 
-  // --- đói lâu thì CHẾT, và có báo trước bằng mấy ngày đói ---
+  /* --- đói lâu thì CHẾT, và có báo trước bằng mấy ngày đói ---
+     Phải DỌN SẠCH CỎ trên bản đồ trước: từ khi con vật tự đi tìm cỏ ăn thì con
+     heo đứng giữa nông trại đầy cỏ sẽ không bao giờ chết đói — và đó chính là
+     hành vi đúng. Chết đói chỉ xảy ra khi thật sự không còn gì để gặm. */
   const st2 = mkStore(923);
   walkTo(st2, HOME.x, HOME.y);
   setState(st2, (s) => {
+    for (const t of s.tiles) if (t.prop !== null) t.prop = null;
     s.entSeq = 1;
     s.entities.push({
       id: 1, kind: "animal", def: "pig", map: "farm",
@@ -3127,6 +3151,42 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   });
   for (let i = 0; i < 12; i++) sleep(st3);
   eq(st3.getState().entities.length, 1, "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống");
+
+  /* --- và ĐI TÌM CỎ thật: con heo trên nông trại còn cỏ thì không chết,
+         mà bãi cỏ nó ăn phải BIẾN MẤT --- */
+  const st4 = mkStore(926);
+  walkTo(st4, HOME.x, HOME.y);
+  const demCo = (st) => {
+    let n = 0;
+    for (const t of st.getState().tiles)
+      if (t.prop === "grass_tall" || t.prop === "grass_short") n++;
+    return n;
+  };
+  setState(st4, (s) => {
+    // rải một vạt cỏ dày quanh con heo
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const t = s.tiles[idx(s.w, px + 4 + dx, py + dy)];
+        if (!t || t.tilled || t.crop || t.b) continue;
+        t.g = "grass";
+        t.prop = "grass_tall";
+        t.hp = 1;
+      }
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "pig", map: "farm",
+      x: (px + 4) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 8,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [] },
+    });
+  });
+  const co0 = demCo(st4);
+  for (let i = 0; i < content.animals.pig.starveDays + 3; i++) sleep(st4);
+  eq(st4.getState().entities.length, 1, "còn cỏ thì con heo không chết đói");
+  ok(demCo(st4) < co0, `bãi cỏ bị gặm bớt: ${co0} → ${demCo(st4)}`);
+  eq(st4.getState().entities[0].animal.hungryDays, 0, "ăn được thì đồng hồ đói về 0");
+  deepEq(checkInvariants(st4.getState(), content), [], "bất biến sau khi gặm cỏ");
 });
 
 test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", () => {

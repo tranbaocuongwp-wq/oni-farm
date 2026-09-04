@@ -246,17 +246,6 @@ export interface BuildingDef {
   solid: boolean;
   /** Tự nối hình theo hàng xóm cùng loại (hàng rào). Vắng = một sprite cố định. */
   autotile?: AutotileKind;
-  /**
-   * Đặt bằng cách KÉO một tuyến, không phải bấm từng ô.
-   *
-   * Hàng rào và đường nhựa là thứ người ta dựng thành ĐOẠN — mười ô rào thì
-   * mười cú bấm, và chỉ cần lệch một ô là phải đập đi làm lại. Bật cờ này thì
-   * cầm nó lên là vào ngay chế độ kéo: ấn ở đầu đoạn, rê tới cuối, nhả tay.
-   *
-   * Là DỮ LIỆU chứ không phải `switch (id)` trong code: thêm "mương nước" hay
-   * "hàng rào đá" sau này chỉ là thêm một dòng JSON.
-   */
-  drag?: boolean;
   effects: BuildingEffects;
   power: { produce: number; consume: number };
   art: { body: string; dark: string; accent: string };

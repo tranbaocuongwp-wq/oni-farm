@@ -340,7 +340,9 @@ async function boot() {
      vẫn trôi, nhân vật vẫn đi được trong lúc bảng mở — đó mới là chỗ nó hữu ích,
      bấm một lệnh rồi nhìn thẳng vào thế giới thấy ngay kết quả. */
   const buildUI = createBuildMode($("#buildmode"), atlas, {
-    select: (slot) => store.dispatch({ t: "SELECT", slot }),
+    // Chọn công trình sống trong chính bảng đó, không đụng tới hotbar: từ khi
+    // tiền trả theo số ô vẽ thì không phải "cầm" nó lên nữa.
+    select: () => {},
   });
 
   const devPanel = createDevPanel($("#devpanel"), {
@@ -373,13 +375,11 @@ async function boot() {
   });
 
   {
-    // Nút tuyến giờ không còn BẬT chế độ nữa (cầm hàng rào là tự ở trong chế độ
-    // đó rồi) — nó chỉ để HUỶ đoạn đang vẽ dở khi lỡ ấn nhầm chỗ bắt đầu.
+    // Lối vào CHẾ ĐỘ XÂY DỰNG ngay cạnh nút hành động. Chôn nó trong menu Tạm
+    // dừng thì phần lớn người chơi sẽ không bao giờ tìm ra, mà từ giờ đó là
+    // cách DUY NHẤT để xây.
     const lb = document.querySelector<HTMLElement>("#linebtn");
-    lb?.addEventListener("click", () => {
-      lineFrom = null;
-      lineTo = null;
-    });
+    lb?.addEventListener("click", () => buildUI.toggle());
   }
 
   for (const [sel, code] of [
@@ -600,11 +600,7 @@ async function boot() {
    *  đường xem trước phải bám vào ĐÂY chứ không bám `cursor`. */
   let lineTo: { x: number; y: number } | null = null;
 
-  /** Công trình đang cầm có phải loại KÉO không. */
-  function dragBuilding(s: GameState): string | null {
-    const id = heldBuilding(s);
-    return id && content.buildings[id]?.drag ? id : null;
-  }
+
 
   /** Đang cầm công trình gì (id trần), null nếu không cầm công trình nào. */
   function heldBuilding(s: GameState): string | null {
@@ -614,8 +610,8 @@ async function boot() {
     return content.buildings[id] ? id : null;
   }
 
-  /** Bật/tắt hiển thị nút tuyến và luồng ý định kéo. Gọi mỗi khung hình —
-   *  rẻ, và không phải nhớ tắt ở mười chỗ khác nhau. */
+  /** Bật/tắt luồng ý định KÉO. Gọi mỗi khung hình — rẻ, và không phải nhớ tắt
+   *  ở mười chỗ khác nhau. */
   const setLineMode = (on: boolean) => {
     input.setDrag(on);
     if (!on) {
@@ -623,11 +619,7 @@ async function boot() {
       lineTo = null;
     }
     const b = document.querySelector<HTMLElement>("#linebtn");
-    if (b) {
-      b.classList.toggle("on", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.hidden = !on;
-    }
+    if (b) b.classList.toggle("on", on);
   };
 
   function holdingSolidBuilding(s: GameState): boolean {
@@ -1051,6 +1043,13 @@ async function boot() {
         }
         case "use": {
           if (modal) break;
+          /* Cầm công trình mà bấm DÙNG thì MỞ CHẾ ĐỘ XÂY DỰNG, không đặt xuống
+             ô đang ngắm. Một cú bấm, và người chơi rơi vào đúng chỗ để quy
+             hoạch — thay vì rắc từng ô rồi tự hỏi vì sao địa hình lởm chởm. */
+          if (!building && heldBuilding(s)) {
+            buildUI.open();
+            break;
+          }
           let c = targetTile(s);
           // Nút hành động theo ngữ cảnh: ô đang ngắm ở XA thì đi tới rồi làm,
           // thay vì bấm hụt. Trên điện thoại đây là đường tắt tự nhiên nhất:
@@ -1097,13 +1096,6 @@ async function boot() {
           const chuot = animalNear(s, tx, ty);
           cardAnimal = chuot ? chuot.id : null;
 
-          // Đang cầm hàng rào / đường: cú ấn này là ĐẦU đoạn. Phần còn lại do
-          // `drag` (rê) và `dragEnd` (nhả tay) lo.
-          if (dragBuilding(s)) {
-            lineFrom = { x: tx, y: ty };
-            lineTo = { x: tx, y: ty };
-            break;
-          }
 
           if (!it.double) {
             // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
@@ -1143,8 +1135,7 @@ async function boot() {
         }
 
         case "dragEnd": {
-          // Trong chế độ xây thì MỌI công trình kéo được, không chỉ loại `drag`.
-          const id = building ? heldBuilding(s) : dragBuilding(s);
+          const id = building ? buildUI.picked() : null;
           if (id && lineFrom && lineTo)
             store.dispatch({
               t: "BUILD_LINE",
@@ -1192,10 +1183,8 @@ async function boot() {
       if (fade <= 0) dayFadeAt = 0;
     }
 
-    /* Chế độ kéo bám thẳng vào THỨ ĐANG CẦM: cầm hàng rào lên là ở trong đó,
-       đổi sang cái cuốc là ra khỏi đó. Không có nút bật/tắt nào để quên.
-       Trong CHẾ ĐỘ XÂY DỰNG thì mọi công trình đều kéo được. */
-    const dragId = buildUI.isOpen() ? heldBuilding(s) : dragBuilding(s);
+    /* Kéo tuyến CHỈ có trong chế độ xây dựng — mọi công trình đều đi qua đó. */
+    const dragId = buildUI.isOpen() ? buildUI.picked() : null;
     setLineMode(dragId !== null);
     buildUI.update(s, content);
 
