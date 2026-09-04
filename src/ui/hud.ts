@@ -29,6 +29,7 @@ import { currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
 import type { AnimalStats } from "../game/animals.ts";
+import type { WorkerCard } from "../game/workers.ts";
 
 export interface Hud {
   update(s: GameState, content: Content, hint: Hint | null): void;
@@ -47,9 +48,11 @@ export interface Hud {
    * Bản đầu tự hiện mỗi lần đứng gần, và trên điện thoại nó che mất một phần
    * tư màn hình đúng lúc đang cần nhìn ruộng.
    */
-  showAnimal(st: AnimalStats | null): void;
+  showAnimal(st: AnimalStats | WorkerCard | null): void;
   /** Người chơi bấm × trên bảng vật nuôi. */
   onAnimalClose(fn: () => void): void;
+  /** Người chơi bấm ‹ hoặc › để xem con kế bên. */
+  onAnimalCycle(fn: (d: number) => void): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -323,6 +326,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elAnimal = root.querySelector<HTMLElement>("#animal-card")!;
   let animalKey = "";
   let onClose: () => void = () => {};
+  let onCycle: (d: number) => void = () => {};
 
   /** "còn 3 giờ" / "còn 2 ngày" — người chơi nghĩ bằng giờ với ngày, không
    *  bằng phút game. */
@@ -346,6 +350,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     onAnimalClose(fn) {
       onClose = fn;
     },
+    onAnimalCycle(fn) {
+      onCycle = fn;
+    },
     showAnimal(st) {
       if (!st) {
         if (animalKey !== "") {
@@ -358,6 +365,44 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       const key = JSON.stringify(st);
       if (key === animalKey) return;
       animalKey = key;
+
+      /* NGƯỜI LÀM: cùng tấm thẻ, khác nội dung. Câu quan trọng nhất là "đang
+         làm gì" — người chơi trả lương ba ngày một lần cho một người tự đi lại
+         trên bản đồ, và câu hỏi duy nhất khi nhìn thấy họ là "có đang làm gì
+         không, hay đứng không?". Không trả lời được thì lương thành khoản chi mù. */
+      if (st.kind === "worker") {
+        elAnimal.innerHTML =
+          `<div class="hd"><b>${st.name}</b>` +
+          `<button type="button" class="ax prev" aria-label="Người trước">‹</button>` +
+          `<button type="button" class="ax next" aria-label="Người sau">›</button>` +
+          `<button type="button" class="ax" aria-label="Đóng bảng">×</button></div>` +
+          `<div class="mnote">${st.doing}</div>` +
+          `<div class="mrow" title="Sức: ${Math.round(st.energy * 100)}%"><i class="ri" data-ic="energy"></i>` +
+          `<span class="mbar ${st.energy < 0.2 ? "bad" : ""}"><i style="width:${Math.round(st.energy * 100)}%"></i></span></div>` +
+          `<div class="mrow" title="Đang đeo ${st.carried}/${st.carryMax}"><i class="ri" data-ic="bag"></i>` +
+          `<span class="mbar ${st.carry >= 1 ? "ok" : ""}"><i style="width:${Math.round(st.carry * 100)}%"></i></span></div>` +
+          `<div class="mnote">${st.job} · lương ${st.wage}đ ngày ${st.payDay}</div>`;
+        for (const el of elAnimal.querySelectorAll<HTMLElement>("i.ri")) {
+          const src = atlas.ui(el.dataset["ic"] as UiIcon);
+          const c = document.createElement("canvas");
+          c.width = src.width;
+          c.height = src.height;
+          c.getContext("2d")!.drawImage(src, 0, 0);
+          el.appendChild(c);
+        }
+        const bindW = (sel: string, fn: () => void) =>
+          elAnimal.querySelector<HTMLElement>(sel)!.addEventListener("click", (e) => {
+            e.stopPropagation();
+            fn();
+          });
+        bindW(".ax.prev", () => onCycle(-1));
+        bindW(".ax.next", () => onCycle(1));
+        elAnimal
+          .querySelectorAll<HTMLElement>(".ax:not(.prev):not(.next)")
+          .forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); onClose(); }));
+        elAnimal.hidden = false;
+        return;
+      }
 
       /* THANH thay cho CHỮ.
 
@@ -404,14 +449,30 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
             `<b class="mval">${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
         );
 
+      /* Hai mũi tên ‹ › nhảy sang con KẾ BÊN. Không có chúng thì muốn so hai
+         con bò phải đi tới tận nơi từng con — mà so sánh chính là lý do người
+         ta mở bảng này ra. */
       elAnimal.innerHTML =
         `<div class="hd"><i class="pic"></i><b>${st.name}</b>` +
+        `<button type="button" class="ax prev" aria-label="Con trước">‹</button>` +
+        `<button type="button" class="ax next" aria-label="Con sau">›</button>` +
         `<button type="button" class="ax" aria-label="Đóng bảng vật nuôi">×</button></div>` +
         rows.join("");
-      elAnimal.querySelector<HTMLElement>(".ax")!.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onClose();
-      });
+      const bind = (sel: string, fn: (e: Event) => void) =>
+        elAnimal.querySelector<HTMLElement>(sel)!.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fn(e);
+        });
+      bind(".ax.prev", () => onCycle(-1));
+      bind(".ax.next", () => onCycle(1));
+      elAnimal
+        .querySelectorAll<HTMLElement>(".ax:not(.prev):not(.next)")
+        .forEach((b) =>
+          b.addEventListener("click", (e) => {
+            e.stopPropagation();
+            onClose();
+          }),
+        );
       // Đổ icon vào các ô nhãn: `data-ic` lấy từ bộ HUD, `data-item` vẽ đúng
       // vật phẩm (chai sữa, quả trứng) nên không phải nhớ nghĩa của ký hiệu nào.
       for (const el of elAnimal.querySelectorAll<HTMLElement>("i.ri")) {

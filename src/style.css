@@ -1455,13 +1455,48 @@ body[data-hand="left"] #abtn {
   left: calc(12px + var(--sa-l));
   align-items: flex-start;
 }
+/* ==========================================================================
+   CỤM NÚT HÌNH THOI — xếp y như mặt tay cầm.
+
+   Bốn nút, bốn vị trí cố định: DƯỚI là nút chính (dùng), PHẢI là tương tác,
+   TRÁI là tự động, TRÊN là balo. Đó đúng là cách A/B/X/Y nằm trên mọi tay cầm
+   từ ba mươi năm nay, nên cắm tay cầm vào là cụm trên màn hình TRỞ THÀNH bản
+   đồ nút: nhìn cụm là biết ngón cái phải bấm chỗ nào, khỏi học gì.
+
+   Trước đây ba nút xếp một HÀNG NGANG. Hàng ngang thì không nói được gì về tay
+   cầm cả — nút nào ứng với nút nào là chuyện phải nhớ. Và trên cảm ứng nó cũng
+   dở hơn: ngón cái quét theo cung tròn, không quét theo đường thẳng.
+
+   Cụm dính vào GÓC MÀN HÌNH (theo camera), không dính vào nhân vật — nhân vật
+   chạy khắp nơi, mà nút thì phải luôn nằm dưới ngón cái. */
 #abtn .btns {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  display: grid;
+  /* Ba cột × ba hàng, bốn nút nằm ở bốn cạnh — chính giữa để trống. */
+  grid-template-columns: repeat(3, auto);
+  grid-template-rows: repeat(3, auto);
+  align-items: center;
+  justify-items: center;
+  gap: 5px;
 }
-body[data-hand="left"] #abtn .btns {
-  flex-direction: row-reverse;
+#abtn .btns .y {
+  grid-area: 1 / 2;
+}
+#abtn .btns .auto {
+  grid-area: 2 / 1;
+}
+#abtn .btns .b {
+  grid-area: 2 / 3;
+}
+#abtn .btns .a {
+  grid-area: 3 / 2;
+}
+/* Tay trái: lật NGANG cụm, giữ nguyên trên–dưới. Nút chính vẫn ở dưới vì đó
+   là chỗ ngón cái nghỉ, dù cầm máy tay nào. */
+body[data-hand="left"] #abtn .btns .auto {
+  grid-area: 2 / 3;
+}
+body[data-hand="left"] #abtn .btns .b {
+  grid-area: 2 / 1;
 }
 #abtn button {
   border-radius: 50%;
@@ -1521,6 +1556,15 @@ body[data-hand="left"] #abtn .btns {
   border-color: #5aa9e6;
   color: #dceeff;
   box-shadow: 0 0 0 3px rgba(90, 169, 230, 0.3), 0 0 14px rgba(90, 169, 230, 0.4);
+}
+/* Nút BALO ở đỉnh hình thoi — cùng cỡ với hai nút cạnh cho cụm cân. */
+#abtn .y {
+  width: var(--btn-b);
+  height: var(--btn-b);
+  min-height: var(--btn-b);
+  font-size: 0.62em;
+  letter-spacing: 0;
+  color: var(--ink-dim);
 }
 #abtn button.down {
   transform: translateY(2px);
@@ -2096,14 +2140,44 @@ body.pointer-focus .modal button:focus:not(:focus-visible) {
    Cầm tay cầm rồi thì joystick ảo và ba nút tròn góc dưới chỉ còn là thứ che
    mất nông trại. Giấu chúng đi trả lại gần một phần tư màn hình trên máy dọc.
    ========================================================================== */
+/* Joystick ảo thì giấu — tay cầm có cần gạt thật rồi. Nhưng CỤM NÚT thì GIỮ
+   LẠI: bốn nút xếp hình thoi chính là bản đồ nút của tay cầm, và bỏ nó đi là
+   bỏ đúng thứ dạy người chơi bấm cái gì. Chỉ tắt nhận chạm và đeo tên nút
+   thật lên từng cái. */
 body[data-input="pad"] #stick,
-body[data-input="pad"] #abtn .btns,
 body[data-input="pad"] #linebtn {
   display: none;
 }
 body[data-input="pad"] #abtn {
-  /* Vẫn giữ khung để dòng "vì sao không làm được" còn chỗ hiện. */
   pointer-events: none;
+}
+body[data-input="pad"] #abtn .btns button {
+  position: relative;
+  overflow: visible;
+}
+/* Tên nút THẬT của tay cầm đang cắm, dán lên góc mỗi nút tròn. */
+body[data-input="pad"] #abtn .btns button[data-pad]::after {
+  content: attr(data-pad);
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--edge-hi);
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+/* Dải chữ ở góc thành thừa khi đã có cụm nút — nhãn nằm ngay trên nút chính. */
+body[data-input="pad"] .padctx {
+  display: none;
 }
 
 /* Nhắc xoay ngang: nền vàng nhạt để tách khỏi ghi chú thường. */
@@ -2285,4 +2359,12 @@ body[data-input="pad"] .modal [data-x][data-pad]::after {
 body[data-input="pad"] .modal [data-x] {
   position: relative;
   overflow: visible;
+}
+
+/* Hai mũi tên ‹ › trên bảng vật nuôi: nhảy sang con kế bên mà không phải đi
+   tới tận nơi. So sánh hai con chính là lý do người ta mở bảng này ra. */
+.animal-card .hd .ax.prev,
+.animal-card .hd .ax.next {
+  font-size: 1.1em;
+  color: var(--gold);
 }

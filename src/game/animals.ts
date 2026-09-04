@@ -89,6 +89,8 @@ export interface ProductLine {
 
 /** Mọi thứ người chơi cần biết về một con vật, ở dạng DỮ LIỆU thuần. */
 export interface AnimalStats {
+  /** Phân biệt với `WorkerCard` — cùng một tấm thẻ, hai loại nội dung. */
+  kind: "animal";
   def: string;
   name: string;
   mature: boolean;
@@ -133,6 +135,7 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
     };
   });
   return {
+    kind: "animal",
     def: e.def,
     name: def.name,
     mature,

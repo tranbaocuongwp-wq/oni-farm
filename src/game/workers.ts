@@ -354,6 +354,80 @@ function cropTask(
   return best;
 }
 
+/* ------------------------------------------------------------ bảng thông tin */
+
+/** Mọi thứ người chơi cần biết về MỘT người làm, ở dạng dữ liệu thuần. */
+export interface WorkerCard {
+  kind: "worker";
+  name: string;
+  /** "chăm cây" | "chăn nuôi" */
+  job: string;
+  /** Đang làm gì NGAY LÚC NÀY, viết bằng lời thường. */
+  doing: string;
+  /** 0..1 */
+  energy: number;
+  carry: number;
+  carried: number;
+  carryMax: number;
+  /** Ngày trả lương kế tiếp. */
+  payDay: number;
+  wage: number;
+}
+
+/**
+ * Bảng của một người làm.
+ *
+ * "Đang làm gì" quan trọng hơn mọi con số khác ở đây: người chơi trả lương ba
+ * ngày một lần cho một người tự đi lại trên bản đồ, và câu hỏi duy nhất họ hỏi
+ * khi nhìn thấy người đó là "hắn có đang làm gì không, hay đứng không?". Không
+ * trả lời được câu đó thì tiền lương thành một khoản chi mù.
+ */
+export function workerCard(e: Entity, content: Content): WorkerCard | null {
+  const w = e.worker;
+  if (!w) return null;
+  const cfg = content.workers;
+  const deo = carried(w);
+  const doing =
+    e.ai.phase === "rest"
+      ? "Đang nghỉ lấy sức"
+      : e.ai.phase === "work"
+        ? "Đang làm việc"
+        : e.ai.phase === "walk"
+          ? `Đang đi tới ô ${e.ai.tx},${e.ai.ty}`
+          : deo >= cfg.carryMax
+            ? "Tay đầy — đang về kho"
+            : "Đang tìm việc";
+  return {
+    kind: "worker",
+    name: w.name,
+    job: w.job === "crops" ? "chăm cây" : "chăn nuôi",
+    doing,
+    energy: cfg.energyMax > 0 ? Math.max(0, Math.min(1, w.energy / cfg.energyMax)) : 1,
+    carry: cfg.carryMax > 0 ? Math.max(0, Math.min(1, deo / cfg.carryMax)) : 0,
+    carried: deo,
+    carryMax: cfg.carryMax,
+    payDay: w.paidDay + cfg.wageEveryDays,
+    wage: cfg.wage,
+  };
+}
+
+/** Người làm gần ô (x,y) trong tầm — để nút tương tác mở đúng bảng của họ. */
+export function workerNear(s: GameState, x: number, y: number, maxTiles = 1.4): Entity | null {
+  const cx = x * TILE + TILE / 2;
+  const cy = y * TILE + TILE / 2;
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  for (const e of s.entities) {
+    if (e.map !== s.mapId || e.kind !== "worker" || !e.worker) continue;
+    const d = Math.hypot(e.x - cx, e.y - cy) / TILE;
+    if (d <= maxTiles && d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
 /** Người làm đang đứng ở ô nào — dùng để biết đã tới nơi chưa. */
 export function atTile(e: Entity, tx: number, ty: number, slack = 1.4): boolean {
   const dx = e.x - (tx * TILE + TILE / 2);
