@@ -17,7 +17,10 @@ import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actio
 import { hintAt, facingTile, nearestTarget } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
+import * as actionsApi from "../src/game/actions.ts";
+import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
+import { SAVE_VERSION } from "../src/core/version.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -295,7 +298,14 @@ test("1. vòng lặp lõi: cày → gieo → tưới → lớn theo thời gian 
 /* ========================================================================== */
 
 test("2. gieo rồi ngủ 5 đêm mà không tưới → stage vẫn 0", () => {
-  const store = mkStore();
+  /* Ép TRỜI KHÔ suốt 5 đêm. Trước đây test này dựa vào may rủi của seed mặc
+     định, nên chỉ cần đổi bản đồ một chút (thêm nhà kho ⇒ đổi số lần rút seed
+     ban đêm ⇒ chuỗi thời tiết dịch đi) là có một đêm mưa và test đỏ. Nó muốn
+     kiểm "không nước thì không lớn", không phải kiểm thời tiết. */
+  const kho = contentWith((r) => {
+    for (const w of r.weather.weathers) if (w.wet) w.weight = 0;
+  });
+  const store = createStore(createNewGame(kho, 1), kho, { validate: true, strict: true });
   walkTo(store, HOME.x, HOME.y);
   const plot = PLOTS[0];
   selectItem(store, "tool:hoe");
@@ -463,7 +473,11 @@ test("5. điện: không pin thì drone đứng im, có pin thì thu hoạch", (
 test("6. mốc mở khoá bắn đúng thứ tự, hàng chưa mở khoá không mua được", () => {
   const store = mkStore();
   deepEq(store.getState().stagesDone, ["start"], "mốc start áp ngay từ createNewGame");
-  deepEq(store.getState().unlocked, ["seed:lettuce"], "chỉ mở khoá hạt xà lách lúc đầu");
+  deepEq(
+    store.getState().unlocked,
+    ["seed:lettuce", "road", "fence"],
+    "mốc start mở hạt xà lách + hạ tầng cơ bản (đường, hàng rào)",
+  );
 
   // mua hàng chưa mở khoá → bị từ chối, không mất tiền
   setState(store, (s) => {
@@ -2455,7 +2469,7 @@ test("45. cỏ/bụi/cây con lớn theo ngày × thời tiết; cắt cỏ ra c
   deepEq(checkInvariants(st3.getState(), c3), [], "bất biến xanh");
 });
 
-test("46. save v6 (không có thời tiết) nạp lên v7 → migrate xanh; round-trip có sick/age", () => {
+test("46. save v6 (không thời tiết, không kho) nạp lên bản mới nhất → migrate xanh", () => {
   const store = mkStore(41);
   walkTo(store, HOME.x, HOME.y);
   const s0 = store.getState();
@@ -2477,12 +2491,19 @@ test("46. save v6 (không có thời tiết) nạp lên v7 → migrate xanh; rou
   delete v6.stats.cured;
   v6.save = 6;
   const { migrateSave } = migrateApi;
+  delete v6.store;
   const up = migrateSave({ magic: "onifarm", state: v6 });
-  ok(up && up.save === 7, "v6 → v7");
+  ok(up && up.save === SAVE_VERSION, `v6 → v${SAVE_VERSION} qua từng bậc`);
+  deepEq(up.store, [], "bậc v7 → v8 điền kho rỗng");
   const mig = migrateForContent(up, content);
   deepEq(checkInvariants(mig.state, content), [], "sau migrate bất biến xanh: " + JSON.stringify(mig.notes));
   eq(mig.state.weather.today, content.weatherFirst, "thời tiết mặc định về kiểu đầu");
   eq(mig.state.stats.cured, 0, "stats.cured mặc định 0");
+  eq(
+    mig.state.store.length,
+    content.balance.storeSlots ?? 60,
+    "migrateForContent nong kho về đúng số ô của content",
+  );
   ok(mig.state.tiles[idx(mig.state.w, PLOTS[0].x, PLOTS[0].y)].crop.sick === true, "giữ cờ bệnh qua migrate");
   eq(mig.state.tiles[idx(mig.state.w, spot.x, spot.y)].age, 2, "giữ tuổi vật thể qua migrate");
   // content gỡ kiểu thời tiết đang dùng → về kiểu đầu, không ném
@@ -2693,6 +2714,236 @@ test("50. quét theo VÒNG cho kết quả y hệt quét vét cạn (bẫy ô ch
     }
   }
   ok(soCa >= 30, `đã so ${soCa} thế trận`);
+});
+
+/* ========================================================================== */
+/* 51-53. HẠ TẦNG: đường nhựa, hàng rào, xây theo tuyến                       */
+/* ========================================================================== */
+
+test("51. đường nhựa: đi nhanh hơn, và A* tự vòng qua đường thay vì cắt qua cỏ", () => {
+  const store = mkStore(901);
+  walkTo(store, HOME.x, HOME.y);
+  const spot = findOpenBlock(store.getState(), 8, 3);
+
+  // đo tốc độ: cùng số khung hình, một lần trên cỏ một lần trên đường
+  const diBaoXa = (tren) => {
+    const st = mkStore(902);
+    setState(st, (s) => {
+      const x = spot.x, y = spot.y;
+      for (let i = 0; i < 8; i++) {
+        const t = s.tiles[idx(s.w, x + i, y)];
+        t.b = tren;
+      }
+      s.player = { ...s.player, x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, moving: false };
+    });
+    const x0 = st.getState().player.x;
+    for (let i = 0; i < 60; i++) st.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 1 / 60 });
+    return st.getState().player.x - x0;
+  };
+  const treoCo = diBaoXa(null);
+  const treoDuong = diBaoXa("road");
+  const tiSo = treoDuong / treoCo;
+  ok(
+    Math.abs(tiSo - content.buildings.road.effects.speedMul) < 0.02,
+    `đi trên đường nhanh hơn đúng speedMul: tỉ số ${tiSo.toFixed(3)}, mong đợi ${content.buildings.road.effects.speedMul}`,
+  );
+
+  /* A*: hai đường vòng DÀI BẰNG NHAU, một lát nhựa một không. Đường thẳng ở
+     giữa bị rào chắn. Đây mới là phép thử công bằng — nếu bắt A* đi vòng xa hơn
+     1,35 lần thì nó chọn đi thẳng qua cỏ là ĐÚNG, không phải lỗi. */
+  const st = mkStore(903);
+  const nav = createNavigator();
+  // Vùng cố định ở nửa nam bản đồ, tự dọn sạch bên dưới — không cần tìm chỗ
+  // trống sẵn 12×5, bản đồ 40×30 rải cây đá khắp nơi nên hiếm khi có.
+  const X = 20, Y = 21;
+  setState(st, (s) => {
+    for (let j = 0; j < 5; j++)
+      for (let i = 0; i < 12; i++) {
+        const t = s.tiles[idx(s.w, X + i, Y + j)];
+        t.prop = null; t.b = null; t.hp = 0;
+      }
+    // tường rào chắn lối thẳng ở hàng giữa
+    for (let i = 1; i <= 9; i++) s.tiles[idx(s.w, X + i, Y + 2)].b = "fence";
+    // đường vòng PHÍA TRÊN lát nhựa
+    for (let i = 0; i <= 10; i++) s.tiles[idx(s.w, X + i, Y)].b = "road";
+    s.player = { ...s.player, x: (X + 0.5) * TILE, y: (Y + 2.5) * TILE, moving: false };
+  });
+  ok(nav.goTo(st.getState(), content, X + 10, Y + 2, { act: false }), "tìm được đường vòng");
+
+  const daDi = new Set();
+  for (let f = 0; f < 1800; f++) {
+    const v = nav.update(st.getState(), content, 1 / 60);
+    if (v) st.dispatch({ t: "MOVE", dx: v.dx, dy: v.dy, dt: 1 / 60, run: v.run });
+    const p2 = st.getState().player;
+    daDi.add(`${Math.floor(p2.x / TILE)},${Math.floor(p2.y / TILE)}`);
+    if (nav.takeArrival() || !nav.isActive()) break;
+  }
+  let quaTren = 0, quaDuoi = 0;
+  for (const k of daDi) {
+    const [, yy] = k.split(",").map(Number);
+    if (yy <= Y + 1) quaTren++;
+    if (yy >= Y + 3) quaDuoi++;
+  }
+  ok(
+    quaTren > quaDuoi,
+    `chọn đường vòng CÓ NHỰA (trên ${quaTren} ô) thay vì đường cỏ dài bằng đúng thế (dưới ${quaDuoi} ô)`,
+  );
+});
+
+test("52. hàng rào: chặn đường, và sprite tự nối theo hàng xóm", () => {
+  const store = mkStore(904);
+  walkTo(store, HOME.x, HOME.y);
+  const spot = findOpenBlock(store.getState(), 4, 4);
+
+  setState(store, (s) => {
+    for (let i = 0; i < 4; i++) s.tiles[idx(s.w, spot.x + i, spot.y)].b = "fence";
+  });
+  const s = store.getState();
+  ok(
+    isSolid(s, content, (spot.x + 1) * TILE + 8, spot.y * TILE + 8),
+    "ô có hàng rào là ô đặc",
+  );
+  eq(
+    content.buildings.fence.autotile,
+    "fence",
+    "hàng rào khai báo tự nối trong content, không hardcode trong code",
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi dựng rào");
+});
+
+test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ngoài tầm thì không làm gì", () => {
+  const { linePath } = actionsApi;
+
+  // hình chữ L: đi ngang trước rồi đi dọc
+  const oL = linePath(2, 3, 5, 6);
+  eq(oL.length, 4 + 3, "tuyến 3 ngang + 3 dọc = 7 ô (kể cả ô đầu)");
+  deepEq(oL[0], { x: 2, y: 3 }, "bắt đầu đúng ô đầu");
+  deepEq(oL[oL.length - 1], { x: 5, y: 6 }, "kết thúc đúng ô cuối");
+  ok(oL.slice(0, 4).every((c) => c.y === 3), "đoạn đầu chạy NGANG");
+  ok(oL.slice(4).every((c) => c.x === 5), "đoạn sau chạy DỌC");
+  ok(linePath(0, 0, 99, 0).length <= 24, "tuyến bị chặn ở MAX_LINE");
+
+  const store = mkStore(905);
+  walkTo(store, HOME.x, HOME.y);
+  const p = store.getState().player;
+  const cx = Math.floor(p.x / TILE);
+  const cy = Math.floor(p.y / TILE);
+
+  // đủ vật liệu: 6 hàng rào cho tuyến 5 ô
+  setState(store, (s) => {
+    s.inv[3] = { id: "build:fence", n: 6 };
+    s.energy = 100;
+  });
+  selectItem(store, "build:fence");
+  const nl0 = store.getState().energy;
+  store.dispatch({ t: "BUILD_LINE", id: "fence", x0: cx + 1, y0: cy, x1: cx + 5, y1: cy });
+  const s1 = store.getState();
+  let dung = 0;
+  for (let i = 1; i <= 5; i++) if (s1.tiles[idx(s1.w, cx + i, cy)]?.b === "fence") dung++;
+  ok(dung >= 3, `dựng được nhiều ô trong một lệnh: ${dung} ô`);
+  eq(countInv(store, "build:fence"), 6 - dung, "trừ đúng một vật phẩm mỗi ô, không giảm giá theo lô");
+  eq(
+    Math.round(nl0 - s1.energy),
+    dung * content.balance.energyCost.build,
+    "trừ đủ năng lượng cho từng ô",
+  );
+
+  // ô ĐẦU ngoài tầm với → không làm gì cả
+  const st2 = mkStore(906);
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => { s.inv[3] = { id: "build:fence", n: 20 }; });
+  selectItem(st2, "build:fence");
+  const truoc = st2.getState();
+  const sau = st2.dispatch({ t: "BUILD_LINE", id: "fence", x0: 2, y0: 2, x1: 6, y1: 2 });
+  eq(countInv(st2, "build:fence"), 20, "ngoài tầm với: không tốn vật phẩm nào");
+  ok(truoc.tiles === sau.tiles, "và không đụng vào lưới ô");
+
+  // thiếu vật liệu: dựng được bao nhiêu thì dựng, không nợ
+  const st3 = mkStore(907);
+  walkTo(st3, HOME.x, HOME.y);
+  const q = st3.getState().player;
+  const qx = Math.floor(q.x / TILE), qy = Math.floor(q.y / TILE);
+  setState(st3, (s) => { s.inv[3] = { id: "build:fence", n: 2 }; s.energy = 100; });
+  selectItem(st3, "build:fence");
+  st3.dispatch({ t: "BUILD_LINE", id: "fence", x0: qx + 1, y0: qy, x1: qx + 8, y1: qy });
+  eq(countInv(st3, "build:fence"), 0, "dùng hết đúng số vật phẩm đang có");
+  const s3 = st3.getState();
+  let d3 = 0;
+  for (let i = 1; i <= 8; i++) if (s3.tiles[idx(s3.w, qx + i, qy)]?.b === "fence") d3++;
+  ok(d3 <= 2, `không dựng quá số vật phẩm có: ${d3} ô`);
+  deepEq(checkInvariants(s3, content), [], "bất biến sau khi xây thiếu vật liệu");
+});
+
+test("54. kho tập trung: cất/lấy giữ nguyên tổng số món, bán từ kho vào đúng tiền", () => {
+  const store = mkStore(908);
+  walkTo(store, HOME.x, HOME.y);
+  const c = content;
+
+  setState(store, (s) => {
+    s.inv[3] = { id: "crop:lettuce", n: 7 };
+    s.inv[4] = { id: "item:wood", n: 5 };
+    s.inv[5] = { id: "seed:lettuce", n: 3 };
+  });
+
+  eq(store.getState().store.length, c.balance.storeSlots ?? 60, "kho có đúng số ô của content");
+
+  const tongTruoc = (st) =>
+    [...st.getState().inv, ...st.getState().store].reduce((n, v) => n + (v ? v.n : 0), 0);
+  const t0 = tongTruoc(store);
+
+  // cất một ô
+  store.dispatch({ t: "STORE_PUT", slot: 3, n: 7 });
+  eq(countInv(store, "crop:lettuce"), 0, "túi hết xà lách");
+  eq(
+    store.getState().store.reduce((n, v) => n + (v && v.id === "crop:lettuce" ? v.n : 0), 0),
+    7,
+    "kho nhận đủ 7",
+  );
+  eq(tongTruoc(store), t0, "cất không làm sinh ra hay mất đi món nào");
+
+  // lấy lại 3
+  const slotKho = store.getState().store.findIndex((v) => v && v.id === "crop:lettuce");
+  store.dispatch({ t: "STORE_TAKE", slot: slotKho, n: 3 });
+  eq(countInv(store, "crop:lettuce"), 3, "lấy ra đúng 3");
+  eq(tongTruoc(store), t0, "lấy cũng không làm đổi tổng");
+
+  // cất hết: nông sản + nguyên liệu đi, HẠT GIỐNG và CÔNG CỤ ở lại
+  const hatTruoc = countInv(store, "seed:lettuce");
+  store.dispatch({ t: "STORE_PUT_ALL" });
+  eq(countInv(store, "crop:lettuce"), 0, "cất hết nông sản");
+  eq(countInv(store, "item:wood"), 0, "cất hết nguyên liệu");
+  eq(
+    countInv(store, "seed:lettuce"),
+    hatTruoc,
+    "KHÔNG cất hạt giống — cất mất thì ra ruộng lại phải chạy về lấy",
+  );
+  eq(countInv(store, "tool:hoe"), 1, "KHÔNG cất công cụ");
+  eq(tongTruoc(store), t0, "cất hết vẫn giữ nguyên tổng");
+
+  // bán hết trong kho: chỉ nông sản, nguyên liệu ở lại
+  const tien0 = store.getState().money;
+  const ban0 = store.getState().stats.sold;
+  store.dispatch({ t: "STORE_SELL_ALL" });
+  const s2 = store.getState();
+  eq(
+    s2.store.reduce((n, v) => n + (v && v.id.startsWith("crop:") ? v.n : 0), 0),
+    0,
+    "kho không còn nông sản",
+  );
+  eq(
+    s2.store.reduce((n, v) => n + (v && v.id === "item:wood" ? v.n : 0), 0),
+    5,
+    "nguyên liệu KHÔNG bị bán theo",
+  );
+  eq(s2.money - tien0, c.crops.lettuce.sellPrice * 7, "cộng đúng tiền bán 7 cây xà lách");
+  eq(s2.stats.sold - ban0, 7, "thống kê đã bán tăng đúng");
+  deepEq(checkInvariants(s2, content), [], "bất biến sau khi dùng kho");
+
+  // round-trip qua JSON: kho phải sống sót
+  const snap = clone(s2);
+  const st2 = mkStore(909);
+  st2.replace(JSON.parse(JSON.stringify(snap)));
+  deepEq(st2.getState().store, snap.store, "kho đi qua save/load nguyên vẹn");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

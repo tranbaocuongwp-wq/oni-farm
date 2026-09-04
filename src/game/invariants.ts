@@ -27,6 +27,7 @@ import {
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { parseItem } from "./items.ts";
+import { normalizeStore, storeErrors } from "./storage.ts";
 
 /** Kiểm mọi ô của MỘT lưới. `where` chỉ để ghi vào thông điệp lỗi. */
 function checkGrid(tiles: Tile[], content: Content, where: string, e: string[]): void {
@@ -181,6 +182,9 @@ export function checkInvariants(state: GameState, content: Content): string[] {
     if (!want) continue;
     if (!got || got.id !== want) e.push(`ô công cụ ${i} phải là '${want}', đang là '${got?.id ?? "trống"}'`);
   }
+
+  // kho tập trung
+  e.push(...storeErrors(state, content));
 
   if (!Number.isInteger(state.sel) || state.sel < 0 || state.sel >= bal.hotbarSlots)
     e.push(`sel = ${state.sel}, phải nằm trong [0, ${bal.hotbarSlots})`);
@@ -393,6 +397,15 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       notes.push(`đổi kích thước túi ${state.inv.length} → ${invRes.inv.length} ô`);
     for (const id of new Set(invRes.dropped)) notes.push(`bỏ vật phẩm '${id}' khỏi túi — content mới không còn`);
 
+    // ---- kho tập trung ---------------------------------------------------
+    // Nong/cắt về đúng số ô content quy định, và bỏ ô hỏng. Đồ thừa khi kho bị
+    // thu nhỏ thì mất — có ghi chú, không im lặng.
+    const storeBefore = Array.isArray(state.store) ? state.store.filter(Boolean).length : 0;
+    const store = normalizeStore(state.store, content);
+    const storeAfter = store.filter(Boolean).length;
+    if (storeBefore !== storeAfter)
+      notes.push(`kho: giữ ${storeAfter}/${storeBefore} ô có đồ (content đổi số ô)`);
+
     // ---- mở khoá / thống kê ---------------------------------------------
     const unlocked = state.unlocked.filter((u) => {
       if (u.startsWith("seed:")) {
@@ -455,6 +468,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       tiles: active.tiles,
       maps,
       inv: invRes.inv,
+      store,
       sel,
       unlocked,
       stagesDone: [...state.stagesDone],

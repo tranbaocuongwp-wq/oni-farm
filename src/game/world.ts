@@ -41,6 +41,44 @@ export function groundDef(content: Content, g: GroundKind): GroundDef | null {
   return content.tiles.grounds?.[g] ?? null;
 }
 
+/**
+ * Hệ số tốc độ dưới điểm (px thế giới). Ngoài bản đồ = 1.
+ *
+ * Lấy giá trị LỚN HƠN giữa nền và công trình đứng trên nó. Đường người chơi tự
+ * xây là một CÔNG TRÌNH chứ không phải nền — cố ý: `mergeGrid` dựng lại nền từ
+ * bản đồ mỗi lần cập nhật content, nên đường ghi vào nền sẽ bị xoá sạch sau một
+ * lần đẩy OTA, còn `Tile.b` thì được giữ nguyên. Nền `asphalt` vẫn có để người
+ * thiết kế bản đồ vẽ sẵn đường trục.
+ */
+export function speedMulAt(state: GameState, content: Content, px: number, py: number): number {
+  // `tileAt` nhận toạ độ Ô, không phải pixel thế giới — phải đổi.
+  const t = tileAt(state, Math.floor(px / TILE), Math.floor(py / TILE));
+  if (!t) return 1;
+  let m = 1;
+  const gm = groundDef(content, t.g)?.speedMul;
+  if (typeof gm === "number" && gm > m) m = gm;
+  if (t.b) {
+    const bm = content.buildings[t.b]?.effects.speedMul;
+    if (typeof bm === "number" && bm > m) m = bm;
+  }
+  return m;
+}
+
+/** Hệ số tốc độ lớn nhất mà content cho phép — heuristic của A* phải chia cho
+ *  con số này, nếu không nó ước lượng THỪA và A* mất tính tối ưu. */
+export function maxSpeedMul(content: Content): number {
+  let m = 1;
+  for (const g of Object.values(content.tiles.grounds ?? {})) {
+    const v = g?.speedMul;
+    if (typeof v === "number" && v > m) m = v;
+  }
+  for (const b of Object.values(content.buildings)) {
+    const v = b?.effects.speedMul;
+    if (typeof v === "number" && v > m) m = v;
+  }
+  return m;
+}
+
 /** Định nghĩa vật thể theo id. Vật thể LẠ trả null — nơi gọi phải coi nó là
  *  đặc và không khai thác được, chứ không được sập. */
 export function propDef(content: Content, id: string | null): PropDef | null {

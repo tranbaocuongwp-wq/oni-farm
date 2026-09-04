@@ -242,6 +242,87 @@ function plant(d: Draft, content: Content, i: number, cur: Tile, cropId: string)
   dStats(d).planted += 1;
 }
 
+/** Tuyến dài nhất xây được một lần. Đủ để rào một lô hoặc nối kho ra cổng,
+ *  không đủ để một cú chạm phủ kín nông trại. */
+export const MAX_LINE = 24;
+
+/**
+ * Các ô của một tuyến hình CHỮ L: đi ngang trước rồi đi dọc.
+ *
+ * Không dùng Bresenham chéo: hàng rào và đường chéo trong pixel art trông gãy
+ * khúc, mà người chơi phân lô thì nghĩ bằng ô vuông chứ không bằng đường thẳng
+ * hình học. Chữ L dễ đoán — nhìn hai đầu là biết tuyến sẽ chạy đâu.
+ */
+export function linePath(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const sx = x1 >= x0 ? 1 : -1;
+  const sy = y1 >= y0 ? 1 : -1;
+  for (let x = x0; x !== x1 + sx; x += sx) out.push({ x, y: y0 });
+  for (let y = y0 + sy; y !== y1 + sy; y += sy) out.push({ x: x1, y });
+  return out.slice(0, MAX_LINE);
+}
+
+/**
+ * Xây cả một tuyến trong MỘT thao tác.
+ *
+ * Luật, và lý do từng cái:
+ * · Phải đang cầm đúng `build:<id>` — cùng điều kiện với đặt từng ô.
+ * · Ô ĐẦU phải trong tầm với. Giữ nguyên bất biến "ngoài tầm thì không làm gì"
+ *   mà không phải dựng một máy trạng thái đi-rồi-xây.
+ * · Trừ ĐỦ năng lượng và ĐỦ một vật phẩm cho mỗi ô. Không giảm giá theo lô —
+ *   nếu không thì xây tuyến trở thành cách lách giá.
+ * · Hết vật liệu hoặc hết năng lượng thì DỪNG ở đó và báo đã xây được bao nhiêu.
+ *   Ô không đặt được (có cây, có vật thể) thì bỏ qua, không tính là thất bại.
+ */
+export function buildLine(
+  d: Draft,
+  content: Content,
+  id: string,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): { placed: number; wanted: number } {
+  const out = { placed: 0, wanted: 0 };
+  const def = content.buildings[id];
+  if (!def) return out;
+  if (selectedItemId(d.s.inv, d.s.sel) !== `build:${id}`) return out;
+  if (!inReach(d.s, x0, y0)) {
+    toastKey(d, content, "tooFar", "bad");
+    return out;
+  }
+
+  const cells = linePath(x0 | 0, y0 | 0, x1 | 0, y1 | 0);
+  out.wanted = cells.length;
+  const cost = content.balance.energyCost.build;
+
+  for (const c of cells) {
+    const i = tileIndexAt(d.s, c.x, c.y);
+    if (i < 0) continue;
+    if (!canPlaceBuilding(d.s, content, id, c.x, c.y)) continue;
+    if (!hasEnergy(d, cost)) break;
+    const left = removeItem(d.s.inv, `build:${id}`, 1);
+    if (!left) break;
+    setInv(d, left);
+    const t = dTile(d, i);
+    if (!t) break;
+    t.b = id;
+    spend(d, cost);
+    const st = dStats(d);
+    st.built[id] = (st.built[id] ?? 0) + 1;
+    out.placed++;
+  }
+
+  if (out.placed === 0) toastKey(d, content, "cannotBuild", "bad");
+  else toastText(d, `${def.name}: đã xây ${out.placed}/${out.wanted} ô`, "good");
+  return out;
+}
+
 function build(d: Draft, content: Content, i: number, x: number, y: number, id: string): void {
   const def = content.buildings[id];
   if (!def) return;

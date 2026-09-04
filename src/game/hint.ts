@@ -23,6 +23,7 @@ export type HintKind =
   | "shop"
   | "sell"
   | "craft"
+  | "store"
   | "sleep"
   | "refill"
   | "enter";
@@ -54,6 +55,7 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   sleep: "NGỦ",
   refill: "MÚC",
   enter: "VÀO",
+  store: "KHO",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -63,6 +65,7 @@ const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
   SLEEP: "sleep",
   REFILL: "refill",
   PORTAL: "enter",
+  STORE: "store",
 };
 
 /** Tìm ô tương tác ở (x,y) hoặc 4 ô kề — cùng luật với `nearbyInteract` bên

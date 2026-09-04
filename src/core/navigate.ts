@@ -29,6 +29,8 @@ import {
   isSolid,
   tileCenterX,
   tileCenterY,
+  speedMulAt,
+  maxSpeedMul,
 } from "../game/world.ts";
 
 /** Tầm coi là "đã tới nơi" khi đi để LÀM VIỆC.
@@ -109,6 +111,11 @@ export interface Navigator {
 
 /* -------------------------------------------------------------------------- */
 
+/** Hệ số tốc độ của Ô (x,y) — dùng cho chi phí bước của A*. */
+function stepSpeed(state: GameState, content: Content, x: number, y: number): number {
+  return speedMulAt(state, content, x * TILE + TILE / 2, y * TILE + TILE / 2);
+}
+
 /** Nhân vật có đi qua được ô này không (dùng cho A*, ở mức Ô). */
 function walkable(state: GameState, content: Content, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= state.w || y >= state.h) return false;
@@ -155,6 +162,16 @@ function findPath(
   // đây còn nhanh hơn dựng heap, và ít code sai hơn nhiều.
   const open: { i: number; f: number }[] = [];
 
+  /* Chi phí một bước được CHIA cho hệ số tốc độ của ô đích: đi trên đường nhựa
+     rẻ hơn đi trên cỏ, nên A* tự vòng qua đường mà không cần luật riêng nào.
+
+     Hệ quả BẮT BUỘC: heuristic cũng phải chia cho hệ số LỚN NHẤT của content.
+     Heuristic chỉ đúng khi nó không bao giờ ước lượng THỪA chi phí thật; có ô
+     rẻ hơn 1 mà vẫn ước lượng theo giá 1 là ước lượng thừa, và A* mất tính tối
+     ưu — nó sẽ trả về một đường hợp lệ nhưng không phải đường ngắn nhất, âm
+     thầm, không crash, rất khó thấy. */
+  const invMax = 1 / Math.max(1, maxSpeedMul(content));
+
   // Heuristic: khoảng cách chéo (8 hướng), không bao giờ ước lượng thừa.
   const heur = (i: number) => {
     const x = i % w;
@@ -168,7 +185,7 @@ function findPath(
       const d = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
       if (d < best) best = d;
     }
-    return best;
+    return best * invMax;
   };
 
   gScore.set(start, 0);
@@ -210,7 +227,7 @@ function findPath(
         }
         const ni = idx(w, nx, ny);
         const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-        const g1 = g0 + step;
+        const g1 = g0 + step / stepSpeed(state, content, nx, ny);
         if (g1 >= (gScore.get(ni) ?? Infinity)) continue;
         gScore.set(ni, g1);
         cameFrom.set(ni, cur);

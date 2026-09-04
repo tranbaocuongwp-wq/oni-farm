@@ -104,11 +104,17 @@ export interface BuildingEffects {
   autoWet?: boolean;
   /** Ô này miễn nhiễm mùa: gieo được quanh năm và cây không héo lúc sang mùa. */
   allSeason?: boolean;
+  /** Nhân tốc độ đi khi đứng trên công trình này (đường nhựa > 1). Cùng ý nghĩa
+   *  với `GroundDef.speedMul`; ô có cả hai thì lấy cái LỚN HƠN. */
+  speedMul?: number;
   /** Cộng tiền mỗi sáng. */
   income?: number;
   /** Tự thu hoạch cây chín trong bán kính này mỗi sáng. */
   harvestRadius?: number;
 }
+
+/** Kiểu tự nối hình theo hàng xóm cùng loại. */
+export type AutotileKind = "fence";
 
 export interface BuildingDef {
   id: string;
@@ -118,6 +124,8 @@ export interface BuildingDef {
   /** 'floor' thay nền ô và đi lên được; 'object' là vật thể đứng trên ô. */
   kind: "floor" | "object";
   solid: boolean;
+  /** Tự nối hình theo hàng xóm cùng loại (hàng rào). Vắng = một sprite cố định. */
+  autotile?: AutotileKind;
   effects: BuildingEffects;
   power: { produce: number; consume: number };
   art: { body: string; dark: string; accent: string };
@@ -192,6 +200,8 @@ export interface PropDef {
 }
 
 export interface Balance {
+  /** Số ô của KHO TẬP TRUNG. Thiếu = 60. */
+  storeSlots?: number;
   startMoney: number;
   startSeeds: Record<string, number>;
   energyMax: number;
@@ -258,8 +268,8 @@ export interface Balance {
   noonDryMinutes?: number;
 }
 
-export type GroundKind = "grass" | "path" | "water" | "wood";
-export type InteractKind = "SLEEP" | "SHOP" | "SELL" | "REFILL" | "CRAFT" | "PORTAL";
+export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt";
+export type InteractKind = "SLEEP" | "SHOP" | "SELL" | "REFILL" | "CRAFT" | "PORTAL" | "STORE";
 
 export interface TileLegendEntry {
   ground: GroundKind;
@@ -271,6 +281,14 @@ export interface TileLegendEntry {
 export interface GroundDef {
   solid?: boolean;
   interact?: InteractKind;
+  /**
+   * Nhân tốc độ đi khi đứng trên nền này (đường nhựa > 1).
+   *
+   * Cũng là thứ làm A* TỰ ĐỘNG vòng qua đường mà không cần một luật "ưu tiên
+   * đường" riêng: chi phí mỗi bước được CHIA cho con số này, nên đi đường rẻ
+   * hơn đi cỏ. Thêm luật riêng sẽ đá nhau với heuristic và làm hỏng tính tối ưu.
+   */
+  speedMul?: number;
 }
 
 export interface TilesDef {
@@ -557,6 +575,15 @@ export interface GameState {
 
   /** Thời tiết hôm nay + dự báo (core 1.3). */
   weather: WeatherState;
+
+  /**
+   * KHO TẬP TRUNG — kho chung của cả nông trại, tách khỏi túi đồ.
+   *
+   * MỘT kho duy nhất dù nhà kho chiếm bao nhiêu ô, cùng tinh thần với "lưới
+   * điện chỉ có một" ở bước 2 của newday: người chơi nghĩ về *cái kho*, không
+   * nghĩ về từng ô tường của nó. Đây cũng là chỗ người làm thuê sẽ đổ hàng về.
+   */
+  store: InvSlot[];
 }
 
 /* ---------------------------------------------------------------------------
@@ -591,6 +618,16 @@ export type Action =
    *  (kể cả bản đồ đích) trong props.json, nên không ai nhảy bừa sang bản đồ
    *  hay toạ độ tuỳ ý được. */
   | { t: "PORTAL"; x: number; y: number }
+  /** Xây cả một tuyến công trình từ (x0,y0) tới (x1,y1) theo hình chữ L. */
+  | { t: "BUILD_LINE"; id: string; x0: number; y0: number; x1: number; y1: number }
+  /** Cất từ túi vào kho (slot của TÚI). */
+  | { t: "STORE_PUT"; slot: number; n: number }
+  /** Lấy từ kho ra túi (slot của KHO). */
+  | { t: "STORE_TAKE"; slot: number; n: number }
+  /** Cất TẤT CẢ nông sản và nguyên liệu trong túi vào kho. */
+  | { t: "STORE_PUT_ALL" }
+  /** Bán sạch nông sản đang nằm trong kho. */
+  | { t: "STORE_SELL_ALL" }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
   | { t: "DEBUG"; op: DebugOp; n?: number }

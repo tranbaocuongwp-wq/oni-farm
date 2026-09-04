@@ -1265,6 +1265,25 @@ body[data-hand="left"] #abtn .btns {
   transform: translateY(2px);
   border-bottom-width: 2px;
 }
+/* Nút XÂY THEO TUYẾN — chỉ hiện khi đang cầm công trình. */
+.linebtn {
+  align-self: flex-end;
+  margin-bottom: 3px;
+  padding: 3px 11px;
+  min-height: 0;
+  font-size: calc(var(--fs-sm) * 0.9);
+  border-radius: 999px;
+  color: var(--ink-dim);
+}
+.linebtn[hidden] {
+  display: none;
+}
+.linebtn.on {
+  background: rgba(61, 90, 130, 0.96);
+  border-color: #5aa9e6;
+  color: #dceeff;
+}
+
 /* lý do không làm được — dòng nhỏ trên nút */
 #abtn .why {
   max-width: 46vw;

@@ -33,6 +33,11 @@ export interface MenuHandlers {
   /** Còn thiếu gì để làm được công thức này. */
   missingFor(id: string): { id: string; need: number; have: number }[];
   debug(op: DebugOp, n?: number): void;
+  /** Kho tập trung: cất / lấy / cất hết / bán hết. */
+  storePut(slot: number, n: number): void;
+  storeTake(slot: number, n: number): void;
+  storePutAll(): void;
+  storeSellAll(): void;
   sell(id: string, n: number): void;
   sellAll(): void;
   save(): void;
@@ -50,6 +55,9 @@ export interface MenuHandlers {
   /** Có thể cài PWA không (đã bắt được beforeinstallprompt). */
   canInstall(): boolean;
   install(): void;
+  /** Bật/tắt bảng gỡ lỗi nổi. Phải có NÚT chứ không chỉ có phím tắt — điện
+   *  thoại không có bàn phím, mà đây là thiết bị chơi chính. */
+  toggleDevPanel(): void;
   /** Mở lại hướng dẫn lần đầu. */
   replayTutorial(): void;
   /** Thiết bị đang dùng cảm ứng — để ẩn phần bàn phím trong Hướng dẫn. */
@@ -61,6 +69,7 @@ export interface Menus {
   close(): void;
   openShop(): void;
   openSell(): void;
+  openStore(): void;
   openCraft(): void;
   openPause(): void;
   openSettings(): void;
@@ -71,6 +80,16 @@ export interface Menus {
 }
 
 const money = (n: number) => `${n.toLocaleString("vi-VN")}đ`;
+
+/** Tên hiển thị của một id vật phẩm — kho trộn cả nông sản lẫn nguyên liệu. */
+function itemLabel(id: string, c: Content): string {
+  if (id.startsWith("crop:")) return c.crops[id.slice(5)]?.name ?? id;
+  if (id.startsWith("item:")) return c.materials[id.slice(5)]?.name ?? id;
+  if (id.startsWith("seed:")) return c.crops[id.slice(5)]?.seedName ?? id;
+  if (id.startsWith("tool:")) return c.tools[id.slice(5)]?.name ?? id;
+  if (id.startsWith("build:")) return c.buildings[id.slice(6)]?.name ?? id;
+  return id;
+}
 
 export function createMenus(
   root: HTMLElement,
@@ -274,6 +293,77 @@ export function createMenus(
   }
 
   /* --------------------------------------------------------- QUẦY THU MUA */
+  /* --------------------------------------------------------------- KHO */
+  function openStore() {
+    current = openStore;
+    const s = getState();
+    const c = getContent();
+
+    const inStore = s.store
+      .map((slot, i) => ({ slot, i }))
+      .filter((x) => x.slot !== null) as { slot: { id: string; n: number }; i: number }[];
+    const inBag = s.inv
+      .map((slot, i) => ({ slot, i }))
+      .filter((x) => x.slot !== null && (x.slot.id.startsWith("crop:") || x.slot.id.startsWith("item:"))) as {
+      slot: { id: string; n: number };
+      i: number;
+    }[];
+
+    const dang = inStore.reduce((n, x) => n + x.slot.n, 0);
+    const banDuoc = inStore.reduce(
+      (sum, x) => sum + (x.slot.id.startsWith("crop:") ? (c.crops[x.slot.id.slice(5)]?.sellPrice ?? 0) * x.slot.n : 0),
+      0,
+    );
+
+    const { body, foot } = shell(
+      "Kho tập trung",
+      `${dang} món · ${s.store.length} ô${banDuoc > 0 ? ` · bán hết được ${money(banDuoc)}` : ""}`,
+      "sheet",
+    );
+
+    const grid = document.createElement("div");
+    grid.className = "grid2";
+    grid.append(
+      mkBtn("Cất hết nông sản", () => {
+        h.storePutAll();
+        openStore();
+      }, "primary"),
+      mkBtn("Bán hết trong kho", () => {
+        h.storeSellAll();
+        openStore();
+      }, banDuoc > 0 ? "accent" : "dim"),
+    );
+    body.appendChild(grid);
+
+    body.appendChild(note("TRONG KHO — bấm để lấy ra túi"));
+    if (!inStore.length) body.appendChild(note("Kho đang trống."));
+    for (const { slot, i } of inStore)
+      body.appendChild(
+        row({
+          id: slot.id,
+          name: `${itemLabel(slot.id, c)} ×${slot.n}`,
+          desc: "",
+          price: "",
+          action: { label: "Lấy", disabled: false, onClick: () => { h.storeTake(i, slot.n); openStore(); } },
+        }),
+      );
+
+    body.appendChild(note("TRONG TÚI — bấm để cất vào kho"));
+    if (!inBag.length) body.appendChild(note("Túi không có gì để cất."));
+    for (const { slot, i } of inBag)
+      body.appendChild(
+        row({
+          id: slot.id,
+          name: `${itemLabel(slot.id, c)} ×${slot.n}`,
+          desc: "",
+          price: "",
+          action: { label: "Cất", disabled: false, onClick: () => { h.storePut(i, slot.n); openStore(); } },
+        }),
+      );
+
+    foot.appendChild(mkBtn("Đóng", close, "primary"));
+  }
+
   function openSell() {
     current = openSell;
     const s = getState();
@@ -587,7 +677,12 @@ export function createMenus(
       mkBtn("? Hướng dẫn chơi", () => openHelp()),
     );
     if (h.canInstall()) list.appendChild(mkBtn("⤓ Cài về màn hình chính", () => h.install(), "accent"));
-    list.appendChild(note("Bảng gỡ lỗi: phím F2 (bảng nổi, không chặn game)."));
+    list.appendChild(
+      mkBtn("Bảng gỡ lỗi", () => {
+        close();
+        h.toggleDevPanel();
+      }, "dim"),
+    );
     body.appendChild(list);
 
     if (info.pending) body.appendChild(note(`Có nội dung ${info.pending} đang chờ — tải lại trang để áp dụng.`));
@@ -763,6 +858,7 @@ export function createMenus(
     close,
     openShop,
     openSell,
+    openStore,
     openCraft,
     openPause,
     openSettings,

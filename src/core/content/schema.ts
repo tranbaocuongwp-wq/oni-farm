@@ -193,10 +193,11 @@ export function validateBuildings(raw: unknown): string[] {
     k.num(item, "price", 0);
     k.enumStr(item, "kind", ["floor", "object"] as const);
     if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
+    if (item["autotile"] !== undefined) k.enumStr(item, "autotile", ["fence"] as const);
 
     const eff = k.obj(item, "effects");
     if (eff) {
-      const allowed = ["waterRadius", "autoWet", "allSeason", "income", "harvestRadius"];
+      const allowed = ["waterRadius", "autoWet", "allSeason", "speedMul", "income", "harvestRadius"];
       for (const key of Object.keys(eff))
         if (!allowed.includes(key))
           k.fail(`effects.${key}`, `hiệu ứng không được core hỗ trợ (core biết: ${allowed.join(", ")})`);
@@ -263,7 +264,7 @@ export function validateItems(raw: unknown): string[] {
   return c.errors;
 }
 
-const INTERACTS = ["SLEEP", "SHOP", "SELL", "REFILL", "CRAFT", "PORTAL"] as const;
+const INTERACTS = ["SLEEP", "SHOP", "SELL", "REFILL", "CRAFT", "PORTAL", "STORE"] as const;
 const TOOL_ACTIONS = ["TILL", "WATER", "CHOP", "MINE"] as const;
 
 export function validateProps(raw: unknown): string[] {
@@ -547,7 +548,7 @@ export function validateBalance(raw: unknown): string[] {
   return c.errors;
 }
 
-const GROUNDS = ["grass", "path", "water", "wood"] as const;
+const GROUNDS = ["grass", "path", "water", "wood", "asphalt"] as const;
 
 export function validateTiles(raw: unknown): string[] {
   const c = new Check("tiles.json");
@@ -566,6 +567,9 @@ export function validateTiles(raw: unknown): string[] {
       if (v["solid"] !== undefined && typeof v["solid"] !== "boolean")
         k.fail("solid", "phải là boolean");
       if (v["interact"] !== undefined) k.enumStr(v, "interact", INTERACTS);
+      // Trần 4: nhanh hơn thế thì nhân vật lướt qua ô nhanh hơn một khung hình
+      // và va chạm bắt đầu bỏ sót tường. Sàn 0,1 để không có nền nào đứng hình.
+      if (v["speedMul"] !== undefined) k.num(v as Record<string, unknown>, "speedMul", 0.1, 4);
       c.merge(k);
     }
 

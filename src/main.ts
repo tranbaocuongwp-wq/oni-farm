@@ -50,10 +50,11 @@ import { createDevPanel } from "./ui/devpanel.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
-import { canCraft, canUseAt, interactAt, missingFor } from "./game/actions.ts";
+import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
 import { facingTile, hintAt, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
+import { canPlaceBuilding } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
@@ -273,6 +274,11 @@ async function boot() {
       source: contentSource,
       pending: pendingVersion,
     }),
+    storePut: (slot, n) => store.dispatch({ t: "STORE_PUT", slot, n }),
+    storeTake: (slot, n) => store.dispatch({ t: "STORE_TAKE", slot, n }),
+    storePutAll: () => store.dispatch({ t: "STORE_PUT_ALL" }),
+    storeSellAll: () => store.dispatch({ t: "STORE_SELL_ALL" }),
+    toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
     install: async () => {
       const p = installPrompt;
@@ -337,6 +343,11 @@ async function boot() {
         }
       : {}),
   });
+
+  {
+    const lb = document.querySelector<HTMLElement>("#linebtn");
+    lb?.addEventListener("click", () => setLineMode(!lineMode));
+  }
 
   for (const [sel, code] of [
     ["#abtn .a", "Space"],
@@ -528,6 +539,31 @@ async function boot() {
     return t.g !== "water" || !!content.tiles.grounds["water"]?.interact;
   }
 
+  /* ---- XÂY THEO TUYẾN ---------------------------------------------------
+     Chọn ô đầu, chọn ô cuối, cả tuyến dựng một lượt. Trạng thái này CỐ Ý không
+     nằm trong `GameState`: nó là ý định nhất thời đang vẽ dở, cùng loại với
+     đích của `nav`. Bỏ dở giữa chừng thì không có gì phải dọn trong save. */
+  let lineMode = false;
+  let lineFrom: { x: number; y: number } | null = null;
+
+  /** Đang cầm công trình gì (id trần), null nếu không cầm công trình nào. */
+  function heldBuilding(s: GameState): string | null {
+    const held = s.inv[s.sel];
+    if (!held?.id.startsWith("build:")) return null;
+    const id = held.id.slice(6);
+    return content.buildings[id] ? id : null;
+  }
+
+  const setLineMode = (on: boolean) => {
+    lineMode = on;
+    lineFrom = null;
+    const b = document.querySelector<HTMLElement>("#linebtn");
+    if (b) {
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  };
+
   function holdingSolidBuilding(s: GameState): boolean {
     const held = s.inv[s.sel];
     if (!held?.id.startsWith("build:")) return false;
@@ -545,6 +581,9 @@ async function boot() {
         return true;
       case "SELL":
         menus.openSell();
+        return true;
+      case "STORE":
+        menus.openStore();
         return true;
       case "CRAFT":
         menus.openCraft();
@@ -839,6 +878,24 @@ async function boot() {
           // tới nơi được phép mở cửa hàng/giường như bình thường.
           workGoal = null;
 
+          // Chế độ tuyến nuốt cú chạm: chạm đầu đặt mốc, chạm sau thì dựng.
+          const lineId = lineMode ? heldBuilding(s) : null;
+          if (lineId) {
+            if (!lineFrom) lineFrom = { x: tx, y: ty };
+            else {
+              store.dispatch({
+                t: "BUILD_LINE",
+                id: lineId,
+                x0: lineFrom.x,
+                y0: lineFrom.y,
+                x1: tx,
+                y1: ty,
+              });
+              lineFrom = null;
+            }
+            break;
+          }
+
           if (!it.double) {
             // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
             // Trước đây mọi cú chạm đều huỷ rồi tìm đường lại, nên người chơi
@@ -897,9 +954,26 @@ async function boot() {
       if (fade <= 0) dayFadeAt = 0;
     }
 
+    // Nút TUYẾN chỉ hiện khi đang cầm công trình — không cầm gì thì nó vô nghĩa.
+    const buildId = heldBuilding(s);
+    const lineBtn = document.querySelector<HTMLElement>("#linebtn");
+    if (lineBtn) lineBtn.hidden = buildId === null;
+    if (!buildId && lineMode) setLineMode(false);
+
+    // Xem trước tuyến: từ mốc đã đặt tới ô đang ngắm.
+    let lineCells: { x: number; y: number; ok: boolean }[] | null = null;
+    if (lineMode && buildId && lineFrom && cursor) {
+      lineCells = linePath(lineFrom.x, lineFrom.y, cursor.x, cursor.y).map((c) => ({
+        x: c.x,
+        y: c.y,
+        ok: canPlaceBuilding(s, content, buildId, c.x, c.y),
+      }));
+    }
+
     const wxDef = weatherDef(s, content);
     const fogUntil = wxDef.fogUntil ?? 0;
     renderer.draw(s, content, cursor, elapsed, {
+      lineCells,
       navTarget: navT ? { x: navT.tx, y: navT.ty } : null,
       fade,
       reduceMotion: document.body.dataset["motion"] === "reduce",

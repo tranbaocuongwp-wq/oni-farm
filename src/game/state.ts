@@ -36,6 +36,11 @@ export type { MigrateResult } from "./invariants.ts";
 /** Số toast tối đa giữ lại trong state. */
 export const LOG_LIMIT = 30;
 
+/** Số ô của kho tập trung. Content quyết định; thiếu thì 60. */
+export function storeSize(content: Content): number {
+  return Math.max(1, Math.floor(content.balance.storeSlots ?? 60));
+}
+
 /* ------------------------------------------------------------------- PRNG */
 
 /** mulberry32 — một bước, thuần: (seed) -> { v in [0,1), seed mới }. */
@@ -326,6 +331,8 @@ export function createNewGame(content: Content, seed = 1): GameState {
     pending: null,
 
     water: Math.max(0, Math.floor(content.balance.startWater ?? 0)),
+
+    store: new Array<InvSlot>(storeSize(content)).fill(null),
 
     weather: {
       today: content.weatherFirst,

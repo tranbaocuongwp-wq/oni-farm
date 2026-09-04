@@ -175,6 +175,36 @@
           "n": 4
         }
       ]
+    },
+    {
+      "id": "road",
+      "name": "Đường nhựa ×4",
+      "desc": "Đập đá lấy sỏi rải đường.",
+      "out": {
+        "id": "build:road",
+        "n": 4
+      },
+      "in": [
+        {
+          "id": "item:stone",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "fence",
+      "name": "Hàng rào ×4",
+      "desc": "Đốn gỗ đóng rào.",
+      "out": {
+        "id": "build:fence",
+        "n": 4
+      },
+      "in": [
+        {
+          "id": "item:wood",
+          "n": 3
+        }
+      ]
     }
   ]
 }

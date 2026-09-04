@@ -289,6 +289,39 @@ năng lượng lúc chạm đất), nên ngay sau khi ra lệnh thì không các
 trượt. Đếm bộ đếm thống kê thì đúng với mọi lý do hỏng cùng lúc — hết năng lượng, túi đầy,
 hết hạt, kẹt đường.
 
+### Hạ tầng: đường nhựa, hàng rào, kho
+
+**Đường nhựa** là công trình sàn (`build:road`, chế từ đá), không phải nền — cố ý: `mergeGrid`
+dựng lại NỀN từ bản đồ mỗi lần cập nhật content, nên đường ghi vào nền sẽ bị xoá sạch sau một
+lần đẩy OTA, còn `Tile.b` thì được giữ. Nền `asphalt` vẫn có để người thiết kế bản đồ vẽ sẵn
+đường trục.
+
+Đường làm hai việc: đi trên đó nhanh hơn `speedMul` lần, **và A\* tự vòng qua đường** — vì
+chi phí mỗi bước được CHIA cho `speedMul`. Không có luật "ưu tiên đường" riêng nào; thêm một
+luật như thế sẽ đá nhau với heuristic. Kèm theo một ràng buộc bắt buộc: heuristic cũng phải
+chia cho `speedMul` lớn nhất trong content, nếu không nó ước lượng THỪA và A\* âm thầm mất
+tính tối ưu — vẫn ra đường hợp lệ, chỉ là không phải đường ngắn nhất.
+
+**Hàng rào** (`build:fence`, chế từ gỗ) tự nối hình theo hàng xóm — 16 biến thể bitmask dựng
+sẵn một lần, sinh từ tham số màu trong content nên thêm kiểu rào mới không cần code. Nó nằm ở
+lớp thực thể có `base` chứ không phải lớp nền, vì hàng rào phải che được nhân vật đi phía sau.
+
+**Xây theo tuyến**: cầm công trình → nút TUYẾN → chạm ô đầu, chạm ô cuối. Tuyến đi hình chữ L
+(ngang rồi dọc) chứ không phải đường chéo — pixel art đi chéo trông gãy khúc, mà người chơi
+phân lô thì nghĩ bằng ô vuông. Trần 24 ô, ô đầu phải trong tầm với, trừ đủ vật liệu và năng
+lượng từng ô (không giảm giá theo lô, nếu không thì xây tuyến thành cách lách giá). Hết vật
+liệu thì dừng tại đó và báo đã xây được bao nhiêu.
+
+### Kho tập trung
+
+Nhà kho nằm sẵn trên bản đồ, có con đường nhựa dẫn từ mép nam vào tận cửa. `state.store` là
+MỘT kho chung dù nhà kho chiếm bao nhiêu ô — cùng tinh thần với "lưới điện chỉ có một" ở bước
+2 của `newday`: người chơi nghĩ về *cái kho*, không nghĩ về từng ô tường của nó. Đây cũng là
+chỗ người làm thuê sẽ đổ hàng về.
+
+"Cất hết" chỉ cất nông sản và nguyên liệu — **không** cất công cụ và hạt giống, vì cất mất cái
+cuốc thì lần sau ra ruộng lại phải chạy về lấy.
+
 ### Hiển thị & camera
 
 `src/render/camera.ts` là chỗ **duy nhất** trong dự án biết màn hình to nhỏ ra sao.

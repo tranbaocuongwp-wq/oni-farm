@@ -205,6 +205,10 @@ export function migrateSave(data: SaveData): GameState | null {
     };
   }
 
+  // v7 → v8: KHO TẬP TRUNG. Save cũ chưa có kho nên bắt đầu rỗng;
+  // `migrateForContent` sẽ nong đúng số ô mà content quy định.
+  if (s.save === 7) s = { ...s, save: 8, store: [] };
+
   return s.save === SAVE_VERSION ? s : null;
 }
 

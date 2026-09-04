@@ -12,7 +12,7 @@
 import type { Content, Dir } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dPlayer } from "./state.ts";
-import { PLAYER_SPEED, blockedAt } from "./world.ts";
+import { PLAYER_SPEED, blockedAt, speedMulAt } from "./world.ts";
 
 export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
   if (nx === 0 && ny === 0) return fallback;
@@ -31,9 +31,11 @@ export function movePlayer(
 ): boolean {
   const p = d.base.player;
   const len = Math.sqrt(dx * dx + dy * dy);
-  const base = run
-    ? (content.balance.runSpeed ?? PLAYER_SPEED)
-    : (content.balance.moveSpeed ?? PLAYER_SPEED);
+  // Nền dưới chân quyết định tốc độ: đường nhựa đi nhanh hơn cỏ.
+  const base =
+    (run
+      ? (content.balance.runSpeed ?? PLAYER_SPEED)
+      : (content.balance.moveSpeed ?? PLAYER_SPEED)) * speedMulAt(d.s, content, p.x, p.y);
   // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
   const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
   const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;

@@ -81,6 +81,45 @@
         "dark": "#64748b",
         "accent": "#f59e0b"
       }
+    },
+    {
+      "id": "road",
+      "name": "Đường nhựa",
+      "desc": "Đi trên đường nhanh hơn hẳn. Người và xe đều tự chọn đường mà đi.",
+      "price": 18,
+      "kind": "floor",
+      "solid": false,
+      "effects": {
+        "speedMul": 1.35
+      },
+      "power": {
+        "produce": 0,
+        "consume": 0
+      },
+      "art": {
+        "body": "#4a4a52",
+        "dark": "#35353b",
+        "accent": "#c9c07a"
+      }
+    },
+    {
+      "id": "fence",
+      "name": "Hàng rào",
+      "desc": "Phân lô và nhốt vật nuôi. Tự nối liền với hàng rào bên cạnh.",
+      "price": 14,
+      "kind": "object",
+      "solid": true,
+      "autotile": "fence",
+      "effects": {},
+      "power": {
+        "produce": 0,
+        "consume": 0
+      },
+      "art": {
+        "body": "#a97d4e",
+        "dark": "#6b4a2c",
+        "accent": "#c49a68"
+      }
     }
   ]
 }

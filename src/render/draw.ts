@@ -43,6 +43,7 @@ import {
   PLAYER_ACT_FRAME,
   PLAYER_RAISE_FRAME,
   houseVariantKey,
+  tileMaskKey,
   variantFor,
   type Atlas,
   type HeldKind,
@@ -98,6 +99,8 @@ export interface DrawOptions {
   reduceMotion: boolean;
   /** Thời tiết hôm nay (core 1.3). */
   weather: WeatherFx;
+  /** Các ô của tuyến đang ngắm khi xây theo tuyến — vẽ xem trước. */
+  lineCells: { x: number; y: number; ok: boolean }[] | null;
 }
 
 export interface Renderer {
@@ -320,7 +323,14 @@ export function createRenderer(
             if (nb && nb.g !== "water") g.drawImage(atlas.shore[sd][shoreFrame]!, px, py);
           continue;
         }
-        const base = t.g === "path" ? atlas.path : t.g === "wood" ? atlas.wood : atlas.grass;
+        const base =
+          t.g === "path"
+            ? atlas.path
+            : t.g === "wood"
+              ? atlas.wood
+              : t.g === "asphalt"
+                ? atlas.asphalt
+                : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
 
         if (t.b) {
@@ -355,6 +365,12 @@ export function createRenderer(
 
   function isHouse(t: Tile | undefined): boolean {
     return !!t && (t.prop === "house" || t.prop === "door");
+  }
+
+  /** Ô kề có CÙNG công trình không — dùng cho hàng rào tự nối. */
+  function sameBuild(s: GameState, x: number, y: number, id: string): boolean {
+    if (x < 0 || y < 0 || x >= s.w || y >= s.h) return false;
+    return s.tiles[y * s.w + x]?.b === id;
   }
 
   function collectEntities(
@@ -427,7 +443,20 @@ export function createRenderer(
 
         if (t.b) {
           const def = content.buildings[t.b];
-          const img = atlas.buildings[t.b];
+          // Công trình TỰ NỐI (hàng rào): chọn sprite theo hàng xóm CÙNG id.
+          // Phải nằm ở lớp thực thể có `base` chứ không phải lớp nền — hàng rào
+          // đứng cao hơn mặt đất và phải che được nhân vật đi phía sau nó.
+          const auto = def?.autotile ? atlas.autotiles[t.b] : undefined;
+          const img = auto
+            ? auto.get(
+                tileMaskKey({
+                  up: sameBuild(s, x, y - 1, t.b),
+                  down: sameBuild(s, x, y + 1, t.b),
+                  left: sameBuild(s, x - 1, y, t.b),
+                  right: sameBuild(s, x + 1, y, t.b),
+                }),
+              )
+            : atlas.buildings[t.b];
           if (def && img && def.kind === "object") {
             items.push({ base, run: () => g.drawImage(img, px, py) });
             if (def.power.produce > 0 || def.effects.harvestRadius)
@@ -767,6 +796,20 @@ export function createRenderer(
         opts.navTarget.x * TILE - camera.rx,
         opts.navTarget.y * TILE - camera.ry,
       );
+    }
+
+    // Xem trước tuyến sắp xây: ô nào đặt được thì khung xanh, không thì khung đỏ.
+    // Người chơi thấy TRƯỚC nó sẽ chạy đâu và tốn bao nhiêu, không phải xây rồi
+    // mới biết mình vẽ nhầm.
+    if (opts.lineCells) {
+      g.globalAlpha = 0.85;
+      for (const c of opts.lineCells)
+        g.drawImage(
+          c.ok ? atlas.cursorOk : atlas.cursorNo,
+          c.x * TILE - camera.rx,
+          c.y * TILE - camera.ry,
+        );
+      g.globalAlpha = 1;
     }
 
     const items: Item[] = [];

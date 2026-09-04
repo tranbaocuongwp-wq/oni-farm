@@ -6,7 +6,9 @@
       "name": "Bắt đầu",
       "require": {},
       "unlocks": [
-        "seed:lettuce"
+        "seed:lettuce",
+        "road",
+        "fence"
       ],
       "toast": "Nông trại là của bạn rồi. Cày một ô và gieo hạt đi!"
     },

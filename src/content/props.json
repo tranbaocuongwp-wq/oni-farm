@@ -336,6 +336,27 @@
         "dark": "#284f22",
         "accent": "#5fa04a"
       }
+    },
+    {
+      "id": "warehouse",
+      "name": "Nhà kho",
+      "solid": true,
+      "art": {
+        "body": "#8d939c",
+        "dark": "#5b6068",
+        "accent": "#c3c9d2"
+      }
+    },
+    {
+      "id": "store_door",
+      "name": "Cửa kho",
+      "solid": true,
+      "interact": "STORE",
+      "art": {
+        "body": "#8d939c",
+        "dark": "#4a4f56",
+        "accent": "#e0b45a"
+      }
     }
   ]
 }

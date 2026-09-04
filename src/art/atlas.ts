@@ -50,6 +50,9 @@ const P = {
   flower: ["#f9e26b", "#f7f2e8", "#f28bb3"],
   path: ["#c9ab7a", "#bf9f6e", "#d3b686"],
   pathDark: "#9a7d54",
+  asphalt: ["#4a4a52", "#53535c", "#434349"],
+  asphaltDark: "#35353b",
+  asphaltLine: "#c9c07a",
   soil: ["#7a4f2f", "#86593a", "#6b4328"],
   soilWet: ["#4e3220", "#573a26", "#432a19"],
   soilEdge: "#54331e",
@@ -224,6 +227,27 @@ function makeTuft(): HTMLCanvasElement {
     const y = 8 + Math.floor(rnd() * 5);
     const h = 3 + Math.floor(rnd() * 3);
     for (let k = 0; k < h; k++) s.px(x, y - k, k === h - 1 ? P.grassTuft : P.grassDark);
+  }
+  return s.c;
+}
+
+/**
+ * Đường nhựa. Bốn biến thể để mặt đường không lặp lại trông như giấy dán tường;
+ * vạch kẻ vàng đứt quãng nằm ở biến thể 1 và 3 nên rải ra thành nét đứt tự
+ * nhiên theo hàm băm toạ độ, không cần autotile.
+ */
+function makeAsphalt(variant: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x5c2f + variant * 92821);
+  s.rect(0, 0, TILE, TILE, P.asphalt[0]!);
+  for (let i = 0; i < 46; i++)
+    s.px(Math.floor(rnd() * TILE), Math.floor(rnd() * TILE), pick(P.asphalt, rnd()));
+  // vài hạt sạn tối cho có mặt nhám
+  for (let i = 0; i < 5; i++)
+    s.px(1 + Math.floor(rnd() * 14), 1 + Math.floor(rnd() * 14), P.asphaltDark);
+  if (variant % 2 === 1) {
+    // vạch kẻ giữa, đứt quãng
+    for (let y = 3; y < 13; y++) if (y % 5 !== 0) s.px(8, y, P.asphaltLine);
   }
   return s.c;
 }
@@ -711,8 +735,42 @@ function makeBushBig(art: PropArt): HTMLCanvasElement {
  * hình. Id lạ (content mới đẩy qua OTA, core chưa biết vẽ) vẫn ra một hình cọc
  * dễ nhận, chứ không làm trắng màn hình.
  */
+/**
+ * Tường nhà kho — tôn múi ngang, xám kim loại.
+ *
+ * Không dùng autotile như ngôi nhà: kho là một khối chữ nhật đặc, và mái đã
+ * được gợi ý bằng dải sáng ở hàng trên cùng, nên ô nào cũng vẽ giống nhau vẫn
+ * ra hình cái nhà kho. Đỡ được 32 biến thể mà mắt không nhận ra khác biệt.
+ */
+function makeWarehouse(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 0, TILE, TILE, art.body);
+  // tôn múi: sọc dọc xen kẽ
+  for (let x = 0; x < TILE; x += 3) s.vline(x, 0, TILE, art.dark);
+  // dải sáng trên cùng = mép mái
+  s.hline(0, 0, TILE, art.accent);
+  s.hline(0, 1, TILE, art.dark);
+  return s.c;
+}
+
+/** Cửa kho — cửa cuốn kim loại, có tay nắm vàng cho dễ nhận ra là chỗ bấm. */
+function makeStoreDoor(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 0, TILE, TILE, art.body);
+  for (let x = 0; x < TILE; x += 3) s.vline(x, 0, TILE, art.dark);
+  s.hline(0, 0, TILE, art.accent);
+  s.hline(0, 1, TILE, art.dark);
+  // khung cửa cuốn
+  s.rect(3, 4, 10, 12, art.dark);
+  for (let y = 5; y < TILE; y += 2) s.hline(4, y, 8, art.body);
+  s.rect(7, 10, 2, 2, art.accent);
+  return s.c;
+}
+
 function makeProp(id: string, art: PropArt): HTMLCanvasElement {
   switch (id) {
+    case "warehouse": return makeWarehouse(art);
+    case "store_door": return makeStoreDoor(art);
     case "tree": return makeTree(art);
     case "sapling": return makeSapling(art);
     case "stump": return makeStump(art);
@@ -1573,6 +1631,7 @@ export type Side = "n" | "s" | "w" | "e";
 export interface Atlas {
   grass: HTMLCanvasElement[];
   path: HTMLCanvasElement[];
+  asphalt: HTMLCanvasElement[];
   soil: HTMLCanvasElement[];
   soilWet: HTMLCanvasElement[];
   /** Viền lô đất theo cạnh giáp ô chưa cày. */
@@ -1587,6 +1646,8 @@ export interface Atlas {
   voidIn: HTMLCanvasElement[];
   /** Mọi vật thể, dựng theo props.json. Cao 32px nếu prop khai `tall`. */
   props: Record<string, HTMLCanvasElement>;
+  /** công trình tự nối: id → (khoá bitmask → sprite) */
+  autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
@@ -1619,12 +1680,63 @@ export interface Atlas {
   weatherIcon(id: string): HTMLCanvasElement;
 }
 
+/**
+ * Một ô hàng rào, hình phụ thuộc HÀNG XÓM.
+ *
+ * Sinh hoàn toàn từ tham số màu trong content, không switch theo id — nên thêm
+ * kiểu rào mới (rào đá, rào lưới) chỉ là thêm một object JSON.
+ *
+ * Luôn có trụ ở giữa; mỗi hướng có hàng xóm thì nối thêm hai thanh ngang ra
+ * mép. Nhờ vậy rào cụt vẫn ra hình cái cọc, còn rào dài thì liền mạch.
+ */
+function makeFence(art: { body: string; dark: string; accent: string }, n: Neighbors): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const TOP = 5; // ngọn trụ
+  const BAR1 = 8;
+  const BAR2 = 12;
+
+  const rail = (x0: number, x1: number, y: number) => {
+    s.hline(x0, y, x1 - x0 + 1, art.body);
+    s.hline(x0, y + 1, x1 - x0 + 1, art.dark);
+  };
+  // thanh ngang sang trái/phải
+  if (n.left) {
+    rail(0, 7, BAR1);
+    rail(0, 7, BAR2);
+  }
+  if (n.right) {
+    rail(8, TILE - 1, BAR1);
+    rail(8, TILE - 1, BAR2);
+  }
+  // thanh dọc lên/xuống — rào chạy theo trục dọc thì nối bằng thanh đứng
+  const post = (x: number, y0: number, y1: number, c: string) => s.vline(x, y0, y1 - y0 + 1, c);
+  if (n.up) {
+    post(6, 0, BAR1, art.body);
+    post(9, 0, BAR1, art.dark);
+  }
+  if (n.down) {
+    post(6, BAR2, TILE - 1, art.body);
+    post(9, BAR2, TILE - 1, art.dark);
+  }
+  // trụ đứng ở giữa, luôn có
+  s.rect(6, TOP, 4, TILE - TOP - 1, art.body);
+  s.vline(9, TOP, TILE - TOP - 1, art.dark);
+  s.hline(6, TOP, 4, art.accent);
+  s.shadow(8, TILE - 1, 3, 1.2);
+  return outline(s).c;
+}
+
 function houseKey(n: Neighbors, door: boolean): string {
   return `${n.up ? 1 : 0}${n.down ? 1 : 0}${n.left ? 1 : 0}${n.right ? 1 : 0}${door ? "D" : "-"}`;
 }
 
 export function houseVariantKey(n: Neighbors, door: boolean) {
   return houseKey(n, door);
+}
+
+/** Khoá bitmask 16 cho vật tự nối (hàng rào). Cùng thứ tự với `houseKey`. */
+export function tileMaskKey(n: Neighbors): string {
+  return `${n.up ? 1 : 0}${n.down ? 1 : 0}${n.left ? 1 : 0}${n.right ? 1 : 0}`;
 }
 
 function makeSeedIcon(def: CropDef): HTMLCanvasElement {
@@ -1733,6 +1845,7 @@ function makeToolIcon(id: string, action: string): HTMLCanvasElement {
 export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3, 4, 5].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
+  const asphalt = [0, 1, 2, 3].map(makeAsphalt);
   const wood = [0, 1, 2, 3].map(makePlank);
   const soil = [0, 1].map((v) => makeSoil(false, v));
   const soilWet = [0, 1].map((v) => makeSoil(true, v));
@@ -1768,9 +1881,24 @@ export function buildAtlas(content: Content): Atlas {
   }
 
   const buildings: Record<string, HTMLCanvasElement> = {};
+  const autotiles: Record<string, Map<string, HTMLCanvasElement>> = {};
   for (const id of content.buildingOrder) {
     const def = content.buildings[id]!;
     buildings[id] = makeBuilding(id, def.art, def.kind);
+    if (def.autotile === "fence") {
+      // 16 tổ hợp hàng xóm, dựng sẵn một lần — rẻ hơn hẳn dựng lại mỗi khung hình
+      const m = new Map<string, HTMLCanvasElement>();
+      for (let b = 0; b < 16; b++) {
+        const n: Neighbors = {
+          up: (b & 8) !== 0,
+          down: (b & 4) !== 0,
+          left: (b & 2) !== 0,
+          right: (b & 1) !== 0,
+        };
+        m.set(tileMaskKey(n), makeFence(def.art, n));
+      }
+      autotiles[id] = m;
+    }
   }
 
   const FALLBACK_ART: PropArt = { body: "#8a8f98", dark: "#4a4f56", accent: "#c8cfdb" };
@@ -1822,7 +1950,8 @@ export function buildAtlas(content: Content): Atlas {
   };
 
   return {
-    grass, path, soil, soilWet, soilEdge, water, shore, wood,
+    grass, path, asphalt, soil, soilWet, soilEdge, water, shore, wood,
+    autotiles,
     tuft: makeTuft(),
     voidOut: [0, 1, 2, 3].map((v) => makeVoid(v, false)),
     voidIn: [0, 1].map((v) => makeVoid(v, true)),

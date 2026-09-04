@@ -56,6 +56,10 @@
     "outOfSeason": "Hạt này không hợp mùa hiện tại.",
     "seasonNew": "Sang mùa mới:",
     "seasonWither": "Cây trái mùa đã héo:",
-    "seasonLast": "Hôm nay là ngày cuối mùa — mai sang"
+    "seasonLast": "Hôm nay là ngày cuối mùa — mai sang",
+    "tooFar": "Xa quá, lại gần hơn đi.",
+    "storeFull": "Kho đầy rồi.",
+    "nothingToStore": "Túi không có gì để cất.",
+    "nothingToSell": "Kho không có nông sản nào."
   }
 }

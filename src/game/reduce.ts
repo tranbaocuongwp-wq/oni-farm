@@ -12,11 +12,12 @@
 import type { Action, Content, GameState, StoredMap } from "./types.ts";
 import { applyProgression, commit, dPlayer, draft, storedView, toastKey, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
-import { canUseAt, craft, refill, useAt } from "./actions.ts";
+import { buildLine, canUseAt, craft, refill, useAt } from "./actions.ts";
 import { swapSlots } from "./inventory.ts";
 import { growCrops, growCropsIn, newDay } from "./newday.ts";
 import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
+import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
   blockedAt,
@@ -241,6 +242,39 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "CRAFT": {
       if (state.busy > 0) return state;
       craft(d, content, action.id);
+      if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "STORE_PUT": {
+      if (state.busy > 0) return state;
+      putToStore(d, content, action.slot | 0, action.n);
+      return commit(d);
+    }
+
+    case "STORE_TAKE": {
+      if (state.busy > 0) return state;
+      takeFromStore(d, content, action.slot | 0, action.n);
+      return commit(d);
+    }
+
+    case "STORE_PUT_ALL": {
+      if (state.busy > 0) return state;
+      putAllToStore(d, content);
+      return commit(d);
+    }
+
+    case "STORE_SELL_ALL": {
+      if (state.busy > 0) return state;
+      sellStore(d, content);
+      if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "BUILD_LINE": {
+      // Đang vung tay dở thì không xây — cùng luật với mọi thao tác khác.
+      if (state.busy > 0) return state;
+      buildLine(d, content, action.id, action.x0, action.y0, action.x1, action.y1);
       if (d.changed) applyProgression(d, content);
       return commit(d);
     }
