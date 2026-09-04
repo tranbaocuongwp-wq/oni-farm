@@ -973,6 +973,12 @@ body.touch .slot .k {
   flex-direction: column;
   gap: 6px;
 }
+/* Trong một DANH SÁCH CUỘN thì không có gì được co lại — co lại chính là thứ
+   làm nó hết cuộn được, và nội dung bên trong thì vẫn cao như cũ nên nó tràn
+   ra đè lên hàng xóm. Đặt ở đây một lần thay vì đi sửa từng loại thẻ. */
+.modal .body > * {
+  flex-shrink: 0;
+}
 .modal footer {
   padding: 8px 10px calc(8px + var(--sa-b));
   border-top: 2px solid var(--edge);
@@ -1114,8 +1120,15 @@ body.touch .slot .k {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 56px;
-  padding: 6px 8px;
+  /* KHÔNG ĐƯỢC CO. Thân tấm sheet là một flex column có cuộn, mà flex item mặc
+     định `flex-shrink: 1` — nên dòng nào cao hơn `min-height` bị ép về đúng
+     56px trong khi nội dung bên trong vẫn cao 75px, và phần thừa tràn ra đè
+     lên dòng trên lẫn dòng dưới. Đúng cảnh "Rìu thép" nằm chồng lên "Cuốc
+     chim" ở bàn chế tạo. Trong một danh sách cuộn thì không có gì được co lại
+     cả — co lại chính là thứ làm nó hết cuộn được. */
+  flex: none;
+  min-height: 52px;
+  padding: 5px 8px;
   background: var(--panel-2);
   border: 2px solid #1b140e;
   border-radius: var(--radius-sm);
@@ -1138,6 +1151,14 @@ body.touch .slot .k {
   font-size: var(--fs-sm);
   color: var(--ink-dim);
   white-space: normal;
+  line-height: 1.3;
+}
+/* Dòng mô tả của công thức chế tạo: chữ nhỏ hơn một nấc. Mười một công thức,
+   mỗi cái ba dòng thì phải cuộn hai màn mới xem hết — mà cả bàn chế tạo chỉ có
+   ngần ấy mục, đáng lẽ nhìn một lượt là thấy hết. */
+.row .desc.dim {
+  font-size: calc(var(--fs-sm) * 0.92);
+  margin-top: 1px;
 }
 .row .desc.dim {
   opacity: 0.75;
@@ -1145,8 +1166,8 @@ body.touch .slot .k {
 .row .need {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 3px;
+  gap: 3px;
+  margin-top: 2px;
 }
 .chip {
   display: inline-flex;
