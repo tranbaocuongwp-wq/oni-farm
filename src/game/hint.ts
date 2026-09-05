@@ -401,9 +401,19 @@ export function autoJob(
   state: GameState,
   content: Content,
   radius: number,
+  /**
+   * NEO — tìm việc quanh ô này thay vì quanh chỗ nhân vật đang đứng.
+   *
+   * Vì sao cần: chế độ tự động hay phải rời chỗ làm để đi múc nước. Xong việc
+   * đó mà lại tìm việc quanh CÁI GIẾNG thì nó nhảy sang làm dở dang một góc
+   * ruộng khác, rồi lần sau lại nhảy chỗ khác nữa — người chơi bật tự động lên
+   * và thấy nông trại bị cày lỗ chỗ khắp nơi thay vì xong gọn từng lô. Neo giữ
+   * cho nó QUAY LẠI đúng chỗ đang làm dở rồi mới làm tiếp.
+   */
+  from?: { x: number; y: number },
 ): AutoJob | null {
-  const px = state.player.x;
-  const py = state.player.y;
+  const px = from ? from.x * 16 + 8 : state.player.x;
+  const py = from ? from.y * 16 + 8 : state.player.y;
   const cx = Math.floor(px / 16);
   const cy = Math.floor(py / 16);
   const R = Math.max(0, Math.floor(radius));

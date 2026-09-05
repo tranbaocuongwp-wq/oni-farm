@@ -783,6 +783,8 @@ async function boot() {
      Cùng một hàm `continueWork` mà nút DÙNG giữ-để-làm-tiếp đang dùng — và
      cũng chính là hàm mà AI người làm thuê sẽ dùng lại. Viết một lần. */
   let autoWork = false;
+  /** Ô mà chế độ tự động đang làm dở — xem `autoStep`. */
+  let autoAnchor: { x: number; y: number } | null = null;
   /** Số lần liên tiếp không tìm ra việc. Hai lần thì tự tắt. */
   let autoMiss = 0;
   /** Ô đang đi tới ĐỂ LÀM VIỆC (không phải do người chơi chạm). Tới nơi thì chỉ
@@ -818,6 +820,7 @@ async function boot() {
   };
   const setAuto = (on: boolean) => {
     autoWork = on;
+    if (!on) autoAnchor = null;
     autoMiss = 0;
     // Đặt lại cả đồng hồ "không tiến triển", nếu không thì bật lại ngay sau khi
     // nó vừa tự tắt là tắt lần nữa tức thì (đồng hồ vẫn đang quá ngưỡng).
@@ -937,7 +940,17 @@ async function boot() {
    * nhân vật cày bằng cái bình tưới.
    */
   function autoStep(s: GameState): boolean {
-    const job = autoJob(s, content, autoRadius(s));
+    /* Tìm việc quanh NEO trước — neo là ô vừa làm xong. Chỉ khi quanh đó hết
+       việc mới bỏ neo và tìm lại từ chỗ nhân vật đang đứng.
+
+       Không có neo thì mỗi lần đi múc nước xong là nó tìm việc quanh cái
+       giếng, làm dở một góc ruộng khác, rồi lần sau lại nhảy chỗ nữa — bật tự
+       động lên một lúc là cả nông trại lỗ chỗ, không lô nào xong. */
+    let job = autoAnchor ? autoJob(s, content, autoRadius(s), autoAnchor) : null;
+    if (!job) {
+      autoAnchor = null;
+      job = autoJob(s, content, autoRadius(s));
+    }
 
     /* MÚC NƯỚC nằm giữa TƯỚI và CÀY trong thứ tự ưu tiên, không phải ở cuối.
        Bình cạn thì `canUseAt` bảo không tưới được, nên `autoJob` tụt xuống bậc
@@ -963,6 +976,9 @@ async function boot() {
     }
     aimed = { x: job.x, y: job.y };
     lastKind = job.kind;
+    // Neo bám theo ô vừa chọn: nó trôi dần theo luống đang làm, và sau mỗi
+    // chuyến đi múc nước thì đây là chỗ phải quay về.
+    autoAnchor = { x: job.x, y: job.y };
     if (inReachOf(s, job.x, job.y)) return tryUse(s, job.x, job.y);
     workGoal = { x: job.x, y: job.y };
     return nav.goTo(s, content, job.x, job.y, { avoidStandingOn: holdingSolidBuilding(s) });

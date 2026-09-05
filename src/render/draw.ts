@@ -336,7 +336,9 @@ export function createRenderer(
               ? atlas.wood
               : t.g === "asphalt"
                 ? atlas.asphalt
-                : atlas.grass;
+                : t.g === "concrete"
+                  ? atlas.concrete
+                  : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
 
         /* GỜ ĐẤT ở mép giáp nước. Vẽ ngay sau nền và TRƯỚC mọi thứ đặt lên ô,
@@ -344,7 +346,7 @@ export function createRenderer(
            mảng cho mỗi ô đất nhìn thấy — rẻ hơn hẳn một lần `blockedAt`, và
            đây là thứ duy nhất làm cái hồ đọc ra là TRŨNG chứ không phải một
            vũng màu dán lên đồng cỏ. */
-        if (t.g !== "wood" && t.g !== "asphalt") {
+        if (t.g !== "wood" && t.g !== "asphalt" && t.g !== "concrete") {
           if (at(s, x, y - 1)?.g === "water") g.drawImage(atlas.bankRim.n, px, py);
           if (at(s, x, y + 1)?.g === "water") g.drawImage(atlas.bankRim.s, px, py);
           if (at(s, x - 1, y)?.g === "water") g.drawImage(atlas.bankRim.w, px, py);
@@ -782,7 +784,17 @@ export function createRenderer(
    * có dấu; dựng một bộ phông pixel đủ dấu chỉ để in "Lô A1" là công việc của
    * cả một ngày mà kết quả vẫn khó đọc trên màn điện thoại. Ở lớp thiết bị thì
    * chữ nét theo đúng độ phân giải máy, và cỡ chữ neo theo `scale` nên phóng
-   * to thu nhỏ bản đồ thì biển to nhỏ theo, không phải một nhãn dán cố định.
+   * to thu nhỏ bản đồ thì biển to nhỏ theo.
+   *
+   * Hai luật giữ cho nó KHÔNG bừa bộn — hai mươi hai tấm biển in chữ cùng lúc
+   * là hai mươi hai vệt chữ nằm đè lên mặt đường và lên nhau:
+   *
+   *   · CHỈ hiện tấm nào ở GẦN. Người chơi cần biết mình đang đứng ở lô nào,
+   *     chứ không cần đọc tên cái lô ở góc bản đồ. Mờ dần ở rìa để nó hiện ra
+   *     và tắt đi chứ không bật/tắt phựt.
+   *   · Nằm GỌN TRONG Ô của chính cái biển theo chiều dọc: đường chân chữ đặt
+   *     ở đáy tấm ván, nên cả mảng chữ nằm trong 16px của ô đó. Trước đây nó
+   *     vẽ tràn lên ô phía TRÊN — mà phía trên hàng lô đầu chính là đường trục.
    *
    * Vẽ SAU `drawNight`: cái biển vẫn phải đọc được lúc trời tối, đó là lúc
    * người chơi cần nó nhất.
@@ -800,22 +812,33 @@ export function createRenderer(
   ) {
     const bien = content.tiles.signs;
     if (!bien || !bien.length) return;
-    const px = 5 * scale; // 5 world px — vừa dưới nửa chiều cao tấm ván
+    /** Trong ngần này ô thì hiện rõ; ra tới `XA` thì tắt hẳn. */
+    const GAN = 5.5;
+    const XA = 8.5;
+    const px = s.player.x / TILE;
+    const py = s.player.y / TILE;
+    const co = 5 * scale; // 5 world px — vừa dưới nửa chiều cao tấm ván
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.font = `${px}px ui-sans-serif, system-ui, sans-serif`;
+    g.font = `${co}px ui-sans-serif, system-ui, sans-serif`;
     g.textAlign = "center";
     g.textBaseline = "alphabetic";
     for (const b of bien) {
       if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
+      const d = Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py);
+      if (d > XA) continue;
+      const mo = d <= GAN ? 1 : 1 - (d - GAN) / (XA - GAN);
       const cx = (b.x * TILE + TILE / 2 - camera.rx) * scale + tx;
-      const cy = (b.y * TILE + 2 - camera.ry) * scale + ty;
-      const w = g.measureText(b.text).width + px * 0.8;
-      /* Nền đục sau chữ: biển đứng trên cỏ, trên đường nhựa và trên đất cày —
+      // Chân chữ ở đáy tấm ván (world y = 9 trong ô) → cả mảng chữ nằm TRONG ô.
+      const cy = (b.y * TILE + 9 - camera.ry) * scale + ty;
+      const w = g.measureText(b.text).width + co * 0.8;
+      g.globalAlpha = mo;
+      /* Nền đục sau chữ: biển đứng trên cỏ, trên lối mòn và trên đất cày —
          chữ trắng trơn thì có nền nó chìm nghỉm. */
-      g.fillStyle = "rgba(24,18,10,0.72)";
-      g.fillRect(Math.round(cx - w / 2), Math.round(cy - px * 1.05), Math.round(w), Math.round(px * 1.35));
+      g.fillStyle = "rgba(24,18,10,0.78)";
+      g.fillRect(Math.round(cx - w / 2), Math.round(cy - co * 1.05), Math.round(w), Math.round(co * 1.35));
       g.fillStyle = "#f3e2be";
       g.fillText(b.text, Math.round(cx), Math.round(cy));
+      g.globalAlpha = 1;
     }
     g.textAlign = "left";
   }

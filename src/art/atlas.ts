@@ -51,7 +51,13 @@ const P = {
   path: ["#c9ab7a", "#bf9f6e", "#d3b686"],
   pathDark: "#9a7d54",
   asphalt: ["#4a4a52", "#53535c", "#434349"],
+  /* Bê tông sàn chuồng. Xám ngả VÀNG chứ không xám xanh như đường nhựa: hai
+     mặt cứng cạnh nhau mà cùng tông thì cái chuồng đọc ra như một khúc đường
+     cụt. Sáng hơn hẳn để nổi trên cỏ. */
+  concrete: ["#9a958a", "#a29d92", "#928d83", "#a6a196"],
   asphaltDark: "#35353b",
+  /** Mạch đổ giữa hai tấm bê tông — tối vừa đủ để thấy, không thành lưới kẻ. */
+  concreteSeam: "#7f7a70",
   asphaltLine: "#c9c07a",
   soil: ["#7a4f2f", "#86593a", "#6b4328"],
   soilWet: ["#4e3220", "#573a26", "#432a19"],
@@ -249,6 +255,29 @@ function makeAsphalt(variant: number): HTMLCanvasElement {
     // vạch kẻ giữa, đứt quãng
     for (let y = 3; y < 13; y++) if (y % 5 !== 0) s.px(8, y, P.asphaltLine);
   }
+  return s.c;
+}
+
+/**
+ * BÊ TÔNG — sàn của các khu chuồng.
+ *
+ * Vẽ có MẠCH ĐỔ: một đường rãnh mờ chạy dọc và ngang, lệch pha theo biến thể
+ * nên cả sàn ra hình các tấm bê tông đổ riêng chứ không phải một mảng xám
+ * phẳng lì. Đó là thứ làm mắt đọc ra "mặt sàn nhân tạo" ngay lập tức, và tách
+ * hẳn nó khỏi mặt đường nhựa cạnh đó.
+ */
+function makeConcrete(variant: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x3b71 + variant * 40503);
+  s.rect(0, 0, TILE, TILE, P.concrete[0]!);
+  // lốm đốm hạt sỏi
+  for (let i = 0; i < 40; i++)
+    s.px(Math.floor(rnd() * TILE), Math.floor(rnd() * TILE), pick(P.concrete, rnd()));
+  // mạch đổ: một dọc một ngang, vị trí đổi theo biến thể
+  const mx = variant % 2 === 0 ? 0 : 8;
+  const my = variant < 2 ? 0 : 8;
+  s.vline(mx, 0, TILE, P.concreteSeam);
+  s.hline(0, my, TILE, P.concreteSeam);
   return s.c;
 }
 
@@ -1968,6 +1997,7 @@ export interface Atlas {
   grass: HTMLCanvasElement[];
   path: HTMLCanvasElement[];
   asphalt: HTMLCanvasElement[];
+  concrete: HTMLCanvasElement[];
   soil: HTMLCanvasElement[];
   soilWet: HTMLCanvasElement[];
   /** Viền lô đất theo cạnh giáp ô chưa cày. */
@@ -2555,6 +2585,7 @@ export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3, 4, 5].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
   const asphalt = [0, 1, 2, 3].map(makeAsphalt);
+  const concrete = [0, 1, 2, 3].map(makeConcrete);
   const wood = [0, 1, 2, 3].map(makePlank);
   const soil = [0, 1].map((v) => makeSoil(false, v));
   const soilWet = [0, 1].map((v) => makeSoil(true, v));
@@ -2723,7 +2754,7 @@ export function buildAtlas(content: Content): Atlas {
   };
 
   return {
-    grass, path, asphalt, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
+    grass, path, asphalt, concrete, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
     autotiles,
     animal: animalOf,
     emote: emoteOf,

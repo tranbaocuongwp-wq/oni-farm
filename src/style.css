@@ -72,6 +72,9 @@
 
   /* chiều cao dành cho cụm điều khiển cảm ứng, hotbar phải né ra */
   --pad-bottom: 0px;
+  /* Đáy cụm nút hành động, tính từ mép an toàn. Bố cục dọc nâng nó lên trên
+     hotbar; các bố cục khác giữ mặc định. */
+  --abtn-bottom: 14px;
   --anim: 0.18s;
 }
 
@@ -1546,7 +1549,7 @@ body[data-control="stick"][data-hand="left"] #stick {
 #abtn {
   position: absolute;
   right: calc(12px + var(--sa-r));
-  bottom: calc(14px + var(--sa-b));
+  bottom: calc(var(--abtn-bottom, 14px) + var(--sa-b));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1786,13 +1789,17 @@ body[data-orientation="portrait"] #stick {
 }
 /* Dọc: cụm nút nằm dưới, hotbar phải né lên trên. */
 body.touch[data-orientation="portrait"] {
-  /* Ngân sách chỗ cho CẢ cột `#abtn`, không chỉ cái nút to:
-       14px lệch đáy · nút chính (--btn-a) · khe 6 · dòng lý do ~27
-       · khe 6 · nút XÂY (--tap + 3 margin)
-     Trước đây con số này quên hẳn nút XÂY, và hotbar đè lên nó ~50px ở cả ba
-     khổ máy — đúng lúc người chơi đang cầm công trình, tức đúng lúc cần nó.
-     Hotbar có z-index cao hơn nên nó nuốt luôn cú chạm, không chỉ che. */
-  --pad-bottom: calc(var(--btn-a) + var(--tap) + 60px);
+  /* HOTBAR NẰM SÁT ĐÁY — chỗ ngón cái với tới dễ nhất trên máy dọc, và là dải
+     bấm nhiều nhất trong game. Nên nó KHÔNG né ai cả: `--pad-bottom` = 0, và
+     chính CỤM NÚT phải leo lên trên nó (xem `--abtn-bottom`).
+     Trước đây làm ngược: hotbar bị đẩy lên để chừa chỗ cho cụm nút, mà ngân
+     sách lại quên nút XÂY nên hai thứ vẫn đè nhau. Đảo lại thì hết cả hai
+     chuyện — hotbar về đúng chỗ của nó, và không còn phải đoán cụm nút cao
+     bao nhiêu. */
+  --pad-bottom: 0px;
+  /* Đáy cụm nút = đáy hotbar + chiều cao hotbar + khe. Ô hotbar cộng 6px viền
+     và đệm của dải. */
+  --abtn-bottom: calc(var(--hud-gap) + var(--slot) + 16px);
 }
 body.touch[data-orientation="landscape"] {
   --pad-bottom: 6px;

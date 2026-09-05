@@ -741,7 +741,10 @@ export function validateBalance(raw: unknown): string[] {
   return c.errors;
 }
 
-const GROUNDS = ["grass", "path", "water", "wood", "asphalt"] as const;
+/* Danh sách NỀN mà core biết vẽ và biết luật. Thêm một nền là việc LÀN CHẬM:
+   phải có mã vẽ trong `atlas.ts` + `draw.ts`, nên không để content tự bịa ra
+   một tên nền mới rồi ra ô vô hình. */
+const GROUNDS = ["grass", "path", "water", "wood", "asphalt", "concrete"] as const;
 const ZONE_KINDS = ["farm", "forest"] as const;
 
 export function validateTiles(raw: unknown): string[] {

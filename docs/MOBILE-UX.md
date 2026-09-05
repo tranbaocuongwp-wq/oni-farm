@@ -39,7 +39,13 @@ trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
    rừng/tường tối (`atlas.voidOut/voidIn`), không bao giờ là màn đen.
 3. **Nút chính phải nói nó sẽ làm gì.** `src/game/hint.ts` tính ra ĐÚNG MỘT hành
    động cho ô đang ngắm — HUD chỉ in nhãn. Không làm được thì in lý do ngắn.
-4. **Không có gì đè lên nhân vật.** Toast nằm trong luồng `.hud-top` (dưới chip mục
+4. **HOTBAR NẰM SÁT ĐÁY**, và cụm nút hành động leo lên TRÊN nó
+   (`--pad-bottom: 0` + `--abtn-bottom`). Đáy màn là chỗ ngón cái với tới dễ nhất,
+   mà hotbar là dải bấm nhiều nhất trong game — nên nó không né ai cả. Làm ngược lại
+   (đẩy hotbar lên để chừa chỗ cho cụm nút) thì ngân sách chỗ phải đoán chiều cao cụm
+   nút, và đoán hụt một lần là hai thứ đè nhau mà hotbar còn nuốt cả cú chạm.
+
+5. **Không có gì đè lên nhân vật.** Toast nằm trong luồng `.hud-top` (dưới chip mục
    tiêu), cụm nút ở góc dưới, hotbar ở đáy. Vùng giữa màn hình luôn trống.
 5. **Sở thích thuộc MÁY, không thuộc VÁN.** Mọi tuỳ chọn (tay thuận, cỡ chữ, zoom,
    rung, joystick…) ở `core/settings.ts` + localStorage, không bao giờ vào save.

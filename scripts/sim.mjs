@@ -4340,10 +4340,15 @@ test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lạ
   const r0 = rung[0];
   const demCay = (st) => {
     const s = st.getState();
+    /* Chỉ đếm thứ CHẶT ĐƯỢC. Trong rừng còn có tấm biển cắm ở đầu ngõ — nó là
+       đồ đạc của bản đồ, không phải cây, và "chặt trụi khu rừng" không có
+       nghĩa là nhổ luôn cái biển. */
     let n = 0;
     for (let y = r0.y; y < r0.y + r0.h; y++)
-      for (let x = r0.x; x < r0.x + r0.w; x++)
-        if (s.tiles[idx(s.w, x, y)]?.prop) n++;
+      for (let x = r0.x; x < r0.x + r0.w; x++) {
+        const pr = s.tiles[idx(s.w, x, y)]?.prop;
+        if (pr && (content.props[pr]?.hits ?? 0) > 0) n++;
+      }
     return n;
   };
   // chặt trụi cả khu rừng
@@ -4777,6 +4782,60 @@ test("73. chỗ ngồi: vẽ lại menu không được ném tiêu điểm đi c
   );
 
   eq(timChoNgoi([], HANG[0]), -1, "danh sách rỗng thì trả -1 chứ không nổ");
+});
+
+/* ========================================================================== */
+/* 74. Tự động làm: NEO vào chỗ đang làm dở                                   */
+/* ========================================================================== */
+
+test("74. tự động: tìm việc quanh NEO, không quanh chỗ nhân vật vừa đi tới", () => {
+  const store = mkStore();
+  unlockAll(store);
+  const s0 = store.getState();
+
+  /* Dựng hai cụm việc CÁCH XA NHAU: một cụm ở lô gần nhà, một cụm ở lô cuối
+     ruộng. Rồi đặt nhân vật đứng cạnh cụm XA — đúng tình huống sau một chuyến
+     đi múc nước. */
+  const gan = { x: PLOTS[0].x, y: PLOTS[0].y };
+  const lo = content.tiles.zones.filter((z) => z.kind === "farm");
+  const zXa = lo[lo.length - 1];
+  const xa = { x: zXa.x + 1, y: zXa.y + 1 };
+  ok(Math.hypot(xa.x - gan.x, xa.y - gan.y) > 12, "hai cụm phải thật sự xa nhau");
+
+  setState(store, (s) => {
+    s.energy = content.balance.maxEnergy ?? s.energy;
+    for (const o of [gan, xa])
+      for (let i = 0; i < 3; i++)
+        setTile(s, o.x, o.y + i, { g: "grass", prop: null, b: null, crop: null, tilled: false, wet: false });
+    // đứng ngay cạnh cụm XA
+    s.player = { ...s.player, x: (xa.x + 1.5) * TILE, y: (xa.y + 0.5) * TILE, moving: false };
+  });
+
+  selectItem(store, "tool:hoe");
+  const s1 = store.getState();
+
+  // KHÔNG neo: chọn việc gần nhân vật nhất → cụm XA
+  const j0 = autoJob(s1, content, Math.max(s1.w, s1.h));
+  ok(!!j0, "có việc để làm");
+  ok(
+    Math.hypot(j0.x - xa.x, j0.y - xa.y) < Math.hypot(j0.x - gan.x, j0.y - gan.y),
+    "không neo: chọn ô gần NHÂN VẬT",
+  );
+
+  // CÓ neo ở cụm gần nhà: phải quay về đó, dù nhân vật đang đứng tận cụm xa
+  const j1 = autoJob(s1, content, Math.max(s1.w, s1.h), gan);
+  ok(!!j1, "có neo vẫn tìm ra việc");
+  ok(
+    Math.hypot(j1.x - gan.x, j1.y - gan.y) < Math.hypot(j1.x - xa.x, j1.y - xa.y),
+    `có neo: chọn ô gần NEO (${j1.x},${j1.y}) chứ không phải ô dưới chân`,
+  );
+
+  /* Neo mà quanh đó HẾT việc thì phải bỏ neo, không được đứng chết. Đặt neo ra
+     một góc rừng, bán kính 2 — quanh đó không có gì cuốc được. */
+  const j2 = autoJob(s1, content, 2, { x: 3, y: 30 });
+  eq(j2, null, "neo ở chỗ hết việc thì trả null để chỗ gọi bỏ neo đi");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -470,7 +470,7 @@ export interface Balance {
   sleepSeconds?: number;
 }
 
-export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt";
+export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt" | "concrete";
 export type InteractKind = "SLEEP" | "SHOP" | "SELL" | "REFILL" | "CRAFT" | "PORTAL" | "STORE";
 
 export interface TileLegendEntry {

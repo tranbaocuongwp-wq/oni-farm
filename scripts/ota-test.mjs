@@ -145,7 +145,12 @@ reject("khu khai feeds nhưng trong ruột không có máng", (p) => {
   const pen = p.tiles.pens.find((q) => (q.feeds ?? []).length && !q.swim);
   for (let y = pen.y; y < pen.y + pen.h; y++) {
     const r = p.maps.farm.rows[y].split("");
-    for (let x = pen.x; x < pen.x + pen.w; x++) if (r[x] === "M") r[x] = ".";
+    // 'm' = máng đứng trên nền bê tông ('M' là biến thể trên cỏ). Gỡ máng đi
+    // nhưng GIỮ nền, không thì ruột chuồng thành ô cỏ và test đo nhầm thứ khác.
+    for (let x = pen.x; x < pen.x + pen.w; x++) {
+      if (r[x] === "m") r[x] = "#";
+      else if (r[x] === "M") r[x] = ".";
+    }
     p.maps.farm.rows[y] = r.join("");
   }
 });
@@ -278,7 +283,7 @@ accept("pack CŨ khai feed là một chuỗi (trước khi mỗi loài có nhi�
   // …và khu thì chưa có `feeds`, nên cũng không được có máng nào
   for (const pen of p.tiles.pens) delete pen.feeds;
   for (let y = 0; y < p.maps.farm.rows.length; y++)
-    p.maps.farm.rows[y] = p.maps.farm.rows[y].replaceAll("M", ".");
+    p.maps.farm.rows[y] = p.maps.farm.rows[y].replaceAll("m", "#").replaceAll("M", ".");
 });
 accept("tắt hẳn mọc lại rừng (forestRegrowChance = 0)", (p) => (p.balance.forestRegrowChance = 0));
 accept("pack CŨ không khai zones — cuốc lại ăn khắp nơi như trước", (p) => {

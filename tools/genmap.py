@@ -19,14 +19,17 @@ LOT_ROWS = [(9, 13), (15, 19), (21, 25)]           # 3 hàng lô, mỗi lô cao 
 LANE_X = [1, 8, 15, 22, 29]
 LANE_Y = [14, 20]
 
-# Ba chuồng XẾP CHỒNG, dùng CHUNG bức rào giữa (y=14 và y=19). Chừa ngõ giữa
-# hai chuồng thì mỗi con vật có một hành lang riêng chẳng dẫn đi đâu; dùng
-# chung vách thì cả dãy đọc ra một khu trại liền mạch, đúng hình một trại nuôi.
+# Ba chuồng nằm ĐÚNG TRÊN LƯỚI BÀN CỜ như ruộng: mỗi chuồng một khối riêng,
+# và hai ngõ ngăn giữa chúng CHÍNH LÀ hai ngõ ngang của ruộng (y=14 và y=20).
+# Nhìn ngang qua đường trục là thấy ngõ bên ruộng nối thẳng sang ngõ bên chuồng.
+#
+# Trước đây ba chuồng dùng chung vách: đọc ra một khối to bị chia vụn chứ không
+# ra ba cái chuồng, và con vật chuồng này đứng sát mặt con vật chuồng kia.
 PEN_X0, PEN_X1 = 32, 45       # viền RÀO của mọi chuồng
 PENS = [  # (id, tên, y rào đầu, y rào cuối, các ô cổng trên cột x=PEN_X0)
-    ("cattle", "Khu gia súc",  9, 14, [11, 12]),
-    ("pigpen", "Khu heo",     14, 19, [16, 17]),
-    ("coop",   "Khu gia cầm", 19, 25, [21, 22]),
+    ("cattle", "Khu gia súc",  9, 13, [11]),
+    ("pigpen", "Khu heo",     15, 19, [17]),
+    ("coop",   "Khu gia cầm", 21, 25, [23]),
 ]
 POND = (2, 2, 11, 6)          # x0,y0,x1,y1 — mặt nước
 PIER_Y, PIER_X0, PIER_X1 = 4, 6, 11
@@ -35,10 +38,15 @@ DOOR = (18, 3)
 BENCH = (21, 5)
 WELL = (13, 3)
 SHOP, COUNTER = (26, 3), (28, 3)
-WARE = (38, 2, 43, 4)
-STORE_DOOR = (40, 4)
+WARE = (39, 2, 44, 4)
+STORE_DOOR = (41, 4)
 SPUR_Y, SPUR_X0, SPUR_X1 = 6, 30, 45
-PARKING = [(39, 6), (40, 6), (41, 6)]
+PARKING = [(40, 6), (41, 6), (42, 6)]
+# SÂN SAU — khoảnh đất trống có chủ ý, giữa đường trục dọc và cái kho.
+# Ruộng chia lô kín, chuồng lát bê tông kín, rừng thì dày: không chừa chỗ này
+# thì cả nông trại không còn một mảnh đất trống nào để đặt vòi tưới hay nhà
+# kính mà không phải hy sinh một ô ruộng.
+YARD = (31, 1, 38, 3)
 DROPOFF = (30, 4)
 GATE = (30, H - 1)
 SPAWN = (18, 5)
@@ -48,7 +56,7 @@ FOREST_LANE_Y = [30, 33]
 
 SOLID = set("TtsobGHDSBWCdgUuLKkM".replace("g", ""))  # 'g' cỏ non KHÔNG đặc
 SOLID = set("TtsobGHDSBWCdUuLKkM")
-WALK_GROUND = set(".,:=gwPN")  # ký tự đi được (P là cầu, N là biển cắm)
+WALK_GROUND = set(".,:=gwPN#m")  # ký tự đi được (P cầu, N biển, # bê tông, m máng)
 
 g = [["." for _ in range(W)] for _ in range(H)]
 
@@ -93,6 +101,7 @@ box(25, 2, 29, 5, ":")           # sân chợ
 g[SHOP[1]][SHOP[0]] = "S"; g[COUNTER[1]][COUNTER[0]] = "B"
 box(*WARE, "K"); g[STORE_DOOR[1]][STORE_DOOR[0]] = "k"
 box(36, 5, 45, 5, ":")           # lối trước kho
+box(*YARD, ".")                  # sân sau: để trống hẳn, không rắc gì lên
 
 # ------------------------------------------------------------- 3. đường sá
 box(1, AVE_N, W - 2, AVE_N, "=")
@@ -109,10 +118,13 @@ for y in LANE_Y: box(CROP_X0, y, CROP_X1, y, ":")
 box(31, CROP_Y0, 31, CROP_Y1, ":")     # ngõ dọc phía tây dãy chuồng
 box(46, CROP_Y0, 46, CROP_Y1, ".")     # ngõ dọc phía đông
 for (_id, _nm, fy0, fy1, gates) in PENS:
-    box(PEN_X0 + 1, fy0 + 1, PEN_X1 - 1, fy1 - 1, ".")
+    # Ruột chuồng lát BÊ TÔNG. Sàn riêng là thứ làm cái chuồng đọc ra là chuồng
+    # chứ không phải một khoảnh cỏ có hàng rào quanh; và bê tông không phải cỏ
+    # nên cái cuốc tự nhiên không ăn ở đây, khỏi cần thêm luật nào.
+    box(PEN_X0 + 1, fy0 + 1, PEN_X1 - 1, fy1 - 1, "#")
     rect(PEN_X0, fy0, PEN_X1, fy1, "F")
-    for gy in gates: g[gy][PEN_X0] = "."
-    g[(fy0 + fy1) // 2][36] = "M"
+    for gy in gates: g[gy][PEN_X0] = ":"
+    g[(fy0 + fy1) // 2][36] = "m"
 
 
 # ----------------------------------------------------------------- 6. rừng
@@ -122,6 +134,7 @@ for y in range(FOREST_Y0, FOREST_Y1 + 1):
     for x in range(1, W - 1):
         if x == AVE_V: continue
         g[y][x] = pick(FOR)
+for y in LANE_Y: box(31, y, 46, y, ":")   # ngõ ngang xuyên cả dãy chuồng
 for x in FOREST_LANE_X: box(x, FOREST_Y0, x, FOREST_Y1, ":")
 for y in FOREST_LANE_Y:
     for x in range(1, W - 1):
@@ -145,9 +158,12 @@ def gan_cua(x, y, r=1):
 for y in range(1, AVE_N):
     for x in range(1, 14):
         if trong(x, y) and not gan_cua(x, y): g[y][x] = pick(LIGHT)
+def trong_san(x, y):
+    return YARD[0] <= x <= YARD[2] and YARD[1] <= y <= YARD[3]
+
 for y in range(1, AVE_N):
     for x in range(14, W - 1):
-        if not trong(x, y) or gan_cua(x, y): continue
+        if not trong(x, y) or gan_cua(x, y) or trong_san(x, y): continue
         ch = pick(DECOR)
         if ch in "uUTt" and gan_cua(x, y, 2): ch = "g"
         g[y][x] = ch
@@ -170,6 +186,9 @@ g[SPAWN[1]][SPAWN[0]] = ":"
 BIEN = []
 def cam(x, y, chu):
     assert g[y][x] not in SOLID and g[y][x] != "~", f"cắm biển vào ô đặc ({x},{y})={g[y][x]}"
+    # Ô mang biển có nền `path`. Cắm lên asphalt là đục thủng mặt đường thành
+    # một ô lối mòn — và cái cọc thì đứng giữa lòng đường.
+    assert g[y][x] != "=", f"cắm biển ra giữa đường nhựa ({x},{y})"
     g[y][x] = "N"
     BIEN.append((x, y, chu))
 
@@ -180,14 +199,16 @@ cam(DOOR[0] - 3, DOOR[1] + 1, "Nhà")
 cam(SHOP[0] - 1, SHOP[1] + 1, "Chợ")
 cam(WELL[0], WELL[1] + 1, "Giếng")
 cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
-cam(PARKING[0][0] - 2, PARKING[0][1], "Bãi đậu xe")
+# Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
+cam(PARKING[2][0] + 2, 5, "Bãi đậu xe")
+cam(YARD[0] - 1, YARD[1] + 1, "Sân sau")
 for (_id, nm, fy0, fy1, gates) in PENS:
     cam(PEN_X0 - 1, gates[0], nm)
 cam(POND[2] + 1, PIER_Y - 1, "Hồ cá")
-# Biển RỪNG cắm ở mép đường trục nam, KHÔNG cắm vào trong rừng: một cái cọc
-# đứng giữa rừng vừa khuất sau tán cây vừa là một vật thể không chặt được nằm
-# lẫn trong vạt gỗ, nên "chặt trụi khu rừng" sẽ không bao giờ trụi.
-cam(AVE_V - 14, AVE_S, "Rừng")
+# Biển RỪNG cắm ở đầu NGÕ xuyên rừng, không cắm ra giữa đường trục: ô mang
+# biển có nền `path`, nên cắm lên mặt đường là đục thủng một lỗ lối mòn giữa
+# đường nhựa — nhìn thấy ngay mà chẳng ai ngờ tới lúc đặt.
+cam(FOREST_LANE_X[1], FOREST_Y0, "Rừng")
 
 # ------------------------------------------------- 8. kiểm tra & vá liên thông
 def walkable(x, y): return g[y][x] not in SOLID and g[y][x] != "~"
@@ -240,7 +261,7 @@ assert patch(), "không vá nổi liên thông"
 for (_id, _nm, fy0, fy1, _gt) in PENS:
     for y in range(fy0+1, fy1):
         for x in range(PEN_X0+1, PEN_X1):
-            assert g[y][x] in ".M", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
+            assert g[y][x] in "#m", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
 for (lx0, lx1) in LOT_COLS:
     for (ly0, ly1) in LOT_ROWS:
         for y in range(ly0, ly1+1):
@@ -312,4 +333,5 @@ print(f"ruộng   : {len(LOT_COLS)}×{len(LOT_ROWS)} = {len(LOT_COLS)*len(LOT_RO
 print(f"chuồng  : {len(PENS)} khu trên cạn + 1 ao cá")
 print(f"rừng    : {W-2}×{FOREST_Y1-FOREST_Y0+1}")
 print(f"biển cắm: {len(BIEN)} tấm")
+print(f"sân sau : {YARD[2]-YARD[0]+1}×{YARD[3]-YARD[1]+1} ô trống")
 print("\n".join(rows))
