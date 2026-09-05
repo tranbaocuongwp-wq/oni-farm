@@ -119,6 +119,19 @@ export interface AnimalArt {
   patch?: number;
   /** 0..3 — sừng */
   horn?: number;
+  /**
+   * 0..1 — cỡ MÕM. Con lợn đọc ra là con lợn nhờ đúng cái mõm tròn, con chó
+   * nhờ cái mõm nhọn. Không có nó thì bốn loài bốn chân chỉ khác nhau ở màu.
+   */
+  snout?: number;
+  /**
+   * MÀO + YẾM (gà). Gà và vịt khác nhau đúng hai chi tiết — cái mào và cái mỏ
+   * — và đó cũng là hai thứ người ta dùng để phân biệt chúng ngoài đời. Bật
+   * thì mỏ nhọn + mào đỏ; tắt thì mỏ BẸT, tức là con vịt.
+   */
+  crest?: number;
+  /** Đuôi DỰNG lên (chó) thay vì thõng xuống. */
+  tailUp?: boolean;
 }
 
 /** Sản phẩm thu LẶP LẠI (sữa, trứng, lông). */

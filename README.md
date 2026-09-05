@@ -952,6 +952,48 @@ sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằ
 bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
 tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
+### Vẽ lại toàn bộ: cây trồng, vật nuôi, địa hình, vật tư (core 1.21)
+
+Ba luật, và cả ba đều là chuyện **khối** chứ không phải chuyện thêm chi tiết. Ở 16px, thêm
+chi tiết chỉ làm hình bẩn hơn; thứ mắt đọc được là hình dạng và ba tông sáng-giữa-tối.
+
+**1. Khối, không phải mảng phẳng.** Con vật trước kia là hình chữ nhật + hình vuông dán vào
+cạnh; cây trồng là `disc` + vệt thẳng; tán cây là ba đĩa tròn rắc pixel ngẫu nhiên. Nay tất cả
+dựng bằng elip (`Surface.ell`) và một hàm dựng khối chung: vành tối ôm mép dưới, thân giữa,
+vệt nắng chếch trên-trái. Cùng một khối lượng pixel, khác hẳn ở chỗ mắt đọc ra hình cầu chứ
+không đọc ra hình tròn tô màu.
+
+**2. Đường ngăn, không phải chồng lấn.** Đây là chỗ khó nhất và là chỗ tôi sai vài lần liền.
+Vẽ mười cái lá chồng lên nhau ở cỡ 16px thì chúng gộp thành một mảng đặc — cây rau thơm ra một
+cục tím, bụi lúa ra một cục xanh. Hai công cụ giải nó:
+
+* `la()` vẽ lá to hình **giọt nước** (phình giữa, thon ngọn) với mép tối ở **cả hai** bên, và
+  bề dày mép tối tính **theo bề ngang lá** chứ không phải một hằng số — lấy hằng số thì lá
+  mảnh hoá ra tối hết.
+* `soi()` vẽ lá **mảnh** bằng đúng hai pixel: một tối một sáng. Hai sợi kề nhau vì thế luôn có
+  đường ngăn, dù chen sát tới đâu. Hành, lúa, cà rốt, cỏ đều dùng nó.
+
+Cùng lý do đó, tán lá dựng bằng **cụm** vẽ lần lượt (vành tối rồi ruột sáng, từng cụm một), chứ
+không phải vẽ hết vành tối rồi mới vẽ hết ruột sáng — vẽ theo lớp thì lớp sáng lấp mất mọi
+đường ngăn và năm cụm gộp lại thành đúng một khối lồi.
+
+**3. Viền theo màu vật, không phải màu đen.** Viền đen tuyền biến mọi thứ thành hình dán. Cây
+cối viền bằng chính màu lá tối đi hai nấc. Và con vật có **hai** tông tối, hai vai khác nhau:
+`vien` là mặt tối của chính màu thân (con bò trắng có mặt tối màu xám), còn `bodyDark` là màu
+**vật liệu khác** — đốm, tai, đuôi, móng. Trộn chúng làm một là lỗi của bản trước: con bò viền
+đen kịt đọc ra một cái sọ.
+
+Ba trường mới trong `AnimalArt`, mỗi trường là một nét đọc được từ xa, và tất cả nằm trong
+content chứ không phải `switch (id)`: `snout` (mõm — lợn tròn, chó nhọn), `crest` (mào + yếm gà;
+tắt thì thành mỏ bẹt vịt), `tailUp` (đuôi dựng của chó).
+
+**Và một lỗi dùng được, không phải lỗi thẩm mỹ.** `makeMaterialIcon` có sáu hình vẽ tay và một
+nhánh `else` gom tất cả phần còn lại — nghĩa là **mười bốn món** (sữa, sữa dê, trứng gà, trứng
+vịt, len, thuốc, tám loại thịt) dùng chung đúng một hình "bó cỏ". Trong túi đồ, trong kho, ở
+quầy bán, chúng là mười bốn ô giống hệt nhau và người chơi phải đọc chữ mới biết mình cầm gì.
+Nay mỗi món có dáng riêng — chai, quả trứng, cuộn len, miếng thịt có vân mỡ và khúc xương,
+miếng phi lê cá — dáng nói "đây là cái gì" trước, màu mới nói "của con nào".
+
 ### Vì sao pixel art sinh bằng code
 
 Không có file ảnh nào trong repo. Đổi lại: thật sự offline, không lo bản quyền,

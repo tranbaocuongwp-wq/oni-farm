@@ -115,6 +115,12 @@ export interface Surface {
   vline(x: number, y: number, h: number, color: string): void;
   /** hình tròn đặc theo kiểu pixel (không khử răng cưa) */
   disc(cx: number, cy: number, r: number, color: string): void;
+  /**
+   * Hình ELIP đặc. Nhận bán kính THỰC (số lẻ được) và tâm ở giữa pixel, nên
+   * đủ mịn để dựng khối cơ thể: con vật là những khối bầu, không phải hình
+   * chữ nhật. Đây là nét khác lớn nhất giữa "một cục màu" và "một con vật".
+   */
+  ell(cx: number, cy: number, rx: number, ry: number, color: string): void;
   /** bóng đổ ellipse mờ dưới chân vật thể */
   shadow(cx: number, cy: number, rx: number, ry: number): void;
 }
@@ -152,6 +158,16 @@ function surface(w: number, h: number): Surface {
       for (let y = -r; y <= r; y++)
         for (let x = -r; x <= r; x++)
           if (x * x + y * y <= r * r + r * 0.35) px(cx + x, cy + y, color);
+    },
+    ell(cx, cy, rx, ry, color) {
+      const ax = Math.max(0.5, rx);
+      const ay = Math.max(0.5, ry);
+      for (let y = Math.floor(cy - ay); y <= Math.ceil(cy + ay); y++)
+        for (let x = Math.floor(cx - ax); x <= Math.ceil(cx + ax); x++) {
+          const dx = (x + 0.5 - cx) / ax;
+          const dy = (y + 0.5 - cy) / ay;
+          if (dx * dx + dy * dy <= 1) px(x, y, color);
+        }
     },
     shadow(cx, cy, rx, ry) {
       g.fillStyle = P.shadow;
@@ -474,96 +490,312 @@ function makeVoid(variant: number, indoor: boolean): HTMLCanvasElement {
    VẬT THỂ TĨNH
 --------------------------------------------------------------------------- */
 
+/** Giếng nước: thành đá tròn, mái che, nước xanh bên trong. */
+/* ---------------------------------------------------------------------------
+   ĐỊA HÌNH TỰ NHIÊN — cây, bụi, cỏ, đá, gỗ.
+
+   Đây là thứ phủ kín bản đồ, nên nó quyết định "nông trại trông thế nào" nhiều
+   hơn bất cứ sprite nào khác. Bản trước dựng tất cả bằng ĐĨA TRÒN + RẮC PIXEL
+   NGẪU NHIÊN: `disc` cho tán, rồi một vòng lặp chấm bừa vài chục pixel sáng
+   tối lên trên. Cách đó cho ra hình có nhiễu chứ không cho ra hình có KHỐI —
+   nhìn xa là những cục tròn lốm đốm, và cây gỗ lớn với bụi rậm chỉ khác nhau
+   ở đường kính.
+
+   Bản này dựng theo ba luật, đúng ba luật đã dùng cho cây trồng và con vật:
+
+   · CỤM, không phải đĩa. Tán lá là năm-sáu cụm chồng nhau, mỗi cụm vẽ VÀNH TỐI
+     rồi mới vẽ RUỘT SÁNG, và vẽ từng cụm một. Vành tối của cụm sau cắt vào cụm
+     trước, nên đường bao lởm chởm ra tán lá thay vì tròn ra quả bóng.
+   · KHỐI, không phải nhiễu. Nắng đến từ trên-trái: mọi thứ đều có mặt sáng ở
+     trên-trái và mặt tối ở dưới-phải. Đốm ngẫu nhiên chỉ dùng để phá đều, và
+     luôn bám theo hướng sáng đó.
+   · CẤU TRÚC riêng. Vỏ cây có thớ dọc, gốc cây có vòng năm, hòn đá có MẶT
+     PHẲNG và cạnh gãy chứ không phải ba đĩa tròn chồng lên.
+--------------------------------------------------------------------------- */
+
+/** Một cụm lá: vành tối rồi ruột sáng. Vẽ từng cụm để cụm sau cắt vào cụm trước. */
+function cumLa(
+  s: Surface,
+  cx: number,
+  cy: number,
+  r: number,
+  giua: string,
+  toi: string,
+  sang?: string,
+): void {
+  s.ell(cx, cy, r, r * 0.92, toi);
+  s.ell(cx, cy - 0.5, r - 0.85, r * 0.92 - 0.85, giua);
+  if (sang) s.ell(cx - r * 0.3, cy - r * 0.38, Math.max(0.5, r * 0.36), Math.max(0.5, r * 0.26), sang);
+}
+
+/** Thớ vỏ cây: vệt dọc so le, tối bên phải vì nắng đến từ trên-trái. */
+function voCay(s: Surface, x: number, y: number, w: number, h: number, mau: string, toi: string, sang: string) {
+  s.rect(x, y, w, h, mau);
+  s.vline(x, y, h, sang);
+  s.vline(x + w - 1, y, h, toi);
+  const rnd = mulberry32(0x8e21 + x * 31 + y);
+  for (let i = 0; i < Math.round(h * 0.6); i++) {
+    const px2 = x + 1 + Math.floor(rnd() * Math.max(1, w - 2));
+    const py2 = y + Math.floor(rnd() * h);
+    s.px(px2, py2, toi);
+    if (rnd() > 0.6) s.px(px2, py2 + 1, toi);
+  }
+}
+
 function makeTree(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE * 2); // cây cao 2 ô, phần trên tràn lên ô phía trên
   const rnd = mulberry32(0x77ee);
   const baseY = TILE * 2;
+  const toi = art.dark;
+  const giua = art.body;
+  const sang = lighten(art.body);
+
   s.shadow(8, baseY - 2, 6, 2.5);
-  // thân
-  s.rect(6, baseY - 10, 4, 9, art.accent);
-  s.vline(6, baseY - 10, 9, P.trunkDark);
-  s.px(9, baseY - 6, P.trunkDark);
-  // tán: ba cụm chồng lên nhau
-  const blobs: [number, number, number][] = [
-    [8, baseY - 19, 7],
-    [4, baseY - 14, 5],
-    [12, baseY - 14, 5],
-    [8, baseY - 12, 6],
+
+  /* Thân: có BỜ RỄ loe ra ở gốc. Cái cột thẳng đứng cắm xuống đất là thứ đọc
+     ra "cái cọc"; bờ rễ loe là thứ đọc ra "cái cây". */
+  voCay(s, 6, baseY - 11, 4, 10, P.trunk, P.trunkDark, shade(P.trunk, 1.22));
+  s.px(5, baseY - 2, P.trunk);
+  s.px(5, baseY - 3, P.trunkDark);
+  s.px(10, baseY - 2, P.trunk);
+  s.px(10, baseY - 3, P.trunkDark);
+  // một cành cụt chìa ra — phá thế đối xứng
+  s.px(10, baseY - 9, P.trunk);
+  s.px(11, baseY - 10, P.trunkDark);
+
+  // Tán: sáu cụm, vẽ từ SAU ra TRƯỚC (cụm dưới trước, cụm trên sau)
+  const cum: [number, number, number][] = [
+    [4, baseY - 14, 4.6],
+    [12, baseY - 14, 4.6],
+    [8, baseY - 12, 4.8],
+    [5, baseY - 18, 4.4],
+    [11, baseY - 18, 4.4],
+    [8, baseY - 20, 5.2],
   ];
-  for (const [cx, cy, r] of blobs) s.disc(cx, cy, r, art.body);
-  // đốm sáng/tối cho tán có khối: sáng phía trên-trái, tối phía dưới-phải
-  for (let i = 0; i < 80; i++) {
-    const x = Math.floor(rnd() * TILE);
-    const y = baseY - 26 + Math.floor(rnd() * 18);
-    const img = s.g.getImageData(x, y, 1, 1).data;
-    if (img[3]! === 0) continue;
-    const lit = x + y < baseY - 14;
-    s.px(x, y, lit ? (rnd() > 0.5 ? P.leaf[3]! : P.leaf[1]!) : rnd() > 0.4 ? art.dark : art.body);
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, giua, toi);
+  // nắng phủ lên nửa trên-trái của cả tán
+  for (const [cx, cy, r] of cum)
+    if (cx <= 8 && cy <= baseY - 16) s.ell(cx - r * 0.25, cy - r * 0.35, r * 0.5, r * 0.34, sang);
+
+  /* Vài LỖ THỦNG trong tán: chỗ thấy trời qua kẽ lá. Không có nó thì tán là
+     một mảng đặc, và mảng đặc thì đọc ra là quả bóng chứ không ra vòm lá. */
+  for (let i = 0; i < 5; i++) {
+    const x = 3 + Math.floor(rnd() * 11);
+    const y = baseY - 22 + Math.floor(rnd() * 12);
+    s.px(x, y, toi);
+    if (rnd() > 0.5) s.px(x + 1, y, toi);
   }
-  return outline(s).c;
+  // lấm tấm lá bắt nắng
+  for (let i = 0; i < 14; i++) {
+    const x = 2 + Math.floor(rnd() * 12);
+    const y = baseY - 23 + Math.floor(rnd() * 13);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+    s.px(x, y, x + y < baseY - 12 ? sang : toi);
+  }
+  return outline(s, shade(art.dark, 0.6)).c;
 }
 
+/** Cây gỗ NHỎ: một ô, thân mảnh, tán ba cụm — chặt vài nhát là xong. */
+function makeSapling(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x5a91);
+  const toi = art.dark;
+  const giua = art.body;
+  const sang = lighten(art.body);
+  s.shadow(8, 14, 4, 1.6);
+
+  voCay(s, 7, 7, 2, 7, P.trunk, P.trunkDark, shade(P.trunk, 1.22));
+  s.px(6, 13, P.trunkDark);
+  s.px(9, 13, P.trunkDark);
+
+  for (const [cx, cy, r] of [
+    [5.5, 7, 3],
+    [10.5, 7, 3],
+    [8, 4.5, 3.6],
+  ] as [number, number, number][])
+    cumLa(s, cx, cy, r, giua, toi, cx <= 8 ? sang : undefined);
+
+  for (let i = 0; i < 6; i++) {
+    const x = 3 + Math.floor(rnd() * 10);
+    const y = 1 + Math.floor(rnd() * 9);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+    s.px(x, y, x + y < 10 ? sang : toi);
+  }
+  return outline(s, shade(art.dark, 0.6)).c;
+}
+
+/** Gốc cây: mặt cắt có VÒNG NĂM — thứ duy nhất nói "cây này vừa bị chặt". */
+function makeStump(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 5, 1.8);
+  // thân gốc
+  voCay(s, 4, 8, 8, 5, art.body, art.dark, lighten(art.body));
+  // bờ rễ toả ra bốn phía
+  for (const [x, y] of [
+    [3, 12],
+    [12, 12],
+    [4, 13],
+    [11, 13],
+  ] as [number, number][])
+    s.px(x, y, art.dark);
+  /* Mặt cắt: gỗ TƯƠI nên sáng hơn hẳn vỏ — đó là thứ nói "vừa bị chặt". Lấy
+     đúng `accent` của content thì nó chỉ nhạt hơn vỏ một nấc và cả cái gốc ra
+     một khối nâu trơn. */
+  const mat = shade(art.accent, 1.3);
+  s.ell(8, 8, 4.4, 2.3, art.dark);
+  s.ell(8, 8, 3.9, 1.9, mat);
+  s.ell(8, 8, 2.8, 1.3, shade(mat, 0.86));
+  s.ell(8, 8, 1.7, 0.8, mat);
+  s.ell(8, 8, 0.7, 0.5, shade(mat, 0.7));
+  // một vết nứt từ tâm ra mép — gỗ khô nào cũng có
+  s.px(10, 7, shade(mat, 0.66));
+  s.px(11, 7, shade(mat, 0.66));
+  return outline(s, shade(art.dark, 0.65)).c;
+}
+
+function makeLog(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 6, 1.8);
+  // thân nằm ngang: nắng trên, bóng dưới, thớ vỏ chạy dọc
+  s.rect(2, 7, 12, 6, art.body);
+  s.hline(2, 7, 12, lighten(art.body));
+  s.hline(2, 12, 12, art.dark);
+  const rnd = mulberry32(0x4c19);
+  for (let i = 0; i < 8; i++) {
+    const x = 3 + Math.floor(rnd() * 10);
+    const y = 8 + Math.floor(rnd() * 4);
+    s.px(x, y, art.dark);
+    if (rnd() > 0.5) s.px(x + 1, y, art.dark);
+  }
+  // hai đầu: mặt cắt có vòng năm, đầu gần sáng hơn đầu xa
+  s.ell(2, 10, 1.6, 3, art.dark);
+  s.ell(2, 10, 1, 2.2, art.accent);
+  s.ell(13.5, 10, 1.8, 3.1, art.accent);
+  s.ell(13.5, 10, 1.1, 2.1, lighten(art.accent));
+  s.px(14, 10, art.dark);
+  return outline(s, shade(art.dark, 0.65)).c;
+}
+
+/** Tảng đá: MẶT PHẲNG và cạnh gãy, không phải ba đĩa tròn chồng lên nhau. */
 function makeRock(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  s.shadow(8, 14, 5, 2);
-  s.disc(8, 10, 5, art.body);
-  s.disc(6, 8, 3, art.accent);
-  s.disc(11, 11, 3, art.dark);
-  s.px(5, 8, art.accent);
-  s.px(6, 7, art.accent);
-  s.px(5, 7, "#ffffff");
+  s.shadow(8, 14, 5.5, 2);
+  const sang = art.accent;
+  const giua = art.body;
+  const toi = art.dark;
+
+  /* Ba MẶT, dựng bằng cách quét từng hàng: mặt trên hứng nắng, mặt trái mờ,
+     mặt phải trong bóng. Cạnh giữa hai mặt là một đường gãy thẳng — đó là thứ
+     làm hòn đá ra đá chứ không ra cục bột. */
+  for (let y = 4; y <= 13; y++) {
+    const u = (y - 4) / 9;
+    const w = Math.round(3 + u * 4.2); // nở dần xuống chân
+    for (let x = 8 - w; x <= 8 + w; x++) {
+      const canh = x - (8 - w);
+      s.px(x, y, canh < w * 0.75 ? giua : toi);
+    }
+  }
+  // mặt trên: mảng sáng phẳng có cạnh gãy
+  for (let y = 4; y <= 8; y++) {
+    const w = Math.round(2 + (y - 4) * 0.7);
+    for (let x = 7 - w; x <= 7 + Math.round(w * 0.35); x++) s.px(x, y, sang);
+  }
+  // đường gãy chạy chéo
+  for (let i = 0; i < 4; i++) s.px(9 + i, 8 + i, toi);
+  s.px(6, 11, toi);
+  s.px(7, 12, toi);
+  // đốm sáng nhất ở mép trên-trái
+  s.px(5, 5, "#ffffff");
+  // vài viên nhỏ dưới chân cho hòn đá có chỗ đứng
+  s.px(2, 13, giua);
+  s.px(3, 13, sang);
+  s.px(13, 13, toi);
   return outline(s).c;
 }
 
+/** Bụi có QUẢ MỌNG: tán cụm + vài quả đỏ nấp trong lá. */
 function makeBush(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const rnd = mulberry32(0x51b1);
   s.shadow(8, 14, 6, 2);
-  s.disc(8, 10, 5, art.body);
-  s.disc(5, 9, 3, art.accent);
-  s.disc(11, 10, 3, art.dark);
-  for (let i = 0; i < 20; i++) {
+  const cum: [number, number, number][] = [
+    [4.5, 10.5, 3.6],
+    [11.5, 10.5, 3.6],
+    [8, 8, 4.2],
+    [6, 12, 3],
+    [10.5, 12.5, 3],
+  ];
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, art.body, art.dark, cx <= 8 ? art.accent : undefined);
+  for (let i = 0; i < 4; i++) {
+    const x = 4 + Math.floor(rnd() * 9);
+    const y = 7 + Math.floor(rnd() * 6);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+    s.px(x, y, "#c9364f");
+    s.px(x, y - 1, "#e0507a");
+  }
+  return outline(s, shade(art.dark, 0.6)).c;
+}
+
+function makeBushSmall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 4, 1.5);
+  cumLa(s, 6, 11, 2.8, art.body, art.dark, art.accent);
+  cumLa(s, 10, 11.5, 2.6, art.body, art.dark);
+  cumLa(s, 8, 9, 2.8, art.body, art.dark, art.accent);
+  return outline(s, shade(art.dark, 0.6)).c;
+}
+
+function makeBushBig(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x77c3);
+  s.shadow(8, 14, 6.5, 2);
+  const cum: [number, number, number][] = [
+    [4, 10, 4],
+    [12, 10, 4],
+    [8, 11.5, 4],
+    [5.5, 6.5, 3.6],
+    [10.5, 7, 3.6],
+    [8, 5, 3.4],
+  ];
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, art.body, art.dark, cx <= 8 && cy <= 8 ? art.accent : undefined);
+  for (let i = 0; i < 8; i++) {
     const x = 2 + Math.floor(rnd() * 12);
-    const y = 5 + Math.floor(rnd() * 9);
-    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, pick(P.bush, rnd()));
+    const y = 3 + Math.floor(rnd() * 10);
+    if (s.g.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+    s.px(x, y, x + y < 13 ? art.accent : art.dark);
   }
-  // vài quả mọng
-  for (let i = 0; i < 3; i++) s.px(4 + Math.floor(rnd() * 9), 7 + Math.floor(rnd() * 6), "#e0507a");
-  return outline(s).c;
+  return outline(s, shade(art.dark, 0.6)).c;
 }
 
-/** Cây gỗ NHỎ: một ô, tán bé, chặt vài nhát là xong. */
-function makeSapling(art: PropArt): HTMLCanvasElement {
+/**
+ * Vạt cỏ. KHÔNG viền: cỏ là nền mềm, viền đen sẽ thành mảng bẩn trên bãi cỏ.
+ *
+ * Mỗi lá cỏ là một SỢI hai pixel — một sáng một tối — nên dù cắm dày tới đâu
+ * hai lá kề nhau vẫn tách được. Bản trước vẽ lá cỏ bằng một cột pixel đơn sắc,
+ * và một vạt cỏ dày ra một mảng xanh đặc.
+ */
+function makeGrassProp(art: PropArt, tall: boolean): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  const rnd = mulberry32(0x5a91);
-  s.shadow(8, 14, 4, 1.6);
-  s.rect(7, 8, 2, 6, art.accent);
-  s.disc(8, 6, 4, art.body);
-  s.disc(6, 5, 2, P.leaf[3]!);
-  for (let i = 0; i < 18; i++) {
-    const x = 3 + Math.floor(rnd() * 10);
-    const y = 1 + Math.floor(rnd() * 9);
-    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, rnd() > 0.5 ? art.dark : art.body);
+  const rnd = mulberry32(tall ? 0x6a2d : 0x3c19);
+  const n = tall ? 9 : 6;
+  const goc = 14;
+  for (let i = 0; i < n; i++) {
+    const x = 2 + Math.round((i / Math.max(1, n - 1)) * 11) + (rnd() > 0.5 ? 1 : 0);
+    const h = (tall ? 6 : 3.5) + rnd() * 3;
+    const lean = (rnd() - 0.5) * (tall ? 3.4 : 2);
+    soi(s, x, goc, x + lean, goc - h, rnd() > 0.45 ? art.body : art.accent, art.dark);
   }
-  return outline(s).c;
+  // cỏ dày có bông cỏ chín: hạt nhạt ở đầu vài lá
+  if (tall)
+    for (let i = 0; i < 3; i++) {
+      const x = 3 + Math.floor(rnd() * 10);
+      const y = 5 + Math.floor(rnd() * 3);
+      s.px(x, y, "#d8d08a");
+      s.px(x, y + 1, "#b8ae6a");
+    }
+  return s.c;
 }
 
-/** Gốc cây còn lại sau khi hạ cây lớn — vẫn chặt tiếp được để lấy nốt gỗ. */
-function makeStump(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.shadow(8, 14, 5, 2);
-  s.rect(4, 8, 8, 5, art.body);
-  s.rect(4, 8, 8, 2, art.accent);
-  s.hline(4, 12, 8, art.dark);
-  s.rect(6, 9, 4, 1, art.dark);
-  s.px(7, 8, art.dark);
-  s.px(8, 8, art.dark);
-  s.vline(4, 10, 3, art.dark);
-  s.vline(11, 10, 3, art.dark);
-  return outline(s).c;
-}
-
-/** Giếng nước: thành đá tròn, mái che, nước xanh bên trong. */
 function makeWell(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 14, 6, 2);
@@ -823,73 +1055,6 @@ function makeCounter(): HTMLCanvasElement {
 
 /* --- địa hình tự nhiên mới (core 1.3): khúc gỗ, cỏ non/dày, bụi nhỏ/lớn --- */
 
-function makeLog(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.shadow(8, 14, 6, 1.8);
-  // thân nằm ngang, hai đầu lộ vân gỗ
-  s.rect(2, 8, 12, 5, art.body);
-  s.rect(2, 8, 12, 1, art.accent);
-  s.rect(2, 12, 12, 1, art.dark);
-  s.disc(2, 10, 2, art.accent);
-  s.px(2, 10, art.dark);
-  s.disc(13, 10, 2, art.body);
-  s.px(13, 10, art.dark);
-  s.px(6, 10, art.dark);
-  s.px(9, 9, art.dark);
-  s.px(11, 11, art.dark);
-  return outline(s).c;
-}
-
-function makeGrassProp(art: PropArt, tall: boolean): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  const rnd = mulberry32(tall ? 0x6a2d : 0x3c19);
-  const blades = tall ? 11 : 7;
-  for (let i = 0; i < blades; i++) {
-    const x = 2 + Math.floor(rnd() * 12);
-    const h = (tall ? 5 : 3) + Math.floor(rnd() * 3);
-    const lean = rnd() > 0.5 ? 1 : -1;
-    for (let k = 0; k < h; k++) {
-      const xx = x + (k > h - 2 ? lean : 0);
-      s.px(xx, 14 - k, k === h - 1 ? art.accent : k === 0 ? art.dark : art.body);
-    }
-  }
-  // cỏ dày có vài bông cỏ khô nhạt
-  if (tall) for (let i = 0; i < 3; i++) s.px(3 + Math.floor(rnd() * 10), 7 + Math.floor(rnd() * 3), "#d8d08a");
-  // KHÔNG viền: cỏ là nền mềm, viền đen sẽ thành mảng bẩn trên bãi cỏ
-  return s.c;
-}
-
-function makeBushSmall(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  const rnd = mulberry32(0x22b7);
-  s.shadow(8, 14, 4, 1.5);
-  s.disc(8, 11, 3, art.body);
-  s.disc(6, 10, 2, art.accent);
-  s.px(10, 12, art.dark);
-  for (let i = 0; i < 8; i++) {
-    const x = 4 + Math.floor(rnd() * 8);
-    const y = 8 + Math.floor(rnd() * 6);
-    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, rnd() > 0.5 ? art.dark : art.accent);
-  }
-  return outline(s).c;
-}
-
-function makeBushBig(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  const rnd = mulberry32(0x77c3);
-  s.shadow(8, 14, 6.5, 2);
-  s.disc(8, 9, 6, art.body);
-  s.disc(5, 8, 3, art.accent);
-  s.disc(11, 10, 3, art.dark);
-  s.disc(8, 5, 2, art.accent);
-  for (let i = 0; i < 24; i++) {
-    const x = 1 + Math.floor(rnd() * 14);
-    const y = 3 + Math.floor(rnd() * 11);
-    if (s.g.getImageData(x, y, 1, 1).data[3]! > 0) s.px(x, y, pick([art.dark, art.body, art.accent] as const, rnd()));
-  }
-  return outline(s).c;
-}
-
 /**
  * Vẽ một vật thể theo id. Đây là chỗ DUY NHẤT ánh xạ id trong props.json sang
  * hình. Id lạ (content mới đẩy qua OTA, core chưa biết vẽ) vẫn ra một hình cọc
@@ -1011,6 +1176,146 @@ function makeBuilding(id: string, art: PropArt, kind: "floor" | "object"): HTMLC
    CÂY TRỒNG — vẽ theo tham số, không vẽ tay từng giai đoạn.
 --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   CÂY TRỒNG.
+
+   Bản trước vẽ cây bằng ĐĨA TRÒN và VỆT THẲNG: một `disc` cho tán, vài `px`
+   xếp hàng cho lá, một chấm trắng cho bóng sáng, rồi viền đen quanh tất cả. Ở
+   cỡ 16×24 thì cái gì cũng ra một hình hình học đối xứng dán trên nền đất, và
+   mười một dáng cây chỉ khác nhau ở đường bao.
+
+   Bản này đổi ba thứ, và cả ba đều là chuyện KHỐI chứ không phải chuyện thêm
+   chi tiết:
+
+   · VIỀN THEO MÀU CÂY, không phải màu đen. Viền đen tuyền biến mọi thứ thành
+     hình dán. Viền bằng chính màu lá tối đi hai nấc thì cái cây vẫn tách khỏi
+     nền mà không thành sticker — đây là thay đổi một dòng có tác dụng lớn nhất
+     trong cả file này.
+   · LÁ LÀ HÌNH GIỌT NƯỚC, có gân. Phình ở giữa, thon về ngọn, gân sáng chạy
+     dọc. Một vệt thẳng đều đọc ra "một nét vẽ"; hình giọt nước đọc ra "cái lá".
+   · QUẢ CÓ KHỐI. Ba tông đồng tâm lệch nhau, cộng cái cuống. Đĩa tròn một màu
+     với một chấm trắng ở góc đọc ra "hình tròn tô màu".
+
+   Và mọi cây đều có BÓNG TIẾP ĐẤT: cây mọc TỪ đất, không phải nằm trên đất.
+--------------------------------------------------------------------------- */
+
+/** Tham số chung mọi dáng cây dùng. `t` là độ lớn 0..1, `ripe` là đã chín. */
+interface FormCtx {
+  s: Surface;
+  a: CropArt;
+  t: number;
+  ripe: boolean;
+  baseY: number;
+  rnd: () => number;
+}
+
+/** Bóng tiếp đất — cái làm cây "đứng trên" đất chứ không "dán lên" đất. */
+function chanDat(s: Surface, baseY: number, r: number): void {
+  s.shadow(8, baseY + 1, Math.max(1.6, r), 1.1);
+}
+
+/**
+ * Một chiếc LÁ hình giọt nước: từ gốc (x0,y0) vươn tới ngọn (x1,y1).
+ *
+ * Bề ngang phình ở khoảng 40% chiều dài rồi thon về ngọn. Mép dưới tối một
+ * nấc, gân giữa sáng một nấc — đủ để cái lá có mặt trên và mặt dưới, tức là
+ * có hướng, tức là mắt đọc ra nó nằm trong không gian chứ không nằm phẳng.
+ */
+function la(
+  s: Surface,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  day: number,
+  mau: string,
+  toi: string,
+  gan?: string,
+): void {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const n = Math.max(2, Math.round(len));
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    const cx = x0 + dx * u;
+    const cy = y0 + dy * u;
+    const r = day * Math.sin(Math.PI * (0.16 + 0.84 * u));
+    /* Mép tối ở CẢ HAI bên, không phải một bên. Đây là chỗ bản trước hỏng:
+       hai chiếc lá vẽ cạnh nhau, mỗi chiếc chỉ tối một mép, thì mép sáng của
+       chiếc này dính liền vào ruột chiếc kia và cả túm lá gộp thành một mảng
+       đặc. Một pixel tối chen giữa là đủ để mắt tách chúng ra. */
+    /* Bề dày mép tối phải THEO bề ngang lá. Lấy một hằng số 0,85 px thì lá
+       mảnh (r ≈ 1) hoá ra TỐI HẾT — cả túm lá thành một mảng đen, đúng cái vừa
+       xảy ra với cây rau thơm và bụi lúa. Lấy nửa bề ngang thì lá nào cũng còn
+       một lõi sáng, mà hai lá kề nhau vẫn có đường ngăn. */
+    const mep = Math.max(r - 0.85, r * 0.5);
+    for (let k = -r; k <= r; k += 0.5) {
+      s.px(Math.round(cx + nx * k), Math.round(cy + ny * k), Math.abs(k) >= mep ? toi : mau);
+    }
+  }
+  if (gan)
+    for (let i = 1; i < n; i++) {
+      const u = i / n;
+      s.px(Math.round(x0 + dx * u), Math.round(y0 + dy * u), gan);
+    }
+}
+
+/**
+ * Một SỢI lá mảnh: nét sáng 1px, kèm một nét TỐI áp sát phía gốc.
+ *
+ * Vì sao cần cái này bên cạnh `la()`: `la()` vẽ hình giọt nước có bề ngang,
+ * hợp với lá to (cải, dưa, bí). Lá MẢNH — hành, lúa, cà rốt — thì bề ngang chỉ
+ * còn một pixel, mà một pixel thì không chứa nổi cả lõi sáng lẫn hai mép tối;
+ * kết quả là cả túm lá gộp thành một mảng đặc. Sợi giải bài toán ấy bằng cách
+ * cho mỗi lá ĐÚNG hai pixel: một tối một sáng. Hai sợi kề nhau vì thế luôn có
+ * một đường ngăn, dù có chen sát tới đâu.
+ */
+function soi(
+  s: Surface,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  mau: string,
+  toi: string,
+): void {
+  const n = Math.max(2, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+  const d = x1 >= x0 ? -1 : 1; // nét tối nằm phía trong búi
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    const x = Math.round(x0 + (x1 - x0) * u);
+    const y = Math.round(y0 + (y1 - y0) * u);
+    s.px(x + d, y, toi);
+    s.px(x, y, mau);
+  }
+}
+
+/** Quả: ba tông đồng tâm lệch nhau + cuống. Có khối, không phải đĩa tròn. */
+function qua(s: Surface, a: CropArt, cx: number, cy: number, r: number, cuong = true): void {
+  s.ell(cx, cy, r, r, a.fruitDark);
+  s.ell(cx, cy - 0.35, Math.max(0.6, r - 0.7), Math.max(0.6, r - 0.7), a.fruit);
+  s.ell(
+    cx - r * 0.32,
+    cy - r * 0.34,
+    Math.max(0.5, r * 0.4),
+    Math.max(0.5, r * 0.3),
+    lighten(a.fruit),
+  );
+  if (cuong) s.px(Math.round(cx), Math.round(cy - r), a.stem);
+}
+
+/** Thân: cột dọc, mép trái ăn nắng. */
+function than(s: Surface, a: CropArt, x: number, yTop: number, yBot: number, day = 1): void {
+  for (let y = yTop; y <= yBot; y++) {
+    s.hline(x, y, day, a.stem);
+    if (day > 1) s.px(x, y, lighten(a.stem));
+    else if (y % 2 === 0) s.px(x, y, lighten(a.stem));
+  }
+}
+
 function makeCrop(def: CropDef, stage: number): HTMLCanvasElement {
   const s = surface(TILE, CROP_H);
   const a = def.art;
@@ -1021,13 +1326,21 @@ function makeCrop(def: CropDef, stage: number): HTMLCanvasElement {
   const rnd = mulberry32(hash2(def.id.length, stage, 0x3a1));
 
   if (stage === 0) {
-    // mầm mới nhú: hai lá mầm bé — vẫn phải viền để thấy trên đất tối
-    s.px(8, baseY, a.stem);
-    s.px(8, baseY - 1, a.stem);
-    s.px(7, baseY - 2, a.leaf);
-    s.px(9, baseY - 2, a.leaf);
-    s.px(8, baseY - 2, a.leafDark);
-    return outline(s).c;
+    /* Mầm mới nhú: hai lá mầm bé xoè sang hai bên trên một cọng mảnh. Đây là
+       hình người trồng cây nào cũng nhận ra ngay, và nó phải KHÁC HẲN giai
+       đoạn sau — đó là thông tin "vừa gieo, còn lâu mới thu". */
+    chanDat(s, baseY, 2);
+    than(s, a, 8, baseY - 2, baseY);
+    /* Vẽ TAY từng pixel chứ không gọi `la()`: ở cỡ hai lá mầm thì mọi phép
+       hình học đều tròn về cùng một cụm pixel, và hai chiếc lá dính thành một
+       cái nêm. Bốn pixel đặt tay đọc ra hình chữ V ngay. */
+    for (const k of [-1, 1]) {
+      s.px(8 + k, baseY - 3, a.leafDark);
+      s.px(8 + k * 2, baseY - 3, a.leaf);
+      s.px(8 + k * 2, baseY - 4, a.leafDark);
+      s.px(8 + k * 3, baseY - 4, lighten(a.leaf));
+    }
+    return outline(s, shade(a.leafDark, 0.58)).c;
   }
 
   const ctx: FormCtx = { s, a, t, ripe, baseY, rnd };
@@ -1065,391 +1378,424 @@ function makeCrop(def: CropDef, stage: number): HTMLCanvasElement {
     default:
       drawLeafy(ctx);
   }
-  return outline(s).c;
+  /* Viền bằng chính màu lá tối đi, không phải màu đen: cây cỏ không có đường
+     bao đen: viền đen tuyền làm cái cây thành hình dán trên nền đất. */
+  return outline(s, shade(a.leafDark, 0.58)).c;
 }
 
-/** Tham số chung mọi dáng cây dùng. `t` là độ lớn 0..1, `ripe` là đã chín. */
-interface FormCtx {
-  s: Surface;
-  a: CropArt;
-  t: number;
-  ripe: boolean;
-  baseY: number;
-  rnd: () => number;
-}
-
-/** Quả tròn có bóng sáng góc trên trái — dùng lại cho mọi dáng. */
-function berry(s: Surface, a: CropArt, cx: number, cy: number, r: number) {
-  s.disc(cx, cy, r, a.fruit);
-  s.disc(cx + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
-  s.px(cx - r + 1, cy - r + 1, "#ffffff");
-}
-
-/* --- head: BẮP tròn ôm sát đất — bắp cải, xà lách, su hào ----------------
+/* --- head: BẮP cuộn ôm sát đất — bắp cải, xà lách, cải thìa ---------------
    Tách khỏi `leafy` vì mười bảy loại rau lá vẽ chung một dáng thì ra mười bảy
-   bụi xanh giống hệt nhau. Bắp tròn có bóng dáng khác hẳn túm lá xoè, nên
-   người chơi phân biệt được từ xa mà không phải đọc chữ. */
+   bụi xanh giống hệt nhau. Bắp cuộn có bóng dáng khác hẳn túm lá xoè. */
 function drawHead({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const r = Math.max(2, Math.round((a.fruitSize + a.spread) * 0.32 * (0.45 + 0.55 * t)));
-  const cy = baseY - r + 1;
+  const r = Math.max(2, (a.fruitSize + a.spread) * 0.3 * (0.5 + 0.5 * t));
+  const wing = r + Math.max(1, a.spread * 0.42 * t);
+  chanDat(s, baseY, wing);
 
-  // lá ngoài xoè ra hai bên, thấp và rộng
-  const wing = r + Math.max(1, Math.round(a.spread * 0.35 * t));
-  for (let x = -wing; x <= wing; x++) {
-    const drop = Math.round((Math.abs(x) / Math.max(1, wing)) * 2);
-    s.px(8 + x, baseY - drop, a.leafDark);
-    if (Math.abs(x) < wing) s.px(8 + x, baseY - drop - 1, a.leaf);
+  // lá ngoài: bốn chiếc bò sát đất, toả ra hai bên
+  for (const k of [-1, 1]) {
+    la(s, 8, baseY - 1, 8 + k * wing, baseY - 1, 1.5, a.leafDark, shade(a.leafDark, 0.8));
+    la(s, 8, baseY - 1, 8 + k * wing * 0.72, baseY - r * 0.9, 1.6, a.leaf, a.leafDark);
   }
 
-  // bắp: đĩa tròn, sáng ở trên trái
-  s.disc(8, cy, r, ripe ? a.fruit : a.leaf);
-  s.disc(8 + 1, cy + 1, Math.max(0, r - 2), ripe ? a.fruitDark : a.leafDark);
-  s.px(8 - r + 1, cy - r + 1, "#ffffff");
-  // gân lá cuộn quanh bắp
-  for (let k = -r + 1; k <= r - 1; k += 2) s.px(8 + k, cy - Math.round(r * 0.4), a.leafDark);
-  if (rnd() > 0.5) s.px(8, cy - r, a.stem);
+  // bắp: khối cầu cuộn, sáng chếch trên-trái
+  const cy = baseY - r * 0.9;
+  const mau = ripe ? a.fruit : a.leaf;
+  const toi = ripe ? a.fruitDark : a.leafDark;
+  s.ell(8, cy, r, r * 0.94, toi);
+  s.ell(8, cy - 0.5, r - 0.8, r * 0.94 - 0.8, mau);
+  s.ell(8 - r * 0.3, cy - r * 0.34, r * 0.42, r * 0.3, lighten(mau));
+  /* Gân cuộn: hai vòng cung ôm theo bắp. Đây là thứ phân biệt "bắp cải" với
+     "một quả bóng màu xanh" — lá cuộn thì có nếp. */
+  for (const g of [0.45, 0.8]) {
+    for (let x = -r * g; x <= r * g; x += 0.5) {
+      const y = cy - Math.sqrt(Math.max(0, (r * g) ** 2 - x * x)) * 0.9;
+      s.px(Math.round(8 + x), Math.round(y), toi);
+      s.px(Math.round(8 + x), Math.round(y) + 1, lighten(mau));
+    }
+  }
+  if (rnd() > 0.5) s.px(8, Math.round(cy - r), a.stem);
 }
 
-/* --- herb: BÚI LÁ MẢNH dựng đứng — hành, hẹ, sả, húng ---------------------
-   Không có quả: người ta ăn chính cái lá. Nên dáng phải mảnh và cao, đọc ra
-   ngay là "rau thơm" chứ không phải "bụi rau". */
-function drawHerb({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(3, Math.round((a.height + 4) * (0.4 + 0.6 * t)));
-  const n = Math.max(3, Math.round((a.leaves + 2) * (0.5 + 0.5 * t)));
+/* --- herb: BÚI LÁ MẢNH dựng đứng — hành lá, hẹ, sả, húng ------------------
+   Không có quả: người ta ăn chính cái lá. Dáng phải mảnh và cao, đọc ra ngay
+   là "rau thơm" chứ không phải "bụi rau". */
+function drawHerb({ s, a, t, baseY, rnd }: FormCtx) {
+  const h = Math.max(3, (a.height + 4) * (0.42 + 0.58 * t));
+  /* ÍT cọng và MẢNH: cả chục cọng dày mọc từ cùng một điểm thì dính thành một
+     mảng đặc, và cây rau thơm đọc ra thành một cục màu. Bảy cọng là trần. */
+  const n = Math.max(3, Math.min(5, Math.round((a.leaves * 0.5 + 1) * (0.5 + 0.5 * t))));
+  chanDat(s, baseY, 2 + a.spread * 0.3);
   for (let i = 0; i < n; i++) {
     const frac = n === 1 ? 0.5 : i / (n - 1);
-    const lean = (frac - 0.5) * 2;
-    const len = Math.max(2, Math.round(h * (0.65 + 0.35 * (1 - Math.abs(lean)))));
-    for (let k = 0; k < len; k++) {
-      const x = 8 + Math.round(lean * (a.spread * 0.55) * (k / Math.max(1, len)));
-      const y = baseY - k;
-      // ngọn nhạt hơn gốc: nhìn ra chiều cao mà không cần vẽ bóng
-      s.px(x, y, k > len - 3 ? a.leaf : a.leafDark);
-    }
+    const nghieng = (frac - 0.5) * 2; // −1..1
+    const cao = h * (0.6 + 0.4 * (1 - Math.abs(nghieng)));
+    /* Gốc mỗi cọng LỆCH NHAU: cả chục cọng mọc từ đúng một pixel thì phần
+       gốc chồng lên nhau thành một mảng đặc, và cái búi mất hết đường ngăn. */
+    soi(
+      s,
+      8 + nghieng * 1.2,
+      baseY,
+      8 + nghieng * (a.spread * 0.85 + 1.4),
+      baseY - cao,
+      i % 2 ? a.leaf : lighten(a.leaf),
+      a.leafDark,
+    );
   }
-  // gốc trắng của hành, chỉ hiện khi đã tới lứa
-  if (ripe) {
-    s.hline(7, baseY, 3, a.fruit);
-    s.px(8, baseY - 1, a.fruit);
-    if (rnd() > 0.6) s.px(7, baseY - 1, a.fruitDark);
-  }
+  // gốc bó lại: vài pixel thân sáng ở chân búi
+  than(s, a, 8, Math.round(baseY - 1), baseY);
+  if (rnd() > 0.6) s.px(7, baseY, a.stem);
 }
 
-/* --- bulb: CỦ TRÒN nổi trên mặt đất, ngọn mảnh — hành tây, tỏi ------------ */
+/* --- bulb: CỦ nằm ngay mặt đất, lá ống dựng lên — hành tây, tỏi ----------- */
 function drawBulb({ s, a, t, ripe, baseY }: FormCtx) {
-  const r = Math.max(2, Math.round(a.fruitSize * 0.5 * (0.5 + 0.5 * t)));
-  const cy = baseY - Math.round(r * 0.6);
-  // ngọn lá mảnh chĩa lên
-  const h = Math.max(3, Math.round(a.height * (0.4 + 0.6 * t)));
-  for (const lean of [-1, 0, 1]) {
-    for (let k = 0; k < h; k++) {
-      const x = 8 + Math.round(lean * (k / Math.max(1, h)) * 2);
-      s.px(x, cy - r - k, k > h - 3 ? a.leaf : a.leafDark);
-    }
+  const r = Math.max(2, a.fruitSize * 0.45 * (0.5 + 0.5 * t));
+  const h = Math.max(4, (a.height + 3) * (0.45 + 0.55 * t));
+  chanDat(s, baseY, r + 1);
+
+  // lá ống: ba cọng rỗng vươn thẳng, hơi loe
+  for (const k of [-1, 0, 1]) {
+    soi(s, 8 + k * 1.2, baseY - r * 0.4, 8 + k * 2.6, baseY - h, a.leaf, a.leafDark);
+    if (k !== 0) soi(s, 8 + k * 1.9, baseY - r * 0.4, 8 + k * 3.6, baseY - h * 0.75, lighten(a.leaf), a.leafDark);
   }
-  if (ripe) {
-    s.disc(8, cy, r, a.fruit);
-    s.disc(8 + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
-    s.px(8 - r + 1, cy - r + 1, "#ffffff");
-    // vằn dọc trên vỏ củ — nét nhận diện của hành tây
-    for (let k = -r + 1; k <= r - 1; k += 2) s.px(8 + k, cy, a.fruitDark);
-  } else {
-    s.disc(8, cy, Math.max(1, r - 1), a.leafDark);
+
+  if (ripe || t > 0.6) {
+    // củ: khối cầu hơi dẹt, có VẰN dọc — vằn là thứ đọc ra "củ hành"
+    const cy = baseY - r * 0.55;
+    s.ell(8, cy, r, r * 1.02, a.fruitDark);
+    s.ell(8, cy - 0.4, r - 0.8, r * 1.02 - 0.8, a.fruit);
+    s.ell(8 - r * 0.3, cy - r * 0.3, r * 0.4, r * 0.32, lighten(a.fruit));
+    for (const k of [-0.55, 0.05, 0.6])
+      for (let y = -r * 0.8; y <= r * 0.7; y += 1)
+        s.px(Math.round(8 + k * r + y * k * 0.12), Math.round(cy + y), a.fruitDark);
+    // rễ chùm
+    s.px(7, baseY, shade(a.fruitDark, 0.8));
+    s.px(9, baseY, shade(a.fruitDark, 0.8));
   }
 }
 
-/* --- melon: QUẢ TO NẰM TRÊN ĐẤT, lá bò quanh — dưa hấu, bí đỏ ------------- */
+/* --- melon: DÂY BÒ mặt đất, một quả to — dưa hấu, bí đỏ ------------------- */
 function drawMelon({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  // dây lá bò lan trên mặt đất
-  const spread = Math.max(2, Math.round(a.spread * (0.5 + 0.5 * t)));
-  for (let x = -spread; x <= spread; x++) {
-    if (x === 0) continue;
-    const y = baseY - (Math.abs(x) % 2);
-    s.px(8 + x, y, a.leafDark);
-    if (rnd() > 0.5) s.px(8 + x, y - 1, a.leaf);
+  const spread = Math.max(2, a.spread * (0.6 + 0.4 * t));
+  chanDat(s, baseY, spread + 1);
+
+  // dây bò ngang, lá to hình thuỳ nằm sát đất
+  for (const k of [-1, 1]) {
+    s.hline(Math.round(8 + (k < 0 ? -spread : 1)), baseY - 1, Math.round(spread), a.stem);
+    la(s, 8 + k * 1.5, baseY - 1, 8 + k * spread, baseY - 2 - spread * 0.45, 1.5, a.leaf, a.leafDark, lighten(a.leaf));
   }
-  const r = Math.max(2, Math.round(a.fruitSize * 0.55 * (0.35 + 0.65 * t)));
-  const cy = baseY - r + 1;
-  s.disc(8, cy, r, ripe ? a.fruit : a.leaf);
-  s.disc(8 + 1, cy + 1, Math.max(0, r - 2), ripe ? a.fruitDark : a.leafDark);
-  s.px(8 - r + 1, cy - r + 1, "#ffffff");
-  // sọc dưa — thứ làm quả dưa ra quả dưa
-  if (ripe && r >= 3)
-    for (let k = -r + 1; k <= r - 1; k += 2)
-      for (let dy = -r + 1; dy <= r - 1; dy++)
-        if (k * k + dy * dy <= (r - 1) * (r - 1)) s.px(8 + k, cy + dy, a.fruitDark);
-  // cuống
-  s.px(8, cy - r, a.stem);
-  s.px(8, cy - r - 1, a.stem);
+  la(s, 8, baseY - 2, 8 - 1, baseY - 3 - spread * 0.7, 1.3, a.leaf, a.leafDark, lighten(a.leaf));
+
+  const r = Math.max(2, a.fruitSize * 0.5 * (ripe ? 1 : 0.45 + 0.4 * t));
+  if (t > 0.35 || ripe) {
+    const cy = baseY - r * 0.85;
+    s.ell(8, cy, r * 1.05, r, a.fruitDark);
+    s.ell(8, cy - 0.4, r * 1.05 - 0.8, r - 0.8, a.fruit);
+    s.ell(8 - r * 0.34, cy - r * 0.36, r * 0.42, r * 0.3, lighten(a.fruit));
+    /* SỌC theo múi: hai đường cong ôm quả. Quả dưa không sọc thì ở cỡ này nó
+       chỉ là một quả bóng — sọc là thứ duy nhất nói nó là quả dưa. */
+    if (r >= 3)
+      for (const g of [-0.45, 0.45]) {
+        for (let y = -r * 0.85; y <= r * 0.85; y += 1) {
+          const x = g * r * Math.sqrt(Math.max(0, 1 - (y / (r * 0.95)) ** 2)) * 1.15;
+          s.px(Math.round(8 + x), Math.round(cy + y), a.fruitDark);
+        }
+      }
+    if (rnd() > 0.4) s.px(8, Math.round(cy - r), a.stem);
+  }
 }
 
-/* --- leafy: thân đứng, lá so le hai bên, quả quanh thân ------------------- */
-
+/* --- leafy: THÂN ĐỨNG, lá so le hai bên — cải, rau muống ------------------ */
 function drawLeafy({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(2, Math.round(a.height * (0.35 + 0.65 * t)));
-  const spread = Math.max(1, Math.round(a.spread * (0.4 + 0.6 * t)));
-  const leaves = Math.max(2, Math.round(a.leaves * (0.4 + 0.6 * t)));
+  const h = Math.max(3, a.height * (0.4 + 0.6 * t));
+  const spread = Math.max(1.5, a.spread * (0.45 + 0.55 * t));
+  const n = Math.max(3, Math.round(a.leaves * (0.45 + 0.55 * t)));
+  chanDat(s, baseY, spread * 0.8);
 
-  for (let k = 0; k < h; k++) {
-    const y = baseY - k;
-    s.px(8, y, a.stem);
-    if (k > h * 0.3 && k % 3 === 0) s.px(9, y, a.leafDark);
+  than(s, a, 8, Math.round(baseY - h), baseY);
+
+  for (let i = 0; i < n; i++) {
+    const frac = i / Math.max(1, n - 1);
+    const y = baseY - 1 - frac * (h - 1);
+    const k = i % 2 === 0 ? -1 : 1;
+    /* Lá dưới DÀI hơn lá trên: cây mọc từ dưới lên nên lá gốc già và to nhất.
+       Đảo lại là ra hình cái chổi ngược, đọc thấy sai ngay dù khó gọi tên. */
+    const len = spread * (1 - 0.42 * frac);
+    la(
+      s,
+      8,
+      y,
+      8 + k * len,
+      y - len * 0.55,
+      1.35,
+      i % 2 ? a.leaf : lighten(a.leaf),
+      a.leafDark,
+      lighten(a.leaf),
+    );
   }
 
-  for (let i = 0; i < leaves; i++) {
-    const frac = i / Math.max(1, leaves - 1);
-    const y = baseY - Math.round(2 + frac * (h - 2));
-    const side = i % 2 === 0 ? -1 : 1;
-    const len = Math.max(1, Math.round(spread * (0.5 + 0.5 * (1 - frac))));
-    for (let k = 1; k <= len; k++) {
-      const x = 8 + side * k;
-      s.px(x, y, k === len ? a.leafDark : a.leaf);
-      if (k < len && rnd() > 0.45) s.px(x, y - 1, a.leaf);
-      // lá dày hơn ở gần thân
-      if (k === 1 && len > 2) s.px(x, y + 1, a.leafDark);
-    }
-  }
-
-  if (ripe) {
-    const r = Math.max(1, Math.round(a.fruitSize / 2));
+  if (ripe && a.fruitCount > 0) {
+    const r = Math.max(1, a.fruitSize * 0.42);
     for (let i = 0; i < a.fruitCount; i++) {
       const ang = (i / Math.max(1, a.fruitCount)) * Math.PI * 2 + 0.6;
-      const cx = 8 + Math.round(Math.cos(ang) * (a.fruitCount === 1 ? 0 : spread * 0.7));
-      const cy =
-        a.fruitCount === 1
-          ? baseY - Math.round(h * 0.45)
-          : baseY - Math.round(h * (0.35 + 0.4 * Math.abs(Math.sin(ang))));
-      berry(s, a, cx, cy, r);
-      s.px(cx, cy - r, a.leafDark);
+      const cx = 8 + Math.cos(ang) * (a.fruitCount === 1 ? 0 : spread * 0.55);
+      const cy = baseY - h * (a.fruitCount === 1 ? 0.5 : 0.35 + 0.4 * Math.abs(Math.sin(ang)));
+      qua(s, a, cx, cy, r);
     }
+    if (rnd() > 0.8) s.px(8, Math.round(baseY - h), a.leafDark);
   }
 }
 
-/* --- root: túm lá xoè, chín thì nhô vai củ khỏi mặt đất ------------------- */
-
+/* --- root: TÚM LÁ XẺ, chín thì nhô vai củ khỏi mặt đất — cà rốt, củ cải --- */
 function drawRoot({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(3, Math.round(a.height * (0.4 + 0.6 * t)));
-  const spread = Math.max(2, Math.round(a.spread * (0.5 + 0.5 * t)));
+  const h = Math.max(3, a.height * (0.45 + 0.55 * t));
+  const spread = Math.max(2, a.spread * (0.5 + 0.5 * t));
+  chanDat(s, baseY, spread * 0.8);
 
-  // vai củ: chỉ ló ra khi đã chín, đó là tín hiệu "nhổ được rồi"
+  /* Vai củ ló lên khỏi mặt đất khi chín — đó là tín hiệu "nhổ được rồi", và nó
+     phải nằm DƯỚI túm lá nên vẽ trước. */
   if (ripe) {
-    const r = Math.max(2, Math.round(a.fruitSize / 2));
-    s.disc(8, baseY, r, a.fruit);
-    s.disc(8 + 1, baseY + 1, Math.max(0, r - 2), a.fruitDark);
-    s.px(8 - r + 1, baseY - r + 1, "#ffffff");
-    // đất vun quanh vai củ cho khỏi trông như quả đặt trên nền
-    s.px(8 - r - 1, baseY + 1, a.fruitDark);
-    s.px(8 + r + 1, baseY + 1, a.fruitDark);
+    const r = Math.max(2, a.fruitSize * 0.52);
+    s.ell(8, baseY, r, r * 0.85, a.fruitDark);
+    s.ell(8, baseY - 0.4, r - 0.7, r * 0.85 - 0.6, a.fruit);
+    s.ell(8 - r * 0.3, baseY - r * 0.3, r * 0.38, r * 0.26, lighten(a.fruit));
+    // đất vun quanh vai củ: không có nó thì củ trông như quả đặt trên nền
+    s.px(Math.round(8 - r - 1), baseY + 1, P.soilEdge);
+    s.px(Math.round(8 + r + 1), baseY + 1, P.soilEdge);
   }
 
-  // túm lá xoè hình quạt từ một gốc
-  const top = baseY - (ripe ? 1 : 0);
-  const blades = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
-  for (let i = 0; i < blades; i++) {
-    const frac = blades === 1 ? 0.5 : i / (blades - 1);
-    const lean = (frac - 0.5) * 2; // -1..1
-    const len = Math.max(2, Math.round(h * (0.6 + 0.4 * (1 - Math.abs(lean)))));
-    for (let k = 0; k < len; k++) {
-      const x = 8 + Math.round(lean * spread * (k / Math.max(1, len)));
-      const y = top - k;
-      s.px(x, y, k > len - 2 ? a.leafDark : a.leaf);
-      if (k > 0 && rnd() > 0.7) s.px(x + (lean < 0 ? -1 : 1), y, a.leafDark);
-    }
-  }
-  // cuống lá tụ lại ở cổ củ
-  s.px(8, top, a.stem);
-  s.px(8, top - 1, a.stem);
-}
-
-/* --- vine: dây bò ngang, quả to nằm trên đất ------------------------------ */
-
-function drawVine({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const reach = Math.max(2, Math.round((a.spread + 2) * (0.5 + 0.5 * t)));
-  const leaves = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
-
-  // hai nhánh dây bò sang hai bên, gợn lên xuống 1px cho có nhịp
-  for (let side = -1 as -1 | 1; ; side = 1) {
-    for (let k = 1; k <= reach; k++) {
-      const x = 8 + side * k;
-      const y = baseY - (k % 3 === 0 ? 1 : 0);
-      s.px(x, y, a.stem);
-    }
-    if (side === 1) break;
-  }
-
-  // lá xoè dọc dây, so le trên/dưới
-  for (let i = 0; i < leaves; i++) {
-    const side = i % 2 === 0 ? -1 : 1;
-    const k = 1 + Math.round((i / Math.max(1, leaves - 1)) * (reach - 1));
-    const cx = 8 + side * k;
-    const cy = baseY - 2 - (i % 3);
-    s.disc(cx, cy, 1, a.leaf);
-    s.px(cx, cy + 1, a.leafDark);
-    if (rnd() > 0.5) s.px(cx + side, cy, a.leafDark);
-  }
-
-  // quả to nằm bệt trên mặt đất — đây là điểm nhìn của dáng này
-  if (ripe) {
-    const r = Math.max(2, Math.round(a.fruitSize / 2));
-    const n = Math.max(1, Math.min(2, a.fruitCount));
-    for (let i = 0; i < n; i++) {
-      const cx = n === 1 ? 8 : 8 + (i === 0 ? -3 : 3);
-      const cy = baseY - r + 1;
-      s.disc(cx, cy, r, a.fruit);
-      // sọc dưa: vài vệt dọc màu tối, chỉ vẽ khi quả đủ to mới thấy được
-      if (r >= 3) {
-        for (let y = cy - r + 1; y <= cy + r - 1; y++) {
-          s.px(cx - Math.round(r * 0.6), y, a.fruitDark);
-          s.px(cx + Math.round(r * 0.6), y, a.fruitDark);
-        }
-      } else {
-        s.disc(cx + 1, cy + 1, Math.max(0, r - 2), a.fruitDark);
-      }
-      s.px(cx - r + 1, cy - r + 1, "#ffffff");
-      s.px(cx, cy - r, a.stem);
-    }
-  }
-}
-
-/* --- stalk: một cọng cao, bắp/quả bám dọc thân --------------------------- */
-
-function drawStalk({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(4, Math.round((a.height + 4) * (0.4 + 0.6 * t)));
-  const spread = Math.max(2, Math.round(a.spread * (0.5 + 0.5 * t)));
-
-  // thân dày 2px cho ra dáng cây cao
-  for (let k = 0; k < h; k++) {
-    s.px(8, baseY - k, a.stem);
-    s.px(9, baseY - k, k % 4 === 0 ? a.leafDark : a.stem);
-  }
-
-  // lá dài rủ xuống, mọc so le dọc thân
-  const leaves = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
-  for (let i = 0; i < leaves; i++) {
-    const frac = i / Math.max(1, leaves - 1);
-    const y0 = baseY - Math.round(2 + frac * (h - 2));
-    const side = i % 2 === 0 ? -1 : 1;
-    const len = Math.max(2, Math.round(spread * (0.6 + 0.4 * frac)));
-    for (let k = 1; k <= len; k++) {
-      const x = 8 + side * k + (side < 0 ? 0 : 1);
-      const y = y0 + Math.round((k / len) * 1.5); // rủ xuống dần
-      s.px(x, y, k === len ? a.leafDark : a.leaf);
-    }
-  }
-
-  // ngọn cờ (bông ngô) khi đã chín
-  if (ripe) {
-    s.px(8, baseY - h, a.leafDark);
-    s.px(9, baseY - h - 1, a.leafDark);
-    const r = Math.max(1, Math.round(a.fruitSize / 2));
-    const n = Math.max(1, a.fruitCount);
-    for (let i = 0; i < n; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const cy = baseY - Math.round(h * (0.35 + 0.25 * i));
-      const cx = 8 + side * 2 + (side < 0 ? 0 : 1);
-      // bắp thuôn dài: chồng hai đĩa lệch nhau theo chiều dọc
-      s.disc(cx, cy, r, a.fruit);
-      s.disc(cx, cy + r, r, a.fruit);
-      s.px(cx + (side < 0 ? -1 : 1), cy, a.fruitDark);
-      s.px(cx, cy - r, a.leafDark);
-      if (rnd() > 0.5) s.px(cx, cy + r + 1, a.fruitDark);
-    }
-  }
-}
-
-/* --- bush: bụi tròn thấp, quả nhỏ rải khắp tán --------------------------- */
-
-function drawBush({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const r = Math.max(2, Math.round((a.spread + 2) * (0.45 + 0.55 * t)));
-  const cy = baseY - r + 1;
-
-  s.disc(8, cy, r, a.leaf);
-  // mảng tối ở nửa dưới phải cho tán có khối, không phẳng như cái đĩa
-  s.disc(8 + 1, cy + 1, Math.max(1, r - 1), a.leafDark);
-  s.disc(8 - 1, cy - 1, Math.max(1, r - 2), a.leaf);
-  // rìa lởm chởm để không thành hình tròn hoàn hảo
-  for (let i = 0; i < 8; i++) {
-    const ang = (i / 8) * Math.PI * 2;
-    if (rnd() > 0.45)
-      s.px(8 + Math.round(Math.cos(ang) * (r + 1)), cy + Math.round(Math.sin(ang) * (r + 1)), a.leaf);
-  }
-  s.px(8, baseY, a.stem);
-  s.px(8, baseY - 1, a.stem);
-
-  if (ripe) {
-    const fr = Math.max(1, Math.round(a.fruitSize / 2));
-    const n = Math.max(1, a.fruitCount);
-    for (let i = 0; i < n; i++) {
-      const ang = (i / n) * Math.PI * 2 + 0.9;
-      const d = r * 0.55;
-      berry(s, a, 8 + Math.round(Math.cos(ang) * d), cy + Math.round(Math.sin(ang) * d), fr);
-    }
-  }
-}
-
-/* --- grain: nhiều cọng mảnh, bông trĩu đầu ngọn -------------------------- */
-
-function drawGrain({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(3, Math.round(a.height * (0.45 + 0.55 * t)));
+  // túm lá: xoè hình quạt, lá giữa cao nhất, mỗi lá có gân
   const n = Math.max(3, Math.round(a.leaves * (0.5 + 0.5 * t)));
-  const spread = Math.max(1, Math.round(a.spread * (0.5 + 0.5 * t)));
+  for (let i = 0; i < n; i++) {
+    const frac = n === 1 ? 0.5 : i / (n - 1);
+    const nghieng = (frac - 0.5) * 2;
+    const cao = h * (0.55 + 0.45 * (1 - Math.abs(nghieng)));
+    soi(
+      s,
+      8 + nghieng * 1.1,
+      baseY - 1,
+      8 + nghieng * spread,
+      baseY - 1 - cao,
+      i % 2 ? a.leaf : lighten(a.leaf),
+      a.leafDark,
+    );
+  }
+  if (rnd() > 0.7) s.px(8, Math.round(baseY - h - 1), a.leaf);
+}
+
+/* --- vine: DÂY LEO ngang, quả treo bên dưới — dưa leo, đậu đũa ------------ */
+function drawVine({ s, a, t, ripe, baseY }: FormCtx) {
+  const spread = Math.max(3, a.spread * (0.6 + 0.4 * t));
+  const h = Math.max(3, a.height * (0.4 + 0.6 * t));
+  chanDat(s, baseY, spread * 0.9);
+
+  // thân leo: cong lên rồi vắt ngang
+  than(s, a, 8, Math.round(baseY - h), baseY);
+  const yNgang = Math.round(baseY - h);
+  s.hline(Math.round(8 - spread), yNgang, Math.round(spread * 2), a.stem);
+
+  // tua cuốn: một móc xoắn ở mỗi đầu, thấp thôi — cao quá thành cái ăng-ten
+  for (const k of [-1, 1]) {
+    const x = Math.round(8 + k * spread);
+    s.px(x, yNgang - 1, a.leafDark);
+    s.px(x + k, yNgang - 2, a.leafDark);
+  }
+
+  // lá to mọc trên giàn
+  const n = Math.max(2, Math.round(a.leaves * 0.5 * (0.5 + 0.5 * t)));
+  for (let i = 0; i < n; i++) {
+    const k = i % 2 === 0 ? -1 : 1;
+    const x = 8 + k * spread * (0.35 + 0.6 * (i / Math.max(1, n)));
+    la(s, x, yNgang, x + k * 1.4, yNgang - 3, 1.2, a.leaf, a.leafDark, lighten(a.leaf));
+  }
+
+  // quả TREO xuống từ giàn — đó là cả cái ý của giàn leo
+  if (t > 0.55 || ripe) {
+    /* Quả TREO xuống từ giàn — cả cái ý của giàn leo nằm ở đây, nên nó phải
+       THẤY ĐƯỢC: quả to hơn, và lúc chưa chín thì xanh đậm hơn lá chứ không
+       cùng màu lá (cùng màu thì nó biến mất trong tán). */
+    const mau = ripe ? a.fruit : shade(a.leaf, 0.72);
+    const toi = shade(ripe ? a.fruitDark : a.leafDark, 0.55);
+    const r = Math.max(1.3, a.fruitSize * 0.5);
+    const dai = Math.max(4, a.fruitSize * 1.3 * (ripe ? 1 : 0.7));
+    const n2 = Math.max(1, Math.min(3, a.fruitCount));
+    for (let i = 0; i < n2; i++) {
+      const k = n2 === 1 ? 0 : (i / (n2 - 1) - 0.5) * 1.15;
+      const x = 8 + k * spread;
+      for (let y = 0; y < dai; y++) {
+        const rr = r * Math.sin(Math.PI * (0.3 + 0.7 * (y / dai)));
+        const yy = yNgang + 1 + y;
+        s.hline(Math.round(x - rr), yy, Math.max(1, Math.round(rr * 2 + 1)), mau);
+        // vành tối CẢ HAI bên: quả treo giữa tán lá cùng màu thì không có vành
+        // tối là nó biến mất trong tán, đúng như quả dưa leo vừa rồi.
+        s.px(Math.round(x + rr), yy, toi);
+        s.px(Math.round(x - rr), yy, toi);
+        if (rr > 1) s.px(Math.round(x - rr + 1), yy, lighten(mau));
+      }
+      s.px(Math.round(x), yNgang + 1, a.stem);
+    }
+  }
+}
+
+/* --- stalk: THÂN CỨNG CAO, lá dài cong — ngô, mía --------------------------- */
+function drawStalk({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const h = Math.max(4, (a.height + 2) * (0.45 + 0.55 * t));
+  const spread = Math.max(2, a.spread * (0.5 + 0.5 * t));
+  chanDat(s, baseY, spread * 0.6);
+
+  // thân dày 2px có đốt
+  than(s, a, 7, Math.round(baseY - h), baseY, 2);
+  for (let y = Math.round(baseY - h) + 2; y < baseY; y += 3) s.hline(7, y, 2, shade(a.stem, 0.75));
+
+  // lá DÀI CONG rủ xuống, so le hai bên — dáng đặc trưng của cây ngô
+  const n = Math.max(2, Math.min(5, Math.round(a.leaves * 0.5 * (0.4 + 0.6 * t))));
+  for (let i = 0; i < n; i++) {
+    const frac = i / Math.max(1, n - 1);
+    const y = baseY - 1 - frac * (h - 2);
+    const k = i % 2 === 0 ? -1 : 1;
+    const len = spread * (1.05 - 0.35 * frac);
+    // vẽ hai đoạn: vươn lên rồi rủ xuống, thành hình cung
+    const mx = 8 + k * len * 0.6;
+    const my = y - len * 0.5;
+    la(s, 8, y, mx, my, 0.85, a.leaf, a.leafDark, lighten(a.leaf));
+    la(s, mx, my, 8 + k * len, y - len * 0.1, 0.7, a.leaf, a.leafDark);
+  }
+
+  // BÔNG CỜ trên ngọn
+  if (t > 0.7 || ripe) {
+    const yy = Math.round(baseY - h);
+    for (const k of [-1, 0, 1]) s.vline(8 + k, yy - 2, 2, a.leafDark);
+  }
+
+  // BẮP: ôm sát thân, có râu — chỉ hiện khi chín
+  if (ripe) {
+    const r = Math.max(1.4, a.fruitSize * 0.34);
+    const cy = baseY - h * 0.45;
+    for (let i = 0; i < Math.min(2, a.fruitCount); i++) {
+      const k = i === 0 ? 1 : -1;
+      const cx = 8 + k * (r + 0.5);
+      s.ell(cx, cy, r, r * 1.5, a.fruitDark);
+      s.ell(cx, cy - 0.4, r - 0.6, r * 1.5 - 0.8, a.fruit);
+      s.ell(cx - r * 0.3, cy - r * 0.6, r * 0.35, r * 0.5, lighten(a.fruit));
+      // râu ngô
+      s.px(Math.round(cx), Math.round(cy - r * 1.5) - 1, "#d9b96a");
+      s.px(Math.round(cx + k), Math.round(cy - r * 1.5) - 2, "#d9b96a");
+      if (rnd() > 0.5) s.px(Math.round(cx - k), Math.round(cy - r * 1.5) - 1, "#d9b96a");
+    }
+  }
+}
+
+/* --- bush: BỤI TÁN TRÒN, quả nấp trong tán — cà chua, ớt, đậu ------------- */
+function drawBush({ s, a, t, ripe, baseY, rnd }: FormCtx) {
+  const r = Math.max(2.4, (a.spread + a.height * 0.55) * 0.46 * (0.5 + 0.5 * t));
+  const cy = baseY - r * 0.85;
+  chanDat(s, baseY, r);
+
+  than(s, a, 8, Math.round(cy), baseY);
+
+  /* Tán dựng bằng NĂM CỤM lá chồng nhau, không phải một đĩa tròn: đường bao
+     lởm chởm mới đọc ra là tán lá, đường bao tròn trơn đọc ra là quả bóng. */
+  const cum: [number, number, number][] = [
+    [0, -r * 0.55, r * 0.62],
+    [-r * 0.62, -r * 0.1, r * 0.58],
+    [r * 0.62, -r * 0.1, r * 0.58],
+    [-r * 0.34, r * 0.45, r * 0.5],
+    [r * 0.34, r * 0.45, r * 0.5],
+  ];
+  /* Vẽ TỪNG cụm một — tối rồi mới sáng — chứ không phải tối hết rồi sáng hết.
+     Vẽ theo lớp thì lớp sáng lấp mất mọi đường ngăn giữa các cụm, và năm cụm
+     gộp lại thành đúng một khối lồi. Vẽ từng cụm thì vành tối của cụm sau cắt
+     vào cụm trước, và đường bao mới lởm chởm ra tán lá. */
+  for (const [dx, dy, rr] of cum) {
+    s.ell(8 + dx, cy + dy, rr, rr * 0.92, a.leafDark);
+    s.ell(8 + dx, cy + dy - 0.6, rr - 0.8, rr * 0.92 - 0.8, a.leaf);
+  }
+  s.ell(8 - r * 0.35, cy - r * 0.5, r * 0.4, r * 0.3, lighten(a.leaf));
+
+  if (ripe || t > 0.75) {
+    const fr = Math.max(1, a.fruitSize * 0.4);
+    for (let i = 0; i < a.fruitCount; i++) {
+      const ang = (i / Math.max(1, a.fruitCount)) * Math.PI * 2 + 1.1;
+      const fx = 8 + Math.cos(ang) * r * 0.6;
+      const fy = cy + Math.sin(ang) * r * 0.45 + r * 0.15;
+      if (ripe) qua(s, a, fx, fy, fr);
+      else s.ell(fx, fy, fr * 0.8, fr * 0.8, a.leafDark);
+    }
+    if (rnd() > 0.7) s.px(8, Math.round(cy - r), a.leaf);
+  }
+}
+
+/* --- grain: NHIỀU CỌNG mảnh, bông rủ xuống khi chín — lúa, lúa mì --------- */
+function drawGrain({ s, a, t, ripe, baseY }: FormCtx) {
+  const h = Math.max(4, (a.height + 2) * (0.45 + 0.55 * t));
+  const n = Math.max(3, Math.round(a.leaves * 0.7));
+  const spread = Math.max(2.2, a.spread * 1.05 * (0.5 + 0.5 * t));
+  chanDat(s, baseY, spread + 1);
 
   for (let i = 0; i < n; i++) {
     const frac = n === 1 ? 0.5 : i / (n - 1);
-    const lean = (frac - 0.5) * 2;
-    const x0 = 8 + Math.round(lean * spread);
-    const hh = Math.max(2, h - Math.round(Math.abs(lean) * 2));
-    for (let k = 0; k < hh; k++) {
-      const x = x0 + Math.round(lean * (k / Math.max(1, hh)) * 1.5);
-      s.px(x, baseY - k, k > hh * 0.6 ? a.leaf : a.stem);
-    }
-    // bông ở ngọn: chín thì trĩu và đổi màu
-    const tipX = x0 + Math.round(lean * 1.5);
-    const tipY = baseY - hh;
+    const nghieng = (frac - 0.5) * 2;
+    const cao = h * (0.72 + 0.28 * (1 - Math.abs(nghieng)));
+    const tx = 8 + nghieng * spread;
+    const ty = baseY - cao;
+    /* Cọng LUÔN xanh, kể cả khi chín: chỉ cái BÔNG mới ngả vàng. Nhuộm vàng
+       cả cây thì ruộng lúa chín ra một đám tia lửa, không ra ruộng lúa. */
+    soi(s, 8 + nghieng * 1.2, baseY, tx, ty, i % 2 ? a.leaf : lighten(a.leaf), a.leafDark);
     if (ripe) {
-      s.px(tipX, tipY, a.fruit);
-      s.px(tipX, tipY - 1, a.fruit);
-      s.px(tipX + (lean < 0 ? -1 : 1), tipY, a.fruitDark);
-      if (rnd() > 0.5) s.px(tipX, tipY - 2, a.fruitDark);
+      /* BÔNG RỦ: đầu cọng cong gập xuống vì nặng hạt. Đây là hình duy nhất nói
+         "lúa đã chín" mà không cần đổi màu cả cây. */
+      const bx = tx + nghieng * 0.7;
+      for (let k = 0; k < 4; k++) {
+        const x = Math.round(bx + nghieng * k * 0.45);
+        const y = Math.round(ty - 1 + k);
+        s.px(x, y, a.fruit);
+        s.px(x + 1, y, a.fruitDark);
+        if (k % 2 === 0) s.px(x - 1, y, lighten(a.fruit));
+      }
     } else {
-      s.px(tipX, tipY, a.leafDark);
+      s.px(Math.round(tx), Math.round(ty) - 1, a.leafDark);
     }
   }
 }
 
-/* --- flower: một bông to trên đỉnh thân ---------------------------------- */
-
+/* --- flower: THÂN THẲNG, một BÔNG to trên ngọn — hướng dương, cúc --------- */
 function drawFlower({ s, a, t, ripe, baseY, rnd }: FormCtx) {
-  const h = Math.max(3, Math.round(a.height * (0.4 + 0.6 * t)));
-  for (let k = 0; k < h; k++) s.px(8, baseY - k, a.stem);
+  const h = Math.max(4, (a.height + 1) * (0.45 + 0.55 * t));
+  const cy = baseY - h;
+  chanDat(s, baseY, 2.4);
 
-  // hai lá thấp
-  const spread = Math.max(1, Math.round(a.spread * 0.6));
-  for (let k = 1; k <= spread; k++) {
-    s.px(8 - k, baseY - Math.round(h * 0.3), k === spread ? a.leafDark : a.leaf);
-    s.px(8 + k, baseY - Math.round(h * 0.55), k === spread ? a.leafDark : a.leaf);
+  than(s, a, 8, Math.round(cy), baseY);
+  // hai lá lớn ôm thân
+  for (const k of [-1, 1]) {
+    const y = baseY - h * (k < 0 ? 0.36 : 0.58);
+    la(s, 8, y, 8 + k * a.spread * 0.85, y - a.spread * 0.35, 1.5, a.leaf, a.leafDark, lighten(a.leaf));
   }
 
-  const cy = baseY - h;
-  if (!ripe) {
-    // nụ khép
-    s.disc(8, cy, 1, a.leafDark);
-    s.px(8, cy - 1, a.leaf);
+  if (t < 0.55) {
+    // nụ: bọc đài xanh, chưa nở
+    s.ell(8, cy + 1, 1.6, 2, a.leafDark);
+    s.ell(8, cy + 0.6, 1.1, 1.5, a.leaf);
     return;
   }
 
-  const r = Math.max(2, Math.round(a.fruitSize / 2) + 1);
-  // cánh: 8 chấm quanh tâm
+  const r = Math.max(2, a.fruitSize * 0.5 * (ripe ? 1 : 0.75));
+  // cánh: tám cánh toả đều, mỗi cánh là một chiếc lá nhỏ
   for (let i = 0; i < 8; i++) {
-    const ang = (i / 8) * Math.PI * 2;
-    const px2 = 8 + Math.round(Math.cos(ang) * r);
-    const py = cy + Math.round(Math.sin(ang) * r);
-    s.disc(px2, py, 1, a.fruit);
-    if (rnd() > 0.6) s.px(px2, py + 1, a.fruitDark);
+    const ang = (i / 8) * Math.PI * 2 + (rnd() - 0.5) * 0.12;
+    la(
+      s,
+      8 + Math.cos(ang) * r * 0.42,
+      cy + Math.sin(ang) * r * 0.42,
+      8 + Math.cos(ang) * r * 1.15,
+      cy + Math.sin(ang) * r * 1.15,
+      1.15,
+      a.fruit,
+      a.fruitDark,
+    );
   }
-  // nhuỵ
-  s.disc(8, cy, Math.max(1, r - 2), a.fruitDark);
-  s.px(8 - 1, cy - 1, "#ffffff");
+  // nhuỵ: đĩa hạt ở giữa, tối và có vân
+  s.ell(8, cy, r * 0.52, r * 0.52, shade(a.fruitDark, 0.62));
+  s.ell(8 - r * 0.12, cy - r * 0.12, r * 0.34, r * 0.34, a.fruitDark);
+  s.px(Math.round(8 - r * 0.3), Math.round(cy - r * 0.3), lighten(a.fruit));
 }
 
 /* ---------------------------------------------------------------------------
@@ -2175,21 +2521,137 @@ function makeCropIcon(def: CropDef): HTMLCanvasElement {
 }
 
 /** Vật liệu thô: gỗ, đá, sợi cỏ. */
+/* ---------------------------------------------------------------------------
+   BIỂU TƯỢNG VẬT TƯ.
+
+   Bản trước có sáu hình vẽ tay và MỘT nhánh `else` gom tất cả phần còn lại —
+   nghĩa là mười bốn món (sữa, sữa dê, trứng gà, trứng vịt, len, thuốc, và tám
+   loại thịt) dùng CHUNG đúng một hình "bó cỏ". Trong túi đồ, trong kho, trong
+   quầy bán, chúng là mười bốn ô giống hệt nhau và người chơi phải đọc chữ mới
+   biết mình đang cầm gì. Đó không phải chuyện thẩm mỹ mà là một lỗi dùng được.
+
+   Nay mỗi món có DÁNG riêng lấy từ bảng dưới, còn màu thì mỗi món một bộ. Dáng
+   trước, màu sau: hai chai sữa khác màu vẫn là hai chai sữa, nên dáng phải nói
+   được "đây là sữa" trước khi màu nói "của con nào".
+--------------------------------------------------------------------------- */
+
+type MatKind = "chai" | "trung" | "long" | "thit" | "ca" | "soi";
+
+const MAT: Record<string, { kind: MatKind; mau: string; toi: string; nhan?: string }> = {
+  medicine: { kind: "chai", mau: "#7fd4a8", toi: "#3f8c68", nhan: "#e8f7ef" },
+  milk: { kind: "chai", mau: "#f6f4ee", toi: "#c9c4b6", nhan: "#e05050" },
+  goatmilk: { kind: "chai", mau: "#f2eee0", toi: "#c0b9a4", nhan: "#7f9ad8" },
+  egg: { kind: "trung", mau: "#f6ead2", toi: "#cbb692" },
+  duckegg: { kind: "trung", mau: "#e2eee6", toi: "#a8c4b4" },
+  wool: { kind: "long", mau: "#f5f2ec", toi: "#c8c2b6" },
+  beef: { kind: "thit", mau: "#c04a48", toi: "#8a2f32" },
+  pork: { kind: "thit", mau: "#e59a9c", toi: "#b06a6e" },
+  mutton: { kind: "thit", mau: "#b8524e", toi: "#7f3234" },
+  goatmeat: { kind: "thit", mau: "#a8564a", toi: "#743330" },
+  chickenmeat: { kind: "thit", mau: "#e8c9a0", toi: "#b8946a" },
+  duckmeat: { kind: "thit", mau: "#d8a880", toi: "#a67a54" },
+  fishmeat: { kind: "ca", mau: "#f0b49a", toi: "#c07f66" },
+  fiber: { kind: "soi", mau: "#9ab86a", toi: "#6a8a44" },
+};
+
+function veVatTu(s: Surface, kind: MatKind, mau: string, toi: string, nhan?: string): void {
+  const sang = lighten(mau);
+  if (kind === "chai") {
+    // CHAI: cổ hẹp, vai xuôi, thân đứng — bóng sáng dọc mép trái
+    s.rect(6, 1, 4, 3, toi);
+    s.rect(6, 1, 4, 1, sang);
+    s.rect(4, 4, 8, 10, toi);
+    s.rect(5, 5, 6, 8, mau);
+    s.vline(5, 5, 8, sang);
+    s.hline(5, 5, 6, sang);
+    if (nhan) {
+      s.rect(4, 8, 8, 3, nhan);
+      s.hline(4, 8, 8, shade(nhan, 0.8));
+    }
+    return;
+  }
+  if (kind === "trung") {
+    // TRỨNG: bầu dưới, thon trên — không phải hình tròn
+    s.ell(8, 9, 4, 5.2, toi);
+    s.ell(8, 9.4, 3.2, 4.4, mau);
+    s.ell(6.6, 6.8, 1.4, 1.6, sang);
+    // quả thứ hai nấp phía sau cho ra "một mẻ trứng"
+    s.ell(12, 12, 2.4, 3, toi);
+    s.ell(12, 12.3, 1.7, 2.3, mau);
+    return;
+  }
+  if (kind === "long") {
+    // CUỘN LEN: cầu bông + vệt xoắn + đầu sợi thò ra
+    s.ell(8, 9, 5.6, 5.2, toi);
+    s.ell(8, 9.3, 4.7, 4.3, mau);
+    s.ell(6, 6.8, 1.8, 1.4, sang);
+    for (let i = -3; i <= 3; i++) {
+      s.px(8 + i, Math.round(9 + i * 0.7), toi);
+      s.px(8 + i, Math.round(9 - i * 0.7), toi);
+    }
+    s.px(13, 5, mau);
+    s.px(14, 4, toi);
+    return;
+  }
+  if (kind === "thit") {
+    // MIẾNG THỊT: khối vuông bo góc, có VÂN MỠ trắng và một khúc xương lộ ra
+    s.ell(7.5, 9, 5.4, 4.4, toi);
+    s.ell(7.5, 8.6, 4.6, 3.6, mau);
+    s.ell(5.8, 7, 1.8, 1.2, sang);
+    for (const [x, y] of [
+      [5, 9],
+      [7, 10],
+      [9, 8],
+      [10, 10],
+    ] as [number, number][])
+      s.px(x, y, "#f3ded0");
+    s.rect(11, 10, 4, 2, "#efe7d6");
+    s.rect(13, 9, 2, 4, "#efe7d6");
+    s.px(14, 10, "#cfc4ad");
+    return;
+  }
+  if (kind === "ca") {
+    // PHI LÊ CÁ: hình thoi dẹt, có vân thịt chạy chéo và một mảnh da bạc
+    s.ell(8, 9, 6, 3.4, toi);
+    s.ell(8, 8.6, 5.2, 2.6, mau);
+    for (let i = -3; i <= 3; i++) s.px(8 + i, Math.round(9 + Math.abs(i) * 0.3), sang);
+    s.hline(3, 11, 10, "#cfd8de");
+    s.hline(3, 12, 10, "#a8b4bd");
+    return;
+  }
+  // SỢI: bó sợi xoắn, buộc một nút ở giữa
+  for (let i = 0; i < 5; i++) {
+    const x = 3 + i * 2;
+    soi(s, x, 13, x + (i % 2 ? 1 : -1), 3, i % 2 ? mau : sang, toi);
+  }
+  s.rect(3, 8, 10, 2, "#c2ad82");
+  s.hline(3, 8, 10, "#e0cfa8");
+}
+
 function makeMaterialIcon(id: string): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   if (id === "wood") {
-    s.rect(2, 5, 12, 6, "#8a6440");
-    s.rect(2, 5, 12, 2, "#a37c52");
-    s.hline(2, 10, 12, "#5a3b21");
-    s.rect(1, 5, 3, 6, "#c49a6a");
-    s.rect(2, 6, 1, 4, "#8a6440");
-    s.px(2, 7, "#6b4a2c");
+    // KHÚC GỖ XẺ: mặt cắt có vòng năm ở đầu, thớ dọc trên mặt
+    s.rect(2, 5, 12, 7, "#8a6440");
+    s.hline(2, 5, 12, "#a37c52");
+    s.hline(2, 11, 12, "#5a3b21");
+    for (const y of [7, 9]) s.hline(4, y, 9, "#7a5636");
+    s.ell(2.5, 8.5, 1.8, 3.4, "#c49a6a");
+    s.ell(2.5, 8.5, 1.1, 2.3, "#a37c52");
+    s.px(2, 8, "#6b4a2c");
   } else if (id === "stone") {
-    s.disc(7, 9, 4, "#8a8f98");
-    s.disc(11, 11, 3, "#6b7078");
-    s.disc(6, 7, 2, "#a2a8b1");
-    s.px(4, 9, "#6b7078");
-    s.px(5, 6, "#ffffff");
+    // HÒN ĐÁ: có MẶT, giống hệt tảng đá ngoài đồng thu nhỏ
+    for (let y = 4; y <= 12; y++) {
+      const w = Math.round(2.4 + ((y - 4) / 8) * 3.6);
+      for (let x = 8 - w; x <= 8 + w; x++)
+        s.px(x, y, x - (8 - w) < w * 0.75 ? "#8a8f98" : "#6b7078");
+    }
+    for (let y = 4; y <= 8; y++) {
+      const w = Math.round(1.6 + (y - 4) * 0.6);
+      for (let x = 7 - w; x <= 7; x++) s.px(x, y, "#a2a8b1");
+    }
+    for (let i = 0; i < 3; i++) s.px(9 + i, 8 + i, "#5b6068");
+    s.px(5, 5, "#ffffff");
   } else if (id === "hay") {
     // BÓ RƠM: vàng, buộc dây ngang. Phải khác hẳn "cỏ khô" — hai thứ này đứng
     // cạnh nhau trong tab Thức ăn, mà cùng một hình thì tab đó vô dụng.
@@ -2219,11 +2681,8 @@ function makeMaterialIcon(id: string): HTMLCanvasElement {
     s.disc(9, 3, 1, "#d9b24a");
     s.px(8, 1, "#efd07a");
   } else {
-    for (let i = 0; i < 5; i++) {
-      const x = 3 + i * 2;
-      s.vline(x, 3 + (i % 2), 10, i % 2 ? "#6aa84f" : "#8ac46a");
-    }
-    s.rect(2, 8, 12, 2, "#c2ad82");
+    const m = MAT[id] ?? { kind: "soi" as MatKind, mau: "#9ab86a", toi: "#6a8a44" };
+    veVatTu(s, m.kind, m.mau, m.toi, m.nhan);
   }
   return outline(s).c;
 }
@@ -2383,6 +2842,45 @@ const ANIMAL_FRAMES = 3;
  * Cùng một hàm vẽ, chỉ đổi vài con số: chi phí gần bằng không so với vẽ ba bộ
  * sprite riêng, và một loài mới thêm bằng JSON vẫn tự có đủ ba tư thế.
  */
+/* ---------------------------------------------------------------------------
+   GIẢI PHẪU con vật.
+
+   Bản trước dựng con vật bằng HÌNH CHỮ NHẬT: thân một khối vuông, đầu một khối
+   vuông nhỏ hơn dán vào cạnh. Ở 16px thì cái gì cũng ra "một cục màu có hai
+   chấm mắt", và tám loài chỉ khác nhau ở màu. Bản này dựng bằng KHỐI BẦU và
+   dựng theo đúng thứ tự một hoạ sĩ vẽ: bóng đổ → phần ở XA (chân sau, đuôi) →
+   thân → phần ở GẦN (chân trước) → cổ → đầu → chi tiết mặt.
+
+   Ba thứ làm nên "chân thực" ở cỡ này, không thứ nào là thêm chi tiết:
+
+   · KHỐI, không phải mảng phẳng. `khoi()` vẽ ba tông: vành tối ôm mép dưới,
+     thân giữa, vệt nắng trên vai. Mắt đọc ra hình cầu chứ không đọc ra hình
+     tròn tô màu.
+   · CHIỀU SÂU. Chân sau tối hơn chân trước và vẽ TRƯỚC, nên bị thân che một
+     phần — đó là toàn bộ lý do con vật trông có bề dày.
+   · TỈ LỆ RIÊNG. Mõm lợn, mào gà, mỏ bẹt vịt, đuôi cong của chó, sừng dê: mỗi
+     loài một nét đọc được từ xa, lấy từ content chứ không phải `switch (id)`.
+
+   Vẽ luôn quay MẶT PHẢI rồi lật cả canvas khi đi trái. Rẻ hơn và không bao giờ
+   lệch: mọi chi tiết tự đối xứng theo, không phải nhớ đảo dấu ở mười chỗ.
+--------------------------------------------------------------------------- */
+
+/** Khối bầu ba tông: vành tối ôm mép, thân giữa, vệt nắng chếch trên-trái. */
+function khoi(
+  s: Surface,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  giua: string,
+  sang: string,
+  toi: string,
+): void {
+  s.ell(cx, cy, rx, ry, toi);
+  s.ell(cx, cy - 0.5, Math.max(0.6, rx - 0.8), Math.max(0.6, ry - 0.7), giua);
+  s.ell(cx - rx * 0.26, cy - ry * 0.44, Math.max(0.5, rx * 0.46), Math.max(0.5, ry * 0.3), sang);
+}
+
 export type AnimalPose = "walk" | "eat" | "sleep";
 
 function makeAnimal(
@@ -2394,147 +2892,425 @@ function makeAnimal(
   const s = surface(TILE, TILE);
   const side = dir === "left" || dir === "right";
   const flip = dir === "left";
-  // nhún theo khung: chân trước/chân sau đổi nhau, thân nhấp nhô 1px
-  const bob = frame === 2 ? 1 : 0;
-  const w = Math.max(3, Math.min(14, Math.round(art.w * (side ? 1 : 0.72))));
-  const h0 = Math.max(3, Math.min(12, Math.round(art.h)));
-  /* NGỦ: nằm bẹp xuống — thân dẹt đi một phần ba và chân thu hết vào trong.
-     Cá thì không: cá ngủ vẫn là cá đang bơi. */
+  const giua = art.body;
+  const sang = lighten(art.body);
+  /* HAI tông tối, hai vai khác nhau — trộn chúng làm một là lỗi của bản trước:
+     · `vien` là MẶT TỐI của chính màu thân, dùng để dựng khối. Con bò trắng có
+       mặt tối màu XÁM, không phải màu đen; lấy `bodyDark` (#2e2a26, màu đốm)
+       làm vành khối thì cả con bò viền đen kịt và đọc ra một cái sọ.
+     · `toi` = `bodyDark` là màu VẬT LIỆU KHÁC: đốm, tai, đuôi, móng. */
+  const vien = shade(art.body, 0.7);
+  const toi = art.bodyDark;
+  /* Tông của phần Ở XA: tối hơn hẳn thân. Đây là mẹo rẻ nhất để có chiều sâu —
+     mắt đọc "cái này ở phía bên kia con vật" mà không cần thêm một pixel nào. */
+  const xa = shade(vien, 0.78);
+
   const nam = pose === "sleep" && art.form !== "fish";
-  const h = nam ? Math.max(3, h0 - 2) : h0;
-  const legLen = art.form === "fish" ? 0 : nam ? 0 : art.form === "bird" ? 2 : 3;
+  const an = pose === "eat" && art.form !== "fish";
+  /* Nhún theo khung. Khung 2 là lúc cả bốn chân chạm đất nên thân hạ xuống 1px;
+     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. */
+  const bob = frame === 2 ? 1 : 0;
 
-  const bodyY = TILE - 1 - legLen - h + bob;
-  const bodyX = Math.round((TILE - w) / 2);
+  const W = Math.max(5, Math.min(14, Math.round(art.w)));
+  const H = Math.max(4, Math.min(11, Math.round(art.h)));
+  const DAT = TILE - 1; // hàng pixel chạm đất
 
-  if (art.form !== "fish") s.shadow(8, TILE - 1, w / 2 + 0.5, 1.4);
+  if (art.form === "fish") ve_ca();
+  else if (art.form === "bird") ve_chim(side);
+  else if (art.form === "critter") ve_thu_nho(side);
+  else ve_bon_chan(side);
 
-  // ---- chân ----
-  if (legLen > 0) {
-    const feet: number[] =
-      art.form === "bird"
-        ? [bodyX + Math.round(w * 0.35), bodyX + Math.round(w * 0.65)]
-        : side
-          ? [bodyX + 1, bodyX + Math.round(w * 0.34), bodyX + Math.round(w * 0.66), bodyX + w - 2]
-          : [bodyX + 1, bodyX + w - 2];
-    feet.forEach((fx, i) => {
-      const lift = frame === 0 ? 0 : (i + frame) % 2;
-      s.vline(fx, bodyY + h - lift, legLen + lift, art.bodyDark);
+  const done = outline(s);
+  if (!flip) return done.c;
+  const m = surface(TILE, TILE);
+  m.g.save();
+  m.g.translate(TILE, 0);
+  m.g.scale(-1, 1);
+  m.g.drawImage(done.c, 0, 0);
+  m.g.restore();
+  return m.c;
+
+  /* ---------------------------------------------------------------- bốn chân
+     Bò, dê, lợn, cừu, chó. Nhìn NGANG là dáng đọc được nhiều nhất nên nó được
+     đầu tư nhất; nhìn thẳng/nhìn sau thu về một khối hẹp hơn với hai chân. */
+  function ve_bon_chan(ngang: boolean) {
+    const chan = nam ? 0 : 3;
+    const w = ngang ? W : Math.max(4, Math.round(W * 0.66));
+    const h = nam ? Math.max(3, H - 2) : H;
+    const day = ngang ? 2 : 1; // bề ngang một cái chân
+    const bot = DAT - chan + bob;
+    const cy = bot - h / 2;
+    const cx = ngang ? 7.4 : 8;
+    const rx = w / 2;
+    const ry = h / 2;
+
+    s.shadow(8, DAT, rx + 0.6, 1.5);
+
+    if (ngang) {
+      /* Đuôi vẽ TRƯỚC thân: nó mọc từ mông, phía sau con vật. Chó dựng đuôi
+         lên, các loài khác thõng xuống rồi cong nhẹ ra sau. */
+      const tx = cx - rx - 0.4;
+      if (!art.tailUp) {
+        s.vline(Math.round(tx), Math.round(cy - ry * 0.4), Math.max(2, Math.round(h * 0.7)), xa);
+        s.px(Math.round(tx) - 1, Math.round(cy + ry * 0.9), toi);
+      }
+
+      // chân SAU (ở xa): tối hơn, vẽ trước nên bị thân che một phần
+      if (chan > 0) chan_doi(cx - rx * 0.66, cx - rx * 0.2, bot - 1, chan + 1, xa, day, 1);
+    }
+
+    // ---- thân
+    khoi(s, cx, cy, rx, ry, giua, sang, vien);
+    // Bụng sáng hẳn: ánh sáng dội từ mặt đất lên, và nó cắt hình khỏi bóng đổ.
+    // Con xù lông thì bỏ — vệt sáng trơn nằm giữa đám lông đọc ra là một vết
+    // lỗi vẽ chứ không ra cái bụng.
+    if (!art.fluff) s.ell(cx, cy + ry * 0.62, rx * 0.7, ry * 0.26, art.belly);
+
+    if (art.fluff) bong_cuu(cx, cy, rx, ry);
+    if (art.patch) dom(cx, cy, rx, ry);
+
+    /* Đuôi DỰNG (chó) vẽ SAU thân: nó cong lên trên lưng nên phần gốc phải đè
+       lên thân, không phải bị thân đè mất. */
+    if (ngang && art.tailUp) {
+      const tx = Math.round(cx - rx + 0.5);
+      s.vline(tx, Math.round(cy - ry - 2), 4, toi);
+      s.px(tx + 1, Math.round(cy - ry - 3), toi);
+      s.px(tx + 2, Math.round(cy - ry - 3), toi);
+    }
+
+    // chân TRƯỚC (ở gần)
+    if (chan > 0) {
+      if (ngang) chan_doi(cx + rx * 0.24, cx + rx * 0.68, bot - 1, chan + 1, vien, day, 0);
+      else chan_doi(cx - rx * 0.5, cx + rx * 0.5, bot - 1, chan + 1, vien, day, 0);
+    }
+
+    // ---- cổ và đầu
+    const hs = Math.max(2.2, h * 0.42); // bán kính đầu
+    let hx: number;
+    let hy: number;
+    if (ngang) {
+      hx = cx + rx * 0.92 + hs * 0.5;
+      hy = cy - ry * 0.62 - hs * 0.1;
+      if (an) {
+        hx = cx + rx * 0.98 + hs * 0.35;
+        hy = bot - hs * 0.7;
+      } else if (nam) hy = cy - ry * 0.1;
+    } else {
+      hx = cx;
+      hy = dir === "up" ? cy - ry - hs * 0.55 : cy + ry * 0.35 + hs * 0.2;
+      if (an) hy += hs * 0.8;
+    }
+
+    // cổ: nối vai với đầu bằng hai khối bầu chồng lên nhau
+    if (ngang) {
+      const nx = (cx + rx * 0.7 + hx) / 2;
+      const ny = (cy - ry * 0.3 + hy) / 2;
+      khoi(s, nx, ny, Math.max(1.3, hs * 0.72), Math.max(1.3, hs * 0.9), giua, sang, vien);
+    }
+
+    khoi(s, hx, hy, hs, hs * 0.92, giua, sang, vien);
+
+    /* ---- mõm
+       Mõm là THỊT, không phải cái mũi: vẽ nó bằng tông thân (sáng hơn một
+       nấc) rồi mới chấm CHÓP MŨI bằng `accent`. Tô cả cái mõm bằng accent là
+       con chó có một cục đen chiếm nửa mặt — accent của nó vốn là màu mũi. */
+    const mom = art.snout ?? 0;
+    if (mom > 0) {
+      const mx = ngang ? hx + hs * 0.8 : hx;
+      const my = ngang ? hy + hs * 0.34 : hy + hs * 0.5;
+      const mr = Math.max(1, hs * (0.34 + 0.3 * mom));
+      khoi(s, mx, my, mr, mr * 0.8, sang, lighten(sang), giua);
+      // chóp mũi
+      const nx = Math.round(mx + (ngang ? mr * 0.55 : 0));
+      s.px(nx, Math.round(my - mr * 0.2), art.accent);
+      if (mom > 0.7) {
+        s.px(nx, Math.round(my - mr * 0.2) + 1, art.accent);
+        s.px(nx + (ngang ? 0 : 1), Math.round(my - mr * 0.2), art.accent);
+      }
+    }
+
+    // ---- tai: nêm nhỏ ở đỉnh-sau của đầu
+    const tai = Math.max(1, Math.round(hs * 0.5));
+    if (ngang) {
+      s.vline(Math.round(hx - hs * 0.55), Math.round(hy - hs * 0.75 - tai), tai, toi);
+    } else {
+      for (const k of [-1, 1])
+        s.vline(Math.round(hx + k * hs * 0.7), Math.round(hy - hs * 0.7 - tai), tai, toi);
+    }
+
+    // ---- sừng
+    const horn = Math.max(0, Math.min(3, Math.round(art.horn ?? 0)));
+    if (horn > 0) {
+      /* Sừng VUỐT RA SAU, không dựng thẳng: sừng thẳng đứng ở 16px đọc ra là
+         cái ăng-ten. Mỗi nấc `horn` thêm một đốt lùi về sau và lên trên. */
+      if (ngang) {
+        let sx = Math.round(hx + hs * 0.2);
+        let sy = Math.round(hy - hs * 0.9);
+        for (let i = 0; i <= horn; i++) {
+          s.px(sx, sy, art.accent);
+          sx -= 1;
+          sy -= i === 0 ? 1 : 0;
+        }
+      } else {
+        for (const k of [-1, 1]) {
+          let sx = Math.round(hx + k * hs * 0.5);
+          let sy = Math.round(hy - hs * 0.85);
+          for (let i = 0; i <= horn; i++) {
+            s.px(sx, sy, art.accent);
+            sx += k;
+            sy -= i === 0 ? 1 : 0;
+          }
+        }
+      }
+    }
+
+    if (nam) mat_nham(hx, hy, hs, ngang);
+    else mat(hx, hy, hs, ngang);
+  }
+
+  /* ------------------------------------------------------------------- chim
+     Gà và vịt chỉ khác nhau ở hai chi tiết, và đó đúng là hai chi tiết người
+     ta dùng để phân biệt chúng ngoài đời: cái MÀO và cái MỎ. `crest` bật mào
+     đỏ + yếm (gà); tắt thì mỏ bẹt ra thành mỏ vịt. */
+  function ve_chim(ngang: boolean) {
+    const chan = nam ? 0 : 2;
+    const w = ngang ? W : Math.max(4, Math.round(W * 0.8));
+    const h = nam ? Math.max(3, H - 2) : H;
+    const bot = DAT - chan + bob;
+    const cy = bot - h / 2;
+    const cx = 7.6;
+    const rx = w / 2;
+    const ry = h / 2;
+
+    s.shadow(8, DAT, rx + 0.4, 1.3);
+
+    // đuôi: nêm chếch lên phía sau
+    if (ngang) {
+      const tx = Math.round(cx - rx - 1);
+      for (let i = 0; i < 3; i++) s.vline(tx - i, Math.round(cy - ry * 0.4 - i), 2 + i, i === 0 ? vien : xa);
+    }
+
+    if (chan > 0) {
+      const cc = art.accent;
+      const c1 = Math.round(cx - rx * 0.2);
+      const c2 = Math.round(cx + rx * 0.35);
+      const l1 = frame === 1 ? chan - 1 : chan;
+      const l2 = frame === 3 ? chan - 1 : chan;
+      s.vline(c1, bot, l1, cc);
+      s.vline(c2, bot, l2, cc);
+      s.hline(c1 - 1, bot + l1 - 1, 3, cc);
+      s.hline(c2 - 1, bot + l2 - 1, 3, cc);
+    }
+
+    // thân: quả trứng, đầu to phía trước
+    khoi(s, cx, cy, rx, ry * 1.05, giua, sang, vien);
+    s.ell(cx, cy + ry * 0.6, rx * 0.62, ry * 0.3, art.belly);
+    // cánh xếp: một vòng cung tối áp vào sườn
+    s.ell(cx - rx * 0.1, cy + ry * 0.05, rx * 0.62, ry * 0.5, vien);
+    s.ell(cx - rx * 0.1, cy - ry * 0.05, rx * 0.5, ry * 0.38, giua);
+
+    // đầu
+    const hs = Math.max(2, h * 0.38);
+    let hx = ngang ? cx + rx * 0.72 + hs * 0.5 : cx;
+    let hy = cy - ry * 0.85 - hs * 0.5;
+    if (an) {
+      hx = ngang ? cx + rx * 0.9 : cx;
+      hy = bot - hs * 0.6;
+    } else if (nam) hy = cy - ry * 0.5;
+    if (!ngang && dir === "down") hy = cy - ry * 0.2;
+    khoi(s, hx, hy, hs, hs, giua, sang, vien);
+
+    // mỏ
+    const my = Math.round(hy + hs * 0.25);
+    if (art.crest) {
+      // mỏ nhọn 2px
+      const bx = Math.round(hx + hs * 0.8);
+      s.hline(ngang ? bx : Math.round(hx), my, 2, art.accent);
+      s.px(ngang ? bx + 1 : Math.round(hx) + 1, my + 1, shade(art.accent, 0.75));
+      // mào: ba bướu tròn trên đỉnh
+      const mx = Math.round(hx);
+      s.px(mx, Math.round(hy - hs) - 1, art.accent);
+      s.px(mx - 1, Math.round(hy - hs), art.accent);
+      s.px(mx + 1, Math.round(hy - hs), art.accent);
+      // yếm dưới mỏ
+      s.px(ngang ? bx : mx, my + 2, art.accent);
+    } else {
+      // mỏ VỊT: bẹt và dài, hạ thấp hơn
+      const bx = Math.round(hx + hs * 0.7);
+      s.rect(ngang ? bx : Math.round(hx - 1), my, 3, 2, art.accent);
+      s.hline(ngang ? bx : Math.round(hx - 1), my + 1, 3, shade(art.accent, 0.72));
+    }
+
+    if (nam) mat_nham(hx, hy, hs, ngang);
+    else mat(hx, hy, hs, ngang);
+  }
+
+  /* -------------------------------------------------------------------- cá
+     Cá không có tư thế nằm và không có bóng đổ trên cạn: nó luôn đang bơi. */
+  function ve_ca() {
+    const w = Math.max(6, W);
+    const h = Math.max(4, H);
+    const cx = 8;
+    const cy = 8 + (frame % 2 === 0 ? 0 : 1) - 1;
+    const rx = w / 2;
+    const ry = h / 2;
+
+    // đuôi: hai nêm toả ra sau
+    const tx = Math.round(cx - rx - 1);
+    for (let i = 0; i < 3; i++) {
+      s.px(tx - i, Math.round(cy - 1 - i), i === 0 ? toi : xa);
+      s.px(tx - i, Math.round(cy + 1 + i), i === 0 ? toi : xa);
+      s.px(tx - i, Math.round(cy), toi);
+    }
+    // vây lưng
+    for (let i = 0; i < Math.max(2, Math.round(rx * 0.6)); i++)
+      s.vline(Math.round(cx - rx * 0.4) + i, Math.round(cy - ry - 1), 1 + (i % 2), toi);
+
+    // thân: hình thoi bo tròn, thon về đuôi
+    khoi(s, cx, cy, rx, ry, giua, sang, vien);
+    s.ell(cx + rx * 0.15, cy + ry * 0.55, rx * 0.6, ry * 0.34, art.belly);
+    // nắp mang
+    s.vline(Math.round(cx + rx * 0.28), Math.round(cy - ry * 0.5), Math.max(2, Math.round(ry)), toi);
+    // vây bụng
+    s.px(Math.round(cx), Math.round(cy + ry), art.accent);
+    s.px(Math.round(cx + 1), Math.round(cy + ry), art.accent);
+
+    // mắt: có tròng, nên đọc ra là mắt cá chứ không phải một chấm bẩn
+    const ex = Math.round(cx + rx * 0.62);
+    const ey = Math.round(cy - ry * 0.2);
+    s.px(ex, ey, "#ffffff");
+    s.px(ex + 1, ey, "#1b1410");
+  }
+
+  /* --------------------------------------------------------------- thú nhỏ
+     Chuột, sóc. Nét nhận diện là TAI TO và ĐUÔI DÀI — thân thì bé tí. */
+  function ve_thu_nho(ngang: boolean) {
+    const chan = nam ? 0 : 2;
+    const w = ngang ? W : Math.max(4, Math.round(W * 0.72));
+    const h = nam ? Math.max(3, H - 1) : H;
+    const bot = DAT - chan + bob;
+    const cy = bot - h / 2;
+    const cx = 7.6;
+    const rx = w / 2;
+    const ry = h / 2;
+
+    s.shadow(8, DAT, rx + 0.4, 1.2);
+
+    // đuôi dài cong lên
+    if (ngang) {
+      const tx = Math.round(cx - rx);
+      for (let i = 0; i < 4; i++) s.px(tx - i, Math.round(cy - i * 0.9), i < 2 ? toi : xa);
+    }
+    if (chan > 0) {
+      s.vline(Math.round(cx - rx * 0.5), bot, chan, vien);
+      s.vline(Math.round(cx + rx * 0.5), bot, chan, vien);
+    }
+
+    khoi(s, cx, cy, rx, ry, giua, sang, vien);
+    s.ell(cx, cy + ry * 0.6, rx * 0.6, ry * 0.28, art.belly);
+
+    const hs = Math.max(1.8, h * 0.44);
+    const hx = ngang ? cx + rx * 0.8 + hs * 0.4 : cx;
+    const hy = cy - ry * 0.2;
+    khoi(s, hx, hy, hs, hs, giua, sang, vien);
+    // tai tròn to
+    const tr = Math.max(1, Math.round(hs * 0.7));
+    s.disc(Math.round(hx - hs * 0.5), Math.round(hy - hs * 0.9), tr, toi);
+    s.disc(Math.round(hx - hs * 0.5), Math.round(hy - hs * 0.9), Math.max(0, tr - 1), art.accent);
+    // mũi nhọn
+    s.px(Math.round(hx + hs), Math.round(hy + hs * 0.3), art.accent);
+    mat(hx, hy, hs, ngang);
+  }
+
+  /* ------------------------------------------------------------- chi tiết */
+
+  /** Một CẶP chân: `pha` lệch nhau nên khung nào cũng có chân trước chân sau. */
+  function chan_doi(
+    x1: number,
+    x2: number,
+    top: number,
+    len: number,
+    mau: string,
+    day: number,
+    pha: number,
+  ) {
+    const lift = (i: number) => (frame === 0 || frame === 2 ? 0 : (i + pha + frame) % 2);
+    [x1, x2].forEach((x, i) => {
+      const l = lift(i);
+      s.rect(Math.round(x - (day - 1) / 2), top - l, day, len + l, mau);
+      // móng: hàng cuối tối hẳn
+      s.rect(Math.round(x - (day - 1) / 2), top + len - l - 1, day, 1, shade(mau, 0.6));
     });
   }
 
-  // ---- thân ----
-  s.rect(bodyX, bodyY, w, h, art.body);
-  s.hline(bodyX, bodyY, w, art.bodyDark);
-  s.hline(bodyX, bodyY + h - 1, w, art.bodyDark);
-  // bụng sáng
-  if (h >= 4) s.hline(bodyX + 1, bodyY + h - 2, Math.max(1, w - 2), art.belly);
-
-  // ---- xù lông (cừu) ----
-  const fluff = art.fluff ?? 0;
-  if (fluff > 0) {
-    const rnd = mulberry32(0x51e + Math.round(fluff * 977));
-    for (let i = 0; i < Math.round(w * h * 0.5 * fluff); i++) {
-      const px = bodyX + Math.floor(rnd() * w);
-      const py = bodyY + Math.floor(rnd() * h);
-      s.px(px, py, rnd() > 0.5 ? art.belly : art.body);
-    }
-    // viền bông trên lưng
-    for (let x = bodyX; x < bodyX + w; x += 2) s.px(x, bodyY - 1, art.belly);
-  }
-
-  // ---- đốm (bò sữa) ----
-  const patch = art.patch ?? 0;
-  if (patch > 0) {
-    const rnd = mulberry32(0x9a2 + Math.round(patch * 613));
-    for (let i = 0; i < Math.round(w * h * 0.35 * patch); i++) {
-      const px = bodyX + 1 + Math.floor(rnd() * Math.max(1, w - 2));
-      const py = bodyY + 1 + Math.floor(rnd() * Math.max(1, h - 2));
-      s.px(px, py, art.bodyDark);
-      if (rnd() > 0.6) s.px(px + 1, py, art.bodyDark);
-    }
-  }
-
-  // ---- đầu ----
-  const headSize = Math.max(3, Math.round(h * 0.8));
-  let hx: number;
-  let hy: number;
-  if (art.form === "fish") {
-    hx = flip ? bodyX : bodyX + w - headSize;
-    hy = bodyY + 1;
-  } else if (side) {
-    hx = flip ? bodyX - 1 : bodyX + w - headSize + 1;
-    hy = bodyY - Math.round(headSize * 0.5);
-  } else {
-    hx = bodyX + Math.round((w - headSize) / 2);
-    hy = dir === "up" ? bodyY - 1 : bodyY + h - Math.round(headSize * 0.6);
-  }
-  /* ĂN: đầu cúi sát đất. NGỦ: đầu gục xuống nửa chừng. Chỉ dịch toạ độ đầu —
-     phần vẽ mỏ/sừng/mắt bên dưới bám theo `hy` nên tự đi theo, không phải sửa
-     một dòng nào ở đó. */
-  if (pose === "eat" && art.form !== "fish") hy += Math.max(2, Math.round(headSize * 0.55));
-  else if (nam) hy += Math.max(1, Math.round(headSize * 0.3));
-  if (art.form !== "fish") {
-    s.rect(hx, hy, headSize, headSize, art.body);
-    s.hline(hx, hy, headSize, art.bodyDark);
-  }
-
-  // ---- mỏ / mũi / sừng ----
-  if (art.form === "bird") {
-    /* Mỏ và mào phải TO hơn một pixel mới thấy được ở cỡ 16px — con gà với con
-       vịt chỉ khác nhau ở đúng hai chi tiết này, vẽ mờ thì thành hai cục giống
-       nhau. Mỏ dài 2px và mào cao 2px là ngưỡng tối thiểu để đọc ra. */
-    const my = hy + Math.round(headSize / 2);
-    if (side) {
-      const bx = flip ? hx - 2 : hx + headSize;
-      s.rect(flip ? bx : bx, my, 2, 2, art.accent);
+  /** Mắt có lòng trắng — chấm đen trơn ở 16px đọc ra là một lỗ thủng. */
+  function mat(hx: number, hy: number, hs: number, ngang: boolean) {
+    if (dir === "up") return; // quay lưng thì không có mắt sau gáy
+    const ey = Math.round(hy - hs * 0.05);
+    if (ngang) {
+      const ex = Math.round(hx + hs * 0.25);
+      s.px(ex, ey, "#ffffff");
+      s.px(ex + 1, ey, "#1b1410");
     } else {
-      s.rect(hx + Math.round(headSize / 2) - 1, my, 2, 2, art.accent);
-    }
-    // mào trên đỉnh đầu, ba chấm so le
-    const mx = hx + Math.round(headSize / 2);
-    s.px(mx, hy - 2, art.accent);
-    s.px(mx - 1, hy - 1, art.accent);
-    s.px(mx + 1, hy - 1, art.accent);
-    // đuôi xoè phía sau thân
-    if (side) {
-      const tx = flip ? bodyX + w : bodyX - 1;
-      s.vline(tx, bodyY - 2, 3, art.bodyDark);
-      s.px(tx + (flip ? 1 : -1), bodyY - 3, art.bodyDark);
-    }
-  } else if (art.form === "fish") {
-    // vây đuôi ở phía sau
-    const tx = flip ? bodyX + w : bodyX - 2;
-    s.vline(tx, bodyY, h, art.bodyDark);
-    s.px(tx + (flip ? 1 : -1), bodyY - 1, art.bodyDark);
-    s.px(tx + (flip ? 1 : -1), bodyY + h, art.bodyDark);
-    s.px(flip ? bodyX + 1 : bodyX + w - 2, bodyY + 1, art.accent);
-  } else {
-    const horn = art.horn ?? 0;
-    for (let i = 0; i < horn; i++) {
-      s.px(hx + i, hy - 1, art.accent);
-      s.px(hx + headSize - 1 - i, hy - 1, art.accent);
+      for (const k of [-1, 1]) {
+        const ex = Math.round(hx + k * hs * 0.5);
+        s.px(ex, ey, "#1b1410");
+      }
     }
   }
 
-  // ---- mắt: chỉ vẽ khi KHÔNG quay lưng, nếu không con vật thành có mắt sau gáy
-  if (dir !== "up" && art.form !== "fish") {
-    const ey = hy + Math.round(headSize * 0.45);
-    if (side) s.px(flip ? hx + 1 : hx + headSize - 2, ey, "#1b1410");
-    else {
-      s.px(hx + 1, ey, "#1b1410");
-      s.px(hx + headSize - 2, ey, "#1b1410");
+  /** Mắt nhắm: một gạch ngang. Đây là thứ đọc ra "đang ngủ" nhanh nhất. */
+  function mat_nham(hx: number, hy: number, hs: number, ngang: boolean) {
+    if (dir === "up") return;
+    const ey = Math.round(hy - hs * 0.05);
+    if (ngang) s.hline(Math.round(hx + hs * 0.2), ey, 2, "#1b1410");
+    else for (const k of [-1, 1]) s.hline(Math.round(hx + k * hs * 0.6) - 1, ey, 2, "#1b1410");
+  }
+
+  /** Lông cừu: viền bướu quanh mép trên + đốm xoáy trong thân. */
+  function bong_cuu(cx: number, cy: number, rx: number, ry: number) {
+    const rnd = mulberry32(0x51e + Math.round((art.fluff ?? 0) * 977));
+    for (let i = 0; i < Math.round(rx * ry * 1.1); i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = Math.sqrt(rnd());
+      s.px(
+        Math.round(cx + Math.cos(a) * rx * r * 0.8),
+        Math.round(cy + Math.sin(a) * ry * r * 0.8),
+        rnd() > 0.55 ? art.belly : giua,
+      );
+    }
+    // bướu lông quanh lưng: cứ hai pixel một bướu nhô lên
+    for (let x = Math.round(cx - rx + 1); x <= Math.round(cx + rx - 1); x += 2) {
+      const dx = (x - cx) / rx;
+      const y = Math.round(cy - ry * Math.sqrt(Math.max(0, 1 - dx * dx)));
+      s.px(x, y - 1, art.belly);
     }
   }
 
-  // ---- đuôi (loài critter: đuôi to là nét nhận diện) ----
-  if (art.form === "critter" && side) {
-    const tx = flip ? bodyX + w : bodyX - 1;
-    s.vline(tx, bodyY - 2, h, art.bodyDark);
-    s.px(tx + (flip ? 1 : -1), bodyY - 3, art.bodyDark);
+  /** Đốm bò: vài MẢNG lớn, không phải mưa pixel — mảng mới đọc ra là đốm. */
+  function dom(cx: number, cy: number, rx: number, ry: number) {
+    const rnd = mulberry32(0x9a2 + Math.round((art.patch ?? 0) * 613));
+    /* Hai đốm là đủ, và cả hai dồn về NỬA SAU thân. Rải đều cả con thì cái đốm
+       nào rơi lên vai sẽ dính vào vành tối của đầu, và cả con bò đọc ra thành
+       một cái sọ đen trắng. Mặt để trắng thì con bò mới còn ra mặt. */
+    const n = 2;
+    for (let i = 0; i < n; i++) {
+      const px2 = cx - rx * (0.12 + i * 0.42) + rnd() * 0.6;
+      const py2 = cy + (i === 0 ? -ry * 0.28 : ry * 0.2) + rnd() * 0.5;
+      const pr = Math.max(1.1, rx * (0.16 + rnd() * 0.08));
+      // cắt đốm theo thân: chỉ tô pixel còn nằm trong khối
+      for (let y = Math.floor(py2 - pr); y <= Math.ceil(py2 + pr); y++)
+        for (let x = Math.floor(px2 - pr); x <= Math.ceil(px2 + pr); x++) {
+          const ddx = (x + 0.5 - px2) / pr;
+          const ddy = (y + 0.5 - py2) / (pr * 0.8);
+          if (ddx * ddx + ddy * ddy > 1) continue;
+          const bx = (x + 0.5 - cx) / (rx - 0.9);
+          const by = (y + 0.5 - cy + 0.5) / (ry - 0.9);
+          if (bx * bx + by * by > 1) continue;
+          s.px(x, y, toi);
+        }
+    }
   }
-
-  return outline(s).c;
 }
 
 /**

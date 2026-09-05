@@ -457,9 +457,11 @@ export function validateActors(raw: unknown): string[] {
           k.fail(`art.${key}`, "phải là mã màu #rrggbb");
       k.num(art as Record<string, unknown>, "w", 1, 16);
       k.num(art as Record<string, unknown>, "h", 1, 16);
-      for (const key of ["fluff", "patch"])
+      for (const key of ["fluff", "patch", "snout", "crest"])
         if (art[key] !== undefined) k.num(art as Record<string, unknown>, key, 0, 1);
       if (art["horn"] !== undefined) k.num(art as Record<string, unknown>, "horn", 0, 3);
+      if (art["tailUp"] !== undefined && typeof art["tailUp"] !== "boolean")
+        k.fail("art.tailUp", "phải là boolean");
     }
     c.merge(k);
   };
