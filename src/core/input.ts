@@ -21,6 +21,86 @@
 
 import { PAD, createGamepad, type PadInfo } from "./gamepad.ts";
 
+/* ---------------------------------------------------------------------------
+   SƠ ĐỒ NÚT TAY CẦM — bảng DUY NHẤT.
+
+   Vì sao là một bảng chứ không phải một chuỗi `if`: cái người chơi bắt lỗi
+   không phải một nút sai, mà là sơ đồ TỰ MÂU THUẪN. Bản trước có ba chỗ chồng
+   chéo, và cả ba đều chỉ nhìn ra khi đọc kỹ mười dòng `if` rải rác:
+
+     · RT làm ĐÚNG việc của A ("Dùng (thay cho A)") — một việc, hai nút.
+     · LT vừa là CHẠY vừa là phím phụ để vai nhảy năm ô — một nút, hai việc.
+     · "Đẩy cần gạt hết cỡ" cũng là chạy, nên chạy có tới HAI cách điều khiển;
+       còn hotbar thì có BA (vai, cò + vai, cần phải).
+
+   Trong khi đó việc NGẮM — thứ bàn phím và ngón tay đều làm được — thì tay
+   cầm không có đường nào, và cò phải thì mang một việc trùng.
+
+   Bảng ở đây là hợp đồng: MỘT NÚT MỘT VIỆC, MỘT VIỆC MỘT NÚT. Kịch bản sim
+   kiểm đúng hai điều đó trên chính bảng này, nên lần sau ai thêm một nút chồng
+   lên nút cũ là test đỏ ngay, không phải đọc lại mười dòng `if`.
+
+   Sơ đồ nút hiện trong game cũng dựng TỪ bảng này, nên màn hình không bao giờ
+   hứa một nút mà máy không làm — đúng cái lỗi "Chạy" chết âm thầm sáu commit.
+--------------------------------------------------------------------------- */
+
+/** Một việc mà tay cầm gọi được. Trùng tên với `Intent` ở đâu được thì trùng. */
+export type PadJob =
+  | "use"
+  | "interact"
+  | "auto"
+  | "inventory"
+  | "hotbarPrev"
+  | "hotbarNext"
+  | "run"
+  | "zoom"
+  | "map"
+  | "menu"
+  | "build"
+  | "padHelp";
+
+export interface PadBind {
+  nut: number;
+  viec: PadJob;
+  /** Mô tả in trong sơ đồ nút. */
+  mo: string;
+  /** Việc GIỮ (không phải bấm một cái) — `poll` bỏ qua, `padState` đọc. */
+  giu?: boolean;
+  /**
+   * Chỉ gán khi trình duyệt xác nhận "standard mapping".
+   *
+   * Không standard thì chỉ số nút là thứ tự THÔ của phần cứng và mỗi hãng một
+   * kiểu — gán bừa thì người chơi bấm nút phía trên lại ra mở balo. Ba nút
+   * đứng ngoài hàng rào này: A, B (gần như mọi tay cầm xếp "xác nhận"/"huỷ" ở
+   * hai chỗ đầu) và START (chỉ số 9 ở gần như mọi tay cầm) — và nếu đoán sai
+   * thì cái giá chỉ là mở nhầm một cái menu đóng lại được, rẻ hơn nhiều so với
+   * việc người chơi KHÔNG CÓ đường nào mở menu.
+   */
+  canStd?: boolean;
+}
+
+export const PAD_MAP: readonly PadBind[] = [
+  { nut: PAD.A, viec: "use", mo: "Dùng — cày, gieo, tưới, thu. Giữ để làm tiếp ô kế bên." },
+  { nut: PAD.B, viec: "interact", mo: "Tương tác — cửa hàng, giường, giếng, kho, con vật, khu chuồng." },
+  { nut: PAD.X, viec: "auto", mo: "Bật/tắt tự động làm.", canStd: true },
+  /* Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó rồi
+     bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới. */
+  { nut: PAD.Y, viec: "inventory", mo: "Mở balo.", canStd: true },
+  { nut: PAD.LB, viec: "hotbarPrev", mo: "Ô hotbar trước.", canStd: true },
+  { nut: PAD.RB, viec: "hotbarNext", mo: "Ô hotbar sau.", canStd: true },
+  { nut: PAD.LT, viec: "run", mo: "Giữ để chạy.", giu: true, canStd: true },
+  { nut: PAD.RT, viec: "zoom", mo: "Đổi mức phóng: gần → vừa → xa.", canStd: true },
+  { nut: PAD.BACK, viec: "map", mo: "Bản đồ nhỏ — cần phải rê con trỏ, A để đi tới đó.", canStd: true },
+  { nut: PAD.START, viec: "menu", mo: "Menu tạm dừng." },
+  { nut: PAD.L3, viec: "build", mo: "Chế độ xây dựng.", canStd: true },
+  { nut: PAD.R3, viec: "padHelp", mo: "Mở lại bảng này.", canStd: true },
+];
+
+/** Nút mang việc này, hoặc −1. Dùng để sơ đồ nút in ĐÚNG tên nút của máy. */
+export function padButtonFor(job: PadJob): number {
+  return PAD_MAP.find((m) => m.viec === job)?.nut ?? -1;
+}
+
 export type Intent =
   | { t: "use" }
   | { t: "interact" }
@@ -33,6 +113,8 @@ export type Intent =
   | { t: "debug" }
   /** Bật/tắt chế độ TỰ ĐỘNG LÀM. */
   | { t: "auto" }
+  /** Đổi mức phóng khung nhìn: gần → vừa → xa → gần. */
+  | { t: "zoom" }
   /** Bấm/chạm vào thế giới — toạ độ WORLD px.
    *  `double` = cú chạm thứ hai của một lần chạm kép. Luật điều khiển:
    *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
@@ -425,49 +507,38 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         return;
       }
 
-      /* Sơ đồ nút — mọi thứ trong game phải với tới được bằng tay cầm, không có
-         chức năng nào chỉ mở được bằng chuột hay ngón tay.
-
-         Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó
-         rồi bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới.
-
-         ⚠️ CHỈ gán khi trình duyệt xác nhận "standard mapping". Không standard
-         thì chỉ số nút là thứ tự THÔ của phần cứng và mỗi hãng một kiểu — gán
-         bừa thì người chơi bấm nút phía trên lại ra mở balo, hoặc chẳng ra gì.
-         Lúc đó chỉ giữ hai nút mặt đầu tiên (gần như mọi tay cầm đều xếp nút
-         "xác nhận" và "huỷ" ở đó) cộng cần gạt, và nói thẳng trong sơ đồ nút. */
+      /* Sơ đồ nút đọc thẳng từ `PAD_MAP` — một bảng, một nguồn. Xem chú thích
+         của bảng ở đầu file để biết vì sao nó phải là bảng chứ không phải một
+         chuỗi `if`. */
       const std = pad.info().standard;
-      if (st.pressed.has(PAD.A) || (std && st.pressed.has(PAD.RT))) push({ t: "use" });
-      if (st.pressed.has(PAD.B)) push({ t: "interact" });
-      /* START đứng NGOÀI hàng rào `std`, cùng lý do với nhánh trong menu ở
-         trên: nút "start/options" nằm ở chỉ số 9 trên gần như mọi tay cầm, kể
-         cả loại trình duyệt không nhận ra sơ đồ. Và nếu đoán sai thì cái giá
-         chỉ là mở nhầm một cái menu đóng lại được — rẻ hơn nhiều so với việc
-         người chơi KHÔNG CÓ đường nào mở menu, tức là không vào được Cài đặt,
-         không lưu, không thoát, và không cả tới được chế độ xây dựng. Trước
-         đây Start đóng được menu (nhánh modal) mà không mở được — một chiều. */
-      if (st.pressed.has(PAD.START)) push({ t: "menu" });
-      if (std) {
-        if (st.pressed.has(PAD.X)) push({ t: "auto" });
-        if (st.pressed.has(PAD.Y)) push({ t: "inventory" });
-        /* Giữ CÒ TRÁI thì vai nhảy NĂM ô một nhịp. Hotbar có mười ô mà vai chỉ
-           đi từng ô: muốn tới ô tám phải bấm bảy lần, trong khi bàn phím chỉ
-           cần một phím số. Năm ô là nửa hotbar — hai nhịp là tới bất cứ đâu. */
-        const buoc = st.held.has(PAD.LT) ? 5 : 1;
-        if (st.pressed.has(PAD.LB)) push({ t: "selectDelta", d: -buoc });
-        if (st.pressed.has(PAD.RB)) push({ t: "selectDelta", d: buoc });
-        if (st.pressed.has(PAD.BACK)) push({ t: "map" });
-        if (st.pressed.has(PAD.L3)) push({ t: "build" });
-        if (st.pressed.has(PAD.R3)) push({ t: "padHelp" });
+      for (const m of PAD_MAP) {
+        if (m.giu) continue; // việc GIỮ (chạy) đọc ở `padState`, không phải sườn lên
+        if (m.canStd && !std) continue;
+        if (!st.pressed.has(m.nut)) continue;
+        switch (m.viec) {
+          case "use": push({ t: "use" }); break;
+          case "interact": push({ t: "interact" }); break;
+          case "auto": push({ t: "auto" }); break;
+          case "inventory": push({ t: "inventory" }); break;
+          case "hotbarPrev": push({ t: "selectDelta", d: -1 }); break;
+          case "hotbarNext": push({ t: "selectDelta", d: 1 }); break;
+          case "zoom": push({ t: "zoom" }); break;
+          case "map": push({ t: "map" }); break;
+          case "menu": push({ t: "menu" }); break;
+          case "build": push({ t: "build" }); break;
+          case "padHelp": push({ t: "padHelp" }); break;
+        }
       }
-      // Rê con trỏ Ô: chỉ có nghĩa trong chế độ xây dựng, nhưng phát vô điều
-      // kiện cho gọn — main.ts bỏ qua khi không cần.
-      if (st.navDir) push({ t: "padAim", dx: st.navDir.x, dy: st.navDir.y });
 
-      /* CẦN PHẢI = chọn đồ ở hotbar. Cần trái đi, cần phải chọn — hai ngón cái
-         làm hai việc cùng lúc, nên vừa chạy vừa đổi công cụ mà không phải dừng
-         lại. Gạt lên/xuống cũng đổi ô, để không phải nhớ chỉ có trái/phải. */
-      if (st.aimDir) push({ t: "selectDelta", d: st.aimDir.x || st.aimDir.y });
+      /* CẦN PHẢI = RÊ CON TRỎ NGẮM. Cần trái đi, cần phải ngắm — hai ngón cái
+         hai việc, đúng như mọi tay cầm khác trên đời. Trước đây cần phải đổi ô
+         hotbar, tức là hotbar có tới BA cách điều khiển (vai, cò+vai, cần
+         phải) trong khi việc ngắm — thứ mà bàn phím và ngón tay đều làm được —
+         thì tay cầm không có cách nào. `main.ts` hiểu ý định này theo ngữ
+         cảnh: bản đồ nhỏ thì rê con trỏ bản đồ, chế độ xây thì rê ô xây, còn
+         lại thì rê ô ngắm quanh nhân vật. */
+      const re = st.aimDir ?? st.navDir;
+      if (re) push({ t: "padAim", dx: re.x, dy: re.y });
     },
     padConnected: () => padState.connected,
     padInfo: () => pad.info(),

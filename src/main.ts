@@ -1056,9 +1056,9 @@ async function boot() {
       hints.push(["✛", "Chuyển"], [b(0), "Chọn"], [b(1), "Đóng"]);
       if (std && document.querySelector(".modal .tabs button")) hints.push([`${b(4)}/${b(5)}`, "Đổi tab"]);
     } else if (minimap.cursor()) {
-      hints.push(["✛", "Rê"], [b(0), "Đi tới đó"], [b(8), "Thôi"]);
+      hints.push(["Cần phải", "Rê"], [b(0), "Đi tới đó"], [b(8), "Thôi"]);
     } else if (inBuild) {
-      hints.push(["✛", "Rê ô"], [b(0), lineFrom ? "Xây" : "Đặt mốc"], [b(1), lineFrom ? "Huỷ" : "Thoát"]);
+      hints.push(["Cần phải", "Rê ô"], [b(0), lineFrom ? "Xây" : "Đặt mốc"], [b(1), lineFrom ? "Huỷ" : "Thoát"]);
       if (std) hints.push([`${b(4)}/${b(5)}`, "Đổi công trình"]);
     } else if (cardAnimal !== null) {
       hints.push([b(1), "Đóng bảng"], [b(0), "Thu / cho ăn"]);
@@ -1067,9 +1067,18 @@ async function boot() {
       /* Ngoài ruộng thì CỤM NÚT HÌNH THOI đã nói hết bốn nút mặt rồi — nhắc
          lại ở đây là chiếm chỗ để nói một thứ đang hiện ngay trên màn hình.
          Thanh này chỉ còn giữ những nút KHÔNG có mặt trong cụm. */
-      if (std) hints.push(["Cần phải", "Hotbar"], [b(10), "Xây dựng"], [b(9), "Tạm dừng"]);
+      if (std)
+        hints.push(["Cần phải", "Ngắm ô"], [b(6), "Chạy"], [b(7), "Phóng"], [b(10), "Xây dựng"], [b(9), "Tạm dừng"]);
       else hints.push([b(0), "Dùng"], [b(1), "Tương tác"]);
     }
+
+    /* Khi thanh này nói về một LỚP PHỦ (menu, hướng dẫn, bản đồ nhỏ, chế độ
+       xây, bảng con vật) thì dải `.padctx` ở góc phải TẮT HẲN. Hai dải cùng
+       hiện là hai chỉ dẫn khác nhau cho cùng một nút A: dải góc nói "DÙNG"
+       trong khi thanh giữa nói "Chọn", và người chơi phải tự đoán cái nào đang
+       thật. Trước đây dải góc chỉ MỜ ĐI (opacity .45) — mờ vẫn là đang nói. */
+    document.body.dataset["padbar"] =
+      inTut || inMenu || inBuild || cardAnimal !== null || minimap.cursor() ? "1" : "";
 
     const key = hints.map(([k, v]) => k + v).join("|");
     if (key === padBarKey) return;
@@ -1490,6 +1499,20 @@ async function boot() {
            một CON TRỎ Ô: gạt để rê, A để đi. Không có đường này thì bấm-để-đi
            (cách đi xa duy nhất) hoàn toàn ngoài tầm tay cầm, và người chơi
            phải giữ cần gạt suốt chiều dài nông trại. */
+        /* CÒ PHẢI = đổi mức phóng. Trước đây cò phải làm ĐÚNG việc của A, còn
+           mức phóng thì chỉ mở được trong Cài đặt — nghĩa là một nút thừa và
+           một tính năng không với tới được, cùng một lúc. */
+        case "zoom": {
+          if (modal || building) break;
+          const muc: Settings["zoom"][] = ["near", "normal", "far"];
+          const i = Math.max(0, muc.indexOf(settings.zoom));
+          const moi = muc[(i + 1) % muc.length]!;
+          setSetting("zoom", moi);
+          toasts.say(moi === "near" ? "Khung nhìn: gần" : moi === "far" ? "Khung nhìn: xa" : "Khung nhìn: vừa");
+          buzz("tap");
+          break;
+        }
+
         case "map":
           if (padOn && !modal) {
             if (minimap.cursor()) {
@@ -1737,18 +1760,33 @@ async function boot() {
             });
             break;
           }
-          if (!building) break;
-          const p0 = padCursor ?? {
-            x: Math.floor(s.player.x / TILE),
-            y: Math.floor(s.player.y / TILE),
-          };
-          padCursor = {
-            x: Math.max(0, Math.min(s.w - 1, p0.x + it.dx)),
-            y: Math.max(0, Math.min(s.h - 1, p0.y + it.dy)),
-          };
-          aimed = { ...padCursor };
-          // Đang vẽ dở thì đầu kia của đoạn bám theo con trỏ.
-          if (lineFrom) lineTo = { ...padCursor };
+          if (building) {
+            const p0 = padCursor ?? {
+              x: Math.floor(s.player.x / TILE),
+              y: Math.floor(s.player.y / TILE),
+            };
+            padCursor = {
+              x: Math.max(0, Math.min(s.w - 1, p0.x + it.dx)),
+              y: Math.max(0, Math.min(s.h - 1, p0.y + it.dy)),
+            };
+            aimed = { ...padCursor };
+            // Đang vẽ dở thì đầu kia của đoạn bám theo con trỏ.
+            if (lineFrom) lineTo = { ...padCursor };
+            break;
+          }
+
+          /* NGOÀI RUỘNG: cần phải rê Ô NGẮM quanh nhân vật.
+             Đây là thứ tay cầm vốn KHÔNG có: chuột chỉ vào đâu cũng được, ngón
+             tay chạm vào đâu cũng được, còn tay cầm thì mãi mãi chỉ làm được ở
+             đúng ô trước mặt — muốn cày ô chéo phải xoay người rồi bước. Giới
+             hạn trong TẦM VỚI để nó vẫn là "ngắm", không thành một con chuột
+             thứ hai. */
+          {
+            const a0 = aimed ?? facingTile(s, TILE);
+            const nx = Math.max(0, Math.min(s.w - 1, a0.x + it.dx));
+            const ny = Math.max(0, Math.min(s.h - 1, a0.y + it.dy));
+            if (inReachOf(s, nx, ny)) aimed = { x: nx, y: ny };
+          }
           break;
         }
 

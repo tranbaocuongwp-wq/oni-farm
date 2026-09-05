@@ -2396,6 +2396,12 @@ body[data-hand="left"][data-input^="pad"] .padctx {
 body[data-input^="pad"] .padctx.off {
   opacity: 0.45;
 }
+/* Thanh nút của LỚP PHỦ đang chiếm chỗ (menu, hướng dẫn, bản đồ nhỏ, chế độ
+   xây): dải góc tắt hẳn. Hai dải cùng hiện là hai chỉ dẫn khác nhau cho cùng
+   một nút A, và người chơi phải tự đoán cái nào đang thật. */
+body[data-input^="pad"][data-padbar="1"] .padctx {
+  display: none;
+}
 /* Thứ đang cầm, ngay trước nhãn: cùng chữ "DÙNG" mà cầm cuốc là cày, cầm hạt
    là gieo — cái nhãn một mình không nói đủ. */
 .padctx .it {

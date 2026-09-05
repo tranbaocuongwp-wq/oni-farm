@@ -79,10 +79,6 @@ export function getPadRemap(): Readonly<Record<number, number>> {
   return doiNut;
 }
 
-/** Đẩy quá mức này là CHẠY — cùng luật analog với joystick cảm ứng, nên người
- *  chơi không phải học thêm nút nào. */
-const RUN = 0.85;
-
 /** Nút được coi là "đang bấm" từ mức này. Cò analog (LT/RT) cũng dùng ngưỡng
  *  này nên chúng hành xử y hệt nút thường. */
 const PRESS = 0.5;
@@ -405,7 +401,13 @@ export function createGamepad(): Gamepad2 {
         connected: true,
         axis: { x: ax, y: ay },
         // Cò LT chỉ đáng tin khi standard mapping; ngoài ra chỉ dựa vào cần gạt.
-        running: len > RUN || (pad.mapping === "standard" && held.has(PAD.LT)),
+        /* CHẠY = giữ cò trái, và CHỈ thế.
+           Trước đây "đẩy cần gạt hết cỡ" cũng là chạy — hai cách điều khiển
+           cho cùng một tính năng, đúng thứ người chơi bắt lỗi: cầm tay cầm mà
+           đi nhanh chậm thất thường vì ngón cái vô tình đẩy quá ngưỡng, và cái
+           cò thì hoá ra thừa. Cần gạt ảo trên màn hình vẫn giữ luật đẩy-hết-cỡ
+           (nó không có cò để mà giữ) — luật ấy nằm ở `input.ts`, không ở đây. */
+        running: pad.mapping === "standard" && held.has(PAD.LT),
         pressed,
         held,
         navDir,

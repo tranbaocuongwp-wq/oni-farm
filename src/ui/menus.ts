@@ -24,6 +24,7 @@ import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
 import { padButtonName, type PadInfo } from "../core/gamepad.ts";
+import { PAD_MAP, type PadBind } from "../core/input.ts";
 import { penSummary } from "../game/animals.ts";
 
 export interface MenuHandlers {
@@ -1243,26 +1244,34 @@ export function createMenus(
         ),
       );
 
-    /* Chỉ bày những nút tay cầm THẬT SỰ có. Quảng cáo "L3 mở chế độ xây" trên
+    /* Bảng này dựng TỪ `PAD_MAP` chứ không gõ tay lại. Gõ tay lại là hai bản
+       sao của cùng một sơ đồ, và chúng trôi khỏi nhau ngay lần sửa đầu tiên —
+       đúng cái đã xảy ra: màn hình quảng cáo "Đẩy mạnh là chạy" và "cò phải =
+       dùng" trong khi máy làm khác.
+
+       Chỉ bày những nút tay cầm THẬT SỰ có. Quảng cáo "L3 mở chế độ xây" trên
        một tay cầm mười nút là hướng dẫn người chơi đi bấm một cái không tồn
        tại — tệ hơn hẳn so với không nhắc tới nó. */
-    const co = (i: number) => info.connected && info.standard && i < info.buttons;
-    const map: [string, string][] = [["Cần trái / D-pad", "Đi. Đẩy mạnh là chạy."]];
-    map.push([ten(0), "Dùng — cày, gieo, tưới, thu. Giữ để làm tiếp ô kế bên."]);
-    map.push([ten(1), "Tương tác — cửa hàng, giường, giếng, kho, con vật."]);
-    if (co(2)) map.push([ten(2), "Bật/tắt tự động làm."]);
-    if (co(3)) map.push([ten(3), "Mở balo."]);
-    if (co(5)) map.push([`${ten(4)} / ${ten(5)}`, "Đổi ô hotbar. Giữ thêm cò trái để nhảy năm ô."]);
-    if (co(6)) map.push([ten(6), "Chạy."]);
-    if (co(7)) map.push([ten(7), `Dùng (thay cho ${ten(0)}).`]);
-    if (co(8)) map.push([ten(8), `Bản đồ nhỏ — bật con trỏ, cần gạt rê, ${ten(0)} để đi tới đó.`]);
-    if (info.connected) map.push([ten(9), "Menu tạm dừng."]);
-    if (co(10)) map.push([ten(10), "Chế độ xây dựng."]);
-    if (co(11)) map.push([ten(11), "Mở lại bảng này."]);
-    map.push(["Trong menu", `Cần gạt chuyển ô, ${ten(0)} chọn, ${ten(1)} thoát. Cần phải cuộn.`]);
-    if (co(5)) map.push(["Trong menu", `${ten(4)} / ${ten(5)} đổi tab.`]);
-    map.push(["Khi xây dựng", `Cần gạt rê ô, ${ten(0)} đặt mốc rồi ${ten(0)} lần nữa để xây, ${ten(1)} huỷ.`]);
-    if (co(5)) map.push(["Khi xây dựng", `${ten(4)} / ${ten(5)} đổi công trình.`]);
+    const co = (m: PadBind) =>
+      info.connected && (!m.canStd || info.standard) && (!m.canStd || m.nut < info.buttons);
+    const map: [string, string][] = [
+      ["Cần trái / D-pad", "Đi."],
+      ["Cần phải", "Rê ô ngắm — cày/gieo/thu ô chéo mà không phải xoay người."],
+    ];
+    for (const m of PAD_MAP) if (co(m)) map.push([ten(m.nut), m.mo]);
+    /* Gộp một dòng cho mỗi NGỮ CẢNH. Hai dòng cùng nhãn "Trong menu" xếp liền
+       nhau đọc ra như một lỗi sao chép, và mắt phải đọc cả hai mới biết chúng
+       nói hai chuyện khác nhau. */
+    map.push([
+      "Trong menu",
+      `Cần gạt chuyển ô, ${ten(0)} chọn, ${ten(1)} thoát. Cần phải cuộn.` +
+        (info.standard ? ` ${ten(4)} / ${ten(5)} đổi tab.` : ""),
+    ]);
+    map.push([
+      "Khi xây dựng",
+      `Cần phải rê ô, ${ten(0)} đặt mốc rồi ${ten(0)} lần nữa để xây, ${ten(1)} huỷ.` +
+        (info.standard ? ` ${ten(4)} / ${ten(5)} đổi công trình.` : ""),
+    ]);
 
     const grid = document.createElement("div");
     grid.className = "pad-map";

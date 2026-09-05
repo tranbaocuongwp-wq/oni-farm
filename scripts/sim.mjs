@@ -29,6 +29,7 @@ import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
+import { PAD_MAP } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 
@@ -4733,13 +4734,16 @@ test("72. tay cầm: sườn lên, vùng chết tròn, chạy, nhịp lặp, sơ
   padHienTai = fakePad({ axes: [0, 0, 0, 0], held: [PAD.RIGHT] });
   eq(g.poll(2300).axis.x, 1, "D-pad phải = đẩy hết cỡ sang phải");
 
-  /* --- CHẠY. Đây là DÂY BẪY: `running` từng được tính đúng ở đây rồi bị
-     `input.ts` quên đọc, nên người chơi tay cầm đi bộ suốt ván trong khi sơ đồ
-     nút vẫn quảng cáo cả hai cách chạy. --- */
-  padHienTai = fakePad({ axes: [0.5, 0, 0, 0] });
-  eq(g.poll(2400).running, false, "đẩy nửa cần thì chưa chạy");
+  /* --- CHẠY. Hai dây bẫy chồng lên nhau ở đây:
+     · `running` từng được tính đúng ở file này rồi bị `input.ts` quên đọc, nên
+       người chơi tay cầm đi bộ suốt ván trong khi sơ đồ nút vẫn quảng cáo.
+     · Và nó từng có HAI cách bật: giữ cò trái, HOẶC đẩy cần gạt hết cỡ. Một
+       tính năng hai cách điều khiển là đúng thứ người chơi bắt lỗi — ngón cái
+       vô tình đẩy quá ngưỡng là tự dưng chạy, còn cái cò thì hoá ra thừa. Trên
+       TAY CẦM chỉ còn cò trái; cần gạt ẢO trên màn hình vẫn giữ luật đẩy hết
+       cỡ (nó không có cò để mà giữ), và luật ấy nằm ở `input.ts`. --- */
   padHienTai = fakePad({ axes: [0.95, 0, 0, 0] });
-  eq(g.poll(2500).running, true, "đẩy gần hết cỡ là CHẠY");
+  eq(g.poll(2500).running, false, "đẩy hết cỡ KHÔNG còn là chạy — chạy chỉ có một nút");
   padHienTai = fakePad({ axes: [0, 0, 0, 0], held: [PAD.LT] });
   eq(g.poll(2600).running, true, "giữ cò trái là CHẠY");
 
@@ -5502,6 +5506,71 @@ test("80. con vật chậm dần khi người tới gần; nút chính bám theo
   ok(/rìu/i.test(h.why ?? ""), `…mà phải nói lý do: "${h.why}"`);
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+/* ========================================================================== */
+/* 81. SƠ ĐỒ NÚT TAY CẦM: một nút một việc, một việc một nút                   */
+/* ========================================================================== */
+
+/* Người chơi: "khi ở chế độ gamepad, các tính năng và các nút không được đè
+   chồng nhau — thế nào đã được gán cho tính năng nào thì không được làm tính
+   năng khác, ngược lại cùng 1 tính năng thì không thể sử dụng nhiều nút để
+   điều khiển được, nên phải khai thác tối đa tất cả các nút trên gamepad".
+
+   Ba chỗ chồng chéo của bản trước, và cả ba chỉ nhìn ra khi đọc kỹ mười dòng
+   `if` rải rác:
+     · RT làm ĐÚNG việc của A ("Dùng (thay cho A)") — một việc, hai nút.
+     · LT vừa là CHẠY vừa là phím phụ cho vai nhảy năm ô — một nút, hai việc.
+     · Đẩy cần gạt hết cỡ cũng là chạy (chạy có HAI cách), còn hotbar thì có BA
+       (vai, cò + vai, cần phải).
+
+   Kịch bản này kiểm thẳng trên BẢNG, nên lần sau ai thêm một nút chồng lên nút
+   cũ là đỏ ngay chứ không phải đọc lại từng dòng. */
+test("81. sơ đồ nút tay cầm: không nút nào hai việc, không việc nào hai nút", () => {
+  ok(PAD_MAP.length >= 12, `bảng phải phủ hết nút thật của tay cầm (đang có ${PAD_MAP.length})`);
+
+  // --- MỘT NÚT MỘT VIỆC ---
+  const theoNut = new Map();
+  for (const m of PAD_MAP) {
+    const cu = theoNut.get(m.nut);
+    ok(!cu, `nút ${m.nut} đã mang việc '${cu}', không được mang thêm '${m.viec}'`);
+    theoNut.set(m.nut, m.viec);
+  }
+
+  // --- MỘT VIỆC MỘT NÚT ---
+  const theoViec = new Map();
+  for (const m of PAD_MAP) {
+    const cu = theoViec.get(m.viec);
+    ok(cu === undefined, `việc '${m.viec}' đã nằm ở nút ${cu}, không được gán thêm nút ${m.nut}`);
+    theoViec.set(m.viec, m.nut);
+  }
+
+  // --- KHAI THÁC HẾT: mọi nút của một tay cầm chuẩn đều có việc ---
+  const conTrong = [];
+  for (const [ten, i] of Object.entries(PAD)) {
+    if (i >= 12) continue; // 12..15 là D-pad, đã gộp vào hướng đi
+    if (!theoNut.has(i)) conTrong.push(`${ten}(${i})`);
+  }
+  deepEq(conTrong, [], "không được để nút mặt/vai/cò/cần nào trống việc");
+
+  // --- Và những việc quan trọng nhất phải CÓ MẶT ---
+  for (const v of ["use", "interact", "auto", "inventory", "run", "zoom", "map", "menu", "build", "padHelp"])
+    ok(theoViec.has(v), `phải có nút cho việc '${v}'`);
+
+  /* --- CHẠY chỉ ở một chỗ: cò trái. `run` là việc GIỮ nên `poll` phải BỎ QUA
+     nó — nếu không thì mỗi lần bóp cò lại phát thêm một ý định thứ hai. */
+  const chay = PAD_MAP.find((m) => m.viec === "run");
+  eq(chay.nut, PAD.LT, "chạy nằm ở cò trái");
+  eq(chay.giu, true, "chạy là việc GIỮ, không phải bấm");
+
+  /* --- Và CÒ PHẢI không còn làm việc của A nữa. */
+  eq(theoNut.get(PAD.RT), "zoom", "cò phải mang việc RIÊNG của nó, không lặp lại nút A");
+  eq(theoNut.get(PAD.A), "use", "nút A vẫn là DÙNG");
+
+  /* --- Sơ đồ nút hiện trong game phải dựng TỪ bảng này. Không thì màn hình
+     hứa một nút mà máy không làm — đúng cái lỗi "Chạy" chết âm thầm sáu
+     commit. Kiểm bằng cách đòi mọi dòng đều có mô tả không rỗng. */
+  for (const m of PAD_MAP) ok(!!m.mo && m.mo.length > 6, `nút ${m.nut} phải có mô tả để in ra sơ đồ`);
 });
 
 /* ------------------------------------------------------------------ tổng kết */

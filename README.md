@@ -952,6 +952,42 @@ sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằ
 bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
 tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
+### Sơ đồ nút tay cầm: một nút một việc, một việc một nút (core 1.24)
+
+Cái người chơi bắt lỗi không phải một nút sai, mà là **sơ đồ tự mâu thuẫn**. Ba chỗ chồng chéo,
+và cả ba chỉ nhìn ra khi đọc kỹ mười dòng `if` rải rác:
+
+* **RT làm đúng việc của A** — sơ đồ nút in thẳng ra: *"Dùng (thay cho A)"*. Một việc, hai nút.
+* **LT vừa là CHẠY vừa là phím phụ** để vai nhảy năm ô. Một nút, hai việc.
+* **Đẩy cần gạt hết cỡ cũng là chạy**, nên chạy có **hai** cách điều khiển; còn hotbar thì có
+  **ba** (vai, cò + vai, cần phải).
+
+Trong khi đó việc **ngắm** — thứ chuột và ngón tay đều làm được — thì tay cầm không có đường
+nào, và **mức phóng** chỉ mở được trong Cài đặt.
+
+Nay có `PAD_MAP`: **một bảng, một nguồn**. `input.ts` đọc nó để gán nút, `menus.ts` dựng sơ đồ
+nút **từ chính nó** — nên màn hình không bao giờ hứa một nút mà máy không làm, đúng cái lỗi
+"Chạy" từng chết âm thầm sáu commit. Kịch bản 81 kiểm thẳng trên bảng: không nút nào hai việc,
+không việc nào hai nút, và **không nút mặt/vai/cò/cần nào bỏ trống**.
+
+| | |
+|---|---|
+| Cần trái / D-pad | Đi |
+| **Cần phải** | **Rê ô ngắm** — cày/gieo/thu ô chéo mà không phải xoay người |
+| A · B | Dùng · Tương tác |
+| X · Y | Tự động làm · Balo |
+| LB · RB | Ô hotbar trước · sau |
+| LT | Giữ để chạy |
+| **RT** | **Đổi mức phóng** gần → vừa → xa |
+| View · Menu | Bản đồ nhỏ · Menu tạm dừng |
+| LS · RS | Chế độ xây dựng · Mở lại sơ đồ nút |
+
+Và **hai dải chỉ dẫn không được cùng hiện**. Ở chế độ tay cầm có dải góc (`.padctx`, nói việc
+của nút A ngoài ruộng) và thanh giữa (`#padbar`, nói việc của nút A trong lớp phủ đang mở). Khi
+mở menu thì cả hai cùng nói về nút A nhưng nói hai thứ khác nhau, và người chơi phải tự đoán
+cái nào đang thật. Trước đây dải góc chỉ **mờ đi** (opacity .45) — mờ vẫn là đang nói. Nay nó
+tắt hẳn.
+
 ### Con vật DÈ CHỪNG, và hai cái nút bám theo quanh mình (core 1.23)
 
 **Vành dè chừng.** Luật "tới gần thì đứng lại" vẫn chạy, nhưng nó là một cái **công tắc** ở
