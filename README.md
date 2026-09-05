@@ -377,13 +377,23 @@ rẻ hơn hẳn bốn khung hình chỉ dùng đúng một giây mỗi ngày.
 
 | kind | Luật | Vì sao |
 |---|---|---|
-| `farm` | CHỈ trong đây mới cuốc được | ngoài vùng cái cuốc không ăn, nên không ai vô tình băm cả bản đồ thành luống — mà luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại, tức là gần như không hoàn tác được |
+| `farm` | CHỈ trong đây mới cuốc được — ruộng chia thành **9 LÔ** riêng, mỗi lô một vùng | ngoài vùng cái cuốc không ăn, nên không ai vô tình băm cả bản đồ thành luống — mà luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại, tức là gần như không hoàn tác được |
 | `forest` | mỗi đêm ô cỏ trống có `balance.forestRegrowChance` mọc lên cây con | rừng chặt xong không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ "rừng" chỉ là trang trí |
 
 Vắng `zones` = không giới hạn, đúng hành vi trước core 1.9, nên pack cũ không
 đổi gì. `validatePack` chặn vùng tràn ra ngoài bản đồ, vùng trỏ vào bản đồ
 không có, và **khu ruộng không có lấy một ô cuốc được** — cái cuối là thứ biến
 cây cuốc thành đồ trang trí ngay từ phút đầu mà nhìn content không thấy.
+
+**Phân lô.** Ruộng không phải một mảng cỏ to mà là chín lô (A1–C3, mỗi lô 18–21
+ô), giữa các lô là **bờ** lát lối mòn. Bờ là ô `path` nên tự nó đã không cuốc
+được — nghĩa là ranh giới NHÌN THẤY ĐƯỢC, không phải một luật vô hình mà người
+chơi chỉ phát hiện khi bấm hụt. Hình vùng trong content khớp đúng hình trên bản
+đồ, và kịch bản 70 bắt hai lô dính nhau: dính nhau thì "phân lô" chỉ là chia
+trên giấy còn nhìn vào vẫn là một mảng ruộng liền.
+
+Đi kèm là một khoảng **sân sau** phía đông bắc để trống hẳn — ruộng chia lô hết
+rồi thì phải có chỗ đặt vòi tưới, pin mặt trời, drone mà không tranh đất với cây.
 
 **CẦU GỖ** (`PropDef.bridge`) là vật thể BẮC QUA một ô không đi được. Ô có nó
 thì người và vật nuôi qua được bất kể NỀN bên dưới, còn loài BƠI vẫn bơi được

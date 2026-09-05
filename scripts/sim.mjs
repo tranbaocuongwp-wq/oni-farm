@@ -264,10 +264,14 @@ function findOpenBlock(s, bw, bh) {
 }
 
 /* Ô ruộng dùng chung: đứng ở (16,8) trên lối đi, với tới 6 ô cỏ hai bên. */
-const HOME = { x: 16, y: 8 };
+/* Chỗ đứng làm ruộng trong các kịch bản: ĐỨNG TRÊN LỐI MÒN CHÍNH, hai bên là
+   hai lô. Sáu ô quanh nó là sáu ô cuốc được, và chỉ sáu — y hệt hình cũ, nên
+   các kịch bản đo "hết ô thì dừng" vẫn đo đúng thứ chúng định đo. Ô cũ (16,8)
+   giờ vắt qua BỜ giữa hai hàng lô nên nửa số nhát cuốc rơi vào chỗ cấm. */
+const HOME = { x: 16, y: 9 };
 const PLOTS = [
-  { x: 15, y: 7 }, { x: 15, y: 8 }, { x: 15, y: 9 },
-  { x: 17, y: 7 }, { x: 17, y: 8 }, { x: 17, y: 9 },
+  { x: 15, y: 8 }, { x: 15, y: 9 }, { x: 15, y: 10 },
+  { x: 17, y: 8 }, { x: 17, y: 9 }, { x: 17, y: 10 },
 ];
 
 /* ========================================================================== */
@@ -626,38 +630,43 @@ const SCRIPT = [
   { t: "SELECT", slot: 0 },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 2 },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 1 },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "TICK", dt: 12 },
+  /* Đi một vòng RỒI VỀ CHỖ CŨ. Đây là phép thử TẤT ĐỊNH, nên chỉ cần chuyển
+     động có tham gia vào chuỗi; đi một chiều rồi đứng đó thì mấy ô ruộng bên
+     dưới rơi ra ngoài tầm với và cả kịch bản không thu hoạch được gì. */
   { t: "MOVE", dx: 1, dy: 0, dt: 0.25 },
   { t: "MOVE", dx: 0, dy: 1, dt: 0.25 },
+  { t: "MOVE", dx: -1, dy: 0, dt: 0.25 },
+  { t: "MOVE", dx: 0, dy: -1, dt: 0.25 },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
@@ -665,7 +674,7 @@ const SCRIPT = [
   { t: "DEBUG", op: "growAll" },
   { t: "USE", x: 15, y: 8 },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 7 },
+  { t: "USE", x: 15, y: 9 },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: 17, y: 8 },
   { t: "TICK", dt: 0.4 },
@@ -4207,7 +4216,16 @@ test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lạ
   const zones = content.tiles.zones ?? [];
   const ruong = zones.filter((z) => z.kind === "farm");
   const rung = zones.filter((z) => z.kind === "forest");
-  ok(ruong.length >= 1, "content khai ít nhất một khu ruộng");
+  ok(ruong.length >= 4, `ruộng phải chia thành nhiều LÔ, đang có ${ruong.length}`);
+  // các lô KHÔNG được dính nhau: giữa chúng phải có bờ, nếu không thì "phân lô"
+  // chỉ là chia trên giấy còn nhìn vào vẫn là một mảng ruộng liền.
+  for (let i = 0; i < ruong.length; i++)
+    for (let j = i + 1; j < ruong.length; j++) {
+      const a = ruong[i], b = ruong[j];
+      const cachX = a.x + a.w < b.x || b.x + b.w < a.x;
+      const cachY = a.y + a.h < b.y || b.y + b.h < a.y;
+      ok(cachX || cachY, `lô '${a.id}' và '${b.id}' phải cách nhau ít nhất một ô bờ`);
+    }
   ok(rung.length >= 1, "…và ít nhất một khu rừng");
   for (const z of zones) {
     ok(z.x >= 0 && z.y >= 0, `vùng '${z.id}' không có toạ độ âm`);
@@ -4224,7 +4242,11 @@ test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lạ
 
   /* ---- (b) CUỐC chỉ ăn trong khu ruộng -------------------------------- */
   const s0 = store.getState();
-  const trongRuong = { x: ruong[0].x + 3, y: ruong[0].y + 3 };
+  // GIỮA một lô, không phải "góc + 3": lô chỉ cao 3 ô nên cộng 3 là ra ngoài.
+  const trongRuong = {
+    x: ruong[0].x + Math.floor(ruong[0].w / 2),
+    y: ruong[0].y + Math.floor(ruong[0].h / 2),
+  };
   ok(inZone(s0, content, "farm", trongRuong.x, trongRuong.y), "ô thử nằm trong khu ruộng");
   // tìm một ô cỏ trống NGOÀI khu ruộng để đối chứng
   let ngoai = null;
