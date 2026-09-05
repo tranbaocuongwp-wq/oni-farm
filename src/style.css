@@ -85,6 +85,14 @@ body[data-ui="large"] {
   --fs: clamp(15px, 4vw, 18px);
   --btn-a: 84px;
   --btn-b: 60px;
+  /* Cỡ LỚN cũng phải nới ô hotbar. Trước đây nó chỉ đụng chữ và hai cái nút
+     tròn, nên người chơi chọn "Lớn" vì bấm hụt hotbar lại thấy hotbar y
+     nguyên — đúng thứ họ than thì không đổi. Nới khe trước (rẻ nhất, giảm hẳn
+     việc bấm nhầm ô bên cạnh), rồi nâng trần cỡ ô. */
+  --slot-gap: 4px;
+}
+body[data-ui="small"] {
+  --slot-gap: 2px;
 }
 
 /* Giảm chuyển động: tắt mọi transition/animation trang trí. */
@@ -363,6 +371,10 @@ body[data-hand="left"] .mid-col {
 }
 .animal-card .ax {
   flex: none;
+  /* Hình vẫn 18px cho gọn, nhưng VÙNG CHẠM nới ra 40px bằng `::before`. Ba nút
+     này nằm cạnh nhau nên nếu phóng to cả hình thì cái bảng phình ra che mất
+     nông trại; nới vùng chạm thì không dịch một pixel nào của hình. */
+  position: relative;
   width: 18px;
   height: 18px;
   min-height: 18px;
@@ -370,6 +382,15 @@ body[data-hand="left"] .mid-col {
   line-height: 1;
   border-radius: 50%;
   font-size: 1em;
+}
+.animal-card .ax::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
 }
 .animal-card .hd b {
   color: var(--gold);
@@ -522,14 +543,17 @@ body[data-hand="left"] .mid-col {
   display: none;
 }
 #update-bar .go {
-  padding: 3px 12px;
-  min-height: 0;
+  /* Nút này là lối DUY NHẤT để lấy bản mới. Trước đây `min-height: 0` đè lên
+     luật chung và nó cao ~24px. */
+  padding: 3px 16px;
+  min-height: var(--tap);
   border-radius: 999px;
   background: #eaf4ff;
   color: #16324a;
   font-weight: 700;
 }
 #update-bar .x {
+  position: relative;
   width: 24px;
   height: 24px;
   min-height: 24px;
@@ -539,6 +563,16 @@ body[data-hand="left"] .mid-col {
   background: transparent;
   border-color: transparent;
   color: #cfe4ff;
+}
+/* Vùng chạm 40px quanh dấu ×, giữ nguyên hình 24px. */
+#update-bar .x::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
 }
 
 /* ---- bảng gỡ lỗi NỔI: đè lên góc, KHÔNG chặn game ----
@@ -687,7 +721,15 @@ body[data-hand="left"] .hud-mid {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* 8px, không phải 6: nút balo đứng sát dải ô hotbar mà hai thứ làm hai việc
+     khác hẳn nhau — bấm nhầm là mở cả một cái menu chứ không phải đổi công cụ. */
+  gap: 8px;
+}
+/* Nút BALO đổi bên theo tay thuận, y như cụm nút hành động. Nó là nút 44px
+   duy nhất ở dải đáy, mà để cố định bên phải thì với tay trái nó nằm xa ngón
+   cái nhất trong cả màn hình. */
+body[data-hand="left"] .hotbar-wrap {
+  flex-direction: row-reverse;
 }
 .hotbar {
   display: flex;
@@ -750,6 +792,23 @@ body[data-hand="left"] .hud-mid {
   cursor: pointer;
   touch-action: manipulation;
   transition: transform var(--anim) ease-out, border-color var(--anim);
+}
+/* VÙNG CHẠM CAO HƠN Ô. Mười ô trên một hàng ở màn 360–430px thì mỗi ô chỉ
+   được 26–33 CSS px — dưới chuẩn 44, và đó là SỐ HỌC chứ không phải sơ suất:
+   10 × 44 + khe = hơn 460px, rộng hơn cả màn hình. Bề ngang thì không nới
+   được (ô này sát ô kia), nhưng chiều DỌC thì còn chỗ trống cả trên lẫn dưới.
+   Ngón cái đi từ dưới lên nên sai số dọc là sai số hay gặp nhất — nới trục đó
+   biến một mục tiêu 29×29 thành 29×44 mà không dịch một pixel nào của hình. */
+.slot::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  /* `max` chứ không phải số cứng: trên tablet ô đã to hơn 44px rồi, khai cứng
+     44 là tự thu nhỏ vùng chạm lại. */
+  height: max(var(--tap), 100%);
+  transform: translateY(-50%);
 }
 .slot.empty {
   opacity: 0.55;
@@ -1439,8 +1498,12 @@ body.touch #touch {
 #stick {
   display: none;
   position: absolute;
-  left: 0;
-  bottom: 0;
+  /* Né vùng cử chỉ của hệ điều hành. Đây là chỗ DUY NHẤT trong lớp cảm ứng
+     từng quên `safe-area`: vuốt lên từ dải home indicator của iOS là thoát
+     app, còn mép trái Android là vuốt-để-quay-lại. Cần gạt phủ tận mép nghĩa
+     là mỗi lần đẩy chéo xuống-trái có thể thành thoát game. */
+  left: var(--sa-l);
+  bottom: var(--sa-b);
   pointer-events: auto;
   touch-action: none;
 }
@@ -1449,8 +1512,11 @@ body[data-control="stick"] #stick {
 }
 body[data-control="stick"][data-hand="left"] #stick {
   left: auto;
-  right: 0;
+  right: var(--sa-r);
 }
+/* Đường kính vòng nền = 2 × bán kính JS trong `input.ts` (STICK_RADIUS).
+   Lệch nhau thì núm chạy hết tầm khi mới tới 82% vòng — người chơi tưởng còn
+   đẩy được nữa mà thực ra đã max, và ở màn thấp thì núm còn tràn ra ngoài. */
 #stick .base {
   position: absolute;
   width: 112px;
@@ -1485,6 +1551,16 @@ body[data-control="stick"][data-hand="left"] #stick {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  /* KHÔNG nhận chạm ở cấp hộp — chỉ các NÚT bên trong mới nhận.
+     Hộp này là một cột flex cao gần 140px và rộng tới 46vw (vì dòng `.why`),
+     nằm đúng góc dưới-phải nơi ngón cái quét qua nhiều nhất. Để nó `auto` thì
+     cả phần TRỐNG giữa các nút, hai khe `gap`, và cái nhãn `.why` — vốn không
+     bấm được gì — đều hút chạm và im lặng. Với lối chơi chạm-để-đi thì đó là
+     một vùng "bấm không ăn" bằng 7% màn hình. Cùng cách `#hud` đã làm. */
+  pointer-events: none;
+}
+#abtn .btns button,
+#abtn .linebtn {
   pointer-events: auto;
 }
 body[data-hand="left"] #abtn {
@@ -1630,8 +1706,11 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
 .linebtn {
   align-self: flex-end;
   margin-bottom: 3px;
-  padding: 3px 11px;
-  min-height: 0;
+  /* Cao đúng chuẩn chạm. Trước đây `min-height: 0` đè lên luật chung
+     `button { min-height: var(--tap) }` và nút này chỉ còn ~27px — nhỏ hơn
+     nửa đầu ngón tay, mà nó lại là lối vào DUY NHẤT của chế độ xây dựng. */
+  min-height: var(--tap);
+  padding: 3px 14px;
   font-size: calc(var(--fs-sm) * 0.9);
   border-radius: 999px;
   color: var(--ink-dim);
@@ -1707,8 +1786,13 @@ body[data-orientation="portrait"] #stick {
 }
 /* Dọc: cụm nút nằm dưới, hotbar phải né lên trên. */
 body.touch[data-orientation="portrait"] {
-  /* nút hành động + dòng lý do phía trên nó */
-  --pad-bottom: calc(var(--btn-a) + 54px);
+  /* Ngân sách chỗ cho CẢ cột `#abtn`, không chỉ cái nút to:
+       14px lệch đáy · nút chính (--btn-a) · khe 6 · dòng lý do ~27
+       · khe 6 · nút XÂY (--tap + 3 margin)
+     Trước đây con số này quên hẳn nút XÂY, và hotbar đè lên nó ~50px ở cả ba
+     khổ máy — đúng lúc người chơi đang cầm công trình, tức đúng lúc cần nó.
+     Hotbar có z-index cao hơn nên nó nuốt luôn cú chạm, không chỉ che. */
+  --pad-bottom: calc(var(--btn-a) + var(--tap) + 60px);
 }
 body.touch[data-orientation="landscape"] {
   --pad-bottom: 6px;
@@ -1739,7 +1823,10 @@ body.touch[data-orientation="landscape"] .hud-mid {
   .goal-chip {
     max-width: 50vw;
   }
-  #stick .base {
+  /* Đường kính vòng nền = 2 × bán kính JS trong `input.ts` (STICK_RADIUS).
+   Lệch nhau thì núm chạy hết tầm khi mới tới 82% vòng — người chơi tưởng còn
+   đẩy được nữa mà thực ra đã max, và ở màn thấp thì núm còn tràn ra ngoài. */
+#stick .base {
     width: 92px;
     height: 92px;
     margin: -46px 0 0 -46px;
@@ -2224,7 +2311,8 @@ body[data-input="pad-std"] #stick,
 body[data-input="pad-std"] #linebtn {
   display: none;
 }
-body[data-input="pad-std"] #abtn {
+body[data-input="pad-std"] #abtn .btns button,
+body[data-input="pad-std"] #abtn .linebtn {
   pointer-events: none;
 }
 body[data-input^="pad"] #abtn .btns button {

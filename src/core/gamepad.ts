@@ -41,6 +41,44 @@ export function setPadDead(muc: keyof typeof DEAD_MUC): void {
   DEAD = DEAD_MUC[muc] ?? DEAD_MUC.normal;
 }
 
+/**
+ * ĐẢO TRỤC Y của hai cần gạt.
+ *
+ * Chỉ đảo trục ngắm/điều hướng, KHÔNG đảo trục đi: "đẩy lên để đi lên" là quy
+ * ước của game nhìn từ trên xuống, không ai đảo cái đó. Thứ người ta quen đảo
+ * là trục NGẮM — thói quen mang từ game bắn súng sang, và với ai đã quen thì
+ * gạt ngược mỗi lần là một lần vấp.
+ */
+let invY = false;
+export function setPadInvertY(on: boolean): void {
+  invY = on;
+}
+
+/**
+ * GÁN LẠI NÚT: bảng đổi chỉ số nút vật lý → chỉ số nút mà game hiểu.
+ *
+ * Vì sao cần dù đã có standard mapping: standard mapping nói đúng nút nào nằm
+ * ở đâu trên mặt tay cầm, chứ không nói người chơi MUỐN nút nào làm việc gì.
+ * Người quen Nintendo cầm tay cầm Xbox sẽ muốn đảo A với B, vì trên máy Switch
+ * nút "xác nhận" nằm ở vị trí mà Xbox gọi là B.
+ *
+ * Bảng rỗng = mặc định. Chỉ đổi được các nút MẶT (0–3) và VAI (4–7): đổi Start
+ * hay L3 thì người chơi tự khoá mình ra khỏi menu, mà không có menu thì không
+ * có đường nào đặt lại.
+ */
+const DOI_DUOC = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+let doiNut: Record<number, number> = {};
+export function setPadRemap(map: Record<number, number>): void {
+  doiNut = {};
+  for (const [tu, den] of Object.entries(map)) {
+    const a = Number(tu);
+    if (DOI_DUOC.has(a) && DOI_DUOC.has(den) && a !== den) doiNut[a] = den;
+  }
+}
+export function getPadRemap(): Readonly<Record<number, number>> {
+  return doiNut;
+}
+
 /** Đẩy quá mức này là CHẠY — cùng luật analog với joystick cảm ứng, nên người
  *  chơi không phải học thêm nút nào. */
 const RUN = 0.85;
@@ -248,10 +286,13 @@ export function createGamepad(): Gamepad2 {
          10 và 11 không tồn tại, và `buttons[10]` là `undefined` — vòng lặp này
          tự nhiên không thêm chúng vào, nên không có chuyện "L3 mở chế độ xây"
          trên một tay cầm không có L3. */
+      /* Dựng `held` theo chỉ số GAME, không phải chỉ số phần cứng: đổi ở đây
+         thì mọi thứ phía sau — sườn lên, `useHeld`, `running`, sơ đồ nút —
+         đều tự đúng, không chỗ nào phải nhớ thêm một luật. */
       const held = new Set<number>();
       for (let i = 0; i < pad.buttons.length; i++) {
         const b = pad.buttons[i];
-        if (b && (b.pressed || b.value > PRESS)) held.add(i);
+        if (b && (b.pressed || b.value > PRESS)) held.add(doiNut[i] ?? i);
       }
 
       const pressed = new Set<number>();
@@ -268,6 +309,12 @@ export function createGamepad(): Gamepad2 {
 
       /* Vùng chết HÌNH TRÒN: cắt theo từng trục thì đẩy chéo nhẹ (0,2 / 0,9) ra
          thành đúng một hướng thẳng, và nhân vật đi giật theo tám hướng. */
+      /* TRẢI LẠI phần trên vùng chết ra đủ 0..1, y hệt joystick ảo đang làm.
+         Không trải thì ngay lúc vượt ngưỡng tốc độ nhảy cóc từ 0 lên 28% —
+         nhân vật giật một cái rồi mới đi, và cả dải 0–28% đầu cần gạt thành
+         vô dụng. Tốc độ vốn đã vô cấp theo độ dài vector (`throttle` trong
+         `player.ts`), nên đây là mảnh còn thiếu để cần gạt tay cầm cho cảm
+         giác đúng như cần gạt ảo. */
       let len = Math.hypot(ax, ay);
       if (len < DEAD) {
         ax = 0;
@@ -277,6 +324,29 @@ export function createGamepad(): Gamepad2 {
         ax /= len;
         ay /= len;
         len = 1;
+      }
+      /* Giữ bản THÔ cho việc GẠT MỘT NẤC ở dưới.
+         Hai câu hỏi khác nhau nên đo bằng hai thước khác nhau:
+           · "đi nhanh bao nhiêu" — cần độ đẩy đã TRẢI LẠI, để cả dải cần gạt
+             đều dùng được;
+           · "người chơi có vừa GẠT một cái không" — ngưỡng 0,6/0,35 vốn hiệu
+             chỉnh trên giá trị thô, trải lại là tự dời ngưỡng đi (0,6 thô hoá
+             ra 0,44) và người chơi phải đẩy sâu hơn hẳn mới lật được một mục
+             menu.
+         Trộn hai thứ vào một con số là hỏng một trong hai. */
+      const thoX = ax;
+      const thoY = ay;
+      /* TRẢI LẠI phần trên vùng chết ra đủ 0..1, y hệt joystick ảo đang làm.
+         Không trải thì ngay lúc vượt ngưỡng tốc độ nhảy cóc từ 0 lên 28% —
+         nhân vật giật một cái rồi mới đi, và cả dải 0–28% đầu cần gạt thành
+         vô dụng. Tốc độ vốn đã vô cấp theo độ dài vector (`throttle` trong
+         `player.ts`), nên đây là mảnh còn thiếu để cần gạt tay cầm cho cảm
+         giác đúng như cần gạt ảo. */
+      if (len > 0) {
+        const k = Math.min(1, (len - DEAD) / (1 - DEAD)) / len;
+        ax *= k;
+        ay *= k;
+        len = Math.min(1, len * k);
       }
 
       /* Gạt hướng trong MENU: bấm một cái ăn một bước, giữ thì lặp lại chậm.
@@ -315,7 +385,7 @@ export function createGamepad(): Gamepad2 {
         return { dir: { x: dx, y: dy }, last, at: -nowMs };
       };
 
-      const nv = nac(ax, ay, navLast, navAt);
+      const nv = nac(thoX, invY ? -thoY : thoY, navLast, navAt);
       const navDir = nv.dir;
       navLast = nv.last;
       navAt = nv.at;
@@ -326,7 +396,7 @@ export function createGamepad(): Gamepad2 {
       const std = pad.mapping === "standard";
       const rx = std ? (pad.axes[2] ?? 0) : 0;
       const ry = std ? (pad.axes[3] ?? 0) : 0;
-      const av = nac(rx, ry, aimLast, aimAt);
+      const av = nac(rx, invY ? -ry : ry, aimLast, aimAt);
       const aimDir = av.dir;
       aimLast = av.last;
       aimAt = av.at;

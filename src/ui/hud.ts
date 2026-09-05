@@ -290,6 +290,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
   function renderHotbar(s: GameState, content: Content) {
     const n = content.balance.hotbarSlots;
+    /* CSS tính cỡ ô bằng cách chia bề ngang cho SỐ Ô, mà số ô thật nằm trong
+       content (đẩy OTA được). Trước đây `--hotbar-slots: 10` là một con số
+       chép tay trong `style.css`: đổi `hotbarSlots` qua OTA thì hàng ô tràn ra
+       ngoài màn hoặc chừa một khoảng trống, và không ai nghĩ tới file CSS. */
+    document.documentElement.style.setProperty("--hotbar-slots", String(n));
     const key = `${s.sel}|${s.inv
       .slice(0, n)
       .map((x) => (x ? `${x.id}x${x.n}` : "-"))

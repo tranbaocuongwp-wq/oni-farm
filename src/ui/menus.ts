@@ -1395,6 +1395,15 @@ export function createMenus(
           { v: "rong", label: "Rộng" },
         ],
       );
+    if (h.padInfo().connected) {
+      const t = (i: number) => padButtonName(h.padInfo(), i);
+      toggle(`Đổi ${t(0)} với ${t(1)}`, "Cho ai quen tay cầm Nintendo: nút xác nhận đổi chỗ với nút huỷ.",
+        () => h.settings().padSwapAB, (v) => h.setSetting("padSwapAB", v));
+      toggle(`Đổi ${t(2)} với ${t(3)}`, "Đổi nốt hai nút mặt còn lại.",
+        () => h.settings().padSwapXY, (v) => h.setSetting("padSwapXY", v));
+      toggle("Đảo trục Y cần ngắm", "Gạt cần phải lên thì con trỏ đi xuống. Chỉ đụng cần NGẮM, không đụng cần đi.",
+        () => h.settings().padInvertY, (v) => h.setSetting("padInvertY", v));
+    }
     toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… thay vì chữ DÙNG cố định.",
       () => h.settings().contextButton, (v) => h.setSetting("contextButton", v));
     toggle("Âm thanh", "Tiếng 8-bit tổng hợp, không có file nhạc.",

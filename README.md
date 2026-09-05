@@ -410,6 +410,40 @@ vẫn chạy phẳng lì tới sát mép và cái hồ trông như dán lên đ�
 đúng lỗi đó một lần, và phải tô cái gờ thành màu đỏ chói mới nhận ra nó vẫn
 đang được vẽ, chỉ là nhạt tới mức mắt gộp luôn vào vệt bọt nước.
 
+### Rà lại toàn bộ vùng chạm cho ngón cái (core 1.14)
+
+Một loạt chỗ mà chuẩn 44px bị hụt vì những lý do rất khác nhau, và không cái nào lộ
+ra khi đọc code:
+
+* **Hotbar đè lên nút XÂY ~50px** ở cả ba khổ điện thoại. `--pad-bottom` chừa chỗ cho
+  "nút hành động + dòng lý do" mà quên hẳn nút XÂY nằm trên cùng cột — và vì hotbar có
+  `z-index` cao hơn nên nó NUỐT cú chạm chứ không chỉ che. Xảy ra đúng lúc người chơi
+  đang cầm công trình, tức đúng lúc cần cái nút đó.
+* **`min-height: 0` lọt vào hai cái nút** (XÂY và "Tải lại" của thanh cập nhật), ghi đè
+  luật chung `button { min-height: var(--tap) }` và biến chúng thành nút 24–27px.
+* **Cụm nút `#abtn` nhận chạm ở cấp HỘP**, nên cả phần trống giữa các nút và cái nhãn
+  `.why` — vốn không bấm được gì — đều hút chạm rồi im lặng. Một vùng "bấm không ăn"
+  bằng 7% màn hình, nằm đúng góc ngón cái quét qua nhiều nhất.
+* **Joystick ảo phủ tận mép màn**, đè lên dải home indicator của iOS và mép
+  vuốt-để-quay-lại của Android. Đây là chỗ duy nhất trong cả lớp cảm ứng quên
+  `safe-area`.
+* **Bán kính joystick trong JS là 46 trong khi CSS vẽ vòng 112px** (bán kính 56): núm
+  chạy hết tầm khi mới tới 82% vòng. Giờ JS đo thẳng từ vòng nền đang hiện.
+* **Kéo tuyến không `setPointerCapture`**: rê ngón ra khỏi canvas là `dragEnd` không
+  bao giờ tới, phiên kéo kẹt lại và chỉ thoát được bằng tải lại trang.
+* **Nút balo không đổi bên theo tay thuận** — nó là nút 44px duy nhất ở dải đáy, mà để
+  cố định bên phải thì với tay trái nó nằm xa ngón cái nhất trong cả màn hình.
+* **Cỡ giao diện "Lớn" không nới ô hotbar**: người chơi chọn Lớn vì bấm hụt hotbar,
+  rồi thấy hotbar y nguyên.
+
+Chỗ **không sửa được bằng CSS**: hotbar 10 ô trên một hàng thì mỗi ô chỉ được 26–33px
+trên điện thoại, vì 10 × 44 cộng khe là hơn 460px — rộng hơn cả màn hình. Đây là số
+học, không phải sơ suất, và `docs/MOBILE-UX.md` đã ghi nó là ngoại lệ có chủ ý. Bù
+được hai thứ: **vùng chạm cao 44px** bằng một `::before` trong suốt (trục dọc còn chỗ,
+mà ngón cái đi từ dưới lên nên sai số dọc là sai số hay gặp nhất), và khe rộng hơn ở
+cỡ giao diện Lớn. Muốn ô to thật thì phải giảm `balance.hotbarSlots` — giờ CSS tự tính
+theo con số đó thay vì chép tay `--hotbar-slots: 10`.
+
 ### Tay cầm chơi được toàn bộ game (core 1.13)
 
 Cắm tay cầm vào là chơi được từ đầu tới cuối, không phải chạm màn hình lần nào.
@@ -455,6 +489,13 @@ cảnh mở sheet đều bị dựng mới. Mua một thẻ ở cuối lưới b
 định danh: menu không có id ổn định, nhưng nó dựng lại đúng bố cục cũ. Vế "loại
 điều khiển" chặn một tai nạn thật — bấm `+` tới số tối đa làm `+` bị vô hiệu, và
 nếu chỉ so khoảng cách thì vòng vàng rơi xuống nút BÁN nằm ngay dưới nó.
+
+Chỉnh được trong Cài đặt (chỉ hiện khi đang cắm tay cầm): **vùng chết cần gạt** —
+con số duy nhất hỏng theo phần cứng, cần gạt mòn nghỉ lệch tâm thì nhân vật tự đi
+mãi; **đổi hai nút mặt** cho ai quen tay cầm Nintendo, nơi nút xác nhận nằm đúng vị
+trí mà Xbox gọi là B; **đảo trục Y cần ngắm**. Đổi nút cố ý chỉ cho đổi nút MẶT và
+VAI — cho đổi Start thì người chơi tự khoá mình ra khỏi menu, mà không vào được menu
+thì không có đường nào đặt lại.
 
 Chi tiết ở [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md) mục 3b.
 

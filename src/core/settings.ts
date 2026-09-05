@@ -16,7 +16,7 @@
    giá trị mặc định, chỉ là không nhớ được giữa các phiên.
 ============================================================================ */
 
-import { setPadDead } from "./gamepad.ts";
+import { setPadDead, setPadInvertY, setPadRemap } from "./gamepad.ts";
 
 const KEY = "oni-farm:settings";
 
@@ -68,6 +68,20 @@ export interface Settings {
    * `normal` = 0,28 (mặc định cũ). `rong` cho tay cầm đã trôi nhiều.
    */
   padDead: "hep" | "normal" | "rong";
+  /** Đảo trục Y của cần NGẮM trên tay cầm (thói quen mang từ game bắn súng). */
+  padInvertY: boolean;
+  /**
+   * ĐỔI hai nút mặt của tay cầm.
+   *
+   * `swapAB` đổi nút xác nhận với nút huỷ — người quen Nintendo cầm tay cầm
+   * Xbox sẽ muốn cái này, vì trên Switch nút "đồng ý" nằm đúng vị trí mà Xbox
+   * gọi là B. `swapXY` đổi hai nút còn lại, cùng lý do.
+   *
+   * Cố ý CHỈ cho đổi nút mặt: đổi được Start hay L3 thì người chơi tự khoá
+   * mình ra khỏi menu, mà không vào được menu thì không có đường nào đặt lại.
+   */
+  padSwapAB: boolean;
+  padSwapXY: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -81,6 +95,9 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   tutorialSeen: false,
   contextButton: true,
   padDead: "normal",
+  padInvertY: false,
+  padSwapAB: false,
+  padSwapXY: false,
 });
 
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
@@ -105,6 +122,9 @@ export function parseSettings(raw: unknown): Settings {
     zoom: oneOf(v["zoom"], ["near", "normal", "far"] as const, d.zoom),
     haptics: bool(v["haptics"], d.haptics),
     padDead: oneOf(v["padDead"], ["hep", "normal", "rong"] as const, d.padDead),
+    padInvertY: bool(v["padInvertY"], d.padInvertY),
+    padSwapAB: bool(v["padSwapAB"], d.padSwapAB),
+    padSwapXY: bool(v["padSwapXY"], d.padSwapXY),
     reduceMotion: bool(v["reduceMotion"], d.reduceMotion),
     tutorialSeen: bool(v["tutorialSeen"], d.tutorialSeen),
     contextButton: bool(v["contextButton"], d.contextButton),
@@ -151,6 +171,17 @@ export function applySettings(s: Settings): void {
   /* Vùng chết KHÔNG đi qua data-attribute: nó là con số cho vòng lặp đọc tay
      cầm, không phải một luật CSS. Đẩy thẳng vào `gamepad.ts`. */
   setPadDead(s.padDead);
+  setPadInvertY(s.padInvertY);
+  const doi: Record<number, number> = {};
+  if (s.padSwapAB) {
+    doi[0] = 1;
+    doi[1] = 0;
+  }
+  if (s.padSwapXY) {
+    doi[2] = 3;
+    doi[3] = 2;
+  }
+  setPadRemap(doi);
 }
 
 /** @deprecated giữ cho tương thích — dùng applySettings. */

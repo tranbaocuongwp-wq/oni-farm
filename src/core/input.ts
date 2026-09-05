@@ -268,7 +268,19 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     // Sau một cú chạm kép thì đặt lại mốc, nếu không chạm lần thứ ba sẽ lại
     // được tính là kép và thao tác chạy hai lần liền.
     lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY, tx, ty };
-    if (dragOn && dragId === null) dragId = e.pointerId;
+    if (dragOn && dragId === null) {
+      dragId = e.pointerId;
+      /* GIỮ CON TRỎ trong lúc kéo tuyến. Không giữ thì ngón tay rê ra khỏi
+         canvas — lên HUD, hay ra mép màn hình, chuyện xảy ra liên tục khi vẽ
+         một tuyến sát biên — là `pointerup` bắn ở nơi khác và `dragEnd` không
+         bao giờ tới. Phiên kéo kẹt lại: mọi cú chạm sau đó bị hiểu là đang vẽ
+         tiếp cái tuyến cũ, và không có cách nào thoát ngoài tải lại trang. */
+      try {
+        (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
+      } catch {
+        /* vài trình duyệt từ chối khi con trỏ đã bị bắt ở chỗ khác — không sao */
+      }
+    }
     push({ t: "pointer", wx: p.x, wy: p.y, double: isDouble });
   };
 
@@ -286,7 +298,17 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   let stick = { x: 0, y: 0 };
   let stickId: number | null = null;
   const js = opts.joystick;
-  const radius = js?.radius ?? 46;
+  /* Bán kính LẤY TỪ CHÍNH VÒNG NỀN đang hiện, không phải một hằng số chép tay.
+     Trước đây JS dùng 46 trong khi CSS vẽ vòng 112px (bán kính 56): núm chạy
+     hết tầm khi mới tới 82% vòng, nên người chơi tưởng còn đẩy được nữa mà
+     thực ra đã max. Và ở màn hình thấp CSS thu vòng còn 92px (bán kính 46)
+     trong khi JS vẫn 46 — hai con số chỉ tình cờ gặp nhau ở đúng một khổ màn.
+     Đo lúc ĐẶT NGÓN XUỐNG thì nó luôn khớp với thứ mắt đang thấy. */
+  const banKinh = (): number => {
+    const w = js?.base?.offsetWidth ?? 0;
+    return w > 0 ? w / 2 : (js?.radius ?? 46);
+  };
+  let radius = banKinh();
   /** Dưới ngưỡng này coi như không đẩy — ngón tay đặt hờ không làm nhân vật trôi. */
   const STICK_DEAD = 0.24;
   /** Đẩy quá ngưỡng này thì chuyển sang chạy. */
@@ -311,6 +333,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     js!.base.style.left = `${e.clientX - r.left}px`;
     js!.base.style.top = `${e.clientY - r.top}px`;
     js!.base.style.opacity = "1";
+    // Đo lại ngay lúc này: cỡ vòng nền đổi theo @media, mà lúc dựng input thì
+    // chưa chắc đã biết khổ màn cuối cùng.
+    radius = banKinh();
     js!.base.dataset["ox"] = String(e.clientX);
     js!.base.dataset["oy"] = String(e.clientY);
     e.preventDefault();

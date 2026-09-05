@@ -25,7 +25,7 @@ import * as actionsApi from "../src/game/actions.ts";
 import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
-import { createGamepad, PAD, padButtonName, setPadDead } from "../src/core/gamepad.ts";
+import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
@@ -4694,6 +4694,41 @@ test("72. tay cầm: sườn lên, vùng chết tròn, chạy, nhịp lặp, sơ
   eq(g.poll(6000).axis.x, 0, "vùng chết rộng: 0,35 vẫn coi như không đẩy");
   setPadDead("normal");
   eq(g.poll(6100).axis.x > 0, true, "về mức vừa thì 0,35 lại đi được");
+
+  /* --- TRẢI LẠI VÙNG CHẾT: vượt ngưỡng không được nhảy cóc tốc độ ---
+     Ngay trên vùng chết thì độ đẩy phải gần 0, không phải 0,28. Không trải thì
+     nhân vật giật một cái rồi mới đi, và cả dải đầu cần gạt thành vô dụng. */
+  padHienTai = fakePad({ axes: [0.3, 0, 0, 0] });
+  const vuaVuot = g.poll(6200).axis.x;
+  ok(vuaVuot > 0 && vuaVuot < 0.1, `vừa vượt vùng chết thì đi rất chậm (${vuaVuot.toFixed(3)}), không nhảy cóc`);
+  padHienTai = fakePad({ axes: [1, 0, 0, 0] });
+  eq(g.poll(6300).axis.x, 1, "đẩy hết cỡ vẫn đúng 1");
+
+  // --- ĐẢO TRỤC Y: chỉ đụng cần ngắm/điều hướng ---
+  padHienTai = fakePad({ axes: [0, 0, 0, 0] });
+  g.poll(6400);
+  padHienTai = fakePad({ axes: [0, 1, 0, 0] });
+  eq(g.poll(6500).navDir?.y, 1, "chưa đảo: gạt xuống ra hướng xuống");
+  setPadInvertY(true);
+  padHienTai = fakePad({ axes: [0, 0, 0, 0] });
+  g.poll(6600);
+  padHienTai = fakePad({ axes: [0, 1, 0, 0] });
+  eq(g.poll(6700).navDir?.y, -1, "đảo rồi: gạt xuống ra hướng LÊN");
+  ok(g.poll(6700).axis.y > 0, "…nhưng trục ĐI thì KHÔNG đảo");
+  setPadInvertY(false);
+
+  // --- ĐỔI NÚT: A↔B đổi được, Start thì KHÔNG ---
+  setPadRemap({ 0: 1, 1: 0, 9: 0 });
+  padHienTai = fakePad({ held: [] });
+  g.poll(6800);
+  padHienTai = fakePad({ held: [PAD.A] });
+  const sauDoi = g.poll(6900);
+  ok(sauDoi.pressed.has(PAD.B) && !sauDoi.pressed.has(PAD.A), "bấm nút mặt dưới giờ ra B");
+  padHienTai = fakePad({ held: [] });
+  g.poll(7000);
+  padHienTai = fakePad({ held: [PAD.START] });
+  ok(g.poll(7050).pressed.has(PAD.START), "Start KHÔNG đổi được — đổi là tự khoá mình khỏi menu");
+  setPadRemap({});
 
   // --- RÚT DÂY: cái vỏ rỗng không được tính là đang cắm ---
   padHienTai = { index: 0, connected: true, id: "", mapping: "", buttons: [], axes: [] };

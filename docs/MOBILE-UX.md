@@ -8,11 +8,28 @@ trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
 
 ## 1. Nguyên tắc
 
-1. **Ngón tay cái là người dùng.** Mọi thứ bấm được ≥ 44 CSS px (`--tap`). Nút hành
-   động chính 72px, nút phụ 52px. Không có nút nào cần hai tay. Ngoại lệ có chủ ý:
-   **hotbar cố định 10 ô** trên một hàng, không cuộn, vị trí và kích thước không đổi
-   theo nội dung — cỡ ô tính từ bề ngang khả dụng (26–52px). Muốn nhiều hơn 10 thì kéo
-   từ balo ra.
+1. **Ngón tay cái là người dùng.** Mọi thứ bấm được ≥ 44 CSS px (`--tap`) — và khi
+   HÌNH không thể to bằng ngần ấy thì **vùng chạm vẫn phải**, nới bằng một `::before`
+   trong suốt (ô hotbar, nút ‹ › × của bảng vật nuôi, dấu ✕ của thanh cập nhật).
+   Nút hành động chính 72px, nút phụ 52px. Không có nút nào cần hai tay.
+
+   Ngoại lệ có chủ ý: **hotbar cố định 10 ô** trên một hàng, không cuộn — cỡ ô tính
+   từ bề ngang khả dụng nên chỉ được 26–33px trên điện thoại. Đây là SỐ HỌC chứ không
+   phải sơ suất: 10 × 44 cộng khe là hơn 460px, rộng hơn cả màn. Bù lại bằng vùng chạm
+   cao 44px (trục dọc còn chỗ, mà ngón cái đi từ dưới lên nên sai số dọc là sai số hay
+   gặp nhất) và bằng khe rộng hơn ở cỡ giao diện Lớn. Muốn ô to thật thì phải giảm
+   `balance.hotbarSlots` — CSS tự tính theo, `renderHotbar` đẩy số đó vào
+   `--hotbar-slots`.
+
+   **Đừng để `min-height: 0` lọt vào một cái nút.** Luật chung
+   `button { min-height: var(--tap) }` là thứ giữ chuẩn 44px, và một dòng ghi đè nó
+   trong khối riêng của nút là cách âm thầm nhất để tạo ra một nút 24px. Đã dính hai
+   lần: nút XÂY và nút "Tải lại" của thanh cập nhật.
+
+   **Hộp bao ngoài không được `pointer-events: auto`.** Chỉ NÚT mới nhận chạm. Cụm
+   `#abtn` là một cột cao gần 140px, rộng tới 46vw vì cái nhãn `.why` — để cả hộp nhận
+   chạm là dựng một vùng "bấm không ăn" bằng 7% màn hình, đúng góc ngón cái quét qua
+   nhiều nhất. `#hud` đã làm đúng từ đầu: gốc `none`, bật lại từng thứ.
 8. **Thao tác có độ trễ và diễn hoạt.** Bấm không đổi ô ngay: giơ công cụ → chạm đất
    (mốc `actionImpact`) → kết quả. Reducer và renderer đọc cùng một con số.
 9. **Không zoom.** `touch-action: manipulation` toàn cục (khu chơi `none`), cộng JS chặn
@@ -77,6 +94,7 @@ bảng màu để trang tĩnh và game là một sản phẩm.
 | Nút E | tương tác thứ trước mặt (không theo ô ngắm) | case "interact" |
 | Nhấn giữ ô hotbar (380ms) | tooltip tên + công dụng | `ui/hud.ts` |
 | Chạm bản đồ nhỏ | đi thuần tuý tới ô đó | `ui/minimap.ts` |
+| Kéo một tuyến | `setPointerCapture` NGAY lúc chạm xuống — không giữ thì ngón rê ra khỏi canvas là `dragEnd` không bao giờ tới và phiên kéo kẹt vĩnh viễn | `core/input.ts › onDown` |
 | Chạm chip mục tiêu | thu gọn/mở | `ui/hud.ts` |
 
 Nắn cú chạm (`snapTap`): xét 9 ô quanh điểm chạm, ưu tiên ô làm được việc, bán kính
@@ -108,7 +126,7 @@ không có sự kiện nào.
 | X (2) | bật/tắt tự động làm | — |
 | Y (3) | balo | — |
 | LB/RB (4,5) | đổi ô hotbar (giữ LT: nhảy 5 ô) | đổi tab |
-| LT (6) | **chạy** | — |
+| LT (6) | **chạy** | giữ + vai: nhảy 5 ô hotbar |
 | RT (7) | dùng | — |
 | Back (8) | bản đồ nhỏ — bật con trỏ ô, gạt để rê, A để đi | — |
 | Start (9) | menu tạm dừng | thoát |
@@ -137,7 +155,15 @@ không có sự kiện nào.
    `running` được tính đúng trong `gamepad.ts` rồi bị `input.ts` quên đọc, nên
    người chơi tay cầm đi bộ suốt ván trong khi màn sơ đồ vẫn quảng cáo hai cách
    chạy. Kịch bản 72 giờ là dây bẫy cho đúng việc đó.
-7. **Rung đi chung công tắc với rung điện thoại.** `buzz()` gọi cả hai qua
+7. **Cần gạt phải TRẢI LẠI phần trên vùng chết** ra đủ 0..1, y hệt joystick ảo.
+   Không trải thì vượt ngưỡng là tốc độ nhảy cóc từ 0 lên 28%, và cả dải đầu cần gạt
+   thành vô dụng. Nhưng ngưỡng gạt-một-nấc trong menu (`ON`/`OFF`) phải đo trên giá
+   trị **THÔ** — hai câu hỏi khác nhau, hai thước khác nhau.
+8. **Đổi nút chỉ cho đổi nút MẶT và VAI** (0–7). Cho đổi Start hay L3 thì người chơi
+   tự khoá mình ra khỏi menu, mà không vào được menu thì không có đường nào đặt lại.
+9. **Đảo trục Y chỉ đụng cần NGẮM**, không đụng cần đi — "đẩy lên để đi lên" là quy
+   ước của game nhìn từ trên xuống, không ai đảo cái đó.
+10. **Rung đi chung công tắc với rung điện thoại.** `buzz()` gọi cả hai qua
    `setPadRumble`; `setHaptics(false)` tắt cả hai. Trước đây tắt "Rung" trong
    Cài đặt không tắt rung tay cầm.
 
