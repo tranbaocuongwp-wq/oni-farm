@@ -41,13 +41,19 @@ SHOP, COUNTER = (26, 3), (28, 3)
 WARE = (39, 2, 44, 4)
 STORE_DOOR = (41, 4)
 SPUR_Y, SPUR_X0, SPUR_X1 = 6, 30, 45
-PARKING = [(40, 6), (41, 6), (42, 6)]
+# BÃI GIAO NHẬN trước cửa kho, nằm TRÊN LỐI ĐI y=5 chứ không trên mặt đường.
+# Trước đây ba ô đậu nằm ngay trên nhánh đường y=6: xe đậu là chắn mất một làn
+# của chính con đường nó vừa đi vào. Và xe GIAO HÀNG thì dừng hẳn giữa trục
+# dọc để thả hàng — nhìn ra là một chiếc xe chết máy chắn ngang đường.
+PARKING = [(42, 5), (43, 5), (44, 5)]
 # SÂN SAU — khoảnh đất trống có chủ ý, giữa đường trục dọc và cái kho.
 # Ruộng chia lô kín, chuồng lát bê tông kín, rừng thì dày: không chừa chỗ này
 # thì cả nông trại không còn một mảnh đất trống nào để đặt vòi tưới hay nhà
 # kính mà không phải hy sinh một ô ruộng.
 YARD = (31, 1, 38, 5)
-DROPOFF = (30, 4)
+# Điểm giao nằm ngay trước CỬA KHO: hàng và vật nuôi về tới nông trại thì về
+# tới kho, chứ không bỏ xuống giữa trục đường rồi tự đi tiếp.
+DROPOFF = (41, 5)
 GATE = (30, H - 1)
 SPAWN = (18, 5)
 FOREST_Y0, FOREST_Y1 = 27, 35
@@ -143,6 +149,11 @@ for y in FOREST_LANE_Y:
     for x in range(1, W - 1):
         if x != AVE_V: g[y][x] = ":"
 g[GATE[1]][GATE[0]] = "="
+# LỐI VÀO nông trại HAI LÀN: từ cổng ở mép nam lên tới trục nam. Một làn thì xe
+# vào và xe ra gặp nhau là kẹt cứng — mà cả hai đều đi đúng con đường này, và
+# đây là con đường DUY NHẤT nối nông trại với bên ngoài. Vẽ SAU khi rải rừng,
+# nếu không thì rừng lấp mất làn thứ hai.
+box(AVE_V + 1, FOREST_Y0, AVE_V + 1, H - 1, "=")
 
 # -------------------------------------------- 7. rắc cỏ/bụi ở các dải trống
 DECOR = [(",", .24), ("g", .22), ("w", .12), ("u", .06), ("U", .05),
@@ -213,7 +224,7 @@ cam(SHOP[0] - 1, SHOP[1] + 1, "Chợ")
 cam(WELL[0], WELL[1] + 1, "Giếng", "w")
 cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
 # Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
-cam(PARKING[2][0] + 2, 5, "Bãi đậu xe", "w")  # bãi đậu nằm bên trái-dưới
+cam(PARKING[2][0] + 1, 5, "Bãi giao nhận", "w")  # bãi nằm bên TRÁI tấm biển
 cam(YARD[0], YARD[1], "Sân sau")
 for (_id, nm, fy0, fy1, gates) in PENS:
     cam(PEN_X0 + 1, fy0 + 1, nm)   # trong ruột chuồng, góc trên-trái

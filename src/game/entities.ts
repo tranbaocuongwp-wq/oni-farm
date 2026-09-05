@@ -34,7 +34,7 @@ import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
 import { patrolCatch, isHungry } from "./animals.ts";
 import { grazeHere, nearestGraze } from "./graze.ts";
-import { eatFromTrough, penGoal } from "./pen.ts";
+import { eatFromTrough, penGoal, penOf, penWander } from "./pen.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -487,6 +487,8 @@ export function actorStep(d: Draft, content: Content): void {
        Rào có cổng nên đây là "tự về chuồng", không phải "bị nhốt": máng cạn thì
        nhánh tìm cỏ bên dưới vẫn dắt nó ra ngoài gặm như trước. */
     let veKhu = false;
+    let khu = cur.kind === "animal" ? penOf(content, cur) : null;
+    if (khu && khu.map !== s.mapId) khu = null;
     if (cur.kind === "animal") {
       g = penGoal(s, content, cur, doi);
       veKhu = g !== null;
@@ -511,6 +513,12 @@ export function actorStep(d: Draft, content: Content): void {
         }
       }
     }
+    /* Loanh quanh TRONG KHU của mình. Tới đây nghĩa là con vật đã ở trong khu
+       (`penGoal` trả null khi đã về tới) và không phải đi kiếm ăn — nên chỗ nó
+       đi loanh quanh là ruột chuồng, không phải một hình vuông bán kính 4
+       quanh chỗ đứng. Ruột chuồng cao đúng 3 ô, nên hình vuông ấy gần như lần
+       nào cũng chỉ ra ngoài, và con vật lách qua cổng đi mất dù còn no. */
+    if (!g && khu) g = penWander(s, cur, khu);
     if (!g) g = wanderGoal(e, s, 4, neRuong);
     e.ai.planAt = s.minutes;
     budget--;

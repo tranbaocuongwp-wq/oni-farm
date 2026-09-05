@@ -205,6 +205,38 @@ export function penGoal(
   return { x: pen.x + (k % pen.w), y: pen.y + (((k / 7) | 0) % pen.h) };
 }
 
+/**
+ * Một ô để con vật đi loanh quanh TRONG KHU của nó.
+ *
+ * Vì sao phải có riêng hàm này thay vì dùng `wanderGoal` chung: `wanderGoal`
+ * bốc một ô bất kỳ trong bán kính 4 quanh chỗ đang đứng, mà RUỘT CHUỒNG chỉ
+ * cao 3 ô. Nghĩa là gần như lần nào nó cũng nhắm ra ngoài chuồng, rồi lách qua
+ * cổng đi mất — và con vật no thì `penGoal` mới gọi về, nên cả đàn cứ ra vào
+ * mãi và người chơi thấy chúng chạy tùm lum khắp nông trại dù chưa đói.
+ *
+ * Cổng là để NGƯỜI CHƠI đi vào và để con vật ĐÓI đi ra kiếm cỏ khi máng cạn,
+ * không phải để cả đàn tự tản ra lúc còn no.
+ *
+ * Chọn theo hạt của chính con vật nên cả đàn không dồn hết vào một ô, và vẫn
+ * tất định như mọi quyết định khác của thực thể.
+ */
+export function penWander(state: GameState, e: Entity, pen: PenDef): { x: number; y: number } {
+  const cx = Math.floor(e.x / TILE);
+  const cy = Math.floor(e.y / TILE);
+  /* Bốn lần bốc rồi thôi: ruột chuồng lát bê tông sạch nên gần như ô nào cũng
+     đứng được; bốc mãi cho tới khi trúng ô trống là mở cửa cho một vòng lặp
+     không có trần trong trường hợp ai đó lấp kín cái chuồng. */
+  let best = { x: cx, y: cy };
+  for (let k = 0; k < 4; k++) {
+    const n = (Math.abs(e.seed | 0) + k * 7919 + Math.floor(state.minutes)) >>> 0;
+    const g = { x: pen.x + (n % pen.w), y: pen.y + (((n / 31) | 0) % pen.h) };
+    best = g;
+    const t = tileAt(state, g.x, g.y);
+    if (t && t.prop === null) break;
+  }
+  return best;
+}
+
 /* ------------------------------------------------------------- cho cá ăn */
 
 /**

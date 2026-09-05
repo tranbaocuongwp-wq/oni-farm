@@ -653,8 +653,48 @@ Bỏ đói thì **chết** — nhưng có báo trước: đói là hiện ngay l
 liên tiếp `starveDays` ngày mới chết. Loài `feed: null` (gà, vịt) tự kiếm ăn nên không bao giờ
 chết đói; đi vắng ba ngày mà về thấy gà chết thì vô lý.
 
-Mua xong con vật được **giao tới điểm giao CỐ ĐỊNH** cạnh quầy bán, cuối con đường nhựa —
-không hiện ra dưới chân người chơi.
+Mua xong con vật được **xe chở tới BÃI GIAO NHẬN trước cửa kho** — không hiện ra dưới chân
+người chơi. Xem mục dưới.
+
+#### Con vật CÒN NO thì ở trong chuồng (core 1.20)
+
+Người chơi: *"sao mấy con vật nó không ở trong chuồng mà nó chạy tùm lum mặc dù chưa đói"*.
+Đúng, và chỗ hỏng nằm ở một khe hở không ai ngờ: `penGoal` trả **null** khi con vật ĐÃ ở
+trong khu — về tới rồi thì đừng bắt nó đi tới đi lui nữa. Rồi `actorStep` rơi xuống nhánh
+cuối, `wanderGoal`, bốc một ô bất kỳ trong **hình vuông bán kính 4** quanh chỗ đứng. Mà ruột
+chuồng chỉ **cao 3 ô**. Nên gần như lần nào nó cũng nhắm ra ngoài, lách qua cổng đi mất, rồi
+lần sau `penGoal` mới gọi về — cả đàn ra vào mãi, nhìn ra đúng là chạy tùm lum khắp nông trại.
+
+`penWander` bốc ô trong **ruột khu** thay vì quanh chỗ đứng. Cổng vẫn để mở đúng nghĩa của
+nó: con vật ĐÓI mà máng cạn vẫn ra ngoài kiếm cỏ được — bỏ luật đó là đổi "tự về chuồng"
+thành "bị nhốt tới chết". Kịch bản 76 đo cả hai chiều: 4000 khung hình với đàn no căng thì
+**không một khung nào** có con nào ở ngoài chuồng (trước khi sửa: 13.397), mà vẫn có con đang
+đi loanh quanh bên trong; rồi bỏ đói với máng rỗng thì phải ra được.
+
+#### Bãi giao nhận, và lối vào hai làn (core 1.20)
+
+Người chơi: *"xe giao hàng chưa xuất hiện, và đi vào kho chỗ đó biến thành bãi xe giao nhận
+đi, nó đứng im luôn, lối vào nông trại có 2 làn xe"*. Ba lỗi chồng nhau:
+
+* **Xe giao hàng dừng giữa trục đường dọc.** Điểm giao cũ là một ô mặt đường ở `(30,4)`, và
+  xe đứng đó **12 phút game** để dỡ hàng — nhìn ra là một chiếc xe chết máy chắn ngang con
+  đường DUY NHẤT nối nông trại với bên ngoài. Ba ô đậu của xe thu mua thì lại nằm ngay **trên**
+  nhánh đường trước kho, nên xe đậu cũng là xe chắn đường.
+* **`drivePath` soát lại thay vì ràng buộc.** Nó gọi A\* thường rồi mới duyệt đường trả về, bỏ
+  đường nào lạc khỏi mặt đường. Mà A\* luôn trả đường **ngắn nhất** — tức là đường cắt thẳng
+  qua bãi cỏ. Nên hễ đích không nằm đúng một đường thẳng dọc con đường thì chuyến nào cũng bị
+  bỏ. Chừng nào điểm giao còn nằm thẳng trên trục dọc thì không ai thấy; dời bãi ra trước kho
+  là lộ ngay. Nay `PathOptions.pass` cho bên gọi cắm bộ lọc **vào trong vòng lặp** A\*, nên xe
+  tự tìm đường VÒNG theo mặt đường.
+* **Lối vào một làn.** Xe vào và xe ra đi đúng con đường ấy. Đoạn từ cổng lên tới trục nam giờ
+  rộng **hai làn**.
+
+Bãi nằm trên **lối đi** `y=5` trước cửa kho, không trên mặt đường; điểm giao là ô trước cửa
+kho. **Mọi** xe đều đậu vào bãi — hàng về thì về tới kho, đúng như một sân giao nhận thật — và
+hàng xuống ngay cạnh chiếc xe, tránh mặt đường. Bãi có đúng `MAX_VEHICLES` ô nên hàng đợi
+không bao giờ kẹt cứng. Kịch bản 77 khoá lại: ô đậu không được là mặt đường nhưng phải kề mặt
+đường, cổng phải có hai làn, xe phải THỰC SỰ đậu vào một ô của bãi trước khi thả hàng, và mọi
+ô trên đường đi của xe phải là mặt đường.
 
 #### Hai luật giữ tính tất định
 

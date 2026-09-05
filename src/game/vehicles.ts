@@ -27,10 +27,15 @@ import { removeEntity } from "./entities.ts";
 import { sellPriceOf } from "./items.ts";
 import { TILE, idx, nearestWaterTile, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
-import { LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, spawnEntity } from "./entities.ts";
+import { LEASH_TILES, MAX_PATH, spawnEntity } from "./entities.ts";
 
 /** Xe đứng chờ ở điểm giao bao nhiêu phút game trước khi quay ra. */
 const WAIT_MINUTES = 12;
+
+/* Ngân sách A* cho XE rộng hơn của vật nuôi: xe men theo mặt đường nên đường
+   đi của nó dài hơn hẳn đường chim bay, và nó chỉ tìm mỗi chuyến một lần chứ
+   không tìm lại mỗi bước như con vật đi lang thang. */
+const MAX_NODES_VEHICLE = 2600;
 
 /** Trần số xe cùng lúc — bãi đậu trước kho chỉ chứa được ngần này, xe tới sau
  *  phải xếp hàng ngoài đường chờ. */
@@ -72,19 +77,20 @@ function drivePath(
   to: { x: number; y: number },
   box: { w: number; h: number },
 ): number[] | null {
-  // Dùng lại A* chung nhưng chặn trước bằng `driveable`: nếu ô đích không phải
-  // đường thì khỏi tìm cho tốn.
+  // Chặn trước bằng `driveable`: ô đích không phải mặt đường thì khỏi tìm.
   if (!driveable(s, content, to.x, to.y)) return null;
   const path = findPath(s, content, from.x, from.y, new Set([idx(s.w, to.x, to.y)]), {
-    maxNodes: MAX_NODES_ACTOR,
+    maxNodes: MAX_NODES_VEHICLE,
     box,
-    leash: { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2), r: LEASH_TILES + 10 },
+    /* Mặt đường là RÀNG BUỘC của phép tìm, không phải phép soát lại sau khi
+       tìm xong: A* luôn trả đường NGẮN NHẤT, mà đường ngắn nhất thì cắt thẳng
+       qua bãi cỏ. Soát lại là bỏ cả chuyến — chiếc xe đứng chờ rồi thả hàng
+       ngay giữa đường. Lọc trong vòng lặp thì nó tự tìm đường VÒNG theo đường
+       nhựa, đúng như một chiếc xe thật. */
+    pass: (x, y) => driveable(s, content, x, y),
+    leash: { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2), r: LEASH_TILES + 14 },
   });
   if (!path) return null;
-  // Bỏ đường nào lạc ra khỏi mặt đường — thà không tới còn hơn lội qua ruộng.
-  for (const i of path) {
-    if (!driveable(s, content, i % s.w, (i / s.w) | 0)) return null;
-  }
   return path.slice(0, MAX_PATH);
 }
 
@@ -214,20 +220,22 @@ export function vehicleStep(
   }
 
   /* ---- đang vào --------------------------------------------------------
-     Xe THU MUA đậu ở BÃI ĐẬU trước kho; xe GIAO HÀNG thì tới thẳng điểm giao.
+     MỌI xe đều ĐẬU VÀO BÃI trước cửa kho — cả xe thu mua lẫn xe giao hàng.
+     Trước đây chỉ xe thu mua vào bãi, còn xe giao hàng dừng ngay trên điểm
+     giao giữa TRỤC ĐƯỜNG DỌC rồi đứng đó mười hai phút: nhìn ra là một chiếc
+     xe chết máy chắn ngang con đường duy nhất nối nông trại với bên ngoài.
+     Hàng về thì về tới kho, đúng như một cái sân giao nhận thật.
+
      Bãi đầy thì xe đứng chờ ngoài đường — đó chính là hàng đợi, không cần cấu
-     trúc gì thêm trong state. */
-  let dich = drop;
-  if (v.role === "buyer") {
-    const spot = freeParkSpot(d.s, content, e.id);
-    if (!spot) {
-      v.wait = 2; // bãi đầy: chờ rồi hỏi lại
-      return true;
-    }
-    dich = { map: drop.map, x: spot.x, y: spot.y };
-    e.ai.tx = spot.x;
-    e.ai.ty = spot.y;
+     trúc gì thêm trong state. Bãi có đúng `MAX_VEHICLES` ô nên không kẹt cứng. */
+  const spot = freeParkSpot(d.s, content, e.id);
+  if (!spot) {
+    v.wait = 2; // bãi đầy: chờ rồi hỏi lại
+    return true;
   }
+  const dich = { map: drop.map, x: spot.x, y: spot.y };
+  e.ai.tx = spot.x;
+  e.ai.ty = spot.y;
 
   if (Math.abs(cx - dich.x) + Math.abs(cy - dich.y) <= 1) {
     v.wait = WAIT_MINUTES;
@@ -249,6 +257,44 @@ export function vehicleStep(
 
 /* -------------------------------------------------------------------- việc */
 
+/**
+ * Ô đứng được ngay cạnh (x,y) — chỗ để hàng xuống khi xe đã đậu.
+ *
+ * Ưu tiên phía DƯỚI rồi mới sang hai bên: bãi giao nhận nằm ngay dưới bức
+ * tường kho, nên phía trên gần như luôn là ô đặc.
+ */
+function beside(s: GameState, content: Content, x: number, y: number): { x: number; y: number } | null {
+  const quanh: [number, number][] = [
+    [-1, 0],
+    [1, 0],
+    [0, 1],
+    [0, -1],
+    [-1, 1],
+    [1, 1],
+  ];
+  const duocKhong = (nx: number, ny: number): boolean => {
+    const t = tileAt(s, nx, ny);
+    if (!t || t.g === "water") return false;
+    if (t.prop && content.props[t.prop]?.solid) return false;
+    if (t.b && content.buildings[t.b]?.solid) return false;
+    return true;
+  };
+  /* Hai lượt: lượt đầu TRÁNH MẶT ĐƯỜNG. Thả con gà xuống giữa nhánh đường thì
+     nó đứng đó cho tới lúc tự nghĩ ra đường về chuồng, mà trong lúc ấy chiếc xe
+     sau phải lách qua nó. Hết chỗ mới chịu để xuống mặt đường. */
+  for (const [dx, dy] of quanh) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (duocKhong(nx, ny) && tileAt(s, nx, ny)?.g !== "asphalt") return { x: nx, y: ny };
+  }
+  for (const [dx, dy] of quanh) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (duocKhong(nx, ny)) return { x: nx, y: ny };
+  }
+  return null;
+}
+
 function doErrand(d: Draft, content: Content, index: number): void {
   const e = d.s.entities[index];
   if (!e?.veh?.errand) return;
@@ -257,10 +303,14 @@ function doErrand(d: Draft, content: Content, index: number): void {
 
   if (er.kind === "drop") {
     const def = content.animals[er.animal];
+    /* Thả hàng NGAY CẠNH CHIẾC XE, không phải ở một toạ độ cố định nào khác:
+       xe đậu ở ô nào trong bãi là hàng xuống ở đó. Lấy điểm giao làm chỗ dựa
+       khi quanh xe không còn ô nào đứng được. */
+    const bai = beside(d.s, content, Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+    let px = bai ? bai.x : drop.x;
+    let py = bai ? bai.y : drop.y + 1;
     // Loài dưới nước phải xuống AO, không phải xuống mặt đường: nước là ô đặc
     // với mọi thứ khác, nên thả cá lên đường là con cá đó kẹt trên cạn vĩnh viễn.
-    let px = drop.x;
-    let py = drop.y + 1;
     if (def?.housing === "water") {
       const ao = nearestWaterTile(d.s, content, drop.x, drop.y);
       if (!ao) {

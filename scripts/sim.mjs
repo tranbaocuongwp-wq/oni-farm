@@ -14,6 +14,7 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal } from "../src/game/world.ts";
 import { findPath } from "../src/game/pathfind.ts";
+import { driveable } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
@@ -4514,7 +4515,7 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   const chu = new Set(bien.map((b) => b.text));
   for (const z of lo) ok(chu.has(z.name), `có biển '${z.name}'`);
   for (const c of chuong) ok(chu.has(c.name), `có biển '${c.name}'`);
-  for (const t of ["Nhà", "Kho", "Bãi đậu xe", "Chợ", "Rừng"]) ok(chu.has(t), `có biển '${t}'`);
+  for (const t of ["Nhà", "Kho", "Bãi giao nhận", "Chợ", "Rừng"]) ok(chu.has(t), `có biển '${t}'`);
   eq(content.props.sign.place, "edge", "biển là loại vật thể ĐỨNG Ở MÉP ô");
   for (const b of bien) {
     /* Ô mang biển vẫn là ô TRỐNG: biển không chiếm ô nào, nên nó không được
@@ -4986,6 +4987,196 @@ test("75. khung nhìn: mọi khổ máy đều KÍN KHUNG, không dải đen nà
     eq(cam.viewport.offY, 0, `mức phóng '${muc}': không dải đen trên/dưới`);
   }
   ok(MIN_TILES_SHORT < MAX_TILES_SHORT, "dải số ô cạnh ngắn phải là một dải thật");
+});
+
+/* ========================================================================== */
+/* 76. Con vật NO thì ở TRONG CHUỒNG                                          */
+/* ========================================================================== */
+
+/* Người chơi: "sao mấy con vật nó không ở trong chuồng mà nó chạy tùm lum mặc
+   dù chưa đói". Đúng, và lý do nằm ở một chỗ không ai ngờ: con vật ĐÃ Ở TRONG
+   khu thì `penGoal` trả null (về tới rồi thì đừng bắt đi tới đi lui), rồi
+   `actorStep` rơi xuống `wanderGoal` — bốc một ô bất kỳ trong HÌNH VUÔNG bán
+   kính 4 quanh chỗ đứng. Mà RUỘT CHUỒNG chỉ cao 3 ô. Nên gần như lần nào nó
+   cũng nhắm ra ngoài, lách qua cổng đi mất, rồi lần sau `penGoal` mới gọi về —
+   cả đàn ra vào mãi, nhìn ra là chạy tùm lum khắp nông trại.
+
+   Cổng là để NGƯỜI CHƠI đi vào và để con vật ĐÓI đi kiếm cỏ khi máng cạn. */
+test("76. con vật CÒN NO thì loanh quanh trong chuồng, không lách cổng đi mất", () => {
+  const content = loadContent();
+  const store = createStore(createNewGame(content, 4242), content, { validate: true, strict: true });
+
+  const khu = (content.tiles.pens ?? []).find((p) => !p.swim && p.map === store.getState().mapId);
+  ok(!!khu, "có một khu chuồng trên cạn để thử");
+  const trongKhu = (e) => {
+    const x = Math.floor(e.x / TILE);
+    const y = Math.floor(e.y / TILE);
+    return x >= khu.x && x < khu.x + khu.w && y >= khu.y && y < khu.y + khu.h;
+  };
+  const loai = Object.values(content.animals).find((a) => a.pen === khu.id);
+  ok(!!loai, `khu '${khu.id}' phải có loài thuộc về nó`);
+
+  /* Sáu con NO CĂNG, rải khắp ruột chuồng, và người chơi đứng thật xa (đứng
+     gần thì con vật đứng lại — luật của kịch bản 62 — nên sẽ không đo được gì). */
+  setState(store, (s) => {
+    /* Người chơi phải đứng THẬT XA: đứng gần thì con vật đứng lại (kịch bản
+       62) và kịch bản này đo được đúng con số 0 vì một lý do sai. Ô bắt đầu
+       cách dãy chuồng hơn mười ô và chắc chắn đi được. */
+    s.player.x = content.tiles.spawn.x * TILE + 8;
+    s.player.y = content.tiles.spawn.y * TILE + 8;
+    s.entities = [];
+    s.entSeq = 0;
+    for (let i = 0; i < 6; i++) {
+      const id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: loai.id, map: s.mapId,
+        x: (khu.x + (i * 2) % khu.w) * TILE + 8,
+        y: (khu.y + i % khu.h) * TILE + 8,
+        dir: "down", anim: 0, seed: 100 + i * 13,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map(() => 0) },
+      });
+    }
+  });
+  for (const e of store.getState().entities) ok(trongKhu(e), `con ${e.id} bắt đầu trong chuồng`);
+
+  /* Chạy dài: đủ nhiều bước quyết định để con nào muốn ra thì đã ra rồi. Giữ
+     cho chúng no suốt — kịch bản này đo chỗ ĐỨNG, không đo cái đói. */
+  let raNgoai = 0;
+  for (let i = 0; i < 4000; i++) {
+    if (i % 200 === 0)
+      setState(store, (s) => {
+        for (const e of s.entities) e.animal.fed = loai.fedMinutes;
+      });
+    store.dispatch({ t: "TICK", dt: 1 / 30 });
+    for (const e of store.getState().entities) if (!trongKhu(e)) raNgoai++;
+  }
+  eq(raNgoai, 0, "con vật còn no thì KHÔNG được bước ra khỏi chuồng lấy một khung hình");
+
+  /* Vẫn phải ĐI, không phải đứng chôn chân: nhốt kín mà bất động thì cái chuồng
+     nhìn ra là một bức tranh. */
+  const diChuyen = store.getState().entities.filter((e) => e.ai.phase === "wander" || e.ai.path.length);
+  ok(diChuyen.length > 0, "trong chuồng vẫn có con đang đi loanh quanh");
+
+  /* Và CỔNG vẫn mở theo đúng nghĩa của nó: đói + máng cạn thì con vật ra được
+     ngoài kiếm cỏ. Bỏ luật này là đổi "tự về chuồng" thành "bị nhốt tới chết". */
+  const m = troughIn(store.getState(), khu);
+  if (m) setState(store, (s) => { s.tiles[idx(s.w, m.x, m.y)].trough = 0; });
+  setState(store, (s) => {
+    s.entities = [s.entities[0]];
+    s.entities[0].animal.fed = 0;
+    s.entities[0].ai.planAt = -999;
+  });
+  let raDuoc = false;
+  for (let i = 0; i < 6000 && !raDuoc; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 30 });
+    setState(store, (s) => { s.entities[0].animal.fed = 0; }); // giữ nó đói
+    if (!trongKhu(store.getState().entities[0])) raDuoc = true;
+  }
+  ok(raDuoc, "đói mà máng cạn thì vẫn ra được ngoài kiếm cỏ — chuồng có cổng, không phải cái lồng");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+/* ========================================================================== */
+/* 77. Xe ĐẬU VÀO BÃI trước kho, không dừng giữa đường                        */
+/* ========================================================================== */
+
+/* Người chơi: "xe giao hàng chưa xuất hiện, và đi vào kho chỗ đó biến thành
+   bãi xe giao nhận đi, nó đứng im luôn".
+
+   Hai lỗi chồng nhau ở đây:
+
+   · Xe GIAO HÀNG dừng ngay trên điểm giao GIỮA TRỤC ĐƯỜNG DỌC rồi đứng đó mười
+     hai phút game — nhìn ra là một chiếc xe chết máy chắn ngang con đường duy
+     nhất nối nông trại với bên ngoài. Ba ô đậu của xe thu mua thì lại nằm ngay
+     TRÊN nhánh đường trước kho, nên xe đậu cũng là xe chắn đường.
+   · Và `drivePath` gọi A* thường rồi mới SOÁT LẠI đường trả về, bỏ đường nào
+     lạc khỏi mặt đường. Mà A* thường luôn trả đường NGẮN NHẤT — tức là đường
+     cắt thẳng qua bãi cỏ. Nên hễ đích không nằm đúng một đường thẳng dọc con
+     đường thì chuyến nào cũng bị bỏ. Chuyển bãi ra trước kho là lộ ngay: xe
+     không bao giờ tới nơi, đứng chờ rồi thả hàng ở đúng chỗ nó đang đứng. */
+test("77. xe đậu vào BÃI GIAO NHẬN trước kho, không đứng chắn giữa đường", () => {
+  const content = loadContent();
+  const store = mkStore(3141);
+
+  const bai = content.tiles.parking;
+  ok(!!bai && bai.spots.length >= 3, "content khai bãi giao nhận có ít nhất 3 ô đậu");
+  const s0 = store.getState();
+
+  /* --- Ô ĐẬU KHÔNG ĐƯỢC NẰM TRÊN MẶT ĐƯỜNG NHỰA -----------------------
+     Đây là dây bẫy chính: đậu trên đường thì mỗi chuyến hàng là một lần bịt
+     đường. Vẫn phải là ô XE ĐI ĐƯỢC (lối đi), và phải kề mặt đường để xe rẽ vào. */
+  for (const o of bai.spots) {
+    const t = tileAt(s0, o.x, o.y);
+    ok(!!t, `ô đậu (${o.x},${o.y}) phải có thật`);
+    eq(t.g, "path", `ô đậu (${o.x},${o.y}) là LỐI ĐI, không phải mặt đường`);
+    ok(!t.prop && !t.b, `ô đậu (${o.x},${o.y}) phải trống`);
+    let keDuong = false;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]])
+      if (tileAt(s0, o.x + dx, o.y + dy)?.g === "asphalt") keDuong = true;
+    ok(keDuong, `ô đậu (${o.x},${o.y}) phải kề mặt đường để xe rẽ vào được`);
+  }
+  const drop = content.tiles.dropoff;
+  ok(
+    bai.spots.some((o) => Math.abs(o.x - drop.x) + Math.abs(o.y - drop.y) <= 3),
+    "điểm giao nằm ngay trong bãi, không phải một chỗ khác trên bản đồ",
+  );
+
+  /* --- LỐI VÀO HAI LÀN: cổng vào phải có hai ô đường kề nhau ----------- */
+  const gate = content.tiles.gate;
+  const lan2 =
+    tileAt(s0, gate.x + 1, gate.y)?.g === "asphalt" || tileAt(s0, gate.x - 1, gate.y)?.g === "asphalt";
+  ok(lan2, "lối vào nông trại có HAI làn — xe vào và xe ra không kẹt nhau");
+
+  /* --- XE GIAO HÀNG phải TỚI TẬN BÃI, không dừng dọc đường ------------- */
+  setState(store, (s) => {
+    s.money = 99999;
+    s.player.x = content.tiles.spawn.x * TILE + 8;
+    s.player.y = content.tiles.spawn.y * TILE + 8;
+  });
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  const xe0 = store.getState().entities.find((e) => e.kind === "vehicle");
+  ok(!!xe0, "mua xong là có xe vào từ cổng");
+
+  let doDuoc = false;
+  let giaoXong = false;
+  for (let i = 0; i < 60 * 60 * 4 && !giaoXong; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    for (const e of store.getState().entities) {
+      if (e.kind !== "vehicle") continue;
+      const x = Math.floor(e.x / TILE);
+      const y = Math.floor(e.y / TILE);
+      if (bai.spots.some((o) => o.x === x && o.y === y)) doDuoc = true;
+    }
+    giaoXong = store.getState().entities.some((e) => e.kind === "animal");
+  }
+  ok(doDuoc, "xe giao hàng ĐẬU VÀO một ô của bãi trước kho");
+  ok(giaoXong, "…rồi mới thả hàng xuống");
+
+  const bo = store.getState().entities.find((e) => e.kind === "animal");
+  const gan = Math.min(
+    ...bai.spots.map((o) => Math.abs(Math.floor(bo.x / TILE) - o.x) + Math.abs(Math.floor(bo.y / TILE) - o.y)),
+  );
+  ok(gan <= 2, `con bò xuống ngay cạnh chiếc xe trong bãi (lệch ${gan} ô)`);
+
+  /* --- Và A* CHO XE phải men theo đường, không cắt qua cỏ -------------- */
+  {
+    const s = store.getState();
+    const p = findPath(s, content, gate.x, gate.y, new Set([idx(s.w, bai.spots[0].x, bai.spots[0].y)]), {
+      maxNodes: 2600,
+      box: content.vehicles.truck.box,
+      pass: (x, y) => driveable(s, content, x, y),
+    });
+    ok(!!p && p.length > 0, "tìm được đường từ cổng vào bãi");
+    for (const i of p) {
+      const x = i % s.w;
+      const y = (i / s.w) | 0;
+      ok(driveable(s, content, x, y), `đường của xe qua ô (${x},${y}) phải là mặt đường`);
+    }
+  }
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

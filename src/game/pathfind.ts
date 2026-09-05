@@ -65,6 +65,18 @@ export interface PathOptions {
   /** Dây xích: chỉ tìm trong bán kính này (ô) quanh tâm, để một actor kẹt không
    *  quét cả bản đồ. */
   leash?: { x: number; y: number; r: number };
+  /**
+   * Bộ lọc RIÊNG của bên gọi, xét ngay trong vòng lặp A*.
+   *
+   * Có vì XE TẢI chỉ đi được trên đường. Trước đây `drivePath` gọi A* thường
+   * rồi mới soát lại đường trả về, thấy ô nào không phải mặt đường thì bỏ cả
+   * đường — mà A* thường luôn trả về đường NGẮN NHẤT, tức là đường cắt thẳng
+   * qua bãi cỏ. Nên hễ đích không nằm đúng một đường thẳng dọc con đường thì
+   * chuyến nào cũng bị bỏ, chiếc xe đứng chờ rồi làm việc của nó ngay giữa
+   * đường. Lọc phải nằm TRONG vòng lặp thì A* mới tìm được đường vòng theo mặt
+   * đường; soát lại sau khi tìm xong thì không bao giờ ra được đường đó.
+   */
+  pass?: (x: number, y: number) => boolean;
 }
 
 /** Ô này đi qua được không (ở mức Ô, chưa xét hộp va chạm). */
@@ -185,6 +197,7 @@ export function findPath(
   const avoidFarm = opts.avoidFarm === true;
   const maxNodes = opts.maxNodes ?? MAX_NODES_DEFAULT;
   const leash = opts.leash;
+  const pass = opts.pass;
   const start = idx(w, sx, sy);
   if (goals.has(start)) return [];
 
@@ -253,6 +266,7 @@ export function findPath(
         if (leash && (Math.abs(nx - leash.x) > leash.r || Math.abs(ny - leash.y) > leash.r))
           continue;
         if (!walkableTile(state, content, nx, ny, swims)) continue;
+        if (pass && !pass(nx, ny)) continue;
         if (avoidFarm && tileAt(state, nx, ny)?.tilled) continue;
         // Hộp va chạm rộng hơn một điểm: ô đi được ở mức Ô vẫn có thể không lọt.
         if (
@@ -264,6 +278,7 @@ export function findPath(
         if (dx !== 0 && dy !== 0) {
           if (!walkableTile(state, content, cx + dx, cy, swims)) continue;
           if (!walkableTile(state, content, cx, cy + dy, swims)) continue;
+          if (pass && (!pass(cx + dx, cy) || !pass(cx, cy + dy))) continue;
         }
         const ni = idx(w, nx, ny);
         const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
