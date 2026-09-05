@@ -177,6 +177,38 @@ export function removeEntity(d: Draft, id: number): boolean {
 export const CALM_TILES = 2;
 
 /**
+ * Bán kính con vật bắt đầu DÈ CHỪNG — đi chậm dần lại vì thấy có người tới.
+ *
+ * Vì sao cần một vành thứ hai: chỉ có `CALM_TILES` thì luật là một cái công
+ * tắc — ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại.
+ * Người chơi đi tới thấy nó vẫn nhơn nhơn đi lại cho tới lúc bụp một cái đứng
+ * im, và cảm giác đọc ra là "nó chẳng để ý gì tới mình". Con vật thật thì
+ * NGẦN NGỪ trước đã: nghe tiếng chân là chậm lại, tới gần nữa mới dừng hẳn.
+ *
+ * Bốn ô rưỡi là quãng vừa đủ để cái chậm lại đó nhìn thấy được ở tốc độ đi bộ
+ * mà không biến cả nông trại thành một vùng bất động quanh người chơi.
+ */
+export const WARY_TILES = 4.5;
+
+/**
+ * Hệ số tốc độ của con vật theo khoảng cách tới người chơi: 1 khi ở xa, giảm
+ * dần trong vành dè chừng, 0 khi đã đứng hẳn lại.
+ *
+ * Không bao giờ trả về đúng 0 trong vành dè chừng — 0 là việc của
+ * `calmedByPlayer`, và hai chỗ cùng quyết định "dừng" là hai chỗ để lệch nhau.
+ */
+export function warySpeedMul(s: GameState, content: Content, e: Entity): number {
+  if (e.kind !== "animal") return 1;
+  if (animalDef(content, e.def)?.job === "pest") return 1;
+  if (e.map !== s.mapId) return 1;
+  if (onFarmTile(s, e)) return 1; // đang đứng trên luống thì phải đi cho khuất, đừng chậm lại
+  const d = Math.hypot(e.x - s.player.x, e.y - s.player.y) / TILE;
+  if (d >= WARY_TILES) return 1;
+  if (d <= CALM_TILES) return 0.25;
+  return 0.25 + 0.75 * ((d - CALM_TILES) / (WARY_TILES - CALM_TILES));
+}
+
+/**
  * Con vật này có đang đứng yên vì người chơi tới gần không?
  *
  * Lý do có hàm này: con bò đi lang thang liên tục, mà tầm với chỉ hơn một ô.
@@ -302,7 +334,11 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
       continue;
     }
 
-    const step = Math.min(len, def.speed * dt);
+    /* Chậm dần lại khi người chơi tới gần. Nhân vào BƯỚC chứ không vào `speed`
+       của content: content nói con vật đi nhanh bao nhiêu, còn đây là chuyện
+       nó đang dè chừng — hai thứ khác nhau, và trộn vào nhau thì mỗi lần chỉnh
+       cân bằng lại phải nhớ trừ hao cho cái vành này. */
+    const step = Math.min(len, def.speed * warySpeedMul(s, content, cur) * dt);
     const nx = cur.x + (dx / len) * step;
     const ny = cur.y + (dy / len) * step;
     let mx = cur.x;

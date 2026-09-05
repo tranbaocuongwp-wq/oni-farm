@@ -81,15 +81,39 @@ const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
   STORE: "store",
 };
 
-/** Tìm ô tương tác ở (x,y) hoặc 4 ô kề — cùng luật với `nearbyInteract` bên
- *  UI: đứng chệch một chút vẫn bấm được. */
-function interactNear(state: GameState, content: Content, x: number, y: number): InteractKind | null {
-  const around: [number, number][] = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
-  for (const [dx, dy] of around) {
-    const k = interactAt(state, content, x + dx, y + dy);
-    if (k) return k;
-  }
-  return null;
+/**
+ * Ô tương tác GẦN NHẤT quanh (x,y) — cùng luật với `nearbyInteract` bên UI.
+ *
+ * Quét cả hình vuông bán kính 2 chứ không chỉ bốn ô kề thẳng. Bốn ô kề bỏ sót
+ * đúng những ca hay gặp nhất: đứng CHÉO góc quầy thu mua, đứng cách cái giếng
+ * một ô vì có hòn đá chen giữa — nút phụ tắt ngóm mà không nói vì sao, và
+ * người chơi phải xê dịch mò cho tới lúc nó sáng lại.
+ *
+ * Lấy ô GẦN NHẤT chứ không phải ô đầu tiên trong một danh sách cố định: đứng
+ * giữa cái giường và cái cửa thì thứ được chọn phải là thứ mình đang đứng sát,
+ * không phải thứ tình cờ nằm trước trong mảng.
+ */
+export const INTERACT_SCAN = 2;
+
+function interactNear(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): { kind: InteractKind; x: number; y: number } | null {
+  let best: { kind: InteractKind; x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (let dy = -INTERACT_SCAN; dy <= INTERACT_SCAN; dy++)
+    for (let dx = -INTERACT_SCAN; dx <= INTERACT_SCAN; dx++) {
+      const k = interactAt(state, content, x + dx, y + dy);
+      if (!k) continue;
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) {
+        bestD = d;
+        best = { kind: k, x: x + dx, y: y + dy };
+      }
+    }
+  return best;
 }
 
 /** Vì sao không làm được gì ở ô này với thứ đang cầm. Chỉ trả về câu ngắn.
@@ -208,8 +232,8 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
      đứng giữa chuồng gà cầm bó rơm mà nút ghi "DÙNG" rồi bấm không ra gì là
      nút đang giấu đúng việc người chơi định làm. `ready: false` nên nút sẽ
      dắt nhân vật tới nơi rồi mới làm, đúng như bấm vào một ô ở xa. */
-  const pa = penAction(state, content, x, y);
-  if (pa) return { kind: pa.kind, label: pa.label, ready: false, why: null };
+  const ca = contextAction(state, content, x, y);
+  if (ca) return { kind: ca.kind, label: ca.label, ready: false, why: null };
 
   return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
 }
@@ -231,7 +255,7 @@ export function interactHint(
 
   const ik = interactNear(state, content, x, y);
   if (ik) {
-    const kind = INTERACT_KIND[ik];
+    const kind = INTERACT_KIND[ik.kind];
     return { kind, label: LABEL[kind] };
   }
 
@@ -242,6 +266,70 @@ export function interactHint(
      thứ cụ thể hơn. */
   const khu = penNear(state, content, x, y, 1);
   if (khu) return { kind: "pen", label: LABEL.pen };
+  return null;
+}
+
+/**
+ * Việc nút CHÍNH sẽ làm khi Ô ĐANG NGẮM không có gì — và ô phải tới để làm.
+ *
+ * Đây là chỗ duy nhất trả lời câu "quanh đây có việc gì": `hintAt` gọi nó để
+ * IN NHÃN, `main.ts` gọi nó để LÀM. Một nguồn, nên nút không bao giờ nói một
+ * đằng làm một nẻo — cái lỗi khó chịu nhất mà một nút ngữ cảnh mắc phải.
+ *
+ * Thứ tự có lý do:
+ *   1. CON VẬT trong tầm đang tới lứa. Người chơi nhìn thấy con bò trước khi
+ *      nhìn thấy nền đất, nên nút phải nói về con bò.
+ *   2. Việc làm được với THỨ ĐANG CẦM ở ô gần nhất quanh chân. Đây là phần
+ *      "bám theo địa hình": cầm cuốc đứng cạnh luống, ngắm hụt sang ô đường
+ *      thì nút vẫn ghi CÀY và dắt sang đúng ô đất.
+ *   3. Việc của cả KHU (đổ máng, thu cả đàn) — rộng nhất nên xét cuối.
+ */
+export type CtxAction = { kind: Exclude<HintKind, null>; label: string; at: { x: number; y: number } };
+
+export function contextAction(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): CtxAction | null {
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+
+  // 1. CON VẬT quanh mình.
+  for (const [ax, ay] of [
+    [x, y],
+    [px, py],
+  ] as [number, number][]) {
+    const an = animalNear(state, ax, ay, 2.2);
+    if (!an) continue;
+    const def = content.animals[an.def];
+    if (!def) continue;
+    const at = { x: Math.floor(an.x / TILE), y: Math.floor(an.y / TILE) };
+    if (readyProduct(an, content) >= 0) return { kind: "gather", label: LABEL.gather, at };
+    if (def.feed && an.animal.fed <= 0) return { kind: "feed", label: LABEL.feed, at };
+  }
+
+  // 2. Việc của cả KHU (đổ máng, thu cả đàn).
+  const pa = penAction(state, content, x, y);
+  if (pa) return pa;
+
+  /* 3. Quét quanh CHÂN — nhưng chỉ khi ô đang ngắm KHÔNG CÓ GÌ.
+     Đây là ranh giới quan trọng nhất của cả hàm, và nó nằm ở chỗ "ô ấy có gì"
+     chứ không ở chỗ "có giải thích được không".
+
+     Ô có VẬT: một cái cây, một luống rau, một công trình — hoặc mình đang vác
+     đồ. Người chơi CHỦ Ý chỉ vào nó, và câu "Cần rìu" / "Lùi ra rồi đặt" đúng
+     là thứ họ đang hỏi. Đổi nhãn sang một việc ở ô khác lúc đó là nuốt mất câu
+     trả lời và bấm vào một chỗ họ không hề nhắm tới.
+
+     Ô ĐẤT TRỐNG thì ngược lại: đứng trên ngõ cầm cuốc, ngắm vào chính con ngõ
+     dưới chân, mà ruộng thì ngay bên cạnh — "Ngoài khu ruộng" đúng nhưng vô
+     ích, còn "CÀY" thì làm được việc. Nhãn vẫn không nói dối: nó hứa cày, và
+     ô nó dắt tới đúng là ô cày được. */
+  const t0 = tileAt(state, x, y);
+  if (state.carry || (t0 && (t0.prop || t0.crop || t0.b))) return null;
+  const gan = nearestTarget(state, content, null, { x, y }, { radius: 3, requireReach: false });
+  if (gan) return { kind: gan.kind, label: LABEL[gan.kind], at: { x: gan.x, y: gan.y } };
   return null;
 }
 

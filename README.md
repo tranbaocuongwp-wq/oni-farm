@@ -952,6 +952,36 @@ sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằ
 bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
 tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
+### Con vật DÈ CHỪNG, và hai cái nút bám theo quanh mình (core 1.23)
+
+**Vành dè chừng.** Luật "tới gần thì đứng lại" vẫn chạy, nhưng nó là một cái **công tắc** ở
+đúng hai ô: ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại. Người chơi đi
+tới thấy nó nhơn nhơn đi lại cho tới lúc bụp một cái đứng im — cảm giác đọc ra đúng là "nó
+chẳng để ý gì tới mình". Con vật thật thì **ngần ngừ trước đã**. Nên có vành thứ hai
+(`WARY_TILES = 4.5`): trong vành đó tốc độ giảm dần từ 100% xuống 25%, rồi tới hai ô mới dừng
+hẳn. Hệ số nhân vào **bước đi**, không vào `speed` của content — content nói con vật đi nhanh
+bao nhiêu, đây là chuyện nó đang dè chừng; trộn vào nhau thì mỗi lần chỉnh cân bằng lại phải
+nhớ trừ hao cho cái vành này.
+
+**Nút phụ quét cả ô CHÉO.** Bốn ô kề thẳng bỏ sót đúng những ca hay gặp nhất: đứng chéo góc
+quầy thu mua, đứng cách cái giếng một ô vì có hòn đá chen giữa — nút tắt ngóm mà không nói vì
+sao, và người chơi phải xê dịch mò cho tới lúc nó sáng lại. Nay quét cả hình vuông bán kính 2
+và lấy vật thể **gần nhất**, không phải cái đầu tiên trong một mảng cố định.
+
+**Nút chính bám theo quanh chân** (`contextAction`). Thứ tự: con vật trong tầm đang tới lứa →
+việc của cả khu (đổ máng, thu cả đàn) → việc làm được với thứ đang cầm ở ô gần nhất quanh chân.
+Ranh giới quan trọng nhất nằm ở chỗ **"ô đang ngắm có gì"**, không ở chỗ "có giải thích được
+không":
+
+* Ô có **vật** — cái cây, luống rau, công trình — hoặc đang vác đồ: người chơi *chủ ý* chỉ vào
+  nó, và "Cần rìu" / "Lùi ra rồi đặt" đúng là câu họ đang hỏi. Nút nhường lời.
+* Ô **đất trống**: đứng trên ngõ cầm cuốc, ngắm vào chính con ngõ dưới chân, mà ruộng ngay bên
+  cạnh — "Ngoài khu ruộng" đúng nhưng vô ích, còn "CÀY" thì làm được việc.
+
+Nhãn vẫn không nói dối: nó hứa cày, và ô nó dắt tới đúng là ô cày được. `hintAt` gọi
+`contextAction` để **in nhãn**, `main.ts` gọi chính nó để **làm** — một nguồn, nên nút không bao
+giờ nói một đằng làm một nẻo.
+
 ### Chở cá tới tận ao, và BẢNG KHU (core 1.22)
 
 **Cá phải được chở TỚI AO.** Xe chở cá đậu ở bãi giao nhận trước cửa kho rồi con cá "hiện ra"

@@ -51,10 +51,10 @@ import { padButtonName } from "./core/gamepad.ts";
 import { timChoNgoi, type Seat } from "./ui/focus.ts";
 import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
-import type { Content, GameState, Stats } from "./game/types.ts";
+import type { Content, GameState, InteractKind, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, facingTile, hintAt, interactHint, nearestTarget, penAction, type Hint } from "./game/hint.ts";
+import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
 import { animalNear, animalStats, penNear, readyProduct } from "./game/animals.ts";
@@ -1583,14 +1583,22 @@ async function boot() {
             buildUI.open();
             break;
           }
-          /* KHU CHUỒNG / AO: nút chính đang nói việc của CÁI KHU quanh mình
-             (xem `penAction`) — dắt tới đúng ô rồi làm. Chỉ chạy khi ô đang
-             ngắm KHÔNG có việc gì, nếu không nó cướp mất việc cụ thể hơn. */
+          /* Ô đang ngắm KHÔNG có việc gì: hỏi `contextAction` — đúng cái hàm
+             `hintAt` dùng để in nhãn — rồi dắt tới ô nó chỉ. Một nguồn cho cả
+             nhãn lẫn hành động, nên nút không nói một đằng làm một nẻo. */
           if (!building && settings.contextButton) {
             const a0 = targetTile(s);
             if (a0 && canUseAt(s, content, a0.x, a0.y, true) === null && !animalNear(s, a0.x, a0.y)) {
-              const pa = penAction(s, content, a0.x, a0.y);
-              if (pa && nav.goTo(s, content, pa.at.x, pa.at.y)) break;
+              const pa = contextAction(s, content, a0.x, a0.y);
+              if (pa) {
+                if (nav.goTo(s, content, pa.at.x, pa.at.y)) break;
+                // Đã đứng đúng chỗ rồi (`goTo` trả false): làm luôn tại đó.
+                if (inReachOf(s, pa.at.x, pa.at.y)) {
+                  if (tryAnimal(s, pa.at.x, pa.at.y)) break;
+                  store.dispatch({ t: "USE", x: pa.at.x, y: pa.at.y });
+                  break;
+                }
+              }
             }
           }
 
@@ -1992,20 +2000,27 @@ async function boot() {
     devPanel.update(s, content);
   });
 
+  /** Vật thể tương tác GẦN NHẤT quanh (x,y) — cùng luật với `interactHint`.
+   *  Quét cả hình vuông bán kính 2, không chỉ bốn ô kề: đứng CHÉO góc quầy hay
+   *  cách cái giếng một ô vì có hòn đá chen giữa vẫn phải bấm được. */
   function nearbyInteract(s: GameState, x: number, y: number) {
-    for (const [dx, dy] of [
-      [0, 0], [0, -1], [0, 1], [-1, 0], [1, 0],
-    ] as [number, number][]) {
-      const k = interactAt(s, content, x + dx, y + dy);
-      if (k) {
+    let best: { kind: InteractKind; x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let dy = -INTERACT_SCAN; dy <= INTERACT_SCAN; dy++)
+      for (let dx = -INTERACT_SCAN; dx <= INTERACT_SCAN; dx++) {
+        const k = interactAt(s, content, x + dx, y + dy);
+        if (!k) continue;
         const dist = Math.hypot(
           (x + dx) * TILE + TILE / 2 - s.player.x,
           (y + dy) * TILE + TILE / 2 - s.player.y,
         );
-        if (dist <= AIM_REACH + TILE) return { kind: k, x: x + dx, y: y + dy };
+        if (dist > AIM_REACH + TILE) continue;
+        if (dist < bestD) {
+          bestD = dist;
+          best = { kind: k, x: x + dx, y: y + dy };
+        }
       }
-    }
-    return null;
+    return best;
   }
 
   bootEl.classList.add("done");

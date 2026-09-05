@@ -17,10 +17,11 @@ import { findPath } from "../src/game/pathfind.ts";
 import { driveable, pondDock } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
 import { penSummary } from "../src/game/animals.ts";
+import { calmedByPlayer, warySpeedMul } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { hintAt, interactHint, penAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
+import { hintAt, interactHint, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -4338,9 +4339,20 @@ test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lạ
     s.player.y = (ngoai.y + 1) * TILE + TILE / 2;
   });
   eq(canUseAt(store.getState(), content, ngoai.x, ngoai.y), null, "ngoài ruộng thì nút không mời CÀY");
-  eq(
-    hintAt(store.getState(), content, ngoai.x, ngoai.y).why,
-    "Ngoài khu ruộng",
+  /* Nút được phép CHỈ SANG một ô cuốc được ở gần thay vì đứng im giải thích —
+     nhưng không bao giờ được hứa cày ĐÚNG cái ô này. Đó mới là điều kiện thật:
+     nhãn nút không nói dối về chỗ nó sẽ làm. */
+  const h70 = hintAt(store.getState(), content, ngoai.x, ngoai.y);
+  const ca70 = contextAction(store.getState(), content, ngoai.x, ngoai.y);
+  if (ca70)
+    ok(
+      ca70.at.x !== ngoai.x || ca70.at.y !== ngoai.y,
+      "nút chỉ sang ô cuốc được ở gần, không hứa cuốc chính ô ngoài ruộng này",
+    );
+  else
+    eq(
+      h70.why,
+      "Ngoài khu ruộng",
     "…và nói ĐÚNG lý do, không phải câu chung chung",
   );
   const nl0 = store.getState().energy;
@@ -5361,6 +5373,133 @@ test("79. bảng khu: nút chính nói việc của CẢ KHU, nút phụ mở b�
   selectItem(store, khu.feeds[0]);
   store.dispatch({ t: "PEN_POUR", pen: khu.id });
   eq(troughStock(store.getState(), m.x, m.y), 0, "đứng ở đầu kia nông trại thì không đổ máng từ xa được");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+/* ========================================================================== */
+/* 80. Con vật DÈ CHỪNG người tới gần; nút bám theo quanh mình                 */
+/* ========================================================================== */
+
+/* Người chơi: "mấy con vật không còn tạm dừng di chuyển hoặc là di chuyển chậm
+   khi tôi tiến lại gần" và "nút ngữ cảnh và các nút phụ phải bám sát theo tình
+   hình địa hình và các động vật, các loại công trình xung quanh".
+
+   Luật "tới gần thì đứng lại" VẪN chạy — nhưng nó là một cái CÔNG TẮC ở đúng
+   hai ô: ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại.
+   Đi tới thì thấy nó nhơn nhơn đi lại cho tới lúc bụp một cái đứng im, và cảm
+   giác đọc ra đúng là "nó chẳng để ý gì tới mình". */
+test("80. con vật chậm dần khi người tới gần; nút chính bám theo quanh chân", () => {
+  const content = loadContent();
+  const store = mkStore(606);
+  const loai = content.animals.cow;
+
+  const dat = (cachO) => {
+    setState(store, (s) => {
+      s.player.x = HOME.x * TILE + 8;
+      s.player.y = HOME.y * TILE + 8;
+      s.entSeq = 1;
+      s.entities = [{
+        id: 1, kind: "animal", def: "cow", map: s.mapId,
+        x: HOME.x * TILE + 8 + cachO * TILE, y: HOME.y * TILE + 8,
+        dir: "left", anim: 0, seed: 5,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map(() => 0) },
+      }];
+    });
+    return store.getState().entities[0];
+  };
+
+  /* --- Ba VÀNH, ba tốc độ khác nhau. Đây là dây bẫy: gộp về một ngưỡng là
+     luật quay lại thành cái công tắc cũ. */
+  /* Gọi `dat()` TRƯỚC rồi mới đọc state: đối số hàm tính từ trái sang phải, nên
+     viết `warySpeedMul(store.getState(), content, dat(1))` là đưa vào state CŨ
+     (người chơi còn ở chỗ khác) cùng con vật MỚI — và phép đo ra sai. */
+  const he = (cachO) => {
+    const e = dat(cachO);
+    return warySpeedMul(store.getState(), content, e);
+  };
+  const k0 = he(1);
+  const k1 = he(3);
+  const k2 = he(8);
+  ok(k0 < k1, `sát bên phải chậm hơn ở tầm trung (${k0} vs ${k1})`);
+  ok(k1 < k2, `tầm trung phải chậm hơn ở xa (${k1} vs ${k2})`);
+  eq(k2, 1, "ra xa hẳn thì đi đúng tốc độ của content");
+  ok(k0 > 0, "không được là 0 — dừng hẳn là việc của `calmedByPlayer`, một chỗ thôi");
+
+  /* --- Và ĐỨNG HẲN trong hai ô, đúng như trước. */
+  const im = (cachO) => {
+    const e = dat(cachO);
+    return calmedByPlayer(store.getState(), content, e);
+  };
+  ok(im(1), "trong hai ô thì đứng hẳn lại");
+  ok(!im(3), "ba ô thì chưa dừng, chỉ chậm lại");
+
+  /* --- Đi thật: cùng một khoảng thời gian, ở gần đi được ÍT hơn ở xa. */
+  const diDuoc = (cachO) => {
+    dat(cachO);
+    setState(store, (s) => {
+      // ép nó có đường đi thật, hướng ra xa người chơi
+      const e = s.entities[0];
+      const cx = Math.floor(e.x / TILE);
+      const cy = Math.floor(e.y / TILE);
+      e.ai.path = [1, 2, 3, 4, 5, 6].map((k) => idx(s.w, cx + k, cy));
+      e.ai.phase = "wander";
+    });
+    const x0 = store.getState().entities[0].x;
+    for (let i = 0; i < 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    return store.getState().entities[0].x - x0;
+  };
+  const gan = diDuoc(3);
+  const xa = diDuoc(9);
+  ok(gan > 0 && xa > 0, "cả hai đều đi được");
+  ok(gan < xa * 0.95, `ở gần phải đi CHẬM hơn hẳn (${gan.toFixed(1)} vs ${xa.toFixed(1)} px/giây)`);
+
+  /* --- NÚT PHỤ bám theo công trình quanh mình, kể cả ô CHÉO --------------
+     Bốn ô kề thẳng bỏ sót đúng ca hay gặp nhất: đứng chéo góc quầy. */
+  const quay = timVatThe("counter");
+  /* Ô CHÉO dưới-PHẢI quầy: chéo với quầy, mà cửa hàng thì ở ngoài tầm quét —
+     nên câu trả lời chỉ có thể tới từ phép quét chéo. Quét bốn ô kề thẳng như
+     bản cũ thì ở đây nút phụ tắt ngóm. */
+  walkTo(store, quay.x + 1, quay.y + 1);
+  const ih = interactHint(
+    store.getState(),
+    content,
+    Math.floor(store.getState().player.x / TILE),
+    Math.floor(store.getState().player.y / TILE),
+  );
+  eq(ih?.kind, "sell", "đứng CHÉO góc quầy thu mua vẫn bấm bán được");
+
+  /* --- NÚT CHÍNH bám theo địa hình quanh chân --------------------------- */
+  const store2 = mkStore(607);
+  walkTo(store2, HOME.x, HOME.y);
+  selectItem(store2, "tool:hoe");
+  // ngắm vào chính NGÕ mình đang đứng: ngõ không cuốc được, nhưng ngay cạnh là ruộng
+  const ngoX = HOME.x;
+  const ngoY = HOME.y;
+  eq(isTillable(store2.getState(), content, ngoX, ngoY), false, "ngõ thì không cuốc được");
+  const ca = contextAction(store2.getState(), content, ngoX, ngoY);
+  ok(!!ca, "ngắm vào ngõ mà quanh chân có ruộng thì nút vẫn có việc để làm");
+  eq(ca.kind, "till", "…và việc đó là CÀY");
+  ok(
+    isTillable(store2.getState(), content, ca.at.x, ca.at.y),
+    `…ở một ô THẬT SỰ cuốc được (đang chỉ vào ${ca.at.x},${ca.at.y})`,
+  );
+  ok(
+    Math.abs(ca.at.x - ngoX) <= 2 && Math.abs(ca.at.y - ngoY) <= 2,
+    "…và ô đó ở ngay cạnh, không phải ở đầu kia nông trại",
+  );
+
+  /* --- Nhưng KHÔNG được cướp lời khi ô ngắm có lý do cụ thể ------------- */
+  const rung = content.tiles.zones.find((z) => z.kind === "forest");
+  let cay = null;
+  for (let y = rung.y; y < rung.y + rung.h && !cay; y++)
+    for (let x = rung.x; x < rung.x + rung.w; x++)
+      if (tile(store2, x, y)?.prop === "tree") { cay = { x, y }; break; }
+  ok(!!cay, "rừng có cây");
+  const h = hintAt(store2.getState(), content, cay.x, cay.y);
+  eq(h.kind, null, "cầm cuốc ngắm vào cây gỗ thì nút KHÔNG được nhảy sang việc khác");
+  ok(/rìu/i.test(h.why ?? ""), `…mà phải nói lý do: "${h.why}"`);
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến");
 });
