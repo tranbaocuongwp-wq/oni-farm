@@ -4489,6 +4489,79 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   deepEq(checkInvariants(s, content), [], "bất biến trên bản đồ vừa quy hoạch");
 });
 
+/* ========================================================================== */
+/* 72. Nạp save CŨ sau khi QUY HOẠCH LẠI bản đồ                               */
+/* ========================================================================== */
+
+test("72. quy hoạch lại bản đồ: save cũ không mọc nhà/kho/giếng cũ lên đất mới", () => {
+  const store = mkStore();
+  const s0 = store0(store);
+  const W = s0.w;
+
+  /* Dựng một save "của bản đồ đời trước": rải công trình và cây cối vào những
+     ô mà bản đồ HÔM NAY để trống, để trống mặt nước, để làm đường. Đây đúng là
+     hình dạng một save cũ sau khi nông trại bị vẽ lại. */
+  const nuoc = [];
+  const duong = [];
+  const ngo = [];
+  for (let y = 0; y < s0.h; y++)
+    for (let x = 0; x < s0.w; x++) {
+      const t = s0.tiles[idx(W, x, y)];
+      if (!t || t.prop) continue;
+      if (t.g === "water") nuoc.push({ x, y });
+      else if (t.g === "asphalt") duong.push({ x, y });
+      else if (t.g === "path") ngo.push({ x, y });
+    }
+  ok(nuoc.length && duong.length && ngo.length, "bản đồ mới có mặt nước, đường nhựa và ngõ");
+  const bay = [
+    { o: nuoc[Math.floor(nuoc.length / 2)], prop: "house" },
+    { o: duong[Math.floor(duong.length / 2)], prop: "warehouse" },
+    { o: ngo[Math.floor(ngo.length / 2)], prop: "well" },
+    { o: duong[Math.floor(duong.length / 3)], prop: "tree" },
+  ];
+  for (const b of bay) s0.tiles[idx(W, b.o.x, b.o.y)].prop = b.prop;
+
+  /* …và một hòn đá người chơi TỰ VÁC ra đặt xuống một ô cỏ trống. Cái này thì
+     phải giữ: nó là đồ của người chơi, không phải địa hình của bản đồ cũ. */
+  let coTrong = null;
+  for (let y = 1; y < s0.h - 1 && !coTrong; y++)
+    for (let x = 1; x < s0.w - 1; x++) {
+      const t = s0.tiles[idx(W, x, y)];
+      if (t && t.g === "grass" && !t.prop && !t.b) { coTrong = { x, y }; break; }
+    }
+  ok(!!coTrong, "bản đồ có ô cỏ trống");
+  s0.tiles[idx(W, coTrong.x, coTrong.y)].prop = "rock";
+  s0.tiles[idx(W, coTrong.x, coTrong.y)].hp = content.props.rock.hits;
+
+  const res = migrateForContent(s0, content);
+  const sau = res.state;
+  for (const b of bay)
+    eq(
+      sau.tiles[idx(W, b.o.x, b.o.y)].prop,
+      null,
+      `'${b.prop}' của bản đồ cũ ở (${b.o.x},${b.o.y}) phải BIẾN MẤT, không mọc lại trên đất mới`,
+    );
+  eq(sau.tiles[idx(W, coTrong.x, coTrong.y)].prop, "rock", "hòn đá người chơi tự đặt thì GIỮ");
+
+  /* Ngược lại: cây trên bản đồ MỚI mà save cũ ghi ô đó trống thì vẫn phải
+     trống — không thì mở game lần nào cũng thấy cả rừng mọc lại. */
+  let cayMoi = null;
+  const goc = mkStore().getState();
+  for (let y = 1; y < goc.h - 1 && !cayMoi; y++)
+    for (let x = 1; x < goc.w - 1; x++)
+      if (goc.tiles[idx(W, x, y)]?.prop === "tree") { cayMoi = { x, y }; break; }
+  ok(!!cayMoi, "bản đồ mới có cây");
+  const s1 = store0(store);
+  s1.tiles[idx(W, cayMoi.x, cayMoi.y)].prop = null;
+  eq(
+    migrateForContent(s1, content).state.tiles[idx(W, cayMoi.x, cayMoi.y)].prop,
+    null,
+    "cây đã chặt từ ván trước thì không mọc lại",
+  );
+
+  deepEq(checkInvariants(sau, content), [], "bất biến sau khi nạp save của bản đồ đời trước");
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 console.log("\n  ONIFARM — sim\n");

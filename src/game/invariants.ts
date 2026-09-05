@@ -335,24 +335,42 @@ function mergeGrid(
         t.tilled = prev.tilled === true && t.g === "grass";
         t.wet = prev.wet === true && t.g === "grass";
 
-        // ---- vật thể: bản đồ lo phần CÔNG TRÌNH, người chơi lo phần KHAI THÁC
-        //
-        // Cây/đá/bụi cỏ là thứ người chơi chặt đi được, nên trạng thái của
-        // chúng thuộc về save chứ không phải bản đồ — nếu lấy lại từ bản đồ
-        // thì mở game lần sau là cả rừng mọc lại. Ngược lại nhà/tường/cửa
-        // không khai thác được: bản đồ mới nói sao thì theo vậy.
-        const freshDef = t.prop ? content.props[t.prop] : undefined;
-        const freshIsHarvestable = !!freshDef?.hits;
-        if (t.prop === null || freshIsHarvestable) {
-          const oldProp = typeof prev.prop === "string" ? prev.prop : null;
-          if (oldProp === null) {
-            t.prop = null;
-          } else if (content.props[oldProp]) {
-            t.prop = oldProp;
-          } else {
-            log.props.add(oldProp);
-            t.prop = null;
-          }
+        /* ---- vật thể: BẢN ĐỒ lo bố cục, SAVE lo thứ người chơi đụng vào
+         *
+         * Cây/đá/bụi/cỏ là thứ vừa MỌC vừa CHẶT được, nên "còn hay đã mất"
+         * thuộc về save — lấy lại từ bản đồ thì mở game lần sau là cả rừng mọc
+         * lại. Ngược lại nhà, quầy, giếng, kho, cầu, rào, biển là ĐỒ ĐẠC của
+         * bản đồ: bản đồ nói sao theo vậy.
+         *
+         * Luật CŨ hỏi thiếu: nó chỉ nhìn ô MỚI, nên ô mới TRỐNG là chép nguyên
+         * vật thể cũ sang, kể cả công trình, kể cả khi nền mới là mặt nước hay
+         * mặt đường. Chừng nào địa hình không đổi thì không ai thấy; tới lúc
+         * quy hoạch lại cả nông trại thì cái nhà cũ, cái kho cũ, cái giếng cũ
+         * mọc lại GIỮA HỒ và GIỮA ĐƯỜNG của bản đồ mới. Nên phải hỏi cả hai
+         * đầu: vật thể cũ thuộc về ai, và nền mới có chỗ cho nó không. */
+        const freshProp = t.prop;
+        const freshIsHarvestable = !!(freshProp ? content.props[freshProp]?.hits : 0);
+        let oldProp = typeof prev.prop === "string" ? prev.prop : null;
+        if (oldProp && !content.props[oldProp]) {
+          log.props.add(oldProp);
+          oldProp = null;
+        }
+        const oldDef = oldProp ? content.props[oldProp] : undefined;
+        const truoc = t.prop;
+        t.prop = (() => {
+          // Ô bản đồ là CÔNG TRÌNH → bản đồ thắng, không bàn.
+          if (freshProp !== null && !freshIsHarvestable) return freshProp;
+          if (oldProp === null) return null; // ván trước ô này trống (đã chặt)
+          // Vật VÁC ĐƯỢC là do chính tay người chơi đặt xuống → theo người chơi.
+          if (oldDef?.portable) return t.g === "water" ? null : oldProp;
+          // Cây cỏ: giữ, nhưng chỉ ở chỗ nó MỌC ĐƯỢC. Nền mới là nhựa hay nước
+          // thì cái cây đó là địa hình của bản đồ đời trước, không phải của ai.
+          if (oldDef?.hits) return t.g === "grass" ? oldProp : null;
+          // Vật thể cũ là ĐỒ ĐẠC của bản đồ đời trước → bỏ, theo bản đồ mới.
+          return freshProp;
+        })();
+        if (truoc !== t.prop && (truoc !== null || oldProp !== null)) {
+          if (oldProp !== null && t.prop !== oldProp) log.lostToTerrain++;
         }
         // hp: giữ nếu còn hợp lệ, không thì trả về đầy máu (save v2 không có
         // trường này nên mọi ô về 0 — 0 ở đây phải hiểu là "chưa biết").

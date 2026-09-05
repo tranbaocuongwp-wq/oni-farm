@@ -424,11 +424,22 @@ export function createRenderer(
           const img = atlas.props[t.prop];
           if (img) {
             const oy = def?.tall ? py - TILE : py;
-            items.push({ base, run: () => g.drawImage(img, px, oy) });
+            /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
+               mép dưới.
+               Vì sao: người chơi ĐỨNG ĐƯỢC lên chính cái ô đó — cầu gỗ, bụi cỏ,
+               tấm biển, cái giường. Lấy mép dưới thì nhân vật (xếp theo `y` của
+               mình, tức giữa ô) luôn nhỏ hơn và bị chính cái cầu mình đang đứng
+               vẽ đè lên: ra hình "đi chui xuống dưới địa hình".
+               Lấy mép trên thì cùng ô là vật nằm DƯỚI chân, còn ô ngay phía
+               dưới vẫn có mép trên lớn hơn nhân vật nên vẫn vẽ đè lên như cũ —
+               giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
+               này: không ai đứng lên được nó. */
+            const lopVat = def && def.solid === false ? y * TILE : base;
+            items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
             const full = def?.hits ?? 0;
             if (full > 1 && t.hp > 0 && t.hp < full) {
               const hp = t.hp;
-              items.push({ base: base + 0.5, run: () => drawHits(px, oy, hp, full) });
+              items.push({ base: lopVat + 0.5, run: () => drawHits(px, oy, hp, full) });
             }
           }
           if (def?.interact === "SHOP") lights.push({ wx: wcx, wy: wcy + 6, r: 26, strength: 0.7 });
