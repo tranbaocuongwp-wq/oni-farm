@@ -47,8 +47,8 @@ import { PAD, createGamepad, type PadInfo } from "./gamepad.ts";
 /** Một việc mà tay cầm gọi được. Trùng tên với `Intent` ở đâu được thì trùng. */
 export type PadJob =
   | "use"
-  | "interact"
-  | "auto"
+  | "back"
+  | "closePopup"
   | "inventory"
   | "hotbarPrev"
   | "hotbarNext"
@@ -80,9 +80,14 @@ export interface PadBind {
 }
 
 export const PAD_MAP: readonly PadBind[] = [
-  { nut: PAD.A, viec: "use", mo: "Dùng — cày, gieo, tưới, thu. Giữ để làm tiếp ô kế bên." },
-  { nut: PAD.B, viec: "interact", mo: "Tương tác — cửa hàng, giường, giếng, kho, con vật, khu chuồng." },
-  { nut: PAD.X, viec: "auto", mo: "Bật/tắt tự động làm.", canStd: true },
+  /* MỘT nút ngữ cảnh, và nó làm TRỌN việc.
+     Trong tầm với thì làm ngay — cày, gieo, tưới, thu, đổ máng, và mở cửa hàng
+     hay cái giường khi trên tay không có việc gì cho ô đó. Ngoài tầm thì nhận
+     cả chuyến: tự đi tới, làm tới hết, bấm lần nữa là dừng. Cầm bao cám gà bấm
+     một cái là đi hết các khu mà đổ — đó mới là "nút ngữ cảnh". */
+  { nut: PAD.A, viec: "use", mo: "Làm — trong tầm thì làm ngay, ngoài tầm thì tự đi làm cho xong. Bấm nữa để dừng." },
+  { nut: PAD.B, viec: "back", mo: "Quay lại — đóng thứ đang mở, không mở gì thì bật menu." },
+  { nut: PAD.X, viec: "closePopup", mo: "Tắt popup đang nổi (bảng con vật, bản đồ nhỏ, chế độ xây).", canStd: true },
   /* Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó rồi
      bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới. */
   { nut: PAD.Y, viec: "inventory", mo: "Mở balo.", canStd: true },
@@ -124,8 +129,12 @@ export type Intent =
   | { t: "inventory" }
   | { t: "map" }
   | { t: "debug" }
-  /** Bật/tắt chế độ TỰ ĐỘNG LÀM. */
+  /** Bật/tắt chế độ TỰ ĐỘNG LÀM. Cảm ứng còn nút riêng; tay cầm gộp vào nút A. */
   | { t: "auto" }
+  /** QUAY LẠI: đóng thứ đang mở, không có gì mở thì bật menu tạm dừng. */
+  | { t: "back" }
+  /** TẮT popup đang nổi (bảng con vật, con trỏ bản đồ nhỏ, chế độ xây). */
+  | { t: "closePopup" }
   /** Đổi mức phóng khung nhìn: gần → vừa → xa → gần. */
   | { t: "zoom" }
   /** Bấm/chạm vào thế giới — toạ độ WORLD px.
@@ -509,6 +518,12 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         if (st.navDir) push({ t: "navDir", dx: st.navDir.x, dy: st.navDir.y });
         if (st.pressed.has(PAD.A)) push({ t: "navOk" });
         if (st.pressed.has(PAD.B) || st.pressed.has(PAD.START)) push({ t: "navBack" });
+        /* X cũng ĐÓNG. Trong lớp phủ thì `PAD_MAP` không được đọc tới (nhánh
+           này thoát sớm), nên nếu không có dòng này thì "X tắt popup" đúng ở
+           ngoài ruộng mà chết ngay khi có popup thật để tắt — tức là chết ở
+           đúng chỗ nó sinh ra để làm. Chỉ khi sơ đồ chuẩn: tay cầm lạ thì chỉ
+           số 2 chẳng biết là nút nào. */
+        if (pad.info().standard && st.pressed.has(PAD.X)) push({ t: "navBack" });
         // Cần phải cuộn nội dung menu — cửa hàng có bốn mươi thẻ hạt.
         if (st.aimDir?.y) push({ t: "navScroll", dy: st.aimDir.y });
         // Vai đổi TAB trong menu — main.ts hiểu `selectDelta` theo ngữ cảnh.
@@ -529,8 +544,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         if (!st.pressed.has(m.nut)) continue;
         switch (m.viec) {
           case "use": push({ t: "use" }); break;
-          case "interact": push({ t: "interact" }); break;
-          case "auto": push({ t: "auto" }); break;
+          case "back": push({ t: "back" }); break;
+          case "closePopup": push({ t: "closePopup" }); break;
           case "inventory": push({ t: "inventory" }); break;
           case "hotbarPrev": push({ t: "selectDelta", d: -1 }); break;
           case "hotbarNext": push({ t: "selectDelta", d: 1 }); break;

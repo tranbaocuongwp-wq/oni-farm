@@ -27,19 +27,33 @@ import type { Draft, MapView } from "./state.ts";
 import { dEntity, dTile, setInv, toastText } from "./state.ts";
 import { countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
-import { TILE, penOfAnimal, tileAt, tileIndexAt, troughIn } from "./world.ts";
+import { TILE, penOfAnimal, tileAt, tileIndexAt } from "./world.ts";
 
 /** Trần sức chứa của máng, lấy từ content. */
 export function troughMax(content: Content): number {
   return Math.max(1, Math.floor(content.balance.troughMax ?? 12));
 }
 
-/** Số phần thức ăn còn trong máng ở ô (x,y). Ô không phải máng → 0. */
+/**
+ * Số phần thức ăn còn ở ô (x,y) — trong cái máng, hoặc đang NỔI trên mặt nước.
+ *
+ * Hai chỗ chứa, một hàm: từ khi rắc cám xuống hồ để lại thức ăn thật trên mặt
+ * nước (thay vì no ngay tức khắc từ hư không), con cá và con bò dùng chung đúng
+ * một luật — "tới chỗ có đồ ăn rồi ăn".
+ */
 export function troughStock(state: GameState, x: number, y: number): number {
   const t = tileAt(state, x, y);
-  if (!t || t.prop !== "trough") return 0;
+  if (!t) return 0;
+  if (t.prop !== "trough" && t.g !== "water") return 0;
   const n = t.trough;
   return Number.isFinite(n) && (n as number) > 0 ? Math.floor(n as number) : 0;
+}
+
+/** MÓN đang nằm ở ô (x,y), hoặc null nếu ô đó trống. */
+export function troughItem(state: GameState, x: number, y: number): string | null {
+  if (troughStock(state, x, y) <= 0) return null;
+  const id = tileAt(state, x, y)?.troughId;
+  return typeof id === "string" && id ? id : null;
 }
 
 /** Khu chứa ô (x,y) trên bản đồ đang chơi, hoặc null. */
@@ -69,7 +83,11 @@ export function canPourInto(state: GameState, content: Content, x: number, y: nu
   if (!feeds.length) return false;
   if (troughStock(state, x, y) >= troughMax(content)) return false;
   const cam = selectedItemId(state.inv, state.sel);
-  return !!cam && feeds.includes(cam);
+  if (!cam || !feeds.includes(cam)) return false;
+  // Máng chứa một món tại một lúc — nếu không thì hình vẽ phải nói dối về thứ
+  // đang nằm trong đó.
+  const dang = troughItem(state, x, y);
+  return dang === null || dang === cam;
 }
 
 /**
@@ -90,6 +108,11 @@ export function pourIntoTrough(d: Draft, content: Content, x: number, y: number)
   const i = tileIndexAt(d.s, x, y);
   if (i < 0) return 0;
 
+  const dang = troughItem(d.s, x, y);
+  if (dang !== null && dang !== feed) {
+    toastText(d, `Máng đang có ${itemName(dang, content)} — để chúng ăn hết đã.`, "info");
+    return 0;
+  }
   const cho = troughMax(content) - troughStock(d.s, x, y);
   if (cho <= 0) {
     toastText(d, "Máng đã đầy.", "info");
@@ -108,8 +131,63 @@ export function pourIntoTrough(d: Draft, content: Content, x: number, y: number)
   const t = dTile(d, i);
   if (!t) return 0;
   t.trough = troughStock(d.s, x, y) + n;
+  t.troughId = feed;
   toastText(d, `Đổ ${n} ${itemName(feed, content)} vào máng.`, "good");
   return n;
+}
+
+/** Bớt một phần ở ô (x,y); cạn thì xoá luôn tên món để hình vẽ về đúng "trống". */
+function botMotPhan(d: Draft, x: number, y: number): boolean {
+  const i = tileIndexAt(d.s, x, y);
+  if (i < 0) return false;
+  const con = troughStock(d.s, x, y);
+  if (con <= 0) return false;
+  const t = dTile(d, i);
+  if (!t) return false;
+  t.trough = con - 1;
+  if (t.trough <= 0) {
+    delete t.trough;
+    delete t.troughId;
+  }
+  return true;
+}
+
+/**
+ * Ô để ĐỔ/RẮC thức ăn cho một khu — cái máng, hay mặt nước của hồ.
+ *
+ * Khu cạn có đúng một cái máng nên không có gì phải chọn. Hồ thì cả chục ô
+ * nước, nên chọn theo thứ tự: chỗ ĐANG có sẵn thức ăn (đổ thêm vào một mẻ chứ
+ * đừng rải khắp hồ), rồi tới ô nước gần người chơi nhất — rắc ngay trước mặt
+ * mình là thứ nhìn vào thấy đúng.
+ */
+export function pourSpotIn(
+  state: GameState,
+  content: Content,
+  pen: PenDef,
+): { x: number; y: number } | null {
+  if (pen.map !== state.mapId) return null;
+  if (!pen.swim) {
+    for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++)
+        if (tileAt(state, x, y)?.prop === "trough") return { x, y };
+    return null;
+  }
+  const px = state.player.x / TILE;
+  const py = state.player.y / TILE;
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (let y = pen.y; y < pen.y + pen.h; y++)
+    for (let x = pen.x; x < pen.x + pen.w; x++) {
+      if (tileAt(state, x, y)?.g !== "water") continue;
+      if (troughStock(state, x, y) > 0 && troughStock(state, x, y) < troughMax(content))
+        return { x, y };
+      const d = Math.hypot(x + 0.5 - px, y + 0.5 - py);
+      if (d < bestD) {
+        bestD = d;
+        best = { x, y };
+      }
+    }
+  return best;
 }
 
 /** Khu của con vật này (theo loài). Loài thả rông → null. */
@@ -134,28 +212,53 @@ export function eatFromTrough(d: Draft, content: Content, i: number): boolean {
 
   const pen = penOf(content, cur);
   if (!pen || pen.map !== d.s.mapId) return false;
-  const m = troughIn(d.s, pen);
-  if (!m) return false;
-  // Máng là ô ĐẶC nên con vật không đứng lên được: nó ăn khi đứng KỀ bên.
   const cx = Math.floor(cur.x / TILE);
   const cy = Math.floor(cur.y / TILE);
-  if (Math.max(Math.abs(cx - m.x), Math.abs(cy - m.y)) > 1) return false;
-  // Máng của khu phải có ÍT NHẤT một món loài này ăn được. Bò và dê chung một
-  // máng chính là nhờ luật giao nhau này, không phải nhờ một danh sách id nào.
-  if (!(pen.feeds ?? []).some((f) => def.feed.includes(f))) return false;
-  if (troughStock(d.s, m.x, m.y) <= 0) return false;
-
-  const ti = tileIndexAt(d.s, m.x, m.y);
-  if (ti < 0) return false;
-  const t = dTile(d, ti);
-  if (!t) return false;
-  t.trough = troughStock(d.s, m.x, m.y) - 1;
+  /* Chỗ ăn GẦN NHẤT còn đồ, và đúng món loài này ăn được. Ô máng thì con vật
+     đứng KỀ bên (máng là ô đặc); mẻ cám nổi trên mặt nước thì con cá bơi ĐÚNG
+     LÊN ô đó. Cùng một hàm cho cả hai, khác nhau đúng ở tầm với. */
+  const cho = feedSpotNear(d.s, pen, def.feed, cx, cy, pen.swim ? 0 : 1);
+  if (!cho) return false;
+  if (!botMotPhan(d, cho.x, cho.y)) return false;
 
   const e = dEntity(d, i);
   if (!e) return false;
   e.animal.fed = def.fedMinutes;
   e.animal.hungryDays = 0;
   return true;
+}
+
+/**
+ * Ô CÓ ĐỒ ĂN gần nhất trong khu mà loài này ăn được, trong tầm `tam` ô.
+ *
+ * `tam = 1` cho khu cạn (đứng kề cái máng), `tam = 0` cho hồ (bơi đúng lên mẻ
+ * cám). `tam = Infinity` khi cần tìm ĐÍCH để đi tới, không phải để ăn ngay.
+ */
+export function feedSpotNear(
+  state: GameState,
+  pen: PenDef,
+  an: readonly string[],
+  cx: number,
+  cy: number,
+  tam: number,
+): { x: number; y: number } | null {
+  if (pen.map !== state.mapId) return null;
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (let y = pen.y; y < pen.y + pen.h; y++)
+    for (let x = pen.x; x < pen.x + pen.w; x++) {
+      const mon = troughItem(state, x, y);
+      // Loài này có ăn được đúng món ĐANG NẰM ĐÓ không. Trước đây chỉ hỏi khu
+      // nhận những món gì, nên con heo vẫn nhắm vào cái máng đang đầy rơm.
+      if (!mon || !an.includes(mon)) continue;
+      const d = Math.max(Math.abs(x - cx), Math.abs(y - cy));
+      if (d > tam) continue;
+      if (d < bestD) {
+        bestD = d;
+        best = { x, y };
+      }
+    }
+  return best;
 }
 
 /**
@@ -187,20 +290,24 @@ export function eatFromTroughNight(
 
   const pen = penOf(content, cur);
   if (!pen || pen.map !== v.id || cur.map !== v.id) return false;
-  // Máng của khu phải có ít nhất một món loài này ăn được — cùng luật giao nhau
-  // với ban ngày, không phải một cách tính thứ hai.
-  if (!(pen.feeds ?? []).some((f) => def.feed.includes(f))) return false;
 
   for (let y = pen.y; y < pen.y + pen.h; y++) {
     for (let x = pen.x; x < pen.x + pen.w; x++) {
       const ti = y * v.w + x;
       const t = v.tiles[ti];
-      if (!t || t.prop !== "trough") continue;
+      if (!t) continue;
+      if (t.prop !== "trough" && t.g !== "water") continue;
       const con = Number.isFinite(t.trough) && (t.trough as number) > 0 ? Math.floor(t.trough as number) : 0;
       if (con <= 0) continue;
+      // Đúng MÓN loài này ăn được, không phải "khu này nhận những món gì".
+      if (!t.troughId || !def.feed.includes(t.troughId)) continue;
       const m = v.edit(ti);
       if (!m) continue;
       m.trough = con - 1;
+      if (m.trough <= 0) {
+        delete m.trough;
+        delete m.troughId;
+      }
       const e = dEntity(d, i);
       if (!e) return false;
       e.animal.fed = def.fedMinutes;
@@ -233,20 +340,24 @@ export function penGoal(
   const cy = Math.floor(e.y / TILE);
   const inside = cx >= pen.x && cx < pen.x + pen.w && cy >= pen.y && cy < pen.y + pen.h;
 
-  const m = troughIn(state, pen);
-  const conAn = !!m && troughStock(state, m.x, m.y) > 0;
+  const an = content.animals[e.def]?.feed ?? [];
+  // Chỗ có ĐÚNG MÓN nó ăn được, ở bất cứ đâu trong khu — cái máng, hay mẻ cám
+  // vừa được rắc xuống mặt nước.
+  const cho = hungry ? feedSpotNear(state, pen, an, cx, cy, Infinity) : null;
 
-  /* ĐÓI mà máng CẠN thì đừng gọi nó về: về tới nơi cũng không có gì ăn, mà
-     đường về thì bỏ lại đúng vạt cỏ nó đang đứng. Trả null để nhánh tìm cỏ ở
-     `actorStep` quyết định — đó mới là "tự về chuồng, vẫn ra ngoài gặm được",
-     chứ không phải "về chuồng rồi chết đói cạnh cái máng rỗng". */
-  if (hungry && !conAn) return null;
+  /* ĐÓI mà không còn gì trong khu thì đừng gọi nó về: về tới nơi cũng không có
+     gì ăn, mà đường về thì bỏ lại đúng vạt cỏ nó đang đứng. Trả null để nhánh
+     tìm cỏ ở `actorStep` quyết định — đó mới là "tự về chuồng, vẫn ra ngoài gặm
+     được", chứ không phải "về chuồng rồi chết đói cạnh cái máng rỗng". */
+  if (hungry && !cho) return null;
 
-  if (hungry && m && conAn) {
-    // Ô kề máng, ưu tiên ô nằm trong ruột khu (đứng ngoài rào thì với không tới).
+  if (cho) {
+    /* Hồ cá: bơi ĐÚNG LÊN mẻ cám. Khu cạn: cái máng là ô đặc nên phải đứng KỀ
+       bên, và phải là ô trong ruột khu — đứng ngoài rào thì với không tới. */
+    if (pen.swim) return cho;
     for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-      const x = m.x + (dx as number);
-      const y = m.y + (dy as number);
+      const x = cho.x + (dx as number);
+      const y = cho.y + (dy as number);
       if (x < pen.x || y < pen.y || x >= pen.x + pen.w || y >= pen.y + pen.h) continue;
       const t = tileAt(state, x, y);
       if (t && t.prop === null && !t.tilled) return { x, y };
@@ -305,33 +416,27 @@ export function pondAt(state: GameState, content: Content, x: number, y: number)
   return tileAt(state, x, y)?.g === "water" ? pen : null;
 }
 
-/** Có con nào trong khu nước này đang đói không. */
-function coCaDoi(state: GameState, content: Content, pen: PenDef): boolean {
-  for (const e of state.entities) {
-    if (e.map !== state.mapId || e.kind !== "animal") continue;
-    if (content.animals[e.def]?.pen !== pen.id) continue;
-    const def = content.animals[e.def];
-    if (def && e.animal.fed <= def.fedMinutes * 0.6) return true;
-  }
-  return false;
-}
-
 /** Rắc được thức ăn đang cầm xuống mặt nước ở ô này không. */
 export function canFeedPond(state: GameState, content: Content, x: number, y: number): boolean {
   const pen = pondAt(state, content, x, y);
   if (!pen) return false;
   const cam = selectedItemId(state.inv, state.sel);
   if (!cam || !(pen.feeds ?? []).includes(cam)) return false;
-  return coCaDoi(state, content, pen);
+  if (troughStock(state, x, y) >= troughMax(content)) return false;
+  const dang = troughItem(state, x, y);
+  return dang === null || dang === cam;
 }
 
 /**
- * Rắc thức ăn xuống hồ: mỗi con ĐANG ĐÓI trong khu ăn một phần. Trả số con
- * đã ăn.
+ * RẮC thức ăn xuống ô nước: mẻ cám NẰM LẠI trên mặt nước, và đàn cá tự bơi tới
+ * ăn dần. Trả số phần đã rắc.
  *
- * Cho ăn cả đàn trong một cú bấm chứ không từng con: con cá bơi lung tung dưới
- * nước, bắt người chơi ngắm đúng từng con là bắt họ làm một việc mà chính cái
- * ao đã làm khó sẵn.
+ * Bản cũ làm con cá no ngay tức khắc, ở bất cứ đâu nó đang bơi, không cần lại
+ * gần — tiện, nhưng nhìn vào thì chẳng có gì xảy ra cả: không thấy thức ăn,
+ * không thấy con cá bơi tới, không thấy nó ăn. Cường bắt đúng chỗ đó.
+ *
+ * Giờ hồ cá dùng CHUNG luật với cái máng: có một chỗ chứa đồ ăn nhìn thấy được,
+ * con vật đói tự tìm tới, ăn xong thì đồ ăn vơi đi. Một luật, hai kiểu khu.
  */
 export function feedPond(d: Draft, content: Content, x: number, y: number): number {
   const pen = pondAt(d.s, content, x, y);
@@ -339,24 +444,32 @@ export function feedPond(d: Draft, content: Content, x: number, y: number): numb
   const cam = selectedItemId(d.s.inv, d.s.sel);
   if (!cam || !(pen.feeds ?? []).includes(cam)) return 0;
 
-  let an = 0;
-  for (let i = 0; i < d.s.entities.length; i++) {
-    const e = d.s.entities[i]!;
-    if (e.map !== d.s.mapId || e.kind !== "animal") continue;
-    const def = content.animals[e.def];
-    if (!def || def.pen !== pen.id) continue;
-    if (e.animal.fed > def.fedMinutes * 0.6) continue;
-    if (countItem(d.s.inv, cam) <= 0) break; // hết đồ giữa chừng: dừng, đừng nợ
-    const left = removeItem(d.s.inv, cam, 1);
-    if (!left) break;
-    setInv(d, left);
-    const m = dEntity(d, i);
-    if (!m) break;
-    m.animal.fed = def.fedMinutes;
-    m.animal.hungryDays = 0;
-    an++;
+  const dang = troughItem(d.s, x, y);
+  if (dang !== null && dang !== cam) {
+    toastText(d, `Chỗ này còn ${itemName(dang, content)} chưa ăn hết.`, "info");
+    return 0;
   }
-  if (an > 0) toastText(d, `Đã rắc ${itemName(cam, content)} cho ${an} con.`, "good");
-  else toastText(d, "Không con nào đang đói.", "info");
-  return an;
+  const cho = troughMax(content) - troughStock(d.s, x, y);
+  if (cho <= 0) {
+    toastText(d, "Chỗ này đã đủ thức ăn.", "info");
+    return 0;
+  }
+  const co = countItem(d.s.inv, cam);
+  if (co <= 0) {
+    toastText(d, `Không có ${itemName(cam, content)} trong túi.`, "bad");
+    return 0;
+  }
+  const n = Math.min(cho, co);
+  const left = removeItem(d.s.inv, cam, n);
+  if (!left) return 0;
+  setInv(d, left);
+
+  const i = tileIndexAt(d.s, x, y);
+  if (i < 0) return 0;
+  const t = dTile(d, i);
+  if (!t) return 0;
+  t.trough = troughStock(d.s, x, y) + n;
+  t.troughId = cam;
+  toastText(d, `Rắc ${n} ${itemName(cam, content)} xuống hồ.`, "good");
+  return n;
 }

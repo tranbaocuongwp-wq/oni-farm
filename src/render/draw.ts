@@ -111,6 +111,15 @@ export interface Renderer {
   draw(s: GameState, content: Content, cursor: Cursor | null, timeSec: number, opts: DrawOptions): void;
   /** Bắn một cụm hạt tại tâm ô (tx,ty). Trang trí thuần tuý, không vào state. */
   burst(kind: BurstKind, tx: number, ty: number): void;
+  /**
+   * TỪ CHỐI: nhân vật lắc đầu và hiện dấu mệt trên đầu.
+   *
+   * Có mặt vì hết năng lượng hiện chỉ báo bằng một dòng chữ trôi qua ở góc và
+   * một tiếng "bụp". Người chơi đang nhìn nhân vật, bấm nút, và KHÔNG THẤY GÌ
+   * XẢY RA — thứ đó đọc ra là "game đứng", không phải "tôi hết sức". Cái lắc
+   * đầu xảy ra ngay chỗ mắt đang nhìn, nên không cần đọc chữ nào.
+   */
+  refuse(): void;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -159,6 +168,15 @@ const BURST: Record<BurstKind, { colors: string[]; n: number; speed: number; up:
   coin: { colors: ["#ffd84a", "#c9931a", "#fff4b0"], n: 6, speed: 18, up: 44, gravity: 70, ttl: 0.7, size: 2 },
 };
 
+/** Mức đầy 0..3 của một chỗ chứa thức ăn, suy từ số phần còn lại. */
+function mucAn(content: Content, n: number): number {
+  if (!(n > 0)) return 0;
+  const tran = Math.max(1, Math.floor(content.balance.troughMax ?? 12));
+  if (n >= tran * 0.75) return 3;
+  if (n >= tran * 0.34) return 2;
+  return 1;
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   atlas: Atlas,
@@ -199,6 +217,13 @@ export function createRenderer(
     }
     g.imageSmoothingEnabled = false;
   }
+
+  /* ---- động tác TỪ CHỐI ---- */
+  /** Giây của đồng hồ vẽ lúc bắt đầu lắc đầu; -1 = không lắc. */
+  let refuseAt = -1;
+  /** `timeSec` của khung vừa vẽ — `refuse()` được gọi từ ngoài vòng vẽ. */
+  let lastTimeSec = 0;
+  const REFUSE_SEC = 0.5;
 
   /* ---- hạt hiệu ứng ---- */
   function burst(kind: BurstKind, tx: number, ty: number) {
@@ -421,9 +446,23 @@ export function createRenderer(
         const wcx = x * TILE + TILE / 2;
         const wcy = y * TILE;
 
+        /* MẶT NƯỚC có mẻ thức ăn vừa rắc xuống: lớp phủ lên ô nước, xếp theo
+           mép trên ô nên con cá bơi qua vẫn vẽ đè lên nó. */
+        if (t.g === "water" && (t.trough ?? 0) > 0 && t.troughId) {
+          const anh = atlas.pondFeed(t.troughId, mucAn(content, t.trough ?? 0));
+          items.push({ base: y * TILE, run: () => g.drawImage(anh, px, py) });
+        }
+
         if (t.prop && t.prop !== "house" && t.prop !== "door") {
           const def = content.props[t.prop];
-          const img = atlas.props[t.prop];
+          /* CÁI MÁNG đổi hình theo mức đầy và theo MÓN đang nằm trong đó —
+             không dùng hình tĩnh trong `atlas.props`. Máng cạn và máng đầy phải
+             nhìn ra khác nhau từ bên kia sân, nếu không thì người chơi không có
+             cách nào biết vì sao đàn bò đang đói. */
+          const img =
+            t.prop === "trough"
+              ? atlas.trough(t.troughId ?? null, mucAn(content, t.trough ?? 0))
+              : atlas.props[t.prop];
           if (img) {
             const oy = def?.tall ? py - TILE : py;
             /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
@@ -624,7 +663,7 @@ export function createRenderer(
     }
   }
 
-  function drawPlayer(s: GameState, content: Content, items: Item[]) {
+  function drawPlayer(s: GameState, content: Content, items: Item[], timeSec: number) {
     const p = s.player;
     const dir = p.dir as PlayerDir;
     const frames = atlas.player[dir];
@@ -676,9 +715,15 @@ export function createRenderer(
        một hình đứng xoay ngang đọc ra ngay là "đang nằm" — và nó rẻ hơn hẳn
        việc vẽ thêm bốn khung hình chỉ dùng đúng một giây mỗi ngày. */
     const nam = s.sleeping;
+    /* LẮC ĐẦU: dịch ngang theo sin trong nửa giây, cộng dấu mệt trên đầu. Lắc
+       ngang chứ không nhấp nháy — nhấp nháy đọc ra là "hỏng", lắc đầu đọc ra là
+       "không, tôi không làm được cái đó". */
+    const lac = refuseAt >= 0 && timeSec - refuseAt < REFUSE_SEC;
+    const lech = lac ? Math.round(Math.sin((timeSec - refuseAt) * 44) * 1.6) : 0;
     items.push({
       base: Math.round(p.y) + 5,
       run: () => {
+        if (lac) g.drawImage(atlas.emote("tired"), px + 4, py - 10);
         if (nam) {
           g.save();
           g.translate(px + TILE / 2, py + 11);
@@ -689,9 +734,9 @@ export function createRenderer(
         }
         // công cụ vẽ SAU (đè lên) người khi ở trước mặt/dưới, TRƯỚC khi giơ lên phía sau
         if (toolRef && raising && dir !== "down") g.drawImage(toolRef.img, toolRef.x, toolRef.y);
-        g.drawImage(img, px, py);
+        g.drawImage(img, px + lech, py);
         if (toolRef && !(raising && dir !== "down")) g.drawImage(toolRef.img, toolRef.x, toolRef.y);
-        if (vac) g.drawImage(vac, px, py - 11 + nhun);
+        if (vac) g.drawImage(vac, px + lech, py - 11 + nhun);
       },
     });
   }
@@ -976,6 +1021,7 @@ export function createRenderer(
 
     const dt = lastTime > 0 ? Math.min(0.1, Math.max(0, timeSec - lastTime)) : 0;
     lastTime = timeSec;
+    lastTimeSec = timeSec;
     if (opts.reduceMotion) particles.length = 0;
     else stepParticles(dt);
 
@@ -1066,7 +1112,7 @@ export function createRenderer(
     collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion, opts.weather);
     collectSigns(s, content, x0, y0, x1, y1, items);
     drawActors(s, content, items, timeSec);
-    drawPlayer(s, content, items);
+    drawPlayer(s, content, items, timeSec);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 
     items.sort((a, b) => a.base - b.base);
@@ -1096,5 +1142,12 @@ export function createRenderer(
   }
 
   applyViewport();
-  return { applyViewport, draw, burst };
+  return {
+    applyViewport,
+    draw,
+    burst,
+    refuse: () => {
+      refuseAt = lastTimeSec;
+    },
+  };
 }

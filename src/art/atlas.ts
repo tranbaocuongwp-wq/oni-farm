@@ -884,7 +884,51 @@ function makeSign(art: PropArt): HTMLCanvasElement {
   return outline(s).c;
 }
 
-function makeTrough(art: PropArt): HTMLCanvasElement {
+/**
+ * Màu VẠT THỨC ĂN theo MÓN đang nằm trong máng (hoặc nổi trên mặt nước).
+ *
+ * Bảng tay cho vật tư, và suy từ content cho nông sản: đổ củ cải vào máng heo
+ * thì vạt thức ăn mang đúng màu củ cải mà `crops.json` khai, không cần thêm một
+ * dòng nào ở đây. Món lạ hoàn toàn thì rơi về màu cám trung tính — thà một máng
+ * màu chung chung còn hơn một máng vô hình.
+ */
+const MON_MAU: Record<string, [string, string]> = {
+  "item:hay": ["#e3c257", "#a8862a"],
+  "item:fodder": ["#93bd5c", "#5f8a34"],
+  "item:feedmix": ["#d29a54", "#96662b"],
+  // Cám cá màu NÂU ẤM, không phải xanh: nó nằm trên mặt nước xanh, và một
+  // vệt xanh trên nền xanh thì bằng như không vẽ.
+  "item:fishfeed": ["#f0cf94", "#a8763c"],
+};
+
+function mauMon(id: string | null, content: Content): [string, string] {
+  if (!id) return ["#000000", "#000000"];
+  const t = MON_MAU[id];
+  if (t) return t;
+  if (id.startsWith("crop:")) {
+    const a = content.crops[id.slice(5)]?.art;
+    if (a) return [a.fruit, a.fruitDark];
+  }
+  if (id.startsWith("item:")) {
+    const m = MAT[id.slice(5)];
+    if (m) return [m.mau, m.toi];
+  }
+  return ["#c8a86a", "#8a6e40"];
+}
+
+/**
+ * Cái MÁNG, bốn mức đầy và mang đúng màu món đang nằm trong đó.
+ *
+ * Trước đây chỉ có MỘT hình, vẽ sẵn một vạt thức ăn màu kem — nên máng cạn và
+ * máng đầy nhìn y hệt nhau, và người chơi không có cách nào biết vì sao đàn bò
+ * đang đói. Cường bắt đúng chỗ đó.
+ *
+ *   0 — trống, nhìn thấy đáy gỗ
+ *   1 — một lớp mỏng dưới đáy
+ *   2 — quá nửa
+ *   3 — đầy có ngọn, nhô lên khỏi thành máng
+ */
+function makeTrough(art: PropArt, muc: number, mau: string, toi: string): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 13, 11, 2);
   // hai chân
@@ -893,9 +937,24 @@ function makeTrough(art: PropArt): HTMLCanvasElement {
   // lòng máng
   s.rect(2, 6, 12, 6, art.dark);
   s.rect(3, 7, 10, 4, art.body);
-  // vạt thức ăn
-  s.rect(4, 8, 8, 2, art.accent);
-  s.hline(4, 8, 8, "#f0dca0");
+
+  if (muc > 0) {
+    /* Vạt thức ăn dâng từ ĐÁY lên: đáy lòng máng ở y=10, miệng ở y=7. Mức 3
+       tràn lên trên miệng một pixel — cái nhô lên khỏi thành là thứ nhìn từ xa
+       cũng thấy, và đó chính là điều người chơi cần thấy từ bên kia sân. */
+    const cao = muc === 1 ? 1 : muc === 2 ? 2 : 3;
+    const y = 11 - cao;
+    s.rect(4, y, 8, cao, toi);
+    s.rect(4, y, 8, Math.max(1, cao - 1), mau);
+    s.hline(4, y, 8, lighten(mau));
+    if (muc >= 3) {
+      // ngọn: hai mô nhô lên khỏi miệng máng
+      s.rect(5, y - 1, 3, 1, mau);
+      s.rect(9, y - 1, 2, 1, mau);
+      s.px(6, y - 2, lighten(mau));
+    }
+  }
+
   // thành trước, và hai đầu nhô cao
   s.hline(2, 11, 12, art.dark);
   s.rect(2, 5, 2, 7, art.body);
@@ -903,6 +962,39 @@ function makeTrough(art: PropArt): HTMLCanvasElement {
   s.hline(2, 5, 2, "#c9a06a");
   s.hline(12, 5, 2, "#c9a06a");
   return outline(s).c;
+}
+
+/**
+ * Mẻ thức ăn NỔI trên mặt nước — lớp phủ lên ô nước, không phải một ô riêng.
+ *
+ * Có nó vì rắc cám xuống hồ giờ để lại thức ăn THẬT nằm đó chờ cá tới ăn. Không
+ * vẽ ra thì luật mới vô hình y như luật cũ, và Cường lại hỏi đúng câu cũ.
+ */
+function makePondFeed(muc: number, mau: string, toi: string): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  // Vị trí hạt CỐ ĐỊNH theo mức, không ngẫu nhiên: cùng một mẻ cám thì khung
+  // hình nào cũng nằm yên một chỗ, chứ không nhảy lung tung mỗi lần vẽ lại.
+  const hat: [number, number][] = [
+    [7, 7], [5, 9], [10, 8],
+    [4, 6], [9, 11], [12, 9],
+    [6, 12], [11, 5], [3, 10],
+  ];
+  const n = muc <= 1 ? 3 : muc === 2 ? 6 : 9;
+  for (let i = 0; i < n && i < hat.length; i++) {
+    const [x, y] = hat[i]!;
+    /* Viền TỐI quanh mỗi hạt. Không có nó thì mẻ cám chìm nghỉm vào mặt nước —
+       màu nào cũng vậy, vì nước là một mảng đặc cùng độ sáng. Viền tách hạt ra
+       khỏi nền, đúng cách mọi vật thể khác trong game đang làm. */
+    s.px(x, y + 2, "#1d3a52");
+    s.px(x + 2, y, "#1d3a52");
+    s.px(x + 2, y + 1, "#1d3a52");
+    s.px(x + 1, y + 2, "#1d3a52");
+    s.px(x, y, toi);
+    s.px(x + 1, y, mau);
+    s.px(x, y + 1, mau);
+    s.px(x + 1, y + 1, toi);
+  }
+  return s.c;
 }
 
 function makeBench(art: PropArt): HTMLCanvasElement {
@@ -1104,7 +1196,8 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "well": return makeWell(art);
     case "bed": return makeBed(art);
     case "bench": return makeBench(art);
-    case "trough": return makeTrough(art);
+    // Máng rỗng là hình MẶC ĐỊNH; các mức đầy đi qua `atlas.trough()`.
+    case "trough": return makeTrough(art, 0, "#000", "#000");
     case "sign": return makeSign(art);
     case "pier": return makePier(art);
     case "wall": return makeWall(art);
@@ -2394,6 +2487,10 @@ export interface Atlas {
   /** lấp lánh trên cây chín, 3 khung 7×7 */
   sparkle: HTMLCanvasElement[];
   drop: HTMLCanvasElement;
+  /** Cái MÁNG theo MỨC ĐẦY (0..3) và theo MÓN đang nằm trong đó. */
+  trough(feedId: string | null, muc: number): HTMLCanvasElement;
+  /** Mẻ thức ăn nổi trên ô nước — lớp phủ, vẽ đè lên mặt nước. */
+  pondFeed(feedId: string, muc: number): HTMLCanvasElement;
   /** icon 16x16 cho UI: hạt, nông sản, công cụ, công trình */
   icon(id: string): HTMLCanvasElement | null;
   /** icon 12×12 cho HUD */
@@ -3493,6 +3590,11 @@ export function buildAtlas(content: Content): Atlas {
     props[id] = makeProp(id, content.props[id]?.art ?? FALLBACK_ART);
   }
 
+  /* Máng và mẻ cám dựng LƯỜI: bốn mức × mỗi món là vài chục hình, mà một ván
+     thường chỉ dùng ba bốn cái. Dựng hết lúc khởi động là trả tiền cho thứ
+     không ai xem. */
+  const mangCache = new Map<string, HTMLCanvasElement>();
+  const hoCache = new Map<string, HTMLCanvasElement>();
   const icons = new Map<string, HTMLCanvasElement>();
   for (const id of content.toolOrder)
     icons.set(`tool:${id}`, makeToolIcon(id, content.tools[id]?.action ?? "TILL"));
@@ -3555,6 +3657,28 @@ export function buildAtlas(content: Content): Atlas {
     navMark: [0, 1, 2].map(makeNavMark),
     sparkle: [0, 1, 2].map(makeSparkle),
     drop: makeDrop(),
+    trough: (feedId, muc) => {
+      const m = Math.max(0, Math.min(3, Math.floor(muc)));
+      const key = `${feedId ?? ""}|${m}`;
+      let c = mangCache.get(key);
+      if (!c) {
+        const [mau, toi] = mauMon(feedId, content);
+        c = makeTrough(content.props["trough"]?.art ?? FALLBACK_ART, m, mau, toi);
+        mangCache.set(key, c);
+      }
+      return c;
+    },
+    pondFeed: (feedId, muc) => {
+      const m = Math.max(1, Math.min(3, Math.floor(muc)));
+      const key = `${feedId}|${m}`;
+      let c = hoCache.get(key);
+      if (!c) {
+        const [mau, toi] = mauMon(feedId, content);
+        c = makePondFeed(m, mau, toi);
+        hoCache.set(key, c);
+      }
+      return c;
+    },
     icon: (id) => icons.get(id) ?? null,
     ui,
     held,

@@ -55,7 +55,7 @@ import type { Content, GameState, InteractKind, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { checkInvariants } from "./game/invariants.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
+import { INTERACT_SCAN, LABEL, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
 import { animalNear, animalStats, penNear, readyProduct } from "./game/animals.ts";
@@ -835,8 +835,20 @@ async function boot() {
       "info",
     );
   };
-  const setAuto = (on: boolean) => {
+  /**
+   * Chuyến do nút A nhận CHỈ làm đúng loại việc đó, rồi dừng.
+   *
+   * `null` = chế độ TỰ ĐỘNG đầy đủ (nút AUTO khi chơi chạm): đổi tay, đi hết
+   * bậc ưu tiên THU → CHỮA → GIEO → TƯỚI → CÀY.
+   *
+   * Khác nhau ở chủ ngữ. Bấm nút AUTO là "trông nông trại hộ tôi". Bấm A trong
+   * lúc cầm bao cám gà là "cho ăn cho xong đi" — và khi các máng đã đầy thì
+   * việc ấy XONG. Đi cày tiếp là làm một thứ người chơi không hề bảo.
+   */
+  let autoOnly: UseKind = null;
+  const setAuto = (on: boolean, only: UseKind = null) => {
     autoWork = on;
+    autoOnly = on ? only : null;
     if (!on) autoAnchor = null;
     autoMiss = 0;
     // Đặt lại cả đồng hồ "không tiến triển", nếu không thì bật lại ngay sau khi
@@ -899,6 +911,15 @@ async function boot() {
    */
   function continueWork(s: GameState): boolean {
     if (s.busy > 0) return false;
+    /* CHƯA làm việc gì thì đây không phải "làm tiếp" — nhường cho `khongCoViec`.
+
+       Không có dòng này thì cú bấm ĐẦU TIÊN rơi vào `nearestTarget(null)` = "ô
+       nào cũng được, việc nào cũng được" trong bán kính 12, và nhân vật lững
+       thững đi tới một ô ngẫu nhiên gần đó. Đó cũng đúng là lý do "cầm bao bắp
+       bấm A" không đi tới khu gà: cú bấm bị nuốt ở đây trước khi tới được chỗ
+       biết nhận cả chuyến. `khongCoViec` hỏi `autoJob`, tức là có bậc ưu tiên,
+       biết đổi công cụ, và quét cả nông trại chứ không chỉ 12 ô. */
+    if (!lastKind) return false;
     if (aimed && inReachOf(s, aimed.x, aimed.y) && canUseAt(s, content, aimed.x, aimed.y) !== null)
       return tryUse(s, aimed.x, aimed.y);
 
@@ -991,6 +1012,10 @@ async function boot() {
       }
     }
     if (!job) return false;
+    /* Chuyến do nút A nhận thì DỪNG khi hết đúng loại việc ấy. Không có dòng
+       này thì đổ đầy ba cái máng xong, nhân vật đi cày tiếp — một việc người
+       chơi không hề bảo, và họ phải bấm lại để bắt nó thôi. */
+    if (autoOnly && job.kind !== autoOnly) return false;
 
     if (job.slot !== s.sel) {
       store.dispatch({ t: "SELECT", slot: job.slot });
@@ -1033,6 +1058,61 @@ async function boot() {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Bấm nút chính mà quanh đây KHÔNG có gì làm được.
+   *
+   * Đây là chỗ nút ngữ cảnh thành ĐÚNG NGHĨA của nó. Cường nói thẳng: chọn bao
+   * cám gà rồi bấm một cái thì nhân vật phải tự đi tới khu gà mà đổ cho xong,
+   * chứ không phải đứng im vì cái máng ở tận đầu kia sân.
+   *
+   *   · đang chạy dở một chuyến → bấm nữa là DỪNG (một nút, hai chiều);
+   *   · còn việc ở đâu đó trên nông trại → nhận chuyến, tự đi, làm tới hết;
+   *   · thật sự hết việc → lắc đầu.
+   *
+   * Dùng lại nguyên bộ máy `autoStep`/`autoJob` đã có — nó vốn đã biết đi tới,
+   * đổi công cụ, đi múc nước và tự tắt khi hết việc. Việc duy nhất phải thêm là
+   * ĐỔ MÁNG và RẮC HỒ vào bảng ưu tiên (xem `AUTO_ORDER`).
+   */
+  function khongCoViec(s: GameState): void {
+    if (autoWork) {
+      setAuto(false);
+      toasts.say("Đã dừng.", "info");
+      return;
+    }
+
+    /* 1. CẢ CHUYẾN. Hỏi `autoJob` — nó có bậc ưu tiên, biết đổi công cụ, biết
+          đi múc nước, và quét cả nông trại chứ không chỉ mấy ô quanh chân. */
+    const viec = autoJob(s, content, autoRadius(s));
+    if (viec) {
+      setAuto(true, viec.kind);
+      toasts.say(`Bắt đầu: ${LABEL[viec.kind] ?? "làm việc"}`, "good");
+      return;
+    }
+
+    /* 2. Quét gần. `autoJob` CỐ Ý không nhận CHẶT và ĐẬP — bật tự động rồi quay
+          đi một lúc mà về thấy sạch bóng cây với đá là thứ không hoàn tác được.
+          Nhưng bấm một cái để chặt đúng cái cây trước mặt thì phải được, nên
+          nhánh này vẫn ở đây, chỉ là đứng SAU chứ không còn nuốt mất cú bấm.
+          Hỏi đúng `contextAction` mà `hintAt` dùng để in nhãn — một nguồn cho
+          cả nhãn lẫn hành động, nên nút không nói một đằng làm một nẻo. */
+    if (settings.contextButton) {
+      const a0 = targetTile(s);
+      if (a0) {
+        const pa = contextAction(s, content, a0.x, a0.y);
+        if (pa) {
+          if (nav.goTo(s, content, pa.at.x, pa.at.y)) return;
+          if (inReachOf(s, pa.at.x, pa.at.y)) {
+            if (tryAnimal(s, pa.at.x, pa.at.y)) return;
+            store.dispatch({ t: "USE", x: pa.at.x, y: pa.at.y });
+            return;
+          }
+        }
+      }
+    }
+
+    deny();
   }
 
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
@@ -1084,22 +1164,15 @@ async function boot() {
       hints.push([b(1), "Đóng bảng"], [b(0), "Thu / cho ăn"]);
       if (std) hints.push([`${b(4)}/${b(5)}`, "Đổi con"]);
     } else {
-      /* Ngoài ruộng, cụm nút chạm giờ chỉ còn ĐÚNG MỘT nút — nút A, thứ duy
-         nhất đổi nhãn theo ngữ cảnh (xem style.css, "MỘT NÚT, MỘT THANH").
-         Nên ba nút mặt kia không còn hiện ở đâu nữa, và thanh này phải gánh.
+      /* Ngoài ruộng thì nút A đã tự nói việc của nó (nhãn trên chính cái nút)
+         và X thì KHÔNG làm gì cả — nó chỉ tắt popup, mà ngoài ruộng không có
+         popup nào. In ra một dòng cho một nút không làm gì là dạy sai.
 
-         Bỏ "Ngắm ô", "Phóng", "Xây dựng" khỏi đây: chúng KHÔNG đổi bao giờ và
-         sơ đồ nút đầy đủ (cần phải bấm xuống) đã in ra hết. Thanh dưới đáy phải
-         đủ ngắn để liếc một cái là đọc xong, không phải đọc từng chữ. */
+         Nên thanh này chỉ còn những nút vừa CÓ TÁC DỤNG ngay lúc này vừa không
+         hiện ở đâu khác. Đủ ngắn để liếc một cái là đọc xong. */
       if (std)
-        hints.push(
-          [b(1), "Tương tác"],
-          [b(2), "Tự động"],
-          [b(3), "Balo"],
-          [b(6), "Chạy"],
-          [b(9), "Tạm dừng"],
-        );
-      else hints.push([b(0), "Dùng"], [b(1), "Tương tác"]);
+        hints.push([b(1), "Menu"], [b(3), "Balo"], [b(6), "Chạy"], [b(7), "Phóng"], [b(10), "Xây dựng"]);
+      else hints.push([b(0), "Làm"], [b(1), "Menu"]);
     }
 
     /* Khi thanh này nói về một LỚP PHỦ (menu, hướng dẫn, bản đồ nhỏ, chế độ
@@ -1126,9 +1199,14 @@ async function boot() {
     padBar.hidden = false;
   }
 
+  /** Dòng nhật ký cuối cùng đã xét cho động tác lắc đầu — xem chỗ đọc `s.log`. */
+  let logDaLac = 0;
   const deny = () => {
     play("deny");
     buzz("deny");
+    // Và nhân vật LẮC ĐẦU. Một dòng chữ trôi ở góc màn hình với một tiếng "bụp"
+    // là hai thứ dễ bỏ lỡ nhất; cái lắc đầu xảy ra ngay chỗ mắt đang nhìn.
+    renderer.refuse();
   };
 
   /**
@@ -1516,6 +1594,33 @@ async function boot() {
           else if (devPanel.isOpen()) devPanel.close();
           else menus.openPause();
           break;
+
+        /* QUAY LẠI (nút B trên tay cầm).
+           Một thứ tự duy nhất, từ nông tới sâu: đóng cái đang mở; không có gì
+           mở thì bật menu tạm dừng. Người chơi không phải nhớ nút nào đóng cái
+           gì — cứ bấm B là lùi ra một lớp, và lùi hết thì ra menu. */
+        case "back":
+          if (tutorial.isOpen()) tutorial.close();
+          else if (menus.isOpen()) menus.close();
+          else if (devPanel.isOpen()) devPanel.close();
+          else if (minimap.cursor()) minimap.setCursor(null);
+          else if (building) buildUI.close();
+          else if (cardAnimal !== null) cardAnimal = null;
+          else menus.openPause();
+          break;
+
+        /* TẮT POPUP (nút X). Chỉ ĐÓNG, không bao giờ MỞ gì.
+           Khác B ở đúng chỗ đó: bấm nhầm B lúc không có gì mở thì bật ra cái
+           menu, còn X thì không làm gì cả. Nó là nút "cho tôi ra khỏi đây" bấm
+           mấy lần cũng an toàn. */
+        case "closePopup":
+          if (tutorial.isOpen()) tutorial.close();
+          else if (menus.isOpen()) menus.close();
+          else if (devPanel.isOpen()) devPanel.close();
+          else if (minimap.cursor()) minimap.setCursor(null);
+          else if (building) buildUI.close();
+          else if (cardAnimal !== null) cardAnimal = null;
+          break;
         case "shop":
           if (!modal) menus.openShop();
           break;
@@ -1560,7 +1665,8 @@ async function boot() {
           devPanel.toggle();
           break;
         case "auto":
-          setAuto(!autoWork);
+          // Nút AUTO (cảm ứng) = chế độ ĐẦY ĐỦ, không giới hạn loại việc.
+          setAuto(!autoWork, null);
           toasts.say(autoWork ? "Tự động làm: BẬT" : "Tự động làm: TẮT", "info");
           break;
         case "select":
@@ -1635,25 +1741,6 @@ async function boot() {
             buildUI.open();
             break;
           }
-          /* Ô đang ngắm KHÔNG có việc gì: hỏi `contextAction` — đúng cái hàm
-             `hintAt` dùng để in nhãn — rồi dắt tới ô nó chỉ. Một nguồn cho cả
-             nhãn lẫn hành động, nên nút không nói một đằng làm một nẻo. */
-          if (!building && settings.contextButton) {
-            const a0 = targetTile(s);
-            if (a0 && canUseAt(s, content, a0.x, a0.y, true) === null && !animalNear(s, a0.x, a0.y)) {
-              const pa = contextAction(s, content, a0.x, a0.y);
-              if (pa) {
-                if (nav.goTo(s, content, pa.at.x, pa.at.y)) break;
-                // Đã đứng đúng chỗ rồi (`goTo` trả false): làm luôn tại đó.
-                if (inReachOf(s, pa.at.x, pa.at.y)) {
-                  if (tryAnimal(s, pa.at.x, pa.at.y)) break;
-                  store.dispatch({ t: "USE", x: pa.at.x, y: pa.at.y });
-                  break;
-                }
-              }
-            }
-          }
-
           let c = targetTile(s);
           // Nút hành động theo ngữ cảnh: ô đang ngắm ở XA thì đi tới rồi làm,
           // thay vì bấm hụt. Trên điện thoại đây là đường tắt tự nhiên nhất:
@@ -1666,19 +1753,25 @@ async function boot() {
             // Con vật trước tiên — nếu không thì nhãn nút ghi THU mà bấm vào lại
             // đi cày, tức là nút nói một đằng làm một nẻo.
             if (tryAnimal(s, c.x, c.y)) break;
-            /* Nút chính KHÔNG mở cửa hàng, giường, giếng, kho nữa — đó là
-               việc của nút tương tác. Trước đây nó làm cả hai, và hậu quả là
-               đang cày một luống dài, đi ngang qua quầy thu mua, bấm tiếp thì
-               bật bảng bán hàng: cả nhịp làm việc gãy vì một thứ mình không
-               hề định làm. Nút chính phải LUÔN làm đúng thứ trên tay. */
+            /* CÔNG CỤ TRƯỚC, TƯƠNG TÁC SAU — và thứ tự đó là cả cái luật.
+
+               Một nút ngữ cảnh duy nhất thì nó phải mở được cửa hàng, cái
+               giường, cái giếng. Nhưng hồi nút chính làm cả hai theo thứ tự
+               ngược lại, đang cày một luống dài mà đi ngang quầy thu mua là
+               bật bảng bán hàng — cả nhịp làm việc gãy vì thứ mình không định
+               làm. Hỏi công cụ trước thì chuyện đó không xảy ra được: đứng
+               trên đất cày được mà cầm cuốc thì luôn là CÀY, và cái quầy chỉ
+               lên tiếng khi trên tay không có việc gì cho ô đó. */
             if (canUseAt(s, content, c.x, c.y) !== null) {
               tryUse(s, c.x, c.y);
+            } else if (tryInteract(s, c.x, c.y)) {
+              break;
             } else if (s.busy <= 0) {
               // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là tự sang ô kế
               // tiếp trong tầm công cụ, cùng loại việc.
-              if (!continueWork(s)) deny();
+              if (!continueWork(s)) khongCoViec(s);
             }
-          } else deny();
+          } else khongCoViec(s);
           break;
         }
         case "pointer": {
@@ -1898,6 +1991,16 @@ async function boot() {
 
     const s = store.getState();
     if (s.log.length) {
+      /* HẾT NĂNG LƯỢNG được phát hiện ở ĐÂY chứ không ở chỗ bấm nút.
+         Thao tác có hiệu lực TRỄ: `USE` đặt `busy` ngay rồi mới kiểm năng lượng
+         lúc cuốc chạm đất, nên lúc bấm không có cách nào biết nhát này sẽ ăn
+         hay trượt. Dòng toast là tín hiệu duy nhất tới đúng lúc — bám vào nó
+         thì cái lắc đầu rơi ĐÚNG khoảnh khắc nhát cuốc trượt. */
+      const hetSuc = content.strings.msg["noEnergy"];
+      if (hetSuc && s.log.some((v) => v.id > logDaLac && v.text === hetSuc)) {
+        renderer.refuse();
+      }
+      logDaLac = s.log[s.log.length - 1]?.id ?? logDaLac;
       const upTo = toasts.show(s.log);
       if (upTo) store.dispatch({ t: "LOG_SEEN", upTo });
     }

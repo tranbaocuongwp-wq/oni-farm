@@ -29,7 +29,7 @@ import {
   tileCenterY,
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
-import { parseItem } from "./items.ts";
+import { isKnownItem, parseItem } from "./items.ts";
 import { normalizeStore, storeErrors } from "./storage.ts";
 import { MAX_ENTITIES, MAX_PATH, pruneEntities, capEntities } from "./entities.ts";
 
@@ -316,6 +316,7 @@ function mergeGrid(
   fresh: StoredMap,
   content: Content,
   log: MergeLog,
+  mapId: string,
 ): StoredMap {
   const tiles: Tile[] = new Array<Tile>(fresh.w * fresh.h);
   for (let y = 0; y < fresh.h; y++) {
@@ -404,11 +405,37 @@ function mergeGrid(
           else log.lostToTerrain++;
         }
 
-        // Thức ăn còn trong máng là của người chơi đổ vào, giữ lại — miễn ô đó
-        // vẫn còn là cái máng sau khi content đổi.
-        if (t.prop === "trough" && prev.prop === "trough") {
+        /* Thức ăn còn trong máng (hoặc đang nổi trên mặt nước của hồ) là của
+           người chơi đổ vào, giữ lại — miễn ô đó vẫn còn nhận được thức ăn sau
+           khi content đổi.
+
+           Save CŨ chỉ có con SỐ, chưa có tên món: suy ra từ `feeds` của khu
+           chứa ô đó. Không suy thì mọi cái máng đang đầy của người chơi cũ hoá
+           thành trơ — có số nhưng không con nào ăn được, vì giờ con vật hỏi
+           "món nằm đó có phải thứ tôi ăn không". */
+        const nhanDo = t.prop === "trough" || t.g === "water";
+        const nhanDoTruoc = prev.prop === "trough" || prev.g === "water";
+        if (nhanDo && nhanDoTruoc) {
           const con = Number(prev.trough);
-          if (Number.isFinite(con) && con > 0) t.trough = Math.floor(con);
+          if (Number.isFinite(con) && con > 0) {
+            const tran = Math.max(1, Math.floor(content.balance.troughMax ?? 12));
+            const cu = typeof prev.troughId === "string" ? prev.troughId : null;
+            const khu = (content.tiles.pens ?? []).find(
+              (q) =>
+                q.map === mapId &&
+                x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h,
+            );
+            const mon =
+              cu && isKnownItem(cu, content) && (khu?.feeds ?? []).includes(cu)
+                ? cu
+                : ((khu?.feeds ?? [])[0] ?? null);
+            if (mon) {
+              // Kẹp về trần MỚI: hạ `troughMax` qua OTA mà không kẹp thì máng
+              // vượt trần và không bao giờ đổ thêm được nữa.
+              t.trough = Math.min(tran, Math.floor(con));
+              t.troughId = mon;
+            }
+          }
         }
         if (prev.crop && typeof prev.crop.id === "string") {
           const def = content.crops[prev.crop.id];
@@ -528,7 +555,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
         notes.push(
           `bản đồ '${id}' đổi kích thước ${old.w}x${old.h} → ${fresh.w}x${fresh.h}; dựng lại lưới, giữ lại phần trùng`,
         );
-      rebuilt[id] = mergeGrid(old, fresh, content, log);
+      rebuilt[id] = mergeGrid(old, fresh, content, log, id);
     }
     for (const id of new Set([...Object.keys(oldGrids), rawMapId]))
       if (id && !rebuilt[id]) notes.push(`bỏ bản đồ '${id}' — content mới không còn`);

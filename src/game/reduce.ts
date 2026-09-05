@@ -34,9 +34,8 @@ import {
   portalAt,
   tileCenterX,
   tileCenterY,
-  troughIn,
 } from "./world.ts";
-import { pourIntoTrough } from "./pen.ts";
+import { feedPond, pourIntoTrough, pourSpotIn } from "./pen.ts";
 
 /** Người chơi có đang ĐỨNG Ở CHỖ cái khu này không (trong hoặc sát ngoài rào). */
 function penInReach(state: GameState, content: Content, penId: string): boolean {
@@ -402,9 +401,12 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       if (!penInReach(state, content, action.pen)) return state;
       const pen = (content.tiles.pens ?? []).find((p) => p.id === action.pen);
       if (!pen || pen.map !== state.mapId) return state;
-      const m = troughIn(state, pen);
+      const m = pourSpotIn(state, content, pen);
       if (!m) return state;
-      pourIntoTrough(d, content, m.x, m.y);
+      // Hồ thì RẮC xuống nước, khu cạn thì ĐỔ vào máng — hai cái tên khác nhau
+      // vì hai hình ảnh khác nhau, nhưng cùng để lại thức ăn thật ở một chỗ.
+      if (pen.swim) feedPond(d, content, m.x, m.y);
+      else pourIntoTrough(d, content, m.x, m.y);
       return commit(d);
     }
 

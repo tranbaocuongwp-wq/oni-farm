@@ -202,6 +202,7 @@ export function warySpeedMul(s: GameState, content: Content, e: Entity): number 
   if (animalDef(content, e.def)?.job === "pest") return 1;
   if (e.map !== s.mapId) return 1;
   if (onFarmTile(s, e)) return 1; // đang đứng trên luống thì phải đi cho khuất, đừng chậm lại
+  if (isHungry(e)) return 1; // ĐÓI thì cái bụng thắng sự dè chừng — xem `calmedByPlayer`
   const d = Math.hypot(e.x - s.player.x, e.y - s.player.y) / TILE;
   if (d >= WARY_TILES) return 1;
   if (d <= CALM_TILES) return 0.25;
@@ -229,6 +230,11 @@ export function calmedByPlayer(s: GameState, content: Content, e: Entity): boole
      cày: luật "tới gần thì đứng lại" giữ nó ở đúng chỗ nó không được ở, và
      người chơi phải đi vòng ra xa mới đuổi được nó đi. */
   if (onFarmTile(s, e)) return false;
+  /* ĐÓI thì KHÔNG đứng lại. Người chơi vừa rắc cám ngay dưới chân mình rồi đứng
+     đó xem — mà chỗ rắc thì lúc nào cũng nằm trong tầm dè chừng, nên con vật
+     dừng lại cách mẻ cám một ô và không bao giờ tới. Đứng bên cái máng vừa đổ
+     cũng y hệt. Cái bụng phải thắng sự dè chừng, đúng như ngoài đời. */
+  if (isHungry(e)) return false;
   return Math.hypot(e.x - s.player.x, e.y - s.player.y) <= CALM_TILES * TILE;
 }
 

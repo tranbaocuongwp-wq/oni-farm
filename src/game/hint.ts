@@ -45,7 +45,7 @@ export interface Hint {
   why: string | null;
 }
 
-const LABEL: Record<Exclude<HintKind, null>, string> = {
+export const LABEL: Record<Exclude<HintKind, null>, string> = {
   harvest: "THU",
   till: "CÀY",
   water: "TƯỚI",
@@ -503,7 +503,18 @@ export function facingTile(state: GameState, tile = 16): { x: number; y: number 
  * bóng cây với đá trên cả nông trại là một thứ không hoàn tác được, và không ai
  * yêu cầu nó. Muốn dọn thì bấm tay.
  */
-export const AUTO_ORDER: Exclude<UseKind, null>[] = ["harvest", "cure", "plant", "water", "till"];
+export const AUTO_ORDER: Exclude<UseKind, null>[] = [
+  // ĐỔ MÁNG và RẮC HỒ đứng ĐẦU: con vật chết đói được, cây thì chỉ đứng chờ.
+  // Và đây là thứ làm nút ngữ cảnh đúng nghĩa — cầm bó rơm bấm một cái thì
+  // nhân vật tự đi hết các khu mà đổ, không phải lội tới từng cái máng.
+  "pour",
+  "feedpond",
+  "harvest",
+  "cure",
+  "plant",
+  "water",
+  "till",
+];
 
 export interface AutoJob {
   x: number;
@@ -527,9 +538,19 @@ function slotsFor(state: GameState, content: Content, kind: Exclude<UseKind, nul
   if (kind === "harvest") return [state.sel];
   const n = Math.max(0, content.balance.hotbarSlots | 0);
   const out: number[] = [];
+  /* THỨC ĂN: mọi món mà một khu nào đó nhận. Đọc từ `pens[].feeds` chứ không
+     liệt kê id — thêm một khu mới trong content là nút ngữ cảnh tự biết. */
+  const an =
+    kind === "pour" || kind === "feedpond"
+      ? new Set((content.tiles.pens ?? []).flatMap((q) => q.feeds ?? []))
+      : null;
   for (let i = 0; i < n; i++) {
     const id = state.inv[i]?.id;
     if (!id) continue;
+    if (an) {
+      if (an.has(id)) out.push(i);
+      continue;
+    }
     const it = parseItem(id);
     if (!it) continue;
     if (kind === "cure" && it.kind === "item" && it.ref === "medicine") out.push(i);

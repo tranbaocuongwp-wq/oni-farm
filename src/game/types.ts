@@ -814,9 +814,21 @@ export interface Tile {
   /** Số đêm liên tiếp ô ĐÃ CÀY này bị bỏ không (không cây, không công trình).
    *  Đủ `balance.tilledIdleDays` thì cỏ mọc lại và luống mất. Vắng = 0. */
   idle?: number;
-  /** Số PHẦN thức ăn còn trong máng (`prop === "trough"`). Vắng = máng rỗng.
-   *  Loại thức ăn không nằm ở đây mà ở `feed` của KHU chứa cái máng. */
+  /** Số PHẦN thức ăn còn trong máng (`prop === "trough"`), hoặc số phần thức ăn
+   *  đang NỔI trên ô nước của hồ cá. Vắng = không có gì. */
   trough?: number;
+  /**
+   * MÓN đang nằm trong máng (hoặc trên mặt nước). Vắng = trống.
+   *
+   * Trước đây chỉ có con SỐ, còn loại thức ăn thì suy ra từ `feeds` của khu —
+   * nên cái máng vẽ ra lúc nào cũng y hệt nhau dù trong đó là rơm, là cám hay
+   * là củ cải, và người chơi không có cách nào nhìn mà biết máng đang có gì
+   * hay đã cạn. Giữ đúng món đã đổ thì hình vẽ nói thật.
+   *
+   * Một máng chỉ chứa MỘT món tại một lúc: đổ món khác vào máng đang có đồ thì
+   * bị từ chối kèm lời giải thích, chứ không trộn lẫn rồi vẽ bừa một màu.
+   */
+  troughId?: string;
 }
 
 export type Dir = "down" | "up" | "left" | "right";

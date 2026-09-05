@@ -23,8 +23,7 @@ import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
 import { grazeNight } from "./graze.ts";
-import { eatFromTroughNight, troughMax, troughStock } from "./pen.ts";
-import { troughIn } from "./world.ts";
+import { eatFromTroughNight, pourSpotIn, troughMax, troughStock } from "./pen.ts";
 
 /**
  * Một NGÀY GAME dài bao nhiêu phút.
@@ -639,7 +638,7 @@ export function penSummary(state: GameState, content: Content, pen: PenDef): Pen
     }
     if (!isMature(e, content)) row.chuaLon++;
   }
-  const m = pen.swim ? null : troughIn(state, pen);
+  const m = pourSpotIn(state, content, pen);
   return {
     id: pen.id,
     name: pen.name,
