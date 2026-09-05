@@ -379,6 +379,7 @@
       "id": "sign",
       "name": "Biển khu",
       "solid": false,
+      "place": "edge",
       "art": {
         "body": "#c39a63",
         "dark": "#5a3b21",

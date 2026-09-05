@@ -326,6 +326,25 @@ export interface PropDef {
   solid: boolean;
   /** Cao 2 ô (cây lớn) — renderer vẽ tràn lên ô phía trên. */
   tall?: boolean;
+  /**
+   * CHỖ ĐỨNG trong ô. `tall` nói chuyện CHIỀU CAO lúc vẽ; `place` nói chuyện
+   * ô có bị CHIẾM hay không — hai câu hỏi khác nhau, nên là hai trường khác
+   * nhau.
+   *
+   *   · `"tile"` (mặc định) — CHIẾM TRỌN Ô: cây, đá, nhà, máng, giường. Ô đó
+   *     không cày được, không gieo được, không đặt thêm gì lên được. Vật loại
+   *     này nằm trong `tiles.legend`: bản đồ đặt nó thẳng vào lưới.
+   *   · `"edge"` — ĐỨNG Ở MÉP Ô, KHÔNG chiếm ô: tấm biển. Ô vẫn cày được, gieo
+   *     được, đi qua được như chưa có gì.
+   *
+   * Vì mỗi ô trong lưới chỉ có ĐÚNG MỘT chỗ cho vật thể (`tile.prop`), vật
+   * `"edge"` mà nằm trong legend là tự mâu thuẫn: nó vừa bảo "tôi không chiếm
+   * ô" vừa giữ mất cái chỗ duy nhất ấy. Nên nó sống ở danh sách riêng của nó
+   * (`tiles.signs`) và chỉ là một lớp VẼ — `validatePack` chặn nếu ai đưa nó
+   * vào legend. Cũng vì thế nó buộc phải `solid: false`: không có ô nào để mà
+   * chặn.
+   */
+  place?: "tile" | "edge";
   /** Số nhát chịu được. Không có = không khai thác được. */
   hits?: number;
   /** Công cụ cần dùng. Không có = tay không cũng phá được (bụi cỏ). */

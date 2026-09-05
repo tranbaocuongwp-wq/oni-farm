@@ -426,11 +426,6 @@ export function createRenderer(
           const img = atlas.props[t.prop];
           if (img) {
             const oy = def?.tall ? py - TILE : py;
-            /* BIỂN nép vào GÓC. Sprite vẽ sẵn ở góc trên-TRÁI; tấm nào gọi tên
-               khu bên phải thì lật ngang để nó nép sang góc trên-PHẢI, tức là
-               nép về phía cái khu nó đang chỉ. Lật bằng phép vẽ chứ không thêm
-               một sprite thứ hai. */
-            const bienE = t.prop === "sign" && signSide(content, x, y) === "e";
             /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
                mép dưới.
                Vì sao: người chơi ĐỨNG ĐƯỢC lên chính cái ô đó — cầu gỗ, bụi cỏ,
@@ -442,20 +437,7 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            items.push({
-              base: lopVat,
-              run: () => {
-                if (!bienE) {
-                  g.drawImage(img, px, oy);
-                  return;
-                }
-                g.save();
-                g.translate(px + TILE, oy);
-                g.scale(-1, 1);
-                g.drawImage(img, 0, 0);
-                g.restore();
-              },
-            });
+            items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
             const full = def?.hits ?? 0;
             if (full > 1 && t.hp > 0 && t.hp < full) {
               const hp = t.hp;
@@ -795,10 +777,78 @@ export function createRenderer(
     }
   }
 
-  /** Góc mà tấm biển ở ô này nép vào. Vắng khai thì nép sang phải. */
-  function signSide(content: Content, x: number, y: number): "e" | "w" {
-    for (const b of content.tiles.signs ?? []) if (b.x === x && b.y === y) return b.side ?? "e";
-    return "e";
+  /* ---- BIỂN CẮM ---------------------------------------------------------
+     Biển KHÔNG nằm trong lưới ô. Nó đứng ở MÉP ô (`place: "edge"` trong
+     props.json) và không chiếm ô nào: ô mang biển vẫn cày được, gieo được, đi
+     qua được. Nên nó cũng không đi qua `t.prop` như mọi vật thể khác mà được
+     gom riêng từ `content.tiles.signs` — vẫn xếp vào cùng danh sách `items` để
+     ăn chung phép sắp lớp theo chiều sâu.
+
+     Đổi lại, biển giờ có thể đứng ngay trên một luống đang trồng. Đó là lý do
+     có `signFade`: tới gần thì cả tấm ván lẫn chữ mờ đi, nhường lại chỗ. */
+
+  /** Trong ngần này ô thì biển mờ hết cỡ; ra tới `BIEN_RO` thì đục hẳn lại. */
+  const BIEN_MO = 1.2;
+  const BIEN_RO = 2.6;
+  /** Mờ nhất còn bao nhiêu — không về 0, vì biến mất hẳn thì tưởng là lỗi vẽ. */
+  const BIEN_DAY = 0.3;
+
+  /**
+   * Độ đục của một tấm biển theo khoảng cách tới người chơi.
+   *
+   * NGƯỢC CHIỀU với nhãn chữ, và cùng một lý do: chữ hiện ra khi lại gần vì ở
+   * xa thì đọc tên lô nào cũng vô ích; còn tấm ván thì MỜ ĐI khi lại gần, vì
+   * lúc đứng ngay đó mình đã biết đang ở lô nào rồi, mà nó lại che đúng chỗ
+   * mình đang cày.
+   */
+  function signFade(s: GameState, bx: number, by: number): number {
+    const d = Math.hypot(bx + 0.5 - s.player.x / TILE, by + 0.5 - s.player.y / TILE);
+    if (d >= BIEN_RO) return 1;
+    if (d <= BIEN_MO) return BIEN_DAY;
+    return BIEN_DAY + (1 - BIEN_DAY) * ((d - BIEN_MO) / (BIEN_RO - BIEN_MO));
+  }
+
+  function collectSigns(
+    s: GameState,
+    content: Content,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    items: Item[],
+  ) {
+    const bien = content.tiles.signs;
+    const img = atlas.props["sign"];
+    if (!bien || !bien.length || !img) return;
+    for (const b of bien) {
+      if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
+      const px = b.x * TILE - camera.rx;
+      const py = b.y * TILE - camera.ry;
+      /* Sprite vẽ sẵn nép vào mép TRÁI của ô; tấm nào gọi tên khu bên phải thì
+         lật ngang để nó nép sang mép PHẢI — tức là nép về phía cái khu nó đang
+         chỉ, ngay cạnh dòng chữ. Lật bằng phép vẽ chứ không thêm sprite thứ hai. */
+      const e = (b.side ?? "e") === "e";
+      const mo = signFade(s, b.x, b.y);
+      /* Xếp lớp theo MÉP TRÊN của ô, đúng như mọi vật ĐI QUA ĐƯỢC: người chơi
+         đứng được lên chính ô đó, lấy mép dưới thì nhân vật bị tấm biển vẽ đè
+         lên và trông như đang chui xuống dưới địa hình. */
+      items.push({
+        base: b.y * TILE,
+        run: () => {
+          g.globalAlpha = mo;
+          if (e) {
+            g.save();
+            g.translate(px + TILE, py);
+            g.scale(-1, 1);
+            g.drawImage(img, 0, 0);
+            g.restore();
+          } else {
+            g.drawImage(img, px, py);
+          }
+          g.globalAlpha = 1;
+        },
+      });
+    }
   }
 
   /**
@@ -849,7 +899,7 @@ export function createRenderer(
       if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
       const d = Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py);
       if (d > XA) continue;
-      const mo = d <= GAN ? 1 : 1 - (d - GAN) / (XA - GAN);
+      const mo = (d <= GAN ? 1 : 1 - (d - GAN) / (XA - GAN)) * signFade(s, b.x, b.y);
       /* Chữ NEO VÀO GÓC mà tấm biển nép vào, và trải về phía KHU nó gọi tên —
          không trải đều hai bên. Trải đều thì một nửa dòng chữ nằm trên lối đi
          phía bên kia, đúng cái làm nó trông như dán bừa lên mặt đường. */
@@ -1014,6 +1064,7 @@ export function createRenderer(
     const items: Item[] = [];
     const lights: Light[] = [];
     collectEntities(s, content, x0, y0, x1, y1, items, lights, timeSec, opts.reduceMotion, opts.weather);
+    collectSigns(s, content, x0, y0, x1, y1, items);
     drawActors(s, content, items, timeSec);
     drawPlayer(s, content, items);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });

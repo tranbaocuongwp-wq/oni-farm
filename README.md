@@ -530,20 +530,13 @@ bãi đậu xe, chợ, giếng, hồ cá và rừng đều có một tấm biể
   chỉ để in "Lô A1" thì vừa tốn cả ngày vừa khó đọc trên màn điện thoại. `drawSignLabels` in
   chữ ở lớp THIẾT BỊ theo phông của trang, cỡ chữ neo theo `scale` nên phóng to thu nhỏ thì
   biển to nhỏ theo. Vẽ SAU `drawNight`: cái biển vẫn phải đọc được lúc trời tối.
-* **Biển đứng BÊN TRONG khu nó gọi tên, ở ô GÓC của khu đó** (core 1.17). Chỗ đầu tiên tôi
-  chọn là con ngõ giữa hai lô — sai hai lần liền: ngõ rộng đúng một ô nên tấm biển đè trọn mặt
-  đi, và một tấm biển đứng ngoài ranh giới thì lô nào cũng đọc thấy mà chẳng lô nào nhận. Ô góc
-  trên-trái vừa nằm trong lô vừa ở mép ngoài của nó, nên đứng ngoài ngõ vẫn đọc được. Giá phải
-  trả là mỗi lô mất một ô cuốc được (29 thay vì 30) — đáng, vì đổi lại ranh giới đọc ra ngay.
-* **Biển KHÔNG ĐẶC và KHÔNG ĐỔI NỀN dưới chân.** Không đặc, vì vài tấm vẫn đứng sát lối đi.
-  Không đổi nền, vì đó chính là cái bẫy đã làm hỏng lần sửa trước: legend chỉ có MỘT ký tự biển
-  và nó ghi cứng `ground: "path"`, nên đặt biển ở đâu là lát một mảng lối đi ở đó — cắm vào lô
-  thì thủng một lỗ đường giữa ruộng. Nay có ba ký tự, mỗi ký tự cho một mặt nền: `N` cỏ, `n` bê
-  tông, `J` lối đi. Bộ sinh bản đồ chọn ký tự theo nền ĐANG CÓ và `assert` rằng nền không đổi.
-* **`validatePack` chặn cả ba chiều**: chữ mà dưới chân không có cọc (dòng chữ lơ lửng trên bãi
-  cỏ trông như lỗi vẽ), cọc mà không tấm nào ghi chữ, và biển trùng tên một khu mà lại cắm
-  ngoài khu đó. Ao cá là ngoại lệ duy nhất, vì lý do vật lý: ruột nó là nước, không cắm cọc
-  xuống được — biển của ao đứng sát bờ.
+* **Biển đứng BÊN TRONG khu nó gọi tên, ở ô GÓC của khu đó.** Chỗ đầu tiên tôi chọn là con ngõ
+  giữa hai lô — sai hai lần liền: ngõ rộng đúng một ô nên tấm biển đè trọn mặt đi, và một tấm
+  biển đứng ngoài ranh giới thì lô nào cũng đọc thấy mà chẳng lô nào nhận. Ô góc vừa nằm trong
+  lô vừa ở mép ngoài của nó, nên đứng ngoài ngõ vẫn đọc được. `validatePack` chặn: biển trùng
+  tên một khu mà cắm ngoài khu đó là pack hỏng. Ao cá là ngoại lệ duy nhất, vì lý do vật lý —
+  ruột nó là nước, không cắm cọc xuống được, nên biển của ao đứng sát bờ.
+* **Biển ĐỨNG Ở MÉP Ô, không chiếm ô** (`place: "edge"`, core 1.19). Xem mục dưới.
 
 Bản đồ được sinh bằng script rồi mới ghi ra `farm.ascii` — trong đó có một bước **vá liên
 thông**: flood-fill từ ô spawn, ô nào đi được mà lạc khỏi khối chính thì đục thông. Rừng rải
@@ -559,6 +552,37 @@ chéo qua dãy chuồng mới — trên màn hình rộng nhìn ra ngay là ba c
 Ranh giới đúng là **ai dựng**, và content đã nói sẵn: `buildable: false` nghĩa là không ai dựng
 được nó nữa, nên mọi ô mang nó trong save đều do bản đồ đời trước dựng ⇒ bỏ. Sàn nhà kính người
 chơi bỏ tiền ra lát thì `buildable` không tắt ⇒ giữ.
+
+### CHỖ ĐỨNG của một vật thể trong ô (core 1.19)
+
+Lưới có đúng **một** chỗ cho vật thể ở mỗi ô (`tile.prop`). Chừng nào mọi vật thể đều là cây,
+đá, nhà — thứ chiếm trọn ô — thì không có gì phải hỏi. Tấm biển phá vỡ giả định đó: nó cao
+chín pixel, đứng nép vào mép ô, và thứ duy nhất nó làm là cho người ta ĐỌC. Cho nó một ô của
+lưới là bắt người chơi trả hai cái giá cho một thứ chỉ để đọc:
+
+* mỗi lô mất một ô cuốc được (29 thay vì 30 — mười hai lô là mười hai ô);
+* và vì legend còn phải nói ô đó **nền** gì, mỗi tấm biển tự đắp một mảng nền dưới chân mình.
+  Đây là cái bẫy đã làm hỏng ba lần sửa liền: legend chỉ có một ký tự biển, ghi cứng
+  `ground: "path"`, nên dời tấm biển đi đâu nó cũng mang theo cái vỉa hè của mình.
+
+Nên `PropDef` tách hẳn hai câu hỏi vốn hay bị gộp:
+
+| trường | hỏi gì | ví dụ |
+|---|---|---|
+| `tall` | vẽ CAO tới đâu — có tràn lên ô phía trên không | cây gỗ lớn |
+| `place` | ô có bị CHIẾM không | `"tile"` (mặc định) · `"edge"` |
+
+`place: "edge"` nghĩa là **đứng ở mép ô và không chiếm ô**: ô mang biển vẫn cày được, gieo
+được, đi qua được như chưa có gì. Và vì lưới chỉ có một chỗ cho vật thể, một vật `"edge"` mà
+nằm trong `legend` là tự mâu thuẫn — nó vừa bảo "tôi không chiếm ô" vừa giữ mất đúng cái chỗ
+ấy. Nên nó sống ở danh sách riêng của nó (`tiles.signs`) và chỉ là một lớp VẼ; `validatePack`
+chặn nếu ai đưa nó ngược vào legend, và chặn luôn `"edge"` + `solid: true` (không chiếm ô nào
+thì lấy gì mà chặn). Kịch bản 71 quét cả bản đồ đòi không ô nào mang vật thể `sign`.
+
+Đổi lại, tấm biển giờ có thể đứng ngay trên một luống đang trồng. Đó là lý do có **`signFade`**:
+tới gần thì cả tấm ván lẫn dòng chữ mờ dần còn 0,3. Ngược chiều với nhãn chữ (hiện ra khi lại
+gần) và cùng một lý do — ở xa thì đọc tên lô nào cũng vô ích, còn lúc đứng ngay đó thì mình đã
+biết đang ở lô nào rồi, mà nó lại che đúng chỗ mình đang cày.
 
 ### Khu chuồng dựng sẵn (core 1.8)
 
@@ -719,8 +743,19 @@ rậm** (ngoài trời) hoặc **tường tối** (trong nhà) — đọc ra là
 Bản đồ vẫn 48×37 ô cố định, chỉ khung nhìn co giãn; người chơi còn chọn được mức phóng
 gần/vừa/xa trong Cài đặt (`camera.setZoom`, đổi dải số ô chứ không đổi luật).
 
-`MAX_TILES_LONG = 24` là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn ultrawide):
-quá ngưỡng thì viền đen còn hơn để người dùng màn rộng nhìn thấy cả bản đồ.
+`MAX_TILES_LONG = 32` là trần cho **trục dài** (điện thoại ngang 20:9, màn ultrawide). Trần
+này từng được thi hành bằng cách CẮT khung nhìn rồi bù hai dải đen — và đó là một lựa chọn
+sai (sửa ở core 1.19). Trên cửa sổ 1920×684 nó ăn 192px mỗi bên, gần một phần năm màn hình,
+mà người dùng không có cách nào đoán ra tại sao: cùng một trang, thu chiều cao cửa sổ lại một
+chút là hai dải đen hiện ra. Điện thoại ngang 20:9 cũng dính 38px mỗi bên. Nay trần ấy thi
+hành bằng cách **phóng to cho vừa khung**: nó nâng SÀN của `scale` thay vì cắt `viewW`. Thà
+thấy ít ô hơn một chút — thứ không ai nhận ra — còn hơn mất hẳn một phần màn hình, thứ ai
+cũng nhận ra. Khi hai ràng buộc đá nhau (khung quá dài so với cạnh ngắn) thì trần trục dài
+THẮNG, và vẫn lấy số nguyên để pixel art không có ô to ô nhỏ.
+
+Kịch bản 75 khoá lại: mười hai khổ máy — desktop, cửa sổ dẹt, ultrawide, tablet ngang/dọc,
+điện thoại ngang/dọc — đều phải `offX === 0 && offY === 0`, hệ số phóng nguyên, và trục dài
+không vượt trần. Ba mức phóng người chơi chọn cũng vậy.
 
 `src/core/screen.ts` nghe ba nguồn — ResizeObserver (khung chứa), orientationchange +
 resize (xoay máy, có đo lại sau một nhịp vì mobile hay báo chậm), và matchMedia resolution

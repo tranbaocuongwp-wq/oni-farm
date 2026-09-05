@@ -27,6 +27,7 @@ import * as migrateApi from "../src/core/save.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
+import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -241,6 +242,22 @@ function nightsFor(days) {
   return Math.ceil((days * BAL.growthMinutesPerDay) / DAYLIGHT_PER_DAY);
 }
 
+/**
+ * Chữa lành ô này nếu cây trên đó vừa đổ bệnh.
+ *
+ * Bệnh là XÚC XẮC. Kịch bản nào đo THỜI GIAN LỚN của cây thì không đo bệnh, mà
+ * một cây bệnh thì đứng hẳn — nên chỉ cần chuỗi ngẫu nhiên dịch đi một nhịp là
+ * nó đỏ, dù phần nó định đo không đổi tí nào. Chuyện này đã xảy ra thật: gỡ 23
+ * tấm biển khỏi lưới làm số vật thể quét mỗi đêm khác đi, thế là hai kịch bản
+ * đo thời gian lớn cùng đỏ. Bệnh có kịch bản riêng của nó (44).
+ */
+function chuaBenh(store, x, y) {
+  setState(store, (s) => {
+    const t = s.tiles[idx(s.w, x, y)];
+    if (t && t.crop && t.crop.sick) delete t.crop.sick;
+  });
+}
+
 /** Tưới rồi ngủ cho tới khi cây ở ô này chín. Trả về số đêm đã qua. */
 function ripen(store, x, y, cap = 40) {
   let nights = 0;
@@ -251,6 +268,7 @@ function ripen(store, x, y, cap = 40) {
     topUpWater(store);
     selectItem(store, "tool:can");
     use(store, x, y);
+    chuaBenh(store, x, y);
     sleep(store);
     nights++;
   }
@@ -510,6 +528,7 @@ test("4. sàn nhà kính giữ ẩm qua nhiều ngày, cây lớn không cần t
   eq(tile(store, p.x, p.y).crop.id, "lettuce", "gieo được lên sàn nhà kính");
 
   for (let i = 0; i < 5; i++) {
+    chuaBenh(store, p.x, p.y); // đo độ ẩm và thời gian lớn, không đo bệnh
     sleep(store);
     ok(tile(store, p.x, p.y).wet, `ngày ${store.getState().day}: sàn nhà kính phải luôn ẩm`);
   }
@@ -4432,37 +4451,20 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   ok(cot[1] - cot[0] > w0, "giữa hai cột lô phải có BỜ, không dính vào nhau");
   ok(hang[1] - hang[0] > h0, "giữa hai hàng lô phải có BỜ, không dính vào nhau");
 
-  /* --- Ruột lô SẠCH: cuốc được từng ô một, không lẫn đá lẫn cây --------- */
-  /* Ngoại lệ duy nhất: đúng MỘT tấm biển tên lô, cắm ở góc trên-trái CỦA CHÍNH
-     LÔ đó — bên trong khu nó gọi tên, ở mép ngoài, không đứng ra lối đi. */
+  /* --- Ruột lô SẠCH: cuốc được TỪNG Ô MỘT, kể cả ô có biển -------------
+     Biển đứng ở MÉP ô nên không ăn của lô ô nào: cả 6×5 đều cuốc được. Dây bẫy
+     cho lần trước — hồi biển còn là một vật thể trong lưới, mỗi lô mất đúng
+     một ô, và ô ấy còn bị legend đắp cho một mảng nền lối mòn. */
   let cuoc = 0;
-  for (const z of lo) {
-    let bien = 0;
+  for (const z of lo)
     for (let y = z.y; y < z.y + z.h; y++)
       for (let x = z.x; x < z.x + z.w; x++) {
         const t = tile(store, x, y);
-        ok(t && t.g === "grass" && !t.b, `lô '${z.id}' ô (${x},${y}) phải là nền cỏ trống`);
-        if (t.prop === "sign") {
-          bien++;
-          eq(`${x},${y}`, `${z.x},${z.y}`, `biển của lô '${z.id}' phải ở góc trên-trái của chính lô`);
-          continue;
-        }
-        ok(!t.prop, `lô '${z.id}' ô (${x},${y}) không được có vật thể (đang là '${t.prop}')`);
+        ok(t && t.g === "grass" && !t.prop && !t.b, `lô '${z.id}' ô (${x},${y}) phải là đất trống`);
         cuoc++;
       }
-    eq(bien, 1, `lô '${z.id}' có đúng một tấm biển tên lô`);
-  }
-  eq(cuoc, lo.length * (w0 * h0 - 1), "mỗi lô cuốc được cả diện tích trừ ô cắm biển");
+  eq(cuoc, lo.length * w0 * h0, "tổng số ô cuốc được đúng bằng số lô × diện tích lô");
   ok(cuoc >= 300, `khu trồng trọt phải RỘNG (đang có ${cuoc} ô)`);
-
-  /* --- BIỂN HIỆU: không tấm nào được đứng giữa đường/lối đi giữa các lô ---
-     Yêu cầu của người chơi: "biển phải nằm bên trong và mép ngoài của khu vực
-     của nó". Dây bẫy: một tấm biển rơi ra bờ giữa hai lô là hỏng ngay. */
-  const trongLo = (x, y) => lo.some((z) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
-  for (let y = hang[0]; y < hang[hang.length - 1] + h0; y++)
-    for (let x = cot[0]; x < cot[cot.length - 1] + w0; x++)
-      if (!trongLo(x, y))
-        ok(tile(store, x, y)?.prop !== "sign", `ô bờ (${x},${y}) giữa các lô không được cắm biển`);
 
   /* --- BỜ giữa hai lô không cuốc được: ranh giới phải NHÌN THẤY --------- */
   const bo = { x: cot[0] + w0, y: hang[0] };
@@ -4513,20 +4515,27 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   for (const z of lo) ok(chu.has(z.name), `có biển '${z.name}'`);
   for (const c of chuong) ok(chu.has(c.name), `có biển '${c.name}'`);
   for (const t of ["Nhà", "Kho", "Bãi đậu xe", "Chợ", "Rừng"]) ok(chu.has(t), `có biển '${t}'`);
+  eq(content.props.sign.place, "edge", "biển là loại vật thể ĐỨNG Ở MÉP ô");
   for (const b of bien) {
+    /* Ô mang biển vẫn là ô TRỐNG: biển không chiếm ô nào, nên nó không được
+       để lại dấu vết gì trong lưới — không vật thể, không đổi nền. */
     const t = tile(store, b.x, b.y);
-    eq(t?.prop, "sign", `biển '${b.text}' cắm đúng lên một cái cọc`);
-    /* Biển KHÔNG ĐẶC: nhiều tấm cắm giữa ngõ rộng đúng một ô, đặc là chặn
-       đường tới chính cái khu mà nó gọi tên. */
+    ok(!t?.prop, `ô của biển '${b.text}' không được có vật thể trong lưới (đang là '${t?.prop}')`);
     ok(!isSolid(s, content, b.x, b.y), `biển '${b.text}' không chặn lối đi`);
-    /* Biển của một lô ĐỨNG TRONG lô đó, ở ô góc — đó là chỗ duy nhất nó được
-       ăn vào đất cuốc được. Biển của khu khác thì tuyệt đối không lấn sang. */
+    ok(t?.g !== "asphalt" && t?.g !== "water", `biển '${b.text}' không đứng giữa đường/dưới nước`);
+    /* Biển của một lô ĐỨNG TRONG lô đó, ở ô góc — bên trong khu nó gọi tên, ở
+       mép ngoài. Biển của khu khác thì tuyệt đối không lấn sang. */
     const oLo = lo.find((z) => b.x >= z.x && b.x < z.x + z.w && b.y >= z.y && b.y < z.y + z.h);
     if (oLo) {
       eq(b.text, oLo.name, `biển đứng trong lô '${oLo.id}' phải là biển CỦA lô đó`);
       eq(`${b.x},${b.y}`, `${oLo.x},${oLo.y}`, `biển '${b.text}' cắm ở ô góc của lô`);
     }
   }
+  /* Và cả bản đồ không còn một ô nào mang vật thể 'sign': đưa nó ngược vào
+     lưới là lấy mất ô của người chơi đúng cái thứ vừa hứa là không lấy. */
+  for (let y = 0; y < s.h; y++)
+    for (let x = 0; x < s.w; x++)
+      ok(tile(store, x, y)?.prop !== "sign", `ô (${x},${y}) không được mang biển trong lưới`);
 
   deepEq(checkInvariants(s, content), [], "bất biến trên bản đồ vừa quy hoạch");
 });
@@ -4900,6 +4909,83 @@ test("74. tự động: tìm việc quanh NEO, không quanh chỗ nhân vật v�
   eq(j2, null, "neo ở chỗ hết việc thì trả null để chỗ gọi bỏ neo đi");
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+/* ========================================================================== */
+/* 75. KHUNG NHÌN — mọi khổ máy, không một dải đen nào                        */
+/* ========================================================================== */
+
+/* `createCamera` không chạm DOM: nó nhận kích thước bằng THAM SỐ (`setSize`)
+   chứ không tự đo, cố ý, để chỗ khác quyết định "khung chứa to bao nhiêu".
+   Nên toàn bộ phép chọn khung nhìn kiểm được trong Node thuần.
+
+   Kịch bản này canh đúng một thứ người chơi nhìn ra ngay: VIỀN ĐEN. Trần
+   `MAX_TILES_LONG` từng được thi hành bằng cách cắt khung nhìn rồi bù hai dải
+   đen hai bên — trên cửa sổ 1920×684 là 192px mỗi bên, gần một phần năm màn
+   hình, mà không có cách nào đoán ra tại sao. Nay trần ấy thi hành bằng cách
+   PHÓNG TO cho vừa khung. */
+test("75. khung nhìn: mọi khổ máy đều KÍN KHUNG, không dải đen nào", () => {
+  const khoMay = [
+    ["desktop 1920×1080", 1920, 1080, 1],
+    ["desktop 1920×684 (cửa sổ dẹt)", 1920, 684, 1],
+    ["desktop 1920×760", 1920, 760, 1],
+    ["laptop 1440×810", 1440, 810, 2],
+    ["ultrawide 2560×1080", 2560, 1080, 1],
+    ["ultrawide 3440×1000", 3440, 1000, 1],
+    ["tablet ngang 1180×820", 1180, 820, 2],
+    ["tablet dọc 820×1180", 820, 1180, 2],
+    ["điện thoại ngang 844×390", 844, 390, 3],
+    ["điện thoại dọc 390×844", 390, 844, 3],
+    ["điện thoại dọc nhỏ 360×640", 360, 640, 3],
+    ["điện thoại ngang 20:9  932×430", 932, 430, 3],
+  ];
+  for (const [ten, w, h, dpr] of khoMay) {
+    const cam = createCamera();
+    cam.setWorld(FARM_W * TILE, FARM_H * TILE);
+    ok(cam.setSize(w, h, dpr), `${ten}: setSize phải nhận`);
+    const vp = cam.viewport;
+
+    /* 1. KÍN KHUNG. Đây là điều kiện chính. */
+    eq(vp.offX, 0, `${ten}: không được có dải đen trái/phải`);
+    eq(vp.offY, 0, `${ten}: không được có dải đen trên/dưới`);
+    eq(Math.round(vp.viewW * vp.scale), w, `${ten}: khung nhìn phủ hết chiều ngang`);
+    eq(Math.round(vp.viewH * vp.scale), h, `${ten}: khung nhìn phủ hết chiều dọc`);
+
+    /* 2. HỆ SỐ NGUYÊN. Pixel art phóng theo hệ số lẻ có ô pixel to nhỏ không
+          đều — nhìn ra ngay ở mấy nét viền một pixel. */
+    ok(vp.integerScale && Number.isInteger(vp.scale), `${ten}: hệ số phóng phải nguyên (đang ${vp.scale})`);
+
+    /* 3. Trục dài không vượt trần, và cạnh ngắn vẫn nằm trong dải cho phép —
+          trừ khi hai ràng buộc đá nhau, lúc đó trần trục dài thắng. */
+    const dai = Math.max(vp.tilesX, vp.tilesY);
+    const ngan = Math.min(vp.tilesX, vp.tilesY);
+    ok(dai <= MAX_TILES_LONG + 0.001, `${ten}: trục dài ${dai.toFixed(1)} ô vượt trần ${MAX_TILES_LONG}`);
+    ok(ngan >= 6, `${ten}: cạnh ngắn ${ngan.toFixed(1)} ô — ít tới mức không chơi được`);
+    ok(ngan <= MAX_TILES_SHORT + 0.001, `${ten}: cạnh ngắn ${ngan.toFixed(1)} ô vượt ${MAX_TILES_SHORT}`);
+
+    /* 4. Hướng máy đọc đúng — HUD và cụm nút bám vào cờ này. */
+    eq(vp.orientation, h >= w ? "portrait" : "landscape", `${ten}: hướng máy`);
+  }
+
+  /* Đổi cỡ đi rồi về: cùng một khung chứa phải ra cùng một khung nhìn. Camera
+     giữ trạng thái giữa các lần gọi nên đây không phải chuyện hiển nhiên. */
+  const cam = createCamera();
+  cam.setWorld(FARM_W * TILE, FARM_H * TILE);
+  cam.setSize(1920, 1080, 1);
+  const a = { ...cam.viewport };
+  cam.setSize(390, 844, 3);
+  cam.setSize(1920, 1080, 1);
+  eq(cam.viewport.scale, a.scale, "về lại cỡ cũ thì ra đúng hệ số cũ");
+  eq(cam.viewport.viewW, a.viewW, "…và đúng khung nhìn cũ");
+
+  /* Mức phóng người chơi chọn cũng không được đẻ ra dải đen. */
+  for (const muc of ["near", "normal", "far"]) {
+    cam.setSize(1920, 684, 1);
+    cam.setZoom(muc);
+    eq(cam.viewport.offX, 0, `mức phóng '${muc}': không dải đen trái/phải`);
+    eq(cam.viewport.offY, 0, `mức phóng '${muc}': không dải đen trên/dưới`);
+  }
+  ok(MIN_TILES_SHORT < MAX_TILES_SHORT, "dải số ô cạnh ngắn phải là một dải thật");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

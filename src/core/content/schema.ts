@@ -299,6 +299,10 @@ export function validateProps(raw: unknown): string[] {
     if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
     if (item["tall"] !== undefined && typeof item["tall"] !== "boolean")
       k.fail("tall", "phải là boolean");
+    if (item["place"] !== undefined && item["place"] !== "tile" && item["place"] !== "edge")
+      k.fail("place", 'phải là "tile" (chiếm trọn ô) hoặc "edge" (đứng ở mép ô)');
+    if (item["place"] === "edge" && item["solid"] === true)
+      k.fail("place", '"edge" là không chiếm ô nào — không thể vừa không chiếm ô vừa chặn ô');
     if (item["hits"] !== undefined) k.num(item, "hits", 1, 99);
     if (item["tool"] !== undefined) k.enumStr(item, "tool", TOOL_ACTIONS);
     if (item["becomes"] !== undefined && !isStr(item["becomes"]))

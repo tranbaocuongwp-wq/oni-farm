@@ -182,29 +182,29 @@ for (lx0, lx1) in LOT_COLS:
 g[SPAWN[1]][SPAWN[0]] = ":"
 
 # ------------------------------------------------------------- 7b. cắm BIỂN
-# Biển đặt trên NGÕ / SÂN / ĐƯỜNG, không bao giờ trên ruột lô hay ruột chuồng:
-# một ô có vật thể là một ô không cuốc được, và cái biển gọi tên cái lô mà lại
-# ăn mất một ô của chính nó thì vô lý. Biển KHÔNG ĐẶC nên cắm giữa ngõ rộng một
-# ô vẫn đi qua được.
+# Biển KHÔNG nằm trong lưới: nó đứng ở MÉP ô (props.json: place 'edge') và
+# không chiếm ô nào. Nên `cam()` chỉ GHI TÊN, không sửa một ký tự nào của bản
+# đồ — ô mang biển vẫn là ô cỏ cuốc được, và không tấm nào tự đắp một mảng nền
+# dưới chân mình nữa.
 BIEN = []
-# Ký tự biển theo NỀN vốn có của ô. Một ký tự duy nhất là ô nào cắm biển cũng
-# bị biến thành lối mòn — mỗi tấm biển tự đắp một vệt đường dưới chân mình,
-# đúng thứ nhìn ra ngay trên bản đồ mà đọc code thì không thấy.
-BIEN_CHU = {".": "N", ",": "N", "g": "N", "w": "N", "#": "n", ":": "J"}
+# Ô cắm biển phải QUANG: một tấm biển lẫn trong bụi cỏ cao là tấm biển không
+# đọc được. Chỉ dọn VẬT THỂ, tuyệt đối KHÔNG đổi nền — đó là bài học của lần
+# trước, khi biển còn có ký tự riêng trong legend và ký tự ấy ghi cứng nền
+# `path`: mỗi tấm biển tự lát một vệt lối mòn dưới chân mình, dời đi đâu cũng
+# mang theo cái vỉa hè.
+DON_QUANG = {"g": ".", "w": "."}   # cỏ lơ thơ / cỏ cao → cỏ trống, vẫn là cỏ
+CHO_CAM = {".", ",", ":", "#"}     # nền cho phép: cỏ, lối mòn, bê tông
 
 def cam(x, y, chu, side="e"):
-    cu = g[y][x]
-    assert cu not in SOLID and cu != "~", f"cắm biển vào ô đặc ({x},{y})={cu}"
-    assert cu != "=", f"cắm biển ra giữa đường nhựa ({x},{y})"
-    assert cu in BIEN_CHU, f"chưa có ký tự biển cho nền '{cu}' ở ({x},{y})"
-    g[y][x] = BIEN_CHU[cu]
+    cu = DON_QUANG.get(g[y][x], g[y][x])
+    assert cu in CHO_CAM, f"cắm biển vào ô không cắm được ({x},{y})={g[y][x]}"
+    g[y][x] = cu
     BIEN.append((x, y, chu, side))
 
 # Biển của một lô nằm BÊN TRONG lô đó, ở ô góc trên-trái — tức là mép ngoài
 # của chính nó. Đứng ra ngõ thì nó là biển của con ngõ, không phải của cái lô;
-# và con ngõ rộng đúng một ô nên tấm biển chiếm trọn mặt đi.
-# Giá phải trả: mỗi lô mất một ô cuốc được (29 thay vì 30). Đáng, vì đổi lại
-# ranh giới đọc được ngay mà không phải suy.
+# và con ngõ rộng đúng một ô nên tấm biển chiếm trọn mặt đi. Nay biển đứng ở
+# MÉP ô nên không còn ăn mất ô nào: lô lại đủ 30 ô cuốc được.
 for ri, (ly0, ly1) in enumerate(LOT_ROWS):
     for ci, (lx0, lx1) in enumerate(LOT_COLS):
         cam(lx0, ly0, f"Lô {'ABCD'[ri]}{ci + 1}")
@@ -274,12 +274,12 @@ assert patch(), "không vá nổi liên thông"
 for (_id, _nm, fy0, fy1, _gt) in PENS:
     for y in range(fy0+1, fy1):
         for x in range(PEN_X0+1, PEN_X1):
-            assert g[y][x] in "#mn", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
+            assert g[y][x] in "#m", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
 for (lx0, lx1) in LOT_COLS:
     for (ly0, ly1) in LOT_ROWS:
         for y in range(ly0, ly1+1):
             for x in range(lx0, lx1+1):
-                assert g[y][x] in ".,N", f"lô bẩn ở ({x},{y}) = {g[y][x]}"
+                assert g[y][x] in ".,", f"lô bẩn ở ({x},{y}) = {g[y][x]}"
 for y in range(POND[1], POND[3]+1):
     for x in range(POND[0], POND[2]+1):
         assert g[y][x] in "~P", f"ao thủng ở ({x},{y}) = {g[y][x]}"
@@ -335,8 +335,7 @@ io.open(p,"w",encoding="utf8").write(json.dumps(pr,ensure_ascii=False,indent=2)+
 
 # ------------------------------------------------------------------ báo cáo
 til = sum(1 for (lx0,lx1) in LOT_COLS for (ly0,ly1) in LOT_ROWS
-          for y in range(ly0,ly1+1) for x in range(lx0,lx1+1)
-          if g[y][x] != "N")
+          for y in range(ly0,ly1+1) for x in range(lx0,lx1+1))
 print(f"bản đồ {W}×{H}")
 print(f"vá liên thông: {VA[0]} chỗ kẹt, đục {VA[1]} ô")
 

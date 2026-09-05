@@ -191,11 +191,18 @@ reject("tên công thức tự chép số lượng vào (\"Đường nhựa ×4\
   const r = p.recipes.recipes.find((q) => q.out.n > 1);
   r.name = `${r.name} ×${r.out.n}`;
 });
-reject("biển ghi chữ mà dưới chân không có cái cọc nào", (p) => {
-  p.tiles.signs[0].x += 1;
+/* Biển ĐỨNG Ở MÉP ô (`place: "edge"`) nên KHÔNG được nằm trong lưới: lưới chỉ
+   có đúng một chỗ cho vật thể ở mỗi ô, đưa nó vào đó là lấy mất ô của người
+   chơi đúng cái thứ vừa hứa là không lấy — và legend còn phải nói ô đó nền gì,
+   nên mỗi tấm sẽ tự đắp một mảng nền dưới chân mình. */
+reject("vật đứng ở MÉP ô lại bị đưa vào legend", (p) => {
+  p.tiles.legend["N"] = { ground: "grass", prop: "sign" };
 });
-reject("có cọc biển trên bản đồ mà không tấm nào ghi chữ", (p) => {
-  p.tiles.signs.pop();
+reject('place lạ (không phải "tile"/"edge")', (p) => {
+  p.props.props.find((x) => x.id === "sign").place = "lo lửng";
+});
+reject("vừa không chiếm ô vừa chặn ô", (p) => {
+  p.props.props.find((x) => x.id === "sign").solid = true;
 });
 reject("hai tấm biển chồng lên cùng một ô", (p) => {
   p.tiles.signs[1] = { ...p.tiles.signs[0], text: "Trùng chỗ" };
@@ -205,8 +212,10 @@ reject("chữ trên biển dài quá tấm ván", (p) => {
 });
 reject("biển trỏ vào bản đồ không có", (p) => (p.tiles.signs[0].map = "hamMo"));
 reject("biển cắm ra giữa lòng đường nhựa", (p) => {
-  // đổi ô của tấm biển đầu tiên thành asphalt (vẫn giữ cái cọc)
-  p.tiles.legend["N"] = { ground: "asphalt", prop: "sign" };
+  const sg = p.tiles.signs[0];
+  const r = p.maps[sg.map].rows[sg.y].split("");
+  r[sg.x] = "=";
+  p.maps[sg.map].rows[sg.y] = r.join("");
 });
 reject("side của biển không phải e/w", (p) => (p.tiles.signs[0].side = "bac"));
 /* Biển phải đứng TRONG khu nó gọi tên. Đẩy nó ra con ngõ bên cạnh là đúng cái
@@ -215,15 +224,7 @@ reject("side của biển không phải e/w", (p) => (p.tiles.signs[0].side = "b
    chỗ" — nếu không thì test này xanh nhờ luật "chữ không có cọc". */
 reject("biển của một lô bị đẩy ra con ngõ ngoài lô", (p) => {
   const z = p.tiles.zones.find((q) => q.kind === "farm");
-  const sg = p.tiles.signs.find((q) => q.text === z.name);
-  const doO = (x, y, c) => {
-    const r = p.maps[sg.map].rows[y].split("");
-    r[x] = c;
-    p.maps[sg.map].rows[y] = r.join("");
-  };
-  doO(sg.x, sg.y, ".");        // trả ô cũ về cỏ trống
-  sg.x = z.x - 1;              // ngõ dọc sát mép tây của lô
-  doO(sg.x, sg.y, "J");        // cọc biển trên nền lối đi
+  p.tiles.signs.find((q) => q.text === z.name).x = z.x - 1; // ngõ dọc sát mép tây
 });
 
 reject("khu dưới nước lại đặt máng", (p) => {
@@ -283,12 +284,9 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   delete p.tiles.signs;
 });
 accept("pack CŨ không khai signs — bản đồ không có tấm biển nào", (p) => {
+  /* Biển không nằm trong lưới, nên gỡ nó đi là xoá đúng một mảng dữ liệu —
+     không phải sửa lại một ký tự nào của bản đồ. */
   delete p.tiles.signs;
-  /* Ba ký tự biển, mỗi ký tự trả về ĐÚNG nền của nó: biển không được đổi mặt
-     đất dưới chân mình, nên gỡ biển cũng không được đổi. */
-  const nen = { N: ".", n: "#", J: ":" };
-  for (const id of Object.keys(p.maps))
-    p.maps[id].rows = p.maps[id].rows.map((r) => r.replace(/[NnJ]/g, (c) => nen[c]));
 });
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });

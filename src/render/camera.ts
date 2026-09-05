@@ -36,13 +36,15 @@
    Trong thực tế thuật toán dưới đây cho ra khoảng 9,3–12,5 ô ở mọi khổ máy phổ
    biến — chênh nhau chưa tới 1,4 lần, đủ công bằng.
 
-   MAX_TILES_LONG là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn
-   ultrawide): quá ngưỡng thì viền đen hai bên còn hơn để người dùng màn rộng
-   nhìn thấy cả bản đồ.
+   MAX_TILES_LONG là trần cho TRỤC DÀI (điện thoại ngang 20:9, màn ultrawide).
+   Trần này KHÔNG được thi hành bằng viền đen: cắt khung nhìn rồi bù hai dải
+   đen là cách duy nhất người dùng nhìn ra ngay mà không đoán nổi tại sao —
+   trên cửa sổ 1920×684 nó ăn mất 192px mỗi bên. Thi hành bằng cách PHÓNG TO
+   cho vừa khung: thà thấy ít ô hơn một chút còn hơn mất hẳn một phần màn hình.
 --------------------------------------------------------------------------- */
 export const MIN_TILES_SHORT = 9;
 export const MAX_TILES_SHORT = 14;
-export const MAX_TILES_LONG = 24;
+export const MAX_TILES_LONG = 32;
 
 export interface CameraConfig {
   tile: number;
@@ -162,14 +164,30 @@ export interface Camera {
  * Lấy số nguyên LỚN NHẤT trong dải = nhiều chi tiết nhất mà vẫn đủ tầm nhìn.
  * Màn quá nhỏ để chứa nổi một bội nguyên nào thì mới chịu dùng hệ số lẻ.
  */
-function pickScale(shortSide: number, cfg: CameraConfig): { scale: number; integer: boolean } {
+function pickScale(
+  shortSide: number,
+  longSide: number,
+  cfg: CameraConfig,
+): { scale: number; integer: boolean } {
   const unit = cfg.tile;
   const lo = Math.ceil(shortSide / (cfg.maxTilesShort * unit));
   const hi = Math.floor(shortSide / (cfg.minTilesShort * unit));
-  if (hi >= 1 && hi >= lo) return { scale: hi, integer: true };
+  /* Trần trục dài là RÀNG BUỘC CỨNG, không phải mong muốn: dưới ngưỡng này thì
+     khung nhìn phủ kín khung chứa, trên ngưỡng thì phải bù bằng viền đen. Nên
+     nó nâng SÀN của scale lên, và nâng trước khi chọn. */
+  const loDai = Math.ceil(longSide / (cfg.maxTilesLong * unit));
+  const san = Math.max(lo, loDai);
+  if (hi >= san && san >= 1) return { scale: hi, integer: true };
 
-  // Không bội nguyên nào vừa (cửa sổ tí hon, hoặc màn hình rất lạ).
-  // Ngắm giữa dải rồi bù độ nét bằng cách snap camera về world px nguyên.
+  /* Hai ràng buộc đá nhau: khung quá dài so với cạnh ngắn, không bội nguyên
+     nào vừa cả hai. Bỏ trần "ít nhất ngần này ô" chứ KHÔNG bỏ trần trục dài —
+     mất vài ô ở cạnh ngắn thì người chơi không nhận ra, còn hai dải đen thì
+     nhận ra ngay. Vẫn lấy số nguyên: pixel art phóng theo hệ số lẻ có ô pixel
+     to nhỏ không đều. */
+  if (san >= 1) return { scale: san, integer: true };
+
+  // Cửa sổ tí hon: không bội nguyên nào ≥ 1 vừa. Ngắm giữa dải rồi bù độ nét
+  // bằng cách snap camera về world px nguyên.
   const target = (cfg.minTilesShort + cfg.maxTilesShort) / 2;
   return { scale: shortSide / (target * unit), integer: false };
 }
@@ -255,15 +273,15 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       zoomDirty = false;
 
       const short = Math.min(cssW, cssH);
-      const { scale, integer } = pickScale(short, cfg);
+      const long = Math.max(cssW, cssH);
+      const { scale, integer } = pickScale(short, long, cfg);
 
-      let viewW = cssW / scale;
-      let viewH = cssH / scale;
-
-      // Lưới an toàn cho màn siêu dài: cắt bớt trục dài rồi letterbox.
-      const maxLong = cfg.maxTilesLong * cfg.tile;
-      if (viewW > maxLong) viewW = maxLong;
-      if (viewH > maxLong) viewH = maxLong;
+      /* Khung nhìn = ĐÚNG khung chứa chia cho scale. Không cắt gì cả: trần
+         trục dài đã được `pickScale` lo bằng cách nâng scale, nên tới đây
+         `viewW`/`viewH` chắc chắn đã nằm trong trần. Cắt thêm ở đây là quay
+         lại đúng cái viền đen vừa bỏ. */
+      const viewW = cssW / scale;
+      const viewH = cssH / scale;
 
       vp.cssW = cssW;
       vp.cssH = cssH;
