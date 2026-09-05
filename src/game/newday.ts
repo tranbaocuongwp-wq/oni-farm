@@ -48,7 +48,7 @@ import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
 import { animalNight, patrolNight, pestNight } from "./animals.ts";
-import { spawnEntity } from "./entities.ts";
+import { catchUpEntities, spawnEntity } from "./entities.ts";
 import { payWages, restWorkers } from "./workers.ts";
 import { maybeSendBuyer } from "./vehicles.ts";
 import {
@@ -564,8 +564,25 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   if (anPha > 0) toastKey(d, content, "pestDamage", "bad", `×${anPha}`);
   if (daDuoi > 0) toastKey(d, content, "pestChased", "good", `×${daDuoi}`);
 
-  // ---- 4d. vật nuôi: già thêm một ngày, tiêu phần no, đói lâu thì chết ----
-  const thu = animalNight(d, content, bal.dayEndMinutes - bal.dayStartMinutes);
+  // ---- 4d. vật nuôi ------------------------------------------------------
+  //
+  // Hai bước, và thứ tự là hợp đồng:
+  //
+  //   a. cộng nốt ĐỒNG HỒ (đói dần, sản phẩm chín dần) cho phần ngày còn thiếu
+  //      của TỪNG bản đồ — mốc riêng từng bản đồ y như cây trồng ở trên. Bản
+  //      đồ đang đứng đã được TICK nuôi tới lúc đi ngủ nên chỉ còn từ `sleptAt`;
+  //      bản đồ đã cất đứng hình từ `awayAt`. Bản cũ cộng TRỌN một ngày cho MỌI
+  //      con ở MỌI bản đồ, chồng lên phần `catchUpEntities` đã cộng lúc rời bản
+  //      đồ — nên ở lì trong nhà là một cách tăng sản lượng.
+  //   b. rồi mới xét ranh giới ngày: già thêm một tuổi, bữa đêm, đói/chết.
+  //
+  // Khác cây trồng ở chỗ mốc cuối là `dayEndMinutes` chứ không phải bình minh:
+  // con vật vẫn đói trong lúc trời tối, chỉ có cây là ngừng lớn.
+  for (const v of views) {
+    const from = v.active ? sleptAt : (d.s.maps?.[v.id]?.awayAt ?? sleptAt);
+    catchUpEntities(d, content, v.id, Math.max(0, bal.dayEndMinutes - Math.min(from, bal.dayEndMinutes)));
+  }
+  const thu = animalNight(d, content, views);
   if (thu.starved > 0) toastKey(d, content, "animalStarved", "bad", `×${thu.starved}`);
   else if (thu.hungry > 0) toastKey(d, content, "animalHungry", "bad", `×${thu.hungry}`);
 

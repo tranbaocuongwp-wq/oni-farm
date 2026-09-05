@@ -23,7 +23,7 @@
 ============================================================================ */
 
 import type { Content, Entity, GameState, PenDef } from "./types.ts";
-import type { Draft } from "./state.ts";
+import type { Draft, MapView } from "./state.ts";
 import { dEntity, dTile, setInv, toastText } from "./state.ts";
 import { countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
@@ -156,6 +156,59 @@ export function eatFromTrough(d: Draft, content: Content, i: number): boolean {
   e.animal.fed = def.fedMinutes;
   e.animal.hungryDays = 0;
   return true;
+}
+
+/**
+ * BỮA ĐÊM từ máng, chạy lúc sang ngày.
+ *
+ * Khác `eatFromTrough` ở đúng hai chỗ, và cả hai đều vì ban đêm không có khung
+ * hình nào để mô phỏng:
+ *
+ *   · không đòi con vật ĐỨNG KỀ máng — cả một đêm trong khu thì nó tự tới được;
+ *   · đọc lưới qua `MapView` chứ không qua `state.tiles`, nên khu nằm ở bản đồ
+ *     nào cũng ăn được. Người chơi ngủ trong nhà thì bản đồ nông trại KHÔNG còn
+ *     là bản đồ đang chơi, và bản cũ hỏi `troughIn(state, pen)` là hỏi nhầm lưới
+ *     của cái nhà.
+ *
+ * Đây là đường sống của con vật có chuồng: nó KHÔNG bao giờ bị dời ra ngoài rào
+ * đi kiếm ăn nữa (xem `grazeNight`), nên máng đầy hay không là quyết định thật
+ * của người chơi.
+ */
+export function eatFromTroughNight(
+  d: Draft,
+  content: Content,
+  v: MapView,
+  i: number,
+): boolean {
+  const cur = d.s.entities[i];
+  if (!cur || cur.kind !== "animal") return false;
+  const def = content.animals[cur.def];
+  if (!def?.feed.length) return false;
+
+  const pen = penOf(content, cur);
+  if (!pen || pen.map !== v.id || cur.map !== v.id) return false;
+  // Máng của khu phải có ít nhất một món loài này ăn được — cùng luật giao nhau
+  // với ban ngày, không phải một cách tính thứ hai.
+  if (!(pen.feeds ?? []).some((f) => def.feed.includes(f))) return false;
+
+  for (let y = pen.y; y < pen.y + pen.h; y++) {
+    for (let x = pen.x; x < pen.x + pen.w; x++) {
+      const ti = y * v.w + x;
+      const t = v.tiles[ti];
+      if (!t || t.prop !== "trough") continue;
+      const con = Number.isFinite(t.trough) && (t.trough as number) > 0 ? Math.floor(t.trough as number) : 0;
+      if (con <= 0) continue;
+      const m = v.edit(ti);
+      if (!m) continue;
+      m.trough = con - 1;
+      const e = dEntity(d, i);
+      if (!e) return false;
+      e.animal.fed = def.fedMinutes;
+      e.animal.hungryDays = 0;
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

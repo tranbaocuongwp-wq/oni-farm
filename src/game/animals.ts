@@ -16,15 +16,29 @@
 ============================================================================ */
 
 import type { Content, Entity, GameState, PenDef } from "./types.ts";
-import type { Draft } from "./state.ts";
+import type { Draft, MapView } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
 import { grazeNight } from "./graze.ts";
-import { troughMax, troughStock } from "./pen.ts";
+import { eatFromTroughNight, troughMax, troughStock } from "./pen.ts";
 import { troughIn } from "./world.ts";
+
+/**
+ * Một NGÀY GAME dài bao nhiêu phút.
+ *
+ * `dayEndMinutes - dayStartMinutes` — đúng quãng đồng hồ chạy từ lúc thức tới
+ * lúc ngã ra ngủ, và cũng đúng quãng mà `newDay` cộng bù cho mọi bản đồ. Trước
+ * đây chu kỳ sản phẩm nhân với một hằng số cắm cứng 1440 trong khi một ngày chỉ
+ * có 1200 phút, nên `every: 1` ("mỗi ngày") thật ra mất hai ngày và MỌI con số
+ * cân bằng trong `actors.json` lệch 20 %.
+ */
+export function dayMinutes(content: Content): number {
+  const bal = content.balance;
+  return Math.max(1, bal.dayEndMinutes - bal.dayStartMinutes);
+}
 
 /** Con vật đã trưởng thành chưa — chưa lớn thì chưa cho sản phẩm, chưa bán thịt được. */
 export function isMature(e: Entity, content: Content): boolean {
@@ -43,7 +57,7 @@ export function readyProduct(e: Entity, content: Content): number {
   if (!def || !isMature(e, content) || isHungry(e)) return -1;
   for (let i = 0; i < def.products.length; i++) {
     const p = def.products[i]!;
-    if ((e.animal.prod[i] ?? 0) >= p.every * 1440) return i;
+    if ((e.animal.prod[i] ?? 0) >= p.every * dayMinutes(content)) return i;
   }
   return -1;
 }
@@ -125,7 +139,7 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
   if (!def) return null;
   const mature = isMature(e, content);
   const products: ProductLine[] = def.products.map((p, i) => {
-    const need = p.every * 1440;
+    const need = p.every * dayMinutes(content);
     const has = e.animal.prod[i] ?? 0;
     return {
       id: p.id,
@@ -376,21 +390,33 @@ export interface AnimalNightReport {
 /**
  * Một đêm cho MỌI vật nuôi (mọi bản đồ).
  *
- * Thứ tự có ý nghĩa: tuổi tăng trước, rồi mới tiêu phần no còn lại của ngày, rồi
- * mới xét đói/chết. Nếu xét chết trước thì con vật vừa được cho ăn lúc chiều
- * cũng bị tính là đói cả ngày.
+ * Ở ĐÂY KHÔNG CÒN CỘNG TRỪ ĐỒNG HỒ NỮA. `fed` đi xuống và `prod` đi lên theo
+ * THỜI GIAN THẬT, do `catchUpEntities` cộng: mỗi khung hình cho bản đồ đang
+ * chơi, một lần lúc rời bản đồ cho bản đồ vừa bỏ lại, và một lần lúc sang ngày
+ * cho phần còn thiếu của từng bản đồ. Bản cũ cộng ở CẢ HAI chỗ nên thời gian ở
+ * bản đồ khác bị tính hai lần — ở lì trong nhà là một cách tăng sản lượng.
  *
- * Loài `feed: null` tự kiếm ăn: chúng không bao giờ đói CHẾT, chỉ đói tạm khi
- * quanh đó hết cỏ — đó là chủ ý, gà thả rông mà chết đói vì người chơi đi vắng
- * ba ngày thì vô lý.
+ * Việc của hàm này giờ đúng bằng những gì chỉ xảy ra ở RANH GIỚI NGÀY: già thêm
+ * một tuổi, và xét đói/chết.
+ *
+ * Thứ tự có ý nghĩa: tuổi tăng trước, rồi mới xét đói/chết. Con vật đói thì có
+ * hai đường sống, theo đúng thứ tự này:
+ *
+ *   1. MÁNG trong khu của nó (`eatFromTroughNight`) — đường duy nhất của loài
+ *      có chuồng, và nó không bao giờ phải rời khu để đi tìm;
+ *   2. đi ăn cỏ (`grazeNight`) — chỉ loài `housing: "free"`.
+ *
+ * Đói mà không có đường nào thì `hungryDays` tăng, và quá `starveDays` thì chết.
  */
 export function animalNight(
   d: Draft,
   content: Content,
-  dayMinutes: number,
+  views: readonly MapView[],
 ): AnimalNightReport {
   const rep: AnimalNightReport = { starved: 0, hungry: 0, born: 0 };
   const chet: number[] = [];
+  const luoi = new Map<string, MapView>();
+  for (const v of views) luoi.set(v.id, v);
 
   for (let i = 0; i < d.s.entities.length; i++) {
     const cur = d.s.entities[i]!;
@@ -403,20 +429,17 @@ export function animalNight(
 
     e.animal.age += 1;
 
-    // tiêu phần no còn lại của một ngày
-    e.animal.fed = Math.max(0, e.animal.fed - dayMinutes);
-
     if (e.animal.fed <= 0) {
-      /* ĐI TÌM CỎ. Trước đây loài `feed: null` cứ mỗi đêm tự no lại một nửa từ
-         hư không — kể cả khi cả nông trại đã lát nhựa — còn loài có `feed` thì
-         đứng giữa bãi cỏ dày mà chết đói. Cả hai đều là con số thay cho hành
-         vi. Giờ cỏ trên bản đồ là thức ăn thật, cho MỌI loài, và hết cỏ thì
-         chết đói thật.
+      /* BỮA ĐÊM. Người chơi ngủ là cả đêm trôi qua trong một action, không có
+         khung hình nào để con vật đi tới máng hay tới bãi cỏ — nên phải làm ở
+         đây chứ không chỉ trong TICK.
 
-         Phải làm ở đây chứ không chỉ trong TICK: người chơi ngủ là cả đêm trôi
-         qua trong một action, không có khung hình nào để con vật đi tới bãi cỏ.
-         Thiếu bước này thì ngủ vài đêm là cả đàn chết dù nông trại đầy cỏ. */
-      if (!grazeNight(d, content, i)) {
+         Máng trước, cỏ sau: đổ máng là công người chơi bỏ ra, nó phải hơn việc
+         con vật tự đi kiếm. Và con có chuồng thì CHỈ có đường máng — nó không
+         còn bị bốc qua rào đi tìm cỏ nữa (xem `grazeNight`). */
+      const v = luoi.get(cur.map) ?? null;
+      const an = v ? eatFromTroughNight(d, content, v, i) || grazeNight(d, content, v, i) : false;
+      if (!an) {
         e.animal.hungryDays += 1;
         rep.hungry++;
         if (e.animal.hungryDays >= def.starveDays) {
@@ -428,12 +451,6 @@ export function animalNight(
     } else {
       e.animal.hungryDays = 0;
     }
-
-    // Đói thì đồng hồ sản phẩm ĐỨNG — bỏ đói không mất con vật ngay, nhưng
-    // cũng không được lấy gì. Đó mới là hình phạt thật.
-    if (e.animal.fed > 0)
-      for (let j = 0; j < e.animal.prod.length; j++)
-        e.animal.prod[j] = (e.animal.prod[j] ?? 0) + dayMinutes;
   }
 
   for (const id of chet) removeEntity(d, id);

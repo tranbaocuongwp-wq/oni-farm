@@ -53,6 +53,7 @@ import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, InteractKind, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
+import { checkInvariants } from "./game/invariants.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
 import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
@@ -217,8 +218,22 @@ async function boot() {
   const migrated = saved ? migrateSave(saved) : null;
   if (migrated) {
     const fixed = migrateForContent(migrated, content);
-    initial = fixed.state;
-    contentWarnings.push(...fixed.notes);
+    /* Migrate xong thì PHẢI kiểm, kể cả ở bản phát hành.
+       `migrateForContent` bọc cả thân hàm trong try/catch và khi ném thì trả về
+       state CHƯA migrate — tức là state chắc chắn vỡ bất biến. Cộng với việc
+       store chỉ kiểm khi `import.meta.env.DEV`, cả lưới an toàn này lâu nay
+       không tồn tại ở đúng chỗ save của người chơi thật đi qua. Vỡ thì bắt đầu
+       nông trại mới còn hơn chơi tiếp trên một state hỏng. */
+    const vo = checkInvariants(fixed.state, content);
+    if (vo.length) {
+      initial = createNewGame(content);
+      contentWarnings.push(
+        `Save cũ không còn hợp lệ (${vo[0]}) — đã bắt đầu nông trại mới.`,
+      );
+    } else {
+      initial = fixed.state;
+      contentWarnings.push(...fixed.notes);
+    }
   } else {
     initial = createNewGame(content);
     if (saved) contentWarnings.push("Save cũ không đọc được — đã bắt đầu nông trại mới.");

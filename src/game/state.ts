@@ -241,10 +241,25 @@ export function dEntity(d: Draft, i: number): Entity | null {
   const cur = list[i];
   if (!cur) return null;
   if (i < d.base.entities.length && cur === d.base.entities[i]) {
+    /* Chép SÂU mọi khối lồng, kể cả `worker` và `veh`.
+       Thiếu hai khối đó thì `w.energy = ...`, `e.worker.job = ...`, `v.wait =
+       ...` ghi thẳng vào object của state CŨ — reducer hết thuần, và bất biến
+       "cùng seed + cùng chuỗi action = state y hệt" vỡ ở đúng chỗ khó thấy
+       nhất. Cùng lý do với `ai.bad`: `markBad` push/shift trên chính mảng đó. */
     const copy: Entity = {
       ...cur,
-      ai: { ...cur.ai, path: cur.ai.path.slice() },
+      ai: { ...cur.ai, path: cur.ai.path.slice(), bad: cur.ai.bad ? cur.ai.bad.slice() : cur.ai.bad },
       animal: { ...cur.animal, prod: cur.animal.prod.slice() },
+      ...(cur.worker ? { worker: { ...cur.worker, carry: cur.worker.carry.slice() } } : {}),
+      ...(cur.veh
+        ? {
+            veh: {
+              ...cur.veh,
+              cargo: cur.veh.cargo.slice(),
+              errand: cur.veh.errand ? { ...cur.veh.errand } : null,
+            },
+          }
+        : {}),
     };
     list[i] = copy;
     return copy;

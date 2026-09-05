@@ -164,13 +164,19 @@ export function normalizeInventory(
 ): { inv: InvSlot[]; dropped: string[] } {
   const size = Math.max(TOOL_SLOTS, content.balance.inventorySlots | 0);
   const tools = toolIds(content);
+  const coDinh = new Set(tools);
   const dropped: string[] = [];
 
-  // gom mọi món KHÔNG phải công cụ, giữ nguyên thứ tự
+  /* Gom mọi món sẽ được XẾP LẠI vào túi, giữ nguyên thứ tự.
+     Bỏ qua đúng hai công cụ của slot cố định, vì bên dưới chúng được dựng lại
+     từ `toolIds`. MỌI công cụ khác đi tiếp như đồ thường — rìu thép, cuốc chim,
+     bình tưới lớn đều là thứ người chơi CHẾ RA, và hàm này chạy ở mỗi lần nạp
+     save. Bỏ hết `tool:` ở đây từng xoá sạch chúng, im lặng, không một dòng ghi
+     chú, mỗi lần mở game. */
   const carried: { id: string; n: number }[] = [];
   for (const s of inv) {
     if (!s || typeof s.id !== "string") continue;
-    if (isTool(s.id)) continue;
+    if (coDinh.has(s.id)) continue;
     const n = Math.floor(s.n);
     if (!Number.isFinite(n) || n < 1) continue;
     if (!isKnownItem(s.id, content)) {

@@ -97,6 +97,19 @@ export const PAD_MAP: readonly PadBind[] = [
 ];
 
 /** Nút mang việc này, hoặc −1. Dùng để sơ đồ nút in ĐÚNG tên nút của máy. */
+/**
+ * Nút DÙNG có đang được giữ không — hỏi thẳng `PAD_MAP` chứ không liệt kê tay.
+ *
+ * Chỗ này từng viết `held.has(PAD.A) || held.has(PAD.RT)` trong khi bảng đã
+ * giao cò phải cho việc đổi mức phóng: một việc hai nút, đúng cái luật mà chính
+ * bảng sinh ra để chặn. Hậu quả là mỗi lần đổi mức phóng lại vung thêm một nhát
+ * cuốc. Hỏi bảng thì lệch kiểu đó không xảy ra được nữa.
+ */
+export function padUseHeld(held: ReadonlySet<number>): boolean {
+  for (const m of PAD_MAP) if (m.viec === "use" && held.has(m.nut)) return true;
+  return false;
+}
+
 export function padButtonFor(job: PadJob): number {
   return PAD_MAP.find((m) => m.viec === job)?.nut ?? -1;
 }
@@ -482,9 +495,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         connected: st.connected,
         axis: st.axis,
         running: st.running,
-        // Giữ A (hoặc cò phải) = giữ nút DÙNG, nên "giữ để làm tiếp ô kế bên"
-        // chạy y hệt như giữ Space.
-        useHeld: st.held.has(PAD.A) || st.held.has(PAD.RT),
+        // Giữ nút DÙNG, nên "giữ để làm tiếp ô kế bên" chạy y hệt như giữ Space.
+        useHeld: padUseHeld(st.held),
       };
       if (!st.connected) return;
 

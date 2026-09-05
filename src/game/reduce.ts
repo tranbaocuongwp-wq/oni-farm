@@ -94,6 +94,15 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       // Thực thể: NHÍCH mỗi khung hình (không rút hạt ngẫu nhiên nào), còn
       // QUYẾT ĐỊNH thì theo nhịp giờ game. Xem đầu file entities.ts — đây là
       // chỗ tính tất định sống hay chết.
+      /* Đồng hồ vật nuôi chạy LIÊN TỤC, không nhảy một bậc lúc nửa đêm: đói
+         dần và sản phẩm chín dần theo đúng số phút vừa trôi qua. Trước đây cả
+         hai chỉ đổi lúc sang ngày, nên thanh "no" và dòng "còn 14 giờ" trên thẻ
+         vật nuôi là một cái đồng hồ đứng, và cho ăn lúc 6 giờ sáng với lúc 11
+         giờ đêm có hiệu lực y hệt nhau.
+
+         Cộng TRƯỚC `runActorSteps` để bước quyết định ngay sau đó đọc đúng độ
+         đói của phút này, không phải của phút trước. */
+      catchUpEntities(d, content, s.mapId, s.minutes - was);
       moveActors(d, content, dt);
       runActorSteps(d, content);
 

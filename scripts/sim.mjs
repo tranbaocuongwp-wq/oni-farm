@@ -19,6 +19,7 @@ import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } f
 import { penSummary } from "../src/game/animals.ts";
 import { calmedByPlayer, warySpeedMul } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
+import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, interactHint, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
@@ -29,7 +30,7 @@ import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
-import { PAD_MAP } from "../src/core/input.ts";
+import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 
@@ -3303,8 +3304,14 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   for (let i = 0; i < 12; i++) sleep(st3);
   eq(st3.getState().entities.length, 1, "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống");
 
-  /* --- và ĐI TÌM CỎ thật: con heo trên nông trại còn cỏ thì không chết,
-         mà bãi cỏ nó ăn phải BIẾN MẤT --- */
+  /* --- và ĐI TÌM CỎ thật: con CHÓ trên nông trại còn cỏ thì không chết,
+         mà bãi cỏ nó ăn phải BIẾN MẤT.
+
+     Con chó chứ không phải con heo, và đó là cả một luật: chỉ loài
+     `housing: "free"` mới đi ăn đêm. Con có chuồng KHÔNG bao giờ bị dời qua rào
+     nữa — trước đây `grazeNight` gán thẳng toạ độ trong bán kính 14 ô, mà ruột
+     chuồng lát bê tông nên đêm nào cả đàn cũng bị bốc ra ngoài. Đường sống của
+     con có chuồng là CÁI MÁNG, và đúng hai khối dưới đây khoá nó lại. --- */
   const st4 = mkStore(926);
   walkTo(st4, HOME.x, HOME.y);
   /* Đếm cỏ TRONG ĐÚNG VẠT vừa rải, không đếm cả bản đồ: cỏ tự LAN mỗi đêm, nên
@@ -3335,7 +3342,7 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
       }
     s.entSeq = 1;
     s.entities.push({
-      id: 1, kind: "animal", def: "pig", map: "farm",
+      id: 1, kind: "animal", def: "dog", map: "farm",
       x: (px + 4) * TILE + 8, y: py * TILE + 8,
       dir: "down", anim: 0, seed: 8,
       ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
@@ -3343,11 +3350,71 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
     });
   });
   const co0 = demCo(st4);
-  for (let i = 0; i < content.animals.pig.starveDays + 3; i++) sleep(st4);
-  eq(st4.getState().entities.length, 1, "còn cỏ thì con heo không chết đói");
+  for (let i = 0; i < content.animals.dog.starveDays + 3; i++) sleep(st4);
+  eq(st4.getState().entities.length, 1, "còn cỏ thì con chó thả rông không chết đói");
   ok(demCo(st4) < co0, `bãi cỏ bị gặm bớt: ${co0} → ${demCo(st4)}`);
   eq(st4.getState().entities[0].animal.hungryDays, 0, "ăn được thì đồng hồ đói về 0");
   deepEq(checkInvariants(st4.getState(), content), [], "bất biến sau khi gặm cỏ");
+
+  /* --- con CÓ CHUỒNG: ở yên trong khu, và MÁNG là đường sống duy nhất ---
+
+     Cùng một con heo, cùng một vạt cỏ dày ngay ngoài rào, khác đúng một thứ:
+     máng đầy hay máng cạn. Đây là chỗ luật mới trả lời thẳng câu người chơi hỏi
+     ("sao mấy con vật nó không ở trong chuồng mà chạy tùm lum"). */
+  const khu = content.tiles.pens.find((p) => p.id === "pigpen");
+  const dungHeo = (seed, doMang) => {
+    const st = mkStore(seed);
+    walkTo(st, HOME.x, HOME.y);
+    setState(st, (s) => {
+      // cỏ dày ngay SÁT rào — nếu con heo còn bị dời ra ngoài thì nó sống
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const t = s.tiles[idx(s.w, khu.x - 4 + dx, khu.y + dy)];
+          if (!t || t.tilled || t.crop || t.b || t.prop !== null) continue;
+          t.g = "grass";
+          t.prop = "grass_tall";
+          t.hp = 1;
+        }
+      if (doMang)
+        for (let y = khu.y; y < khu.y + khu.h; y++)
+          for (let x = khu.x; x < khu.x + khu.w; x++) {
+            const t = s.tiles[idx(s.w, x, y)];
+            if (t && t.prop === "trough") t.trough = content.balance.troughMax;
+          }
+      s.entSeq = 1;
+      s.entities.push({
+        id: 1, kind: "animal", def: "pig", map: "farm",
+        x: (khu.x + 1) * TILE + 8, y: (khu.y + 1) * TILE + 8,
+        dir: "down", anim: 0, seed: 11,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [] },
+      });
+    });
+    return st;
+  };
+
+  const trongKhu = (st) => {
+    const e = st.getState().entities[0];
+    if (!e) return null;
+    const x = Math.floor(e.x / TILE);
+    const y = Math.floor(e.y / TILE);
+    return x >= khu.x && x < khu.x + khu.w && y >= khu.y && y < khu.y + khu.h;
+  };
+
+  const mangCan = dungHeo(927, false);
+  for (let i = 0; i < content.animals.pig.starveDays; i++) {
+    ok(trongKhu(mangCan) !== false, "máng cạn: con heo vẫn KHÔNG bị bốc qua rào");
+    sleep(mangCan);
+  }
+  eq(mangCan.getState().entities.length, 0, "máng cạn thì cỏ ngoài rào cũng không cứu được");
+
+  const mangDay = dungHeo(928, true);
+  for (let i = 0; i < content.animals.pig.starveDays + 3; i++) {
+    sleep(mangDay);
+    ok(trongKhu(mangDay), "máng đầy: con heo ăn máng và ở yên trong khu");
+  }
+  eq(mangDay.getState().entities.length, 1, "máng đầy thì con heo sống");
+  deepEq(checkInvariants(mangDay.getState(), content), [], "bất biến sau mấy đêm ăn máng");
 });
 
 test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", () => {
@@ -4245,7 +4312,12 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
   selectItem(st2, monCa);
   eq(canUseAt(st2.getState(), content, oNuoc.x, oNuoc.y), "feedpond", "cầm cám cá → nút CHO CÁ ĂN");
   use(st2, oNuoc.x, oNuoc.y);
-  eq(st2.getState().entities[0].animal.fed, content.animals.fish.fedMinutes, "con cá đã no");
+  /* "Gần đầy" chứ không "đúng bằng": đồng hồ no giờ chạy LIÊN TỤC theo phút
+     game, nên mấy khung hình của chính cái nhát rắc cám đã tiêu mất một mẩu.
+     Bám đúng con số tuyệt đối ở đây là bám vào cái đồng hồ đứng của bản cũ. */
+  const noCa = st2.getState().entities[0].animal.fed;
+  const dayCa = content.animals.fish.fedMinutes;
+  ok(noCa > dayCa - 5 && noCa <= dayCa, `con cá đã no: ${noCa.toFixed(1)}/${dayCa}`);
   eq(countInv(st2, monCa), 2, "trừ đúng một phần cho một con");
   eq(canUseAt(st2.getState(), content, oNuoc.x, oNuoc.y), null, "không con nào đói thì nút tắt");
 
@@ -5571,6 +5643,203 @@ test("81. sơ đồ nút tay cầm: không nút nào hai việc, không việc n
      hứa một nút mà máy không làm — đúng cái lỗi "Chạy" chết âm thầm sáu
      commit. Kiểm bằng cách đòi mọi dòng đều có mô tả không rỗng. */
   for (const m of PAD_MAP) ok(!!m.mo && m.mo.length > 6, `nút ${m.nut} phải có mô tả để in ra sơ đồ`);
+});
+
+
+test("82. công cụ CHẾ RA sống sót qua một lần nạp save", () => {
+  /* Lỗi nặng nhất từng có trong repo này, và nó im lặng tuyệt đối:
+     `normalizeInventory` gom lại túi bằng cách bỏ HẾT `tool:` rồi chỉ dựng lại
+     hai ô cố định. Người chơi chế rìu thép cả buổi, tắt game, mở lại thì mất
+     trắng — `notes` rỗng, bất biến xanh. `migrateForContent` chạy ở MỌI lần nạp
+     save nên nó xảy ra mỗi ngày. */
+  const store = mkStore(1101);
+  const che = ["tool:axe", "tool:pickaxe", "tool:can2"];
+  for (const id of che) giveItem(store, id, 1);
+  for (const id of che) eq(countInv(store, id), 1, `trước khi nạp lại: có ${id}`);
+
+  const lai = migrateForContent(store0(store), content);
+  const co = (id) => lai.state.inv.some((v) => v && v.id === id);
+  for (const id of che) ok(co(id), `sau khi nạp lại: VẪN còn ${id}`);
+  for (const id of ["tool:hoe", "tool:can"]) ok(co(id), `hai ô công cụ cố định vẫn nguyên: ${id}`);
+  eq(lai.state.inv[0].id, "tool:hoe", "ô 0 vẫn là cái cuốc");
+  eq(lai.state.inv[1].id, "tool:can", "ô 1 vẫn là bình tưới");
+  deepEq(lai.notes, [], "không mất gì thì không có ghi chú nào");
+  deepEq(checkInvariants(lai.state, content), [], "bất biến sau khi nạp lại");
+
+  /* Ngược lại: công cụ content đã GỠ thì vẫn phải rơi ra, và phải được GHI SỔ —
+     mất đồ im lặng mới là lỗi, mất đồ có báo là hợp đồng. */
+  const bay = clone(store.getState());
+  bay.inv[bay.inv.findIndex((v) => v && v.id === "tool:axe")] = { id: "tool:khongcothat", n: 1 };
+  const lai2 = migrateForContent(bay, content);
+  ok(lai2.notes.length > 0, "công cụ không còn trong content thì có ghi chú");
+});
+
+test("83. đồng hồ vật nuôi chạy TRONG ngày, và một lứa đúng bằng một ngày game", () => {
+  /* Trước đây `fed` và `prod` chỉ nhảy một bậc lúc nửa đêm, còn chu kỳ sản phẩm
+     thì nhân với hằng số cắm cứng 1440 trong khi một ngày game chỉ có 1200 phút.
+     Hai hệ quả người chơi thấy: thanh "no" là cái đồng hồ đứng, và `every: 1`
+     ("mỗi ngày") thật ra mất hai ngày. */
+  eq(dayMinutes(content), BAL.dayEndMinutes - BAL.dayStartMinutes, "một ngày = quãng thức");
+
+  const store = mkStore(1102);
+  walkTo(store, HOME.x, HOME.y);
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+  setState(store, (s) => {
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 3,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: content.animals.cow.fedMinutes, hungryDays: 0, prod: [0] },
+    });
+  });
+
+  const bo = () => store.getState().entities.find((e) => e.id === 1);
+  const no0 = bo().animal.fed;
+  const sua0 = bo().animal.prod[0];
+  const phut0 = store.getState().minutes;
+
+  // 200 phút GAME trôi qua trong CÙNG một ngày
+  const giay = 200 / (10 / BAL.realSecondsPerGameTenMinutes);
+  store.dispatch({ t: "TICK", dt: giay });
+  const troi = store.getState().minutes - phut0;
+  ok(troi > 190 && troi < 210, `đã trôi ~200 phút game: ${troi.toFixed(0)}`);
+  ok(no0 - bo().animal.fed > 150, `độ no GIẢM trong ngày: ${no0} → ${bo().animal.fed.toFixed(0)}`);
+  ok(bo().animal.prod[0] - sua0 > 150, `đồng hồ sữa CHẠY trong ngày: ${bo().animal.prod[0].toFixed(0)}`);
+
+  // và thẻ vật nuôi nói đúng cùng con số đó, không tự diễn giải lại
+  const the = animalStats(bo(), content);
+  eq(
+    Math.round(the.products[0].everyMinutes),
+    Math.round(content.animals.cow.products[0].every * dayMinutes(content)),
+    "chu kỳ trên thẻ = every × một ngày game",
+  );
+
+  /* `every: 1` phải chín sau ĐÚNG một ngày, không phải hai. Cho bò no sẵn mỗi
+     sáng để đồng hồ không bị đói làm đứng. */
+  const st2 = mkStore(1103);
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => {
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 4,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: content.animals.cow.fedMinutes, hungryDays: 0, prod: [0] },
+    });
+  });
+  const moiNgay = content.animals.cow.products[0].every;
+  eq(moiNgay, 1, "con bò khai every: 1 — mỗi ngày một lứa sữa");
+  sleep(st2);
+  setState(st2, (s) => { s.entities[0].animal.fed = content.animals.cow.fedMinutes; });
+  ok(
+    st2.getState().entities[0].animal.prod[0] >= dayMinutes(content),
+    `một đêm ngủ cộng đủ một ngày: ${st2.getState().entities[0].animal.prod[0].toFixed(0)} ≥ ${dayMinutes(content)}`,
+  );
+  eq(readyProduct(st2.getState().entities[0], content), 0, "và tới lứa NGAY sáng hôm sau, không phải hai ngày");
+});
+
+test("84. ở lì trong nhà KHÔNG làm con bò ngoài ruộng ra sữa nhanh hơn", () => {
+  /* `catchUpEntities` cộng bù lúc rời bản đồ, rồi `animalNight` cộng TRỌN một
+     ngày cho MỌI con ở MỌI bản đồ — thời gian ở bản đồ khác bị tính hai lần, và
+     ở lì trong nhà thành một cách tăng sản lượng (đo được 1320 thay vì 1200).
+
+     Hợp đồng đúng: một ngày cộng ĐÚNG một ngày, đi đường nào cũng vậy. */
+  const dungBo = (seed) => {
+    const st = mkStore(seed);
+    walkTo(st, HOME.x, HOME.y);
+    const x = Math.floor(st.getState().player.x / TILE);
+    const y = Math.floor(st.getState().player.y / TILE);
+    setState(st, (s) => {
+      s.entSeq = 1;
+      s.entities.push({
+        id: 1, kind: "animal", def: "cow", map: "farm",
+        x: (x + 1) * TILE + 8, y: y * TILE + 8,
+        dir: "down", anim: 0, seed: 7,
+        // no vô tận: kịch bản này đo ĐỒNG HỒ SỮA, không đo cái đói
+        animal: { age: 99, fed: 1e9, hungryDays: 0, prod: [0] },
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      });
+    });
+    return st;
+  };
+  const vaoNha = (st) => {
+    walkTo(st, AT_DOOR.x, AT_DOOR.y);
+    st.dispatch({ t: "INTERACT", x: DOOR.x, y: DOOR.y });
+    eq(st.getState().mapId, "house", "đã vào nhà");
+  };
+  const sua = (st) => st.getState().entities.find((e) => e.id === 1).animal.prod[0];
+
+  // A — vào nhà rồi ngủ ngay
+  const A = dungBo(1104);
+  vaoNha(A);
+  sleepInBed(A);
+
+  // B — vào nhà, ĐỨNG LÌ 120 phút game, rồi mới ngủ
+  const B = dungBo(1104);
+  vaoNha(B);
+  const truocB = B.getState().minutes;
+  B.dispatch({ t: "TICK", dt: 120 / (10 / BAL.realSecondsPerGameTenMinutes) });
+  ok(B.getState().minutes - truocB > 100, "B thật sự đã đứng lì thêm 120 phút game");
+  sleepInBed(B);
+
+  const mot = dayMinutes(content);
+  ok(Math.abs(sua(A) - mot) < 3, `ngủ ngay: một ngày = ${sua(A).toFixed(0)} ≈ ${mot}`);
+  ok(Math.abs(sua(B) - mot) < 3, `đứng lì 120 phút rồi ngủ: vẫn ${sua(B).toFixed(0)} ≈ ${mot}`);
+  ok(
+    Math.abs(sua(A) - sua(B)) < 3,
+    `ở lì trong nhà KHÔNG cho thêm sữa: ${sua(A).toFixed(0)} vs ${sua(B).toFixed(0)}`,
+  );
+});
+
+test("85. cho ăn LÚC NÀO cũng có nghĩa — no buổi sáng thì tối vẫn còn", () => {
+  /* `fed` từng bị trừ trọn `dayEndMinutes - dayStartMinutes` = 1200 mỗi đêm,
+     trong khi `fedMinutes` cao nhất trong content là 800 — nên MỌI con vật đói
+     sạch mỗi sáng bất kể được cho ăn lúc nào, và cả `fedMinutes` lẫn cái máng
+     đều là số trang trí. */
+  for (const [id, def] of Object.entries(content.animals)) {
+    if (def.job === "pest") continue;
+    ok(def.fedMinutes > 0, `${id} khai fedMinutes`);
+  }
+
+  const store = mkStore(1105);
+  walkTo(store, HOME.x, HOME.y);
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+  setState(store, (s) => {
+    s.minutes = BAL.dayStartMinutes;
+    s.entSeq = 1;
+    s.entities.push({
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 9,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: content.animals.cow.fedMinutes, hungryDays: 0, prod: [0] },
+    });
+  });
+  const no = content.animals.cow.fedMinutes;
+  // đi tới nửa quãng no rồi kiểm: vẫn còn no, không phải bằng 0
+  const nua = no / 2;
+  store.dispatch({ t: "TICK", dt: nua / (10 / BAL.realSecondsPerGameTenMinutes) });
+  const conLai = store.getState().entities[0].animal.fed;
+  ok(conLai > nua * 0.8 && conLai < no, `giữa chừng còn no một phần: ${conLai.toFixed(0)}/${no}`);
+  eq(store.getState().entities[0].animal.hungryDays, 0, "chưa đói thì chưa đếm ngày đói");
+});
+
+test("86. cò phải KHÔNG còn là nút Dùng", () => {
+  /* `useHeld` từng viết tay `held.has(PAD.A) || held.has(PAD.RT)` trong khi
+     `PAD_MAP` đã giao cò phải cho việc đổi mức phóng — nên mỗi lần đổi mức
+     phóng lại vung thêm một nhát cuốc xuống ô đang ngắm. Giờ nó hỏi thẳng bảng,
+     nên lệch kiểu đó không xảy ra được nữa. */
+  ok(padUseHeld(new Set([PAD.A])), "giữ A = giữ nút Dùng");
+  ok(!padUseHeld(new Set([PAD.RT])), "giữ cò phải KHÔNG phải giữ nút Dùng");
+  ok(!padUseHeld(new Set()), "không giữ gì thì không phải giữ nút Dùng");
+  for (const m of PAD_MAP)
+    if (m.viec !== "use")
+      ok(!padUseHeld(new Set([m.nut])), `nút của việc '${m.viec}' không được kiêm nút Dùng`);
 });
 
 /* ------------------------------------------------------------------ tổng kết */

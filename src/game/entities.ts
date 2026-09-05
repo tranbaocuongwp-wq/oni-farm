@@ -27,7 +27,7 @@
 
 import type { AnimalDef, Content, Dir, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
-import { dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
+import { activeView, dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
 import { blockedForActor, idx, TILE, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
@@ -508,7 +508,7 @@ export function actorStep(d: Draft, content: Content): void {
       // HẲN. Xét trước cỏ: con vật đứng cạnh máng đầy mà vẫn cúi gặm cỏ là thứ
       // nhìn vào thấy sai ngay, và làm cái máng thành vô nghĩa.
       if (eatFromTrough(d, content, i)) continue;
-      if (grazeHere(d, content, i)) continue;
+      if (grazeHere(d, content, activeView(d), i)) continue;
     }
 
     /* Con chó ĐI TUẦN chứ không lang thang: nó nhắm thẳng vào con sâu bọ gần
@@ -636,6 +636,7 @@ export function catchUpEntities(
     if (cur.map !== mapId) continue;
     const def = animalDef(content, cur.def);
     if (!def) continue;
+    if (def.job === "pest") continue; // sâu bọ có vòng đời riêng, không đói không ra sản phẩm
     const e = dEntity(d, i);
     if (!e) continue;
     e.animal.fed = Math.max(0, e.animal.fed - minutes);

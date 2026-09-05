@@ -23,10 +23,25 @@
      chết khi quanh đó không còn một mảnh cỏ nào.
 ============================================================================ */
 
-import type { AnimalDef, Content, Entity, GameState } from "./types.ts";
-import type { Draft } from "./state.ts";
-import { dEntity, dTile } from "./state.ts";
-import { TILE, idx, tileAt, tileIndexAt } from "./world.ts";
+import type { AnimalDef, Content, Entity, GameState, Tile } from "./types.ts";
+import type { Draft, MapView } from "./state.ts";
+import { dEntity } from "./state.ts";
+import { TILE, idx } from "./world.ts";
+
+/**
+ * Đủ để đọc một lưới ô: `GameState` và `MapView` đều vừa khuôn này.
+ *
+ * Có nó vì bữa ăn ĐÊM phải đọc lưới của BẢN ĐỒ CON VẬT ĐANG Ở, không phải lưới
+ * đang hiện trên màn hình. Người chơi ngủ trong nhà thì `state.tiles` là cái
+ * nhà, và bản cũ đem toạ độ con gà ngoài ruộng đi hỏi lưới ấy — ra kết quả vô
+ * nghĩa, im lặng.
+ */
+type Luoi = { readonly w: number; readonly h: number; readonly tiles: readonly Tile[] };
+
+function oTai(v: Luoi, x: number, y: number): Tile | null {
+  if (x < 0 || y < 0 || x >= v.w || y >= v.h) return null;
+  return v.tiles[y * v.w + x] ?? null;
+}
 
 /** Ăn một bữa no được bao nhiêu phần của `fedMinutes`. Cố ý KHÔNG đầy: cho ăn
  *  bằng tay vẫn phải hơn hẳn việc tự gặm, nếu không thì máng cỏ vô nghĩa. */
@@ -48,13 +63,13 @@ function propsDropping(content: Content, feeds: readonly string[]): Set<string> 
 
 /** Ô (x,y) có ăn được với loài này không. */
 export function grazeableAt(
-  s: GameState,
+  s: Luoi,
   content: Content,
   def: AnimalDef,
   x: number,
   y: number,
 ): boolean {
-  const t = tileAt(s, x, y);
+  const t = oTai(s, x, y);
   if (!t) return false;
   // Ruộng đã cày hay đang có cây thì KHÔNG phải bãi chăn — con bò gặm luống rau
   // là thứ người chơi sẽ nhớ rất lâu, theo nghĩa xấu.
@@ -77,7 +92,7 @@ export function grazeableAt(
  * trong chuồng không quét cả bản đồ mỗi bước.
  */
 export function nearestGraze(
-  s: GameState,
+  s: Luoi,
   content: Content,
   def: AnimalDef,
   e: Entity,
@@ -106,25 +121,23 @@ export function nearestGraze(
  * lại, còn bãi cỏ thì phải chờ mọc, và chính chỗ khác nhau đó là lý do nuôi bò
  * khó hơn nuôi gà.
  */
-export function grazeHere(d: Draft, content: Content, i: number): boolean {
+export function grazeHere(d: Draft, content: Content, v: MapView, i: number): boolean {
   const cur = d.s.entities[i];
-  if (!cur) return false;
+  if (!cur || cur.map !== v.id) return false;
   const def = content.animals[cur.def];
   if (!def) return false;
   const x = Math.floor(cur.x / TILE);
   const y = Math.floor(cur.y / TILE);
-  if (!grazeableAt(d.s, content, def, x, y)) return false;
+  if (!grazeableAt(v, content, def, x, y)) return false;
 
   /* Ăn BỤI thì bụi mất; mổ sâu trên nền cỏ trống thì không mất gì — sâu mọc
      lại, còn bãi cỏ thì phải chờ mọc, và chính chỗ khác nhau đó là lý do nuôi
      bò khó hơn nuôi gà. Điều kiện là "ô có bụi không", chứ không phải "loài
      này có ăn được đồ cho ăn không": từ khi gà cũng ăn cám thì hai câu đó
      không còn trùng nhau nữa. */
-  const t = tileAt(d.s, x, y);
+  const t = oTai(v, x, y);
   if (t && t.prop !== null) {
-    const ti = tileIndexAt(d.s, x, y);
-    if (ti < 0) return false;
-    const m = dTile(d, ti);
+    const m = v.edit(y * v.w + x);
     if (!m) return false;
     m.prop = null;
     m.hp = 0;
@@ -144,15 +157,31 @@ export function grazeHere(d: Draft, content: Content, i: number): boolean {
  * hình nào để con vật đi tới bụi cỏ. Không có bước này thì cứ ngủ vài đêm là cả
  * đàn chết đói dù nông trại đầy cỏ, tức là ngủ trở thành thứ trừng phạt.
  *
+ * CHỈ loài `housing: "free"` (gà, vịt, chó) mới đi. Con có chuồng — bò, dê,
+ * cừu, heo, cá — thì KHÔNG BAO GIỜ bị dời nữa, dù đói tới đâu.
+ *
+ * Đây là lỗi mà người chơi nhìn thấy còn tôi thì mất ba lần mới tìm ra gốc: hàm
+ * này gán thẳng `e.x`/`e.y` trong bán kính 14 ô, mà ruột chuồng lát bê tông nên
+ * bên trong không có gì gặm được — nên đêm nào cả đàn cũng bị bốc qua rào ra
+ * ngoài. Đường sống của con có chuồng giờ là CÁI MÁNG (`eatFromTroughNight`),
+ * đúng như cái máng sinh ra để làm.
+ *
  * Bán kính rộng hơn ban ngày: cả một đêm thì con vật đi được xa hơn nhiều so
  * với vài phút game.
  */
-export function grazeNight(d: Draft, content: Content, i: number, radius = 14): boolean {
+export function grazeNight(
+  d: Draft,
+  content: Content,
+  v: MapView,
+  i: number,
+  radius = 14,
+): boolean {
   const cur = d.s.entities[i];
-  if (!cur) return false;
+  if (!cur || cur.map !== v.id) return false;
   const def = content.animals[cur.def];
   if (!def) return false;
-  const spot = nearestGraze(d.s, content, def, cur, radius);
+  if (def.housing !== "free") return false;
+  const spot = nearestGraze(v, content, def, cur, radius);
   if (!spot) return false;
 
   // Dời con vật tới đúng bãi nó vừa ăn: sáng ra người chơi thấy nó đứng ở chỗ
@@ -162,7 +191,7 @@ export function grazeNight(d: Draft, content: Content, i: number, radius = 14): 
   e.x = spot.x * TILE + TILE / 2;
   e.y = spot.y * TILE + TILE / 2;
   e.ai.path = [];
-  return grazeHere(d, content, i);
+  return grazeHere(d, content, v, i);
 }
 
 /** Chỉ số ô của một điểm ăn được, dùng làm đích cho A*. */
