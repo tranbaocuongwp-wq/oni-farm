@@ -550,6 +550,16 @@ thông**: flood-fill từ ô spawn, ô nào đi được mà lạc khỏi khối
 ngẫu nhiên luôn đẻ ra vài túi cụt, và một túi cụt trong rừng là thứ không ai phát hiện cho tới
 lúc có người đi vào đó.
 
+**Vẽ lại bản đồ thì save cũ phải theo bản đồ mới** (`mergeGrid`, core 1.18). Câu hỏi ở mỗi ô là
+"thứ này của ai": cây/đá/bụi là thứ vừa mọc vừa chặt được nên thuộc SAVE, còn nhà/kho/giếng/cầu
+là đồ đạc của BẢN ĐỒ. Luật cho vật thể có từ 1.12, nhưng công trình (`tile.b`) thì bị bỏ sót —
+ô mới trống là công trình cũ được ở lại vô điều kiện. Hàng rào các khu chuồng chính là công
+trình, nên sau khi quy hoạch lại, rào của dãy chuồng ĐỜI TRƯỚC vẫn nằm nguyên chỗ cũ và vắt
+chéo qua dãy chuồng mới — trên màn hình rộng nhìn ra ngay là ba cái chuồng chồng lên nhau.
+Ranh giới đúng là **ai dựng**, và content đã nói sẵn: `buildable: false` nghĩa là không ai dựng
+được nó nữa, nên mọi ô mang nó trong save đều do bản đồ đời trước dựng ⇒ bỏ. Sàn nhà kính người
+chơi bỏ tiền ra lát thì `buildable` không tắt ⇒ giữ.
+
 ### Khu chuồng dựng sẵn (core 1.8)
 
 Trước 1.8, "chuồng" chỉ là chữ `housing: "pen"` trong `AnimalDef` — không có gì trong game ứng

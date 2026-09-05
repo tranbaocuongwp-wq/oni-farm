@@ -4535,7 +4535,7 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
 /* 72. Nạp save CŨ sau khi QUY HOẠCH LẠI bản đồ                               */
 /* ========================================================================== */
 
-test("72. quy hoạch lại bản đồ: save cũ không mọc nhà/kho/giếng cũ lên đất mới", () => {
+test("72. quy hoạch lại bản đồ: save cũ không mọc nhà/kho/giếng/HÀNG RÀO cũ lên đất mới", () => {
   const store = mkStore();
   const s0 = store0(store);
   const W = s0.w;
@@ -4575,8 +4575,44 @@ test("72. quy hoạch lại bản đồ: save cũ không mọc nhà/kho/giếng 
   s0.tiles[idx(W, coTrong.x, coTrong.y)].prop = "rock";
   s0.tiles[idx(W, coTrong.x, coTrong.y)].hp = content.props.rock.hits;
 
+  /* …và HÀNG RÀO của dãy chuồng đời trước. Đây là cái người chơi bắt được:
+     rào là ĐỒ ĐẠC CỦA BẢN ĐỒ (`buildable: false` — không ai xây được nó nữa),
+     nên khi cả nông trại được vẽ lại, rào cũ phải đi theo bản đồ cũ. Giữ lại
+     thì trên màn hình rộng nhìn ra ngay: hàng rào cũ vắt chéo qua chuồng mới,
+     ba cái chuồng chồng lên nhau thành một mớ ô vuông. */
+  const raoCu = [];
+  for (let y = 1; y < s0.h - 1 && raoCu.length < 12; y++)
+    for (let x = 1; x < s0.w - 1 && raoCu.length < 12; x++) {
+      const t = s0.tiles[idx(W, x, y)];
+      if (t && !t.prop && !t.b && (t.g === "grass" || t.g === "path" || t.g === "concrete")) {
+        t.b = "fence";
+        raoCu.push({ x, y });
+      }
+    }
+  eq(raoCu.length, 12, "dựng được hàng rào của bản đồ đời trước");
+
+  /* Ngược lại, SÀN NHÀ KÍNH là công trình người chơi bỏ tiền ra lát (`buildable`
+     không tắt) → phải sống sót. Ranh giới đúng là "ai dựng", không phải "có
+     phải công trình hay không". */
+  let sanCu = null;
+  for (let y = 1; y < s0.h - 1 && !sanCu; y++)
+    for (let x = 1; x < s0.w - 1; x++) {
+      const t = s0.tiles[idx(W, x, y)];
+      if (t && t.g === "grass" && !t.prop && !t.b) { sanCu = { x, y }; break; }
+    }
+  ok(!!sanCu, "có ô cỏ trống để lát sàn nhà kính");
+  s0.tiles[idx(W, sanCu.x, sanCu.y)].b = "greenhouse";
+
   const res = migrateForContent(s0, content);
   const sau = res.state;
+  const goc0 = mkStore().getState();
+  for (const o of raoCu)
+    eq(
+      sau.tiles[idx(W, o.x, o.y)].b,
+      goc0.tiles[idx(W, o.x, o.y)].b,
+      `hàng rào cũ ở (${o.x},${o.y}) phải theo BẢN ĐỒ MỚI, không sót lại`,
+    );
+  eq(sau.tiles[idx(W, sanCu.x, sanCu.y)].b, "greenhouse", "sàn nhà kính người chơi lát thì GIỮ");
   for (const b of bay)
     eq(
       sau.tiles[idx(W, b.o.x, b.o.y)].prop,

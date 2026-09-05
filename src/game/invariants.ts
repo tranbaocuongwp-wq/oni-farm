@@ -382,11 +382,24 @@ function mergeGrid(
         /* Công trình do BẢN ĐỒ dựng (hàng rào các khu chuồng, `buildable:
            false`) THẮNG công trình cũ của người chơi ở cùng ô. Nếu để bên kia
            thắng thì một ô đường nhựa lát từ ván trước sẽ khoét thủng hàng rào
-           mới, và cái chuồng đó thành cái chuồng không bao giờ đóng được. */
+           mới, và cái chuồng đó thành cái chuồng không bao giờ đóng được.
+
+           Và cùng câu hỏi đó phải hỏi ngược lại: ô mới TRỐNG thì công trình cũ
+           có được ở lại không? Chỉ khi nó là của NGƯỜI CHƠI. `buildable: false`
+           nghĩa là không ai dựng được nó nữa, nên mọi ô mang nó trong save đều
+           do bản đồ ĐỜI TRƯỚC dựng — quy hoạch lại nông trại là hàng rào cũ
+           phải đi theo bản đồ cũ. Để lại thì trên màn hình rộng nhìn ra ngay:
+           rào của dãy chuồng cũ vắt chéo qua dãy chuồng mới, ba cái chuồng
+           chồng lên nhau thành một mớ ô vuông. Đây đúng là luật đã áp cho vật
+           thể ở trên ("đồ đạc của bản đồ đời trước → bỏ"), chỉ là hồi đó quên
+           áp cho công trình. */
         const capBanDo = t.b;
         if (prev.b) {
-          if (!content.buildings[prev.b]) log.builds.add(prev.b);
-          else if (capBanDo === null) t.b = prev.b;
+          const cuDef = content.buildings[prev.b];
+          if (!cuDef) log.builds.add(prev.b);
+          else if (cuDef.buildable === false) {
+            if (capBanDo !== prev.b) log.lostToTerrain++;
+          } else if (capBanDo === null) t.b = prev.b;
           else log.lostToTerrain++;
         }
 
