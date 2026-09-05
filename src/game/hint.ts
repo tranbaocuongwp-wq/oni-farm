@@ -17,7 +17,8 @@ import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
-import { inReach, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
+import { penNear, penSummary } from "./animals.ts";
+import { TILE, inReach, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
@@ -30,7 +31,8 @@ export type HintKind =
   | "feed"
   | "sleep"
   | "refill"
-  | "enter";
+  | "enter"
+  | "pen";
 
 export interface Hint {
   /** Việc sẽ xảy ra khi bấm DÙNG/E ở ô này; null = không có gì để làm. */
@@ -66,6 +68,7 @@ const LABEL: Record<Exclude<HintKind, null>, string> = {
   putdown: "ĐẶT XUỐNG",
   pour: "ĐỔ MÁNG",
   feedpond: "CHO CÁ ĂN",
+  pen: "KHU",
 };
 
 const INTERACT_KIND: Record<InteractKind, Exclude<HintKind, null>> = {
@@ -199,6 +202,15 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
   if (use !== null) {
     return { kind: use, label: LABEL[use], ready: inReach(state, x, y), why: null };
   }
+
+  /* Không làm được gì với ĐÚNG ô này, nhưng có thể đang đứng trong một cái
+     KHU. Nút phải nói việc của CHỖ ĐANG ĐỨNG chứ không chỉ việc của một ô:
+     đứng giữa chuồng gà cầm bó rơm mà nút ghi "DÙNG" rồi bấm không ra gì là
+     nút đang giấu đúng việc người chơi định làm. `ready: false` nên nút sẽ
+     dắt nhân vật tới nơi rồi mới làm, đúng như bấm vào một ô ở xa. */
+  const pa = penAction(state, content, x, y);
+  if (pa) return { kind: pa.kind, label: pa.label, ready: false, why: null };
+
   return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
 }
 
@@ -218,9 +230,63 @@ export function interactHint(
   if (animalNear(state, x, y)) return { kind: "gather", label: "XEM" };
 
   const ik = interactNear(state, content, x, y);
-  if (!ik) return null;
-  const kind = INTERACT_KIND[ik];
-  return { kind, label: LABEL[kind] };
+  if (ik) {
+    const kind = INTERACT_KIND[ik];
+    return { kind, label: LABEL[kind] };
+  }
+
+  /* KHU CHUỒNG / AO: đứng ở chỗ cái khu mà không chỉ vào con nào thì B mở
+     BẢNG KHU. Trước đây muốn biết "chuồng này có việc gì phải làm không" thì
+     phải đi tới bấm từng con một — mà đó chính là câu hỏi duy nhất người chơi
+     hỏi khi đi ngang qua nó. Xếp SAU vật thể: đứng cạnh cái máng thì máng là
+     thứ cụ thể hơn. */
+  const khu = penNear(state, content, x, y, 1);
+  if (khu) return { kind: "pen", label: LABEL.pen };
+  return null;
+}
+
+/**
+ * Việc đáng làm nhất ở KHU quanh (x,y), kèm ô phải đứng để làm.
+ *
+ * Dùng cho nút CHÍNH: đứng trong chuồng, cầm bó rơm, ngắm vào một ô bê tông
+ * trống — trước đây nút ghi "DÙNG" và bấm thì không có gì xảy ra, dù cái máng
+ * chỉ cách ba ô. Nút phải nói được việc của CHỖ ĐANG ĐỨNG, không chỉ việc của
+ * đúng một ô.
+ */
+export function penAction(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): { kind: Exclude<HintKind, null>; label: string; at: { x: number; y: number } } | null {
+  const khu = penNear(state, content, x, y, 1);
+  if (!khu) return null;
+  const tt = penSummary(state, content, khu);
+
+  // Cầm đúng thức ăn mà máng còn chỗ → đổ máng, đích là chính cái máng.
+  const cam = selectedItemId(state.inv, state.sel);
+  if (tt.mang && cam && tt.feeds.includes(cam) && tt.mang.n < tt.mang.max)
+    return { kind: "pour", label: LABEL.pour, at: { x: tt.mang.x, y: tt.mang.y } };
+
+  // Có con tới lứa → thu, đích là con gần nhất trong khu.
+  if (tt.toiLua > 0) {
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (const e of state.entities) {
+      if (e.kind !== "animal" || e.map !== state.mapId) continue;
+      if (content.animals[e.def]?.pen !== khu.id) continue;
+      if (readyProduct(e, content) < 0) continue;
+      const ex = Math.floor(e.x / TILE);
+      const ey = Math.floor(e.y / TILE);
+      const dd = Math.hypot(ex - x, ey - y);
+      if (dd < bestD) {
+        bestD = dd;
+        best = { x: ex, y: ey };
+      }
+    }
+    if (best) return { kind: "gather", label: LABEL.gather, at: best };
+  }
+  return null;
 }
 
 /** Tuỳ chọn cho `nearestTarget`. Mặc định = đúng hành vi cũ, không đổi một ly. */

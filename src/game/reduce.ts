@@ -20,11 +20,12 @@ import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
 import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.ts";
 import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
-import { feedAnimal, gatherFrom, slaughter } from "./animals.ts";
+import { feedAnimal, gatherFrom, gatherPen, penNear, slaughter } from "./animals.ts";
 import { assignJob, fireWorker, hireWorker } from "./workers.ts";
 import { sendVehicle } from "./vehicles.ts";
 import { buy, sell, sellAll } from "./economy.ts";
 import {
+  TILE,
   blockedAt,
   inInteractRange,
   inReach,
@@ -33,7 +34,16 @@ import {
   portalAt,
   tileCenterX,
   tileCenterY,
+  troughIn,
 } from "./world.ts";
+import { pourIntoTrough } from "./pen.ts";
+
+/** Người chơi có đang ĐỨNG Ở CHỖ cái khu này không (trong hoặc sát ngoài rào). */
+function penInReach(state: GameState, content: Content, penId: string): boolean {
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+  return penNear(state, content, px, py, 2)?.id === penId;
+}
 
 export function reduce(state: GameState, action: Action, content: Content): GameState {
   const d = draft(state);
@@ -363,6 +373,29 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "GATHER": {
       if (state.busy > 0) return state;
       if (gatherFrom(d, content, action.x | 0, action.y | 0)) applyProgression(d, content);
+      return commit(d);
+    }
+
+    /* ---- BẢNG KHU: hai việc làm cho CẢ KHU, không phải cho một ô ----------
+       Cả hai đều đòi người chơi ĐANG ĐỨNG ở chỗ cái khu. Bảng khu chỉ mở được
+       khi đứng đó nên trong game điều kiện luôn đúng; kiểm ở đây là để reducer
+       không nhận một lệnh "thu trứng chuồng gà" phát từ đầu kia nông trại —
+       reducer là chỗ duy nhất giữ luật, UI chỉ là một cách gọi nó. */
+    case "PEN_GATHER": {
+      if (state.busy > 0) return state;
+      if (!penInReach(state, content, action.pen)) return state;
+      if (gatherPen(d, content, action.pen) > 0) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "PEN_POUR": {
+      if (state.busy > 0) return state;
+      if (!penInReach(state, content, action.pen)) return state;
+      const pen = (content.tiles.pens ?? []).find((p) => p.id === action.pen);
+      if (!pen || pen.map !== state.mapId) return state;
+      const m = troughIn(state, pen);
+      if (!m) return state;
+      pourIntoTrough(d, content, m.x, m.y);
       return commit(d);
     }
 

@@ -1149,6 +1149,10 @@ export type Action =
   | { t: "GATHER"; x: number; y: number }
   /** Bán con vật gần ô (x,y) lấy thịt. */
   | { t: "SLAUGHTER"; x: number; y: number }
+  /** Thu HẾT sản phẩm tới lứa trong một khu — thay cho ba mươi lần bấm từng con. */
+  | { t: "PEN_GATHER"; pen: string }
+  /** Đổ thức ăn đang cầm vào máng của một khu, không cần đứng đúng ô máng. */
+  | { t: "PEN_POUR"; pen: string }
   /** Thuê một người làm; họ tới ĐIỂM GIAO như mọi thứ khác. */
   | { t: "HIRE"; job: WorkerJob }
   /** Cho nghỉ việc. */

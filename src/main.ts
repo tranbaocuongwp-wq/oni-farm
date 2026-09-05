@@ -54,10 +54,10 @@ import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
 import { createNewGame, migrateForContent } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, facingTile, hintAt, interactHint, nearestTarget, type Hint } from "./game/hint.ts";
+import { autoJob, facingTile, hintAt, interactHint, nearestTarget, penAction, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
-import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
+import { animalNear, animalStats, penNear, readyProduct } from "./game/animals.ts";
 import { workerCard, workerNear } from "./game/workers.ts";
 import { canPlaceBuilding, inReach } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
@@ -332,6 +332,8 @@ async function boot() {
     storePutAll: () => store.dispatch({ t: "STORE_PUT_ALL" }),
     storeSellAll: () => store.dispatch({ t: "STORE_SELL_ALL" }),
     buyAnimal: (def) => store.dispatch({ t: "BUY_ANIMAL", def }),
+    penGather: (pen) => store.dispatch({ t: "PEN_GATHER", pen }),
+    penPour: (pen) => store.dispatch({ t: "PEN_POUR", pen }),
     hire: (job) => store.dispatch({ t: "HIRE", job }),
     fire: (id) => store.dispatch({ t: "FIRE", id }),
     assign: (id, job) => store.dispatch({ t: "ASSIGN", id, job }),
@@ -1581,6 +1583,17 @@ async function boot() {
             buildUI.open();
             break;
           }
+          /* KHU CHUỒNG / AO: nút chính đang nói việc của CÁI KHU quanh mình
+             (xem `penAction`) — dắt tới đúng ô rồi làm. Chỉ chạy khi ô đang
+             ngắm KHÔNG có việc gì, nếu không nó cướp mất việc cụ thể hơn. */
+          if (!building && settings.contextButton) {
+            const a0 = targetTile(s);
+            if (a0 && canUseAt(s, content, a0.x, a0.y, true) === null && !animalNear(s, a0.x, a0.y)) {
+              const pa = penAction(s, content, a0.x, a0.y);
+              if (pa && nav.goTo(s, content, pa.at.x, pa.at.y)) break;
+            }
+          }
+
           let c = targetTile(s);
           // Nút hành động theo ngữ cảnh: ô đang ngắm ở XA thì đi tới rồi làm,
           // thay vì bấm hụt. Trên điện thoại đây là đường tắt tự nhiên nhất:
@@ -1789,7 +1802,20 @@ async function boot() {
 
           // Không có con vật nào: đây là tương tác với VẬT THỂ (cửa hàng,
           // giường, giếng, kho, cửa nhà).
-          if (!tryInteract(s, c.x, c.y)) deny();
+          if (tryInteract(s, c.x, c.y)) break;
+
+          /* Vẫn không có gì: đang đứng ở chỗ một cái KHU thì mở BẢNG KHU. Xếp
+             cuối vì nó là câu trả lời RỘNG nhất — mọi thứ cụ thể hơn (con vật,
+             cái máng, cái giếng) phải được hỏi trước. */
+          const khu2 =
+            penNear(s, content, px2, py2, 1) ??
+            (inReachOf(s, c.x, c.y) ? penNear(s, content, c.x, c.y, 1) : null);
+          if (khu2) {
+            menus.openPen(khu2.id);
+            buzz("tap");
+            break;
+          }
+          deny();
           break;
         }
       }

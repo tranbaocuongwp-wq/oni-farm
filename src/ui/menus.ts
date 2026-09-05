@@ -24,6 +24,7 @@ import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
 import { padButtonName, type PadInfo } from "../core/gamepad.ts";
+import { penSummary } from "../game/animals.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
@@ -43,6 +44,10 @@ export interface MenuHandlers {
   storeSellAll(): void;
   /** Mua một con vật — nó được giao tới điểm giao cố định. */
   buyAnimal(def: string): void;
+  /** Thu HẾT sản phẩm tới lứa trong một khu. */
+  penGather(pen: string): void;
+  /** Đổ thức ăn đang cầm vào máng của một khu. */
+  penPour(pen: string): void;
   hire(job: "crops" | "livestock"): void;
   fire(id: number): void;
   assign(id: number, job: "crops" | "livestock"): void;
@@ -91,6 +96,8 @@ export interface Menus {
   openSettings(): void;
   openBag(): void;
   openHelp(): void;
+  /** Bảng KHU CHUỒNG / AO — mở bằng nút phụ khi đứng ở chỗ cái khu. */
+  openPen(id: string): void;
   /** Bảng nút tay cầm — mở tự động lần đầu nhận ra tay cầm. */
   openPadHelp(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
@@ -672,6 +679,107 @@ export function createMenus(
 
   /* --------------------------------------------------------- QUẦY THU MUA */
   /* --------------------------------------------------------------- KHO */
+  /**
+   * BẢNG KHU — trả lời đúng câu hỏi người chơi hỏi khi đi ngang một cái chuồng:
+   * "ở đây có việc gì phải làm không?".
+   *
+   * Trước đây câu đó chỉ trả lời được bằng cách đi tới bấm vào TỪNG con một:
+   * ba mươi con gà là ba mươi lần bấm chỉ để biết có quả trứng nào chưa. Bảng
+   * này gom lại theo LOÀI (người chơi đếm theo loài, không đếm theo con) và
+   * đặt ngay cạnh đó hai việc chiếm gần hết thời gian ở chuồng: đổ máng và thu
+   * sản phẩm.
+   *
+   * Cố ý KHÔNG có nút bán/mổ thịt: đó là việc không quay lui được, và một nút
+   * không quay lui được nằm cạnh hai nút bấm hàng ngày là một cái bẫy. Bán thịt
+   * vẫn ở bảng của TỪNG con, nơi người chơi đã nhìn thẳng vào con vật đó.
+   */
+  function openPen(id: string) {
+    current = () => openPen(id);
+    const s = getState();
+    const c = getContent();
+    const pen = (c.tiles.pens ?? []).find((p) => p.id === id);
+    if (!pen) {
+      close();
+      return;
+    }
+    const tt = penSummary(s, c, pen);
+    const camId = s.inv[s.sel]?.id ?? null;
+    const doDuoc = !!tt.mang && !!camId && tt.feeds.includes(camId) && tt.mang.n < tt.mang.max;
+
+    const { body, foot } = shell(
+      tt.name,
+      tt.n === 0
+        ? "Chưa có con nào"
+        : `${tt.n} con${tt.doi ? ` · ${tt.doi} đang đói` : ""}${tt.toiLua ? ` · ${tt.toiLua} tới lứa` : ""}`,
+      "sheet",
+    );
+
+    if (tt.mang) {
+      const day = tt.mang.n >= tt.mang.max;
+      body.appendChild(
+        note(
+          `Máng: ${tt.mang.n}/${tt.mang.max} phần` +
+            (day ? " — đã đầy" : doDuoc ? "" : ` · cầm ${tt.feeds.map((f: string) => itemLabel(f, c)).join(" / ")} để đổ`),
+        ),
+      );
+    } else if (tt.swim) {
+      body.appendChild(
+        note(`Ao không có máng — đứng bờ, cầm ${tt.feeds.map((f: string) => itemLabel(f, c)).join(" / ")} rồi rắc xuống nước.`),
+      );
+    }
+
+    const g = document.createElement("div");
+    g.className = "grid2";
+    if (tt.mang)
+      g.appendChild(
+        mkBtn(
+          "Đổ máng",
+          () => {
+            h.penPour(id);
+            openPen(id);
+          },
+          doDuoc ? "primary" : "dim",
+        ),
+      );
+    g.appendChild(
+      mkBtn(
+        tt.toiLua ? `Thu tất cả (${tt.toiLua})` : "Thu tất cả",
+        () => {
+          h.penGather(id);
+          openPen(id);
+        },
+        tt.toiLua ? "accent" : "dim",
+      ),
+    );
+    body.appendChild(g);
+
+    if (tt.loai.length === 0) body.appendChild(note("Mua vật nuôi ở cửa hàng — xe sẽ chở tới tận nơi."));
+    for (const l of tt.loai) {
+      const row = document.createElement("div");
+      row.className = "row";
+      const left = document.createElement("div");
+      left.className = "info";
+      const ic = c.animals[l.def];
+      left.innerHTML =
+        `<div class="name">${l.name} ×${l.n}</div>` +
+        `<div class="desc">` +
+        [
+          l.toiLua ? `${l.toiLua} tới lứa` : "",
+          l.doi ? `${l.doi} đói` : "",
+          l.chuaLon ? `${l.chuaLon} chưa lớn` : "",
+          !l.toiLua && !l.doi && !l.chuaLon ? "đang khoẻ" : "",
+        ]
+          .filter(Boolean)
+          .join(" · ") +
+        (ic?.products.length ? ` · cho ${ic.products.map((q) => itemLabel(q.id, c)).join(", ")}` : "") +
+        `</div>`;
+      row.appendChild(left);
+      body.appendChild(row);
+    }
+
+    foot.appendChild(mkBtn("Đóng", close, "dim"));
+  }
+
   function openStore() {
     current = openStore;
     const s = getState();
@@ -1481,6 +1589,7 @@ export function createMenus(
     openSettings,
     openBag,
     openHelp,
+    openPen,
     refresh: () => current?.(),
   };
 }

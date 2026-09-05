@@ -15,7 +15,7 @@
    đó (hiện rõ trên con vật), và phải đói liên tiếp `starveDays` ngày mới chết.
 ============================================================================ */
 
-import type { Content, Entity, GameState } from "./types.ts";
+import type { Content, Entity, GameState, PenDef } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, countItem, removeItem, selectedItemId } from "./inventory.ts";
@@ -23,6 +23,8 @@ import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
 import { grazeNight } from "./graze.ts";
+import { troughMax, troughStock } from "./pen.ts";
+import { troughIn } from "./world.ts";
 
 /** Con vật đã trưởng thành chưa — chưa lớn thì chưa cho sản phẩm, chưa bán thịt được. */
 export function isMature(e: Entity, content: Content): boolean {
@@ -251,11 +253,24 @@ export function feedAnimal(d: Draft, content: Content, x: number, y: number): bo
 export function gatherFrom(d: Draft, content: Content, x: number, y: number): boolean {
   const e = animalNear(d.s, x, y);
   if (!e) return false;
+  return thuMotCon(d, content, e, true);
+}
+
+/**
+ * Thu sản phẩm của ĐÚNG một con. Tách ra khỏi `gatherFrom` để bảng khu thu cả
+ * đàn mà không phải dựng một đường thu thứ hai — hai đường thu là hai chỗ để
+ * luật "chưa lớn / đang đói thì chưa tới lứa" lệch nhau.
+ *
+ * `noi` = có bắn thông báo giải thích khi KHÔNG thu được không. Thu cả đàn thì
+ * tắt: ba mươi con chưa tới lứa là ba mươi dòng thông báo.
+ */
+function thuMotCon(d: Draft, content: Content, e: Entity, noi: boolean): boolean {
   const def = animalDef(content, e.def);
   if (!def) return false;
 
   const pi = readyProduct(e, content);
   if (pi < 0) {
+    if (!noi) return false;
     if (!isMature(e, content)) toastText(d, `${def.name} chưa lớn.`, "info");
     else if (isHungry(e)) toastText(d, `${def.name} đang đói, chưa cho gì được.`, "bad");
     else toastText(d, `${def.name} chưa tới lứa.`, "info");
@@ -279,8 +294,45 @@ export function gatherFrom(d: Draft, content: Content, x: number, y: number): bo
 
   const st = dStats(d);
   st.gathered = (st.gathered ?? 0) + add.added;
-  toastText(d, `${itemName(p.id, content)} ×${add.added}`, "good");
+  if (noi) toastText(d, `${itemName(p.id, content)} ×${add.added}`, "good");
   return true;
+}
+
+/**
+ * Thu HẾT sản phẩm tới lứa trong một khu. Trả về số con đã thu.
+ *
+ * Vì sao cần: một chuồng ba mươi con gà thì "thu trứng" là ba mươi lần đi tới
+ * từng con và bấm — một việc vặt không có quyết định nào bên trong, đúng loại
+ * việc mà một cú bấm phải làm thay.
+ *
+ * Gom id TRƯỚC rồi mới thu: `dEntity` thay cả mảng thực thể, nên duyệt thẳng
+ * trên mảng cũ là duyệt trên dữ liệu đã lỗi thời ngay sau con đầu tiên.
+ */
+export function gatherPen(d: Draft, content: Content, penId: string): number {
+  const ids = d.s.entities
+    .filter(
+      (e) =>
+        e.kind === "animal" &&
+        e.map === d.s.mapId &&
+        content.animals[e.def]?.pen === penId &&
+        readyProduct(e, content) >= 0,
+    )
+    .map((e) => e.id);
+  let lay = 0;
+  for (const id of ids) {
+    const e = d.s.entities.find((q) => q.id === id);
+    if (!e) continue;
+    // Túi đầy thì DỪNG HẲN, không thử tiếp: con sau cũng đầy y như con trước,
+    // và mỗi lần thử là một dòng "túi đầy" nữa.
+    if (!thuMotCon(d, content, e, false)) {
+      if (!canAdd(d.s.inv, content.animals[e.def]?.products[readyProduct(e, content)]?.id ?? "", 1)) break;
+      continue;
+    }
+    lay++;
+  }
+  if (lay > 0) toastText(d, `Thu sản phẩm của ${lay} con.`, "good");
+  else toastText(d, "Chưa con nào tới lứa.", "info");
+  return lay;
 }
 
 /* --------------------------------------------------------------- bán thịt */
@@ -479,4 +531,107 @@ export function patrolNight(d: Draft, content: Content): number {
   }
   for (const id of duoi) removeEntity(d, id);
   return duoi.length;
+}
+
+/* ---------------------------------------------------------------- BẢNG KHU */
+
+/**
+ * Khu mà (x,y) đang ở TRONG hoặc SÁT.
+ *
+ * "Sát" là điều kiện thật chứ không phải nới lỏng cho dễ bấm: cái ao thì người
+ * chơi KHÔNG bao giờ đứng được ở trong, chỉ đứng bờ; còn chuồng thì đứng ngoài
+ * rào nhìn vào vẫn là "đang ở chỗ cái chuồng". Nên một ô đệm quanh khu chính là
+ * ranh giới đúng, không phải một hằng số tuỳ tiện.
+ */
+export function penNear(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+  dem = 1,
+): PenDef | null {
+  let best: PenDef | null = null;
+  let bestD = Infinity;
+  for (const p of content.tiles.pens ?? []) {
+    if (p.map !== state.mapId) continue;
+    const dx = Math.max(p.x - x, 0, x - (p.x + p.w - 1));
+    const dy = Math.max(p.y - y, 0, y - (p.y + p.h - 1));
+    const d = Math.max(dx, dy);
+    if (d > dem) continue;
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/** Một dòng trong bảng khu: gộp theo LOÀI, vì người chơi đếm theo loài. */
+export interface PenLine {
+  def: string;
+  name: string;
+  n: number;
+  doi: number;
+  toiLua: number;
+  chuaLon: number;
+}
+
+export interface PenSummary {
+  id: string;
+  name: string;
+  swim: boolean;
+  n: number;
+  doi: number;
+  toiLua: number;
+  loai: PenLine[];
+  /** Máng của khu, hoặc null (ao và khu không khai `feeds` thì không có). */
+  mang: { x: number; y: number; n: number; max: number } | null;
+  feeds: string[];
+}
+
+/**
+ * Tóm tắt một khu: bao nhiêu con, mấy con đói, mấy con tới lứa, máng còn mấy phần.
+ *
+ * Thuần và không chạm DOM — UI chỉ việc in ra. Đây là câu trả lời cho câu hỏi
+ * người chơi thật sự hỏi khi đi ngang cái chuồng: "có việc gì phải làm ở đây
+ * không?". Trước đây muốn biết phải bấm vào TỪNG con một.
+ */
+export function penSummary(state: GameState, content: Content, pen: PenDef): PenSummary {
+  const gom = new Map<string, PenLine>();
+  let n = 0;
+  let doi = 0;
+  let toiLua = 0;
+  for (const e of state.entities) {
+    if (e.kind !== "animal" || e.map !== state.mapId) continue;
+    const def = content.animals[e.def];
+    if (!def || def.pen !== pen.id) continue;
+    let row = gom.get(e.def);
+    if (!row) {
+      row = { def: e.def, name: def.name, n: 0, doi: 0, toiLua: 0, chuaLon: 0 };
+      gom.set(e.def, row);
+    }
+    row.n++;
+    n++;
+    if (isHungry(e)) {
+      row.doi++;
+      doi++;
+    }
+    if (readyProduct(e, content) >= 0) {
+      row.toiLua++;
+      toiLua++;
+    }
+    if (!isMature(e, content)) row.chuaLon++;
+  }
+  const m = pen.swim ? null : troughIn(state, pen);
+  return {
+    id: pen.id,
+    name: pen.name,
+    swim: !!pen.swim,
+    n,
+    doi,
+    toiLua,
+    loai: [...gom.values()].sort((a, b) => b.n - a.n),
+    mang: m ? { x: m.x, y: m.y, n: troughStock(state, m.x, m.y), max: troughMax(content) } : null,
+    feeds: pen.feeds ?? [],
+  };
 }

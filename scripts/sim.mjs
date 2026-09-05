@@ -12,14 +12,15 @@ import { buildContent } from "../src/core/content/loader.ts";
 import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
-import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal } from "../src/game/world.ts";
+import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
 import { findPath } from "../src/game/pathfind.ts";
-import { driveable } from "../src/game/vehicles.ts";
+import { driveable, pondDock } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
+import { penSummary } from "../src/game/animals.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { hintAt, interactHint, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
+import { hintAt, interactHint, penAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -5175,6 +5176,191 @@ test("77. xe đậu vào BÃI GIAO NHẬN trước kho, không đứng chắn gi
       ok(driveable(s, content, x, y), `đường của xe qua ô (${x},${y}) phải là mặt đường`);
     }
   }
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+/* ========================================================================== */
+/* 78. Cá: chở tới TẬN AO, và con nào lạc lên bờ thì đưa về                    */
+/* ========================================================================== */
+
+/* Người chơi: "giao cá thì là chạy ra ngoài ao đổ xuống, xử lý trường hợp mấy
+   con cá đang nằm trên bờ kìa".
+
+   Hai chuyện khác nhau trong một câu:
+
+   · Xe chở cá ĐẬU Ở BÃI GIAO NHẬN trước cửa kho, rồi con cá "hiện ra" dưới ao
+     ở đầu kia nông trại — đúng cú dịch chuyển tức thời mà cả hệ thống xe cộ
+     này sinh ra để tránh.
+   · Và những con cá ĐANG nằm trên bờ: quy hoạch lại bản đồ là cái ao dời đi
+     nửa nông trại, mà phép gỡ kẹt lúc nạp save chỉ dò quanh vài ô. Quanh chỗ
+     con cá thì ba mươi ô nữa cũng chưa có giọt nước nào, nên nó nằm lại đúng
+     chỗ cũ, và mỗi lần mở game lại thấy đàn cá phơi trên cỏ. */
+test("78. cá: xe đậu SÁT BỜ AO để thả, và cá lạc lên bờ thì được đưa về ao", () => {
+  const content = loadContent();
+  const store = mkStore(777);
+  const ao = (content.tiles.pens ?? []).find((p) => p.swim);
+  ok(!!ao, "content có khu dưới nước");
+
+  /* --- (a) BẾN THẢ CÁ: có một ô mặt đường sát ao ---------------------- */
+  const ben = pondDock(store.getState(), content);
+  ok(!!ben, "tìm được ô đậu sát bờ ao cho xe chở cá");
+  ok(driveable(store.getState(), content, ben.x, ben.y), "ô đó xe đi được");
+  const nuocGan = nearestWaterTile(store.getState(), content, ben.x, ben.y, 3);
+  ok(!!nuocGan, "đứng ở bến là với tới mặt nước");
+  const xaBai = Math.abs(ben.x - content.tiles.parking.spots[0].x);
+  ok(xaBai > 10, `bến thả cá phải KHÁC bãi giao nhận (đang cách ${xaBai} ô)`);
+
+  /* --- (b) mua cá: xe phải tới BẾN, không phải bãi giao nhận ---------- */
+  setState(store, (s) => {
+    s.money = 99999;
+    s.player.x = content.tiles.spawn.x * TILE + 8;
+    s.player.y = content.tiles.spawn.y * TILE + 8;
+  });
+  store.dispatch({ t: "BUY_ANIMAL", def: "fish" });
+  let toiBen = false;
+  let xong = false;
+  for (let i = 0; i < 60 * 60 * 4 && !xong; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    for (const e of store.getState().entities) {
+      if (e.kind !== "vehicle") continue;
+      if (Math.floor(e.x / TILE) === ben.x && Math.floor(e.y / TILE) === ben.y) toiBen = true;
+    }
+    xong = store.getState().entities.some((e) => e.kind === "animal" && e.def === "fish");
+  }
+  ok(toiBen, "xe chở cá chạy TỚI BẾN sát ao");
+  ok(xong, "…rồi mới thả con cá xuống");
+  const ca = store.getState().entities.find((e) => e.def === "fish");
+  eq(tile(store, Math.floor(ca.x / TILE), Math.floor(ca.y / TILE)).g, "water", "cá xuống NƯỚC");
+  const trongAo =
+    Math.floor(ca.x / TILE) >= ao.x &&
+    Math.floor(ca.x / TILE) < ao.x + ao.w &&
+    Math.floor(ca.y / TILE) >= ao.y &&
+    Math.floor(ca.y / TILE) < ao.y + ao.h;
+  ok(trongAo, "và xuống đúng cái ao, không phải một vũng nước nào khác");
+
+  /* --- (c) CÁ LẠC LÊN BỜ: nạp save là phải về ao ---------------------- */
+  const s0 = store0(store);
+  const W = s0.w;
+  // đặt ba con cá lên ba chỗ khác nhau trên cạn, xa ao hết cỡ
+  const canh = [];
+  for (let y = 1; y < s0.h - 1 && canh.length < 3; y++)
+    for (let x = 1; x < s0.w - 1 && canh.length < 3; x++) {
+      const t = s0.tiles[idx(W, x, y)];
+      if (!t || t.g === "water" || t.prop || t.b) continue;
+      if (Math.abs(x - ao.x) < 20) continue; // phải THẬT xa ao, ngoài tầm dò quanh
+      canh.push({ x, y });
+    }
+  eq(canh.length, 3, "tìm được ba chỗ trên cạn xa ao để thả cá lạc");
+  s0.entSeq = 3;
+  s0.entities = canh.map((o, i) => ({
+    id: i + 1,
+    kind: "animal",
+    def: "fish",
+    map: s0.mapId,
+    x: o.x * TILE + 8,
+    y: o.y * TILE + 8,
+    dir: "right",
+    anim: 0,
+    seed: 11 + i,
+    ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+    animal: { age: 3, fed: 600, hungryDays: 0, prod: [0] },
+  }));
+
+  const sau = migrateForContent(s0, content).state;
+  eq(sau.entities.length, 3, "không con nào bị bỏ mất");
+  for (const e of sau.entities) {
+    const x = Math.floor(e.x / TILE);
+    const y = Math.floor(e.y / TILE);
+    eq(sau.tiles[idx(W, x, y)].g, "water", `con cá #${e.id} phải ở dưới nước, không phơi trên bờ`);
+    ok(
+      x >= ao.x && x < ao.x + ao.w && y >= ao.y && y < ao.y + ao.h,
+      `con cá #${e.id} phải về đúng cái ao của nó`,
+    );
+  }
+  deepEq(checkInvariants(sau, content), [], "bất biến sau khi đưa cá về ao");
+});
+
+/* ========================================================================== */
+/* 79. BẢNG KHU: một cú bấm cho cả chuồng                                     */
+/* ========================================================================== */
+
+/* Người chơi: "tiến lại gần chuồng nào thì nút ngữ cảnh cũng sẽ diễn hoạt theo
+   phù hợp — cho ăn hoặc thu hoạch — / nút phụ / xem thông tin".
+
+   Trước đây cả hai nút chỉ biết ĐÚNG MỘT Ô. Đứng giữa chuồng gà, cầm bó rơm,
+   ngắm vào một ô bê tông trống thì nút chính ghi "DÙNG" và bấm không ra gì —
+   dù cái máng chỉ cách ba ô. Và muốn biết chuồng có việc gì phải làm thì phải
+   đi tới bấm vào từng con một. */
+test("79. bảng khu: nút chính nói việc của CẢ KHU, nút phụ mở bảng", () => {
+  const content = loadContent();
+  const store = mkStore(4242);
+  const khu = (content.tiles.pens ?? []).find((p) => !p.swim && (p.feeds ?? []).length);
+  ok(!!khu, "có khu chuồng trên cạn có máng");
+  const loai = Object.values(content.animals).find((a) => a.pen === khu.id);
+  ok(!!loai, "khu đó có loài thuộc về nó");
+
+  const m = troughIn(store.getState(), khu);
+  ok(!!m, "khu có máng");
+
+  /* Đứng TRONG khu, ngắm một ô bê tông trống ở góc xa máng. */
+  const gx = khu.x + khu.w - 1;
+  const gy = khu.y + khu.h - 1;
+  setState(store, (s) => {
+    s.player.x = gx * TILE + 8;
+    s.player.y = gy * TILE + 8;
+    s.entSeq = 4;
+    s.entities = [];
+    for (let i = 0; i < 4; i++)
+      s.entities.push({
+        id: i + 1, kind: "animal", def: loai.id, map: s.mapId,
+        x: (khu.x + 1 + i) * TILE + 8, y: khu.y * TILE + 8,
+        dir: "right", anim: 0, seed: 30 + i,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 99, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map((q) => q.every * 1440) },
+      });
+  });
+  giveItem(store, khu.feeds[0], 20);
+  selectItem(store, khu.feeds[0]);
+
+  /* --- nút CHÍNH: cầm thức ăn, ngắm ô trống → ĐỔ MÁNG, và đích là cái máng */
+  const h1 = hintAt(store.getState(), content, gx, gy);
+  eq(h1.kind, "pour", "đứng trong chuồng cầm thức ăn thì nút chính ghi ĐỔ MÁNG");
+  const pa = penAction(store.getState(), content, gx, gy);
+  eq(`${pa.at.x},${pa.at.y}`, `${m.x},${m.y}`, "và nó dắt tới đúng cái máng");
+
+  /* --- nút PHỤ: không con nào kề bên → mở BẢNG KHU */
+  const h2 = interactHint(store.getState(), content, gx, gy);
+  eq(h2?.kind, "pen", "nút phụ mở bảng khu");
+
+  /* --- BẢNG KHU đếm đúng ------------------------------------------------ */
+  const tt = penSummary(store.getState(), content, khu);
+  eq(tt.n, 4, "bảng đếm đúng số con");
+  eq(tt.toiLua, loai.products.length ? 4 : 0, "…và đếm đúng số con tới lứa");
+  eq(tt.mang.n, 0, "máng đang rỗng");
+
+  /* --- ĐỔ MÁNG cho cả khu: không cần đứng đúng ô máng ------------------- */
+  store.dispatch({ t: "PEN_POUR", pen: khu.id });
+  ok(troughStock(store.getState(), m.x, m.y) > 0, "đổ được máng từ trong khu");
+
+  /* --- THU TẤT CẢ: một cú bấm thay cho bốn lần đi tới từng con ---------- */
+  if (loai.products.length) {
+    const truoc = countInv(store, loai.products[0].id);
+    store.dispatch({ t: "PEN_GATHER", pen: khu.id });
+    ok(countInv(store, loai.products[0].id) > truoc, "thu được sản phẩm của cả đàn trong một cú bấm");
+    eq(penSummary(store.getState(), content, khu).toiLua, 0, "…và không còn con nào tới lứa");
+  }
+
+  /* --- ĐỨNG XA thì KHÔNG làm được: luật nằm ở reducer, không ở UI ------- */
+  setState(store, (s) => {
+    s.player.x = content.tiles.spawn.x * TILE + 8;
+    s.player.y = content.tiles.spawn.y * TILE + 8;
+    s.tiles[idx(s.w, m.x, m.y)].trough = 0;
+  });
+  giveItem(store, khu.feeds[0], 20);
+  selectItem(store, khu.feeds[0]);
+  store.dispatch({ t: "PEN_POUR", pen: khu.id });
+  eq(troughStock(store.getState(), m.x, m.y), 0, "đứng ở đầu kia nông trại thì không đổ máng từ xa được");
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến");
 });

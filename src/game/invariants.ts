@@ -23,6 +23,7 @@ import {
   buildFromMap,
   nudgeForActor,
   nudgeOutOfSolid,
+  penOfAnimal,
   spawnMapId,
   tileCenterX,
   tileCenterY,
@@ -446,6 +447,36 @@ function mergeGrid(
 }
 
 /** Chỉnh save cho khớp content MỚI. Không bao giờ ném lỗi. */
+/**
+ * Ô trong KHU của loài này mà con vật đứng được, hoặc null.
+ *
+ * Dùng khi phép gỡ kẹt tại chỗ bó tay. Khu là câu trả lời ĐÚNG chứ không phải
+ * câu trả lời tiện: con cá thuộc về cái ao, con bò thuộc về cái chuồng — dời
+ * nó tới ô trống gần nhất trên bản đồ thì nó thoát kẹt nhưng lại đứng ở một
+ * chỗ chẳng liên quan gì tới nó.
+ */
+function veChoCua(
+  probe: GameState,
+  content: Content,
+  defId: string,
+  box: { w: number; h: number },
+  boi: boolean,
+): { x: number; y: number } | null {
+  const pen = penOfAnimal(content, defId);
+  const vung = pen && pen.map === probe.mapId ? pen : null;
+  const x0 = vung ? vung.x : 1;
+  const y0 = vung ? vung.y : 1;
+  const x1 = vung ? vung.x + vung.w : probe.w - 1;
+  const y1 = vung ? vung.y + vung.h : probe.h - 1;
+  for (let y = y0; y < y1; y++)
+    for (let x = x0; x < x1; x++) {
+      const cx = x * TILE + TILE / 2;
+      const cy = y * TILE + TILE / 2;
+      if (!blockedForActor(probe, content, cx, cy, box.w, box.h, boi)) return { x: cx, y: cy };
+    }
+  return null;
+}
+
 export function migrateForContent(state: GameState, content: Content): MigrateResult {
   const notes: string[] = [];
   try {
@@ -562,6 +593,20 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
           const p = nudgeForActor(probe, content, fixed.x, fixed.y, box.w, box.h, boi);
           fixed.x = p.x;
           fixed.y = p.y;
+          /* Gỡ kẹt tại chỗ chỉ dò quanh vài ô. Đủ cho "con bò kẹt trong hàng
+             rào mới", KHÔNG đủ cho con cá: quy hoạch lại bản đồ là cái ao dời
+             đi nửa nông trại, và quanh chỗ con cá đang nằm thì ba mươi ô nữa
+             cũng chưa có giọt nước nào. Nó nằm lại trên bờ, mỗi lần nạp save
+             lại nằm đúng chỗ cũ — người chơi nhìn thấy đàn cá phơi trên cỏ.
+             Nên khi dò quanh thất bại thì ĐƯA VỀ KHU của chính nó. */
+          if (blockedForActor(probe, content, fixed.x, fixed.y, box.w, box.h, boi)) {
+            const ve = veChoCua(probe, content, en.def, box, boi);
+            if (ve) {
+              fixed.x = ve.x;
+              fixed.y = ve.y;
+              notes.push(`đưa '${en.def}' lạc chỗ về đúng khu của nó`);
+            }
+          }
         }
       }
       return fixed;

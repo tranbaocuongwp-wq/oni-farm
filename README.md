@@ -952,6 +952,43 @@ sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằ
 bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
 tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
+### Chở cá tới tận ao, và BẢNG KHU (core 1.22)
+
+**Cá phải được chở TỚI AO.** Xe chở cá đậu ở bãi giao nhận trước cửa kho rồi con cá "hiện ra"
+dưới ao ở đầu kia nông trại — đúng cú dịch chuyển tức thời mà cả hệ thống xe cộ sinh ra để
+tránh. Nay `pondDock()` tìm ô mặt đường sát bờ ao (phải có mặt nước trong tầm ba ô, nếu không
+thì đứng đó thả xuống đâu), xe chạy tới đó, và hàng xuống ở chỗ nước gần **chiếc xe** chứ
+không phải gần điểm giao.
+
+**Và những con cá đang nằm trên bờ.** Quy hoạch lại bản đồ là cái ao dời đi nửa nông trại, mà
+phép gỡ kẹt lúc nạp save chỉ dò quanh vài ô — quanh chỗ con cá thì ba mươi ô nữa cũng chưa có
+giọt nước nào. Nó nằm lại đúng chỗ cũ, và mỗi lần mở game lại thấy đàn cá phơi trên cỏ. Nay khi
+dò quanh bó tay thì con vật được **đưa về KHU của chính nó** — con cá về ao, con bò về chuồng.
+Khu là câu trả lời đúng chứ không phải câu trả lời tiện: dời nó tới ô trống gần nhất trên bản
+đồ thì nó thoát kẹt nhưng lại đứng ở một chỗ chẳng liên quan gì tới nó.
+
+**BẢNG KHU.** Cả hai nút trước đây chỉ biết **đúng một ô**. Đứng giữa chuồng gà, cầm bó rơm,
+ngắm vào một ô bê tông trống thì nút chính ghi "DÙNG" và bấm không ra gì — dù cái máng chỉ cách
+ba ô. Và muốn biết chuồng có việc gì phải làm thì phải đi tới bấm vào **từng con một**: ba mươi
+con gà là ba mươi lần bấm chỉ để biết có quả trứng nào chưa.
+
+* **Nút chính** (`penAction`) nói việc của **chỗ đang đứng**, không chỉ việc của một ô: cầm
+  thức ăn khu nhận và máng còn chỗ → *ĐỔ MÁNG*, dắt tới đúng cái máng; có con tới lứa → *THU*,
+  dắt tới con gần nhất. Xếp **sau** mọi việc của ô đang ngắm — nếu không nó cướp mất việc cụ
+  thể hơn.
+* **Nút phụ** mở bảng khu: bao nhiêu con, mấy con đói, mấy con tới lứa, máng còn mấy phần, gộp
+  theo **loài** (người chơi đếm theo loài, không đếm theo con). Kèm hai việc chiếm gần hết thời
+  gian ở chuồng: *Đổ máng* và *Thu tất cả*. Xếp sau con vật và sau vật thể — cái máng, cái
+  giếng là thứ cụ thể hơn.
+* Cố ý **không** có nút bán/mổ thịt trong bảng: đó là việc không quay lui được, và một nút
+  không quay lui được nằm cạnh hai nút bấm hàng ngày là một cái bẫy. Bán thịt vẫn ở bảng của
+  **từng con**, nơi người chơi đã nhìn thẳng vào con vật đó.
+
+Hai action mới `PEN_GATHER` / `PEN_POUR` đều đòi người chơi **đang đứng ở chỗ cái khu**. Bảng
+chỉ mở được khi đứng đó nên trong game điều kiện luôn đúng; kiểm trong reducer là để nó không
+nhận một lệnh "thu trứng chuồng gà" phát từ đầu kia nông trại — reducer là chỗ duy nhất giữ
+luật, UI chỉ là một cách gọi nó.
+
 ### Vẽ lại toàn bộ: cây trồng, vật nuôi, địa hình, vật tư (core 1.21)
 
 Ba luật, và cả ba đều là chuyện **khối** chứ không phải chuyện thêm chi tiết. Ở 16px, thêm

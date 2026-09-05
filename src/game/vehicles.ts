@@ -165,6 +165,37 @@ export function freeParkSpot(
   return null;
 }
 
+/**
+ * Ô mặt đường GẦN AO nhất — chỗ xe dừng để thả cá xuống nước.
+ *
+ * Vì sao không thả ở bãi giao nhận như mọi thứ khác: bãi nằm trước cửa kho, ở
+ * đầu kia nông trại, cách mặt nước ba mươi ô. Thả cá ở đó rồi để nó "xuất hiện"
+ * dưới ao là đúng cái kiểu dịch chuyển tức thời mà cả hệ thống xe cộ này sinh
+ * ra để tránh. Chở cá thì phải chở tới AO.
+ */
+export function pondDock(s: GameState, content: Content): { x: number; y: number } | null {
+  const ao = (content.tiles.pens ?? []).find((p) => p.swim && p.map === s.mapId);
+  if (!ao) return null;
+  const cx = ao.x + ao.w / 2;
+  const cy = ao.y + ao.h / 2;
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  /* Quét một vành quanh ao, không quét cả bản đồ: chỗ đậu phải SÁT ao thì cái
+     cần cẩu mới với tới, và quét hẹp thì rẻ. */
+  for (let y = ao.y - 3; y <= ao.y + ao.h + 2; y++)
+    for (let x = ao.x - 3; x <= ao.x + ao.w + 2; x++) {
+      if (!driveable(s, content, x, y)) continue;
+      // phải có mặt nước trong tầm với, nếu không thì đứng đây thả xuống đâu
+      if (!nearestWaterTile(s, content, x, y, 3)) continue;
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < bestD) {
+        bestD = d;
+        best = { x, y };
+      }
+    }
+  return best;
+}
+
 /* -------------------------------------------------------------------- bước */
 
 /**
@@ -228,7 +259,14 @@ export function vehicleStep(
 
      Bãi đầy thì xe đứng chờ ngoài đường — đó chính là hàng đợi, không cần cấu
      trúc gì thêm trong state. Bãi có đúng `MAX_VEHICLES` ô nên không kẹt cứng. */
-  const spot = freeParkSpot(d.s, content, e.id);
+  /* Chở CÁ thì đích là BỜ AO, không phải bãi giao nhận. Ao ở đầu kia nông
+     trại, nên thả ở bãi rồi để con cá hiện ra dưới nước là đúng kiểu dịch
+     chuyển tức thời mà cả hệ thống xe cộ này sinh ra để tránh. */
+  const chocCa =
+    v.errand?.kind === "drop" && content.animals[v.errand.animal]?.housing === "water"
+      ? pondDock(d.s, content)
+      : null;
+  const spot = chocCa ?? freeParkSpot(d.s, content, e.id);
   if (!spot) {
     v.wait = 2; // bãi đầy: chờ rồi hỏi lại
     return true;
@@ -312,7 +350,12 @@ function doErrand(d: Draft, content: Content, index: number): void {
     // Loài dưới nước phải xuống AO, không phải xuống mặt đường: nước là ô đặc
     // với mọi thứ khác, nên thả cá lên đường là con cá đó kẹt trên cạn vĩnh viễn.
     if (def?.housing === "water") {
-      const ao = nearestWaterTile(d.s, content, drop.x, drop.y);
+      /* Đổ xuống chỗ nước gần CHIẾC XE — xe đã đỗ sát bờ ao rồi. Hỏi từ điểm
+         giao (trước cửa kho) thì con cá rơi xuống ao ở đầu kia bản đồ, mà đó
+         chính là cú dịch chuyển vừa bỏ công đi tránh. */
+      const ao =
+        nearestWaterTile(d.s, content, Math.floor(e.x / TILE), Math.floor(e.y / TILE), 6) ??
+        nearestWaterTile(d.s, content, drop.x, drop.y);
       if (!ao) {
         toastText(d, "Chưa có ao để thả cá — hàng bị trả lại.", "bad");
         return;
