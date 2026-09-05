@@ -175,21 +175,6 @@
           "n": 4
         }
       ]
-    },
-    {
-      "id": "road",
-      "name": "Đường nhựa",
-      "desc": "Đập đá lấy sỏi rải đường.",
-      "out": {
-        "id": "build:road",
-        "n": 4
-      },
-      "in": [
-        {
-          "id": "item:stone",
-          "n": 3
-        }
-      ]
     }
   ]
 }

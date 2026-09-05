@@ -477,8 +477,6 @@ export function createRenderer(
             : atlas.buildings[t.b];
           if (def && img && def.kind === "object") {
             items.push({ base, run: () => g.drawImage(img, px, py) });
-            if (def.power.produce > 0 || def.effects.harvestRadius)
-              lights.push({ wx: wcx, wy: wcy + 8, r: 20, strength: 0.5 });
           }
         }
 

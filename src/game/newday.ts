@@ -2,12 +2,10 @@
    NEWDAY — chuyển ngày. Thứ tự các bước ở đây là HỢP ĐỒNG, đừng đảo:
 
      1. day++ , minutes = dayStartMinutes
-     2. thu tiền income + tính tổng điện sinh ra (power)
      3. tưới tự động (waterRadius / autoWet) — ĐÁNH DẤU TRƯỚC
      4. cây lớn lên: cộng nốt phần ban ngày còn lại cho các ô `wet`
      5. làm khô: ô không được tưới tự động thì wet = false
         5b. cỏ dại mọc lan, đất cày bỏ không thì hoang trở lại
-     6. drone thu hoạch, tiêu điện từ quỹ `power`, duyệt theo chỉ số ô tăng dần
      7. hồi năng lượng
      8. đánh giá progression
 
@@ -34,7 +32,6 @@ import {
   toastKey,
   touch,
 } from "./state.ts";
-import { harvestTileIn } from "./actions.ts";
 import {
   TILE,
   anyEntityOverlapsTile,
@@ -323,22 +320,6 @@ export interface NewDayOptions {
 
 /* ------------------------------------------------- các bước trên MỘT bản đồ */
 
-/** Tiền + điện của một bản đồ. Chỉ ĐỌC, không sửa gì. */
-function collectPower(content: Content, v: MapView): { income: number; power: number } {
-  let income = 0;
-  let power = 0;
-  const n = v.w * v.h;
-  for (let i = 0; i < n; i++) {
-    const t = v.tiles[i];
-    if (!t || !t.b) continue;
-    const def = content.buildings[t.b];
-    if (!def) continue;
-    income += def.effects.income ?? 0;
-    power += def.power?.produce ?? 0;
-  }
-  return { income, power };
-}
-
 /** Bước 3+4+5+5b cho một bản đồ: tưới tự động → cây lớn → làm khô → đêm xuống. */
 interface NightReport {
   sick: number;
@@ -443,57 +424,6 @@ function nightOnMap(
   nightGround(d, content, v, yesterday.growMul);
 }
 
-/** Bước 6 cho một bản đồ. `budget` là quỹ điện CHUNG của cả thế giới; trả về
- *  phần còn lại sau khi các drone trên bản đồ này ăn xong. */
-function dronesOnMap(
-  d: Draft,
-  content: Content,
-  v: MapView,
-  budget: number,
-  warned: { noPower: boolean; full: boolean },
-): number {
-  const w = v.w;
-  const h = v.h;
-  const n = w * h;
-  let left = budget;
-  for (let i = 0; i < n; i++) {
-    const t = v.tiles[i];
-    if (!t || !t.b) continue;
-    const def = content.buildings[t.b];
-    if (!def) continue;
-    const r = def.effects.harvestRadius ?? 0;
-    if (r <= 0) continue;
-    const need = def.power?.consume ?? 0;
-    if (need > left) {
-      if (!warned.noPower) {
-        toastKey(d, content, "droneNoPower", "bad");
-        warned.noPower = true;
-      }
-      continue;
-    }
-    left -= need;
-
-    const bx = i % w;
-    const by = (i - bx) / w;
-    for (let y = by - r; y <= by + r; y++) {
-      for (let x = bx - r; x <= bx + r; x++) {
-        if (x < 0 || y < 0 || x >= w || y >= h) continue;
-        const j = idx(w, x, y);
-        const tt = v.tiles[j];
-        if (!tt || !tt.crop) continue;
-        const cd = content.crops[tt.crop.id];
-        if (!cd || tt.crop.stage < cd.growthDays.length) continue;
-        // Drone ở bản đồ khác vẫn đổ đồ vào ĐÚNG một cái túi.
-        const res = harvestTileIn(d, content, v, j, false);
-        if (res.overflow > 0 && !warned.full) {
-          toastKey(d, content, "invFull", "bad");
-          warned.full = true;
-        }
-      }
-    }
-  }
-  return left;
-}
 
 /** Trần số sâu bọ cùng lúc — đủ để thấy đau, không đủ để thành dịch. */
 const MAX_PESTS = 8;
@@ -593,17 +523,7 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   // Lấy cửa sổ cho MỌI bản đồ đúng một lần, theo thứ tự tất định.
   const views = mapViews(d, content);
 
-  // ---- 2. thu nhập + điện (gộp cả thế giới) -----------------------------
-  let income = 0;
-  let power = 0;
-  for (const v of views) {
-    const got = collectPower(content, v);
-    income += got.income;
-    power += got.power;
-  }
-  if (income !== 0) touch(d).money = d.s.money + income;
-
-  // ---- 2b. trả lương người làm ------------------------------------------
+  // ---- 2. trả lương người làm -------------------------------------------
   // Cùng bước tiền tệ với thu nhập, và PHẢI trước bước 8: nếu trả sau, mốc mở
   // khoá theo `money` sẽ tính bằng số tiền chưa trừ lương.
   payWages(d, content);
@@ -666,11 +586,6 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
     const m = dStoredMap(d, v.id);
     if (m) m.awayAt = bal.dayStartMinutes;
   }
-
-  // ---- 6. drone (quỹ điện dùng chung, duyệt theo thứ tự bản đồ) ----------
-  let budget = power;
-  const warned = { noPower: false, full: false };
-  for (const v of views) budget = dronesOnMap(d, content, v, budget, warned);
 
   // ---- 7. năng lượng -----------------------------------------------------
   const ratio = opts.passedOut

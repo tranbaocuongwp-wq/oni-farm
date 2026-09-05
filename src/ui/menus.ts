@@ -370,6 +370,19 @@ export function createMenus(
     return card;
   }
 
+  /** MỘT dòng nói công trình này làm gì. Suy từ `effects` chứ không chép tay,
+   *  nên thêm hiệu ứng mới trong content là thẻ tự có chữ. */
+  function tomTatCongTrinh(b: Content["buildings"][string]): string {
+    const e = b.effects ?? {};
+    const y: string[] = [];
+    if (e.waterRadius) y.push(`tưới ${e.waterRadius * 4} ô kề`);
+    if (e.autoWet) y.push("luôn ẩm");
+    if (e.allSeason) y.push("mọi mùa");
+    if (e.speedMul) y.push(`đi nhanh ×${e.speedMul}`);
+    if (y.length) return y.join(" · ");
+    return b.kind === "floor" ? "lát nền" : "công trình";
+  }
+
   const cardGrid = (): HTMLElement => {
     const g = document.createElement("div");
     g.className = "shop-grid";
@@ -398,11 +411,13 @@ export function createMenus(
       b.setAttribute("aria-selected", String(shopTab === id));
       tabs.appendChild(b);
     };
-    mkTab("seed", "Hạt giống");
+    // Nhãn NGẮN: năm tab mà nhãn hai chữ thì chúng xuống dòng, và hàng tab cao
+    // gần bằng một hàng hàng hoá — trong khi nó chỉ là cái để chọn chỗ đứng.
+    mkTab("seed", "Hạt");
     mkTab("feed", "Thức ăn");
-    mkTab("build", "Công trình");
+    mkTab("build", "Xây");
     mkTab("animal", "Vật nuôi");
-    mkTab("worker", "Người làm");
+    mkTab("worker", "Thợ");
     body.appendChild(tabs);
 
     if (shopTab === "seed") {
@@ -463,7 +478,7 @@ export function createMenus(
           buyCard({
             art: `item:${id}`,
             name: m.name,
-            subs: [an.length ? `cho ${an.join(", ")}` : "chưa loài nào ăn"],
+            subs: [an.length ? (an.length > 2 ? `cho ${an.length} loài` : `cho ${an.join(", ")}`) : "chưa loài nào ăn"],
             price: money(gia),
             disabled: s.money < gia,
             onClick: () => {
@@ -549,15 +564,11 @@ export function createMenus(
             name: a.name,
             // Trên thẻ hẹp thì mỗi dòng phải NGẮN. Gộp hết vào một dòng dài như
             // bản danh sách cũ là chữ tràn ra ba dòng và lưới cao thấp lởm chởm.
-            subs: [
-              sanPham || (thit ? `thịt: ${thit}` : ""),
-              a.feed.length ? `ăn ${a.feed.map((f) => itemLabel(f, c)).join(", ")}` : "tự kiếm ăn",
-              /* Nói TÊN KHU nó sẽ về, không nói "cần rào" nữa: nông trại đã
-                 chia lô sẵn nên người chơi không phải chuẩn bị gì, chỉ cần
-                 biết mua xong ra đâu mà tìm con vật. */
-              c.tiles.pens?.find((q) => q.id === a.pen)?.name ??
-                (a.housing === "water" ? "dưới ao" : "thả rông"),
-            ],
+            /* MỘT dòng: thứ người chơi cần để quyết định mua hay không là nó
+               CHO RA CÁI GÌ. Ăn gì và về khu nào đọc được ở bảng Vật nuôi và
+               trang Thư viện — nhồi cả ba vào một ô 88px thì ô nào cũng ba
+               dòng chữ vụn và cả lưới cao thấp lởm chởm. */
+            subs: [sanPham || thit || "nuôi lấy thịt"],
             price: money(a.price),
             disabled: s.money < a.price,
             onClick: () => {
@@ -592,7 +603,10 @@ export function createMenus(
           buyCard({
             art: `build:${id}`,
             name: b.name,
-            subs: [b.desc],
+            // MỘT dòng tóm tắt, suy từ `effects`. Nhồi cả `desc` vào ô rộng
+            // 88px thì mỗi thẻ thành một cột chữ tám dòng — đúng cái làm bảng
+            // giá trông rối. Đoạn mô tả đầy đủ nằm ở trang Thư viện.
+            subs: [tomTatCongTrinh(b)],
             price: `${money(b.price)}/ô`,
             disabled: true,
             onClick: () => {},
@@ -604,7 +618,7 @@ export function createMenus(
         note(
           "Đây là BẢNG GIÁ. Công trình xây trong CHẾ ĐỘ XÂY DỰNG (menu Tạm dừng, " +
             "hoặc nút XÂY cạnh nút hành động): thời gian dừng lại, ấn rồi rê để kéo " +
-            "cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu. Hàng khoá mở theo tiến trình.",
+            "cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu. ",
         ),
       );
     }
@@ -1334,8 +1348,8 @@ export function createMenus(
         <p><b>Nước có hạn:</b> bình cạn thì ra <b>giếng</b> hoặc bờ ao bấm <b>MÚC</b>.</p>
         <p><b>Nhà:</b> bấm <b>VÀO</b> ở cửa. Trong nhà có giường (ngủ) và bàn chế tạo. Ngủ trong
         nhà thì ruộng ngoài kia vẫn lớn cây, vòi tưới vẫn tưới.</p>
-        <p><b>Hiện đại hoá:</b> đủ tiền mở vòi tưới tự động, sàn nhà kính (luôn ẩm), pin mặt trời
-        (ra tiền + điện) và drone thu hoạch (cần điện).</p>
+        <p><b>Hiện đại hoá:</b> có tiền là mua được ngay, không phải mở khoá gì —
+        vòi tưới tự động (mỗi sáng tự tưới quanh nó) và sàn nhà kính (ô luôn ẩm).</p>
       </div>`;
     foot.appendChild(mkBtn("Đã hiểu", close, "primary wide"));
   }

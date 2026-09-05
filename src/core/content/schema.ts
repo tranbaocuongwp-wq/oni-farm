@@ -211,21 +211,17 @@ export function validateBuildings(raw: unknown): string[] {
 
     const eff = k.obj(item, "effects");
     if (eff) {
-      const allowed = ["waterRadius", "autoWet", "allSeason", "speedMul", "income", "harvestRadius"];
+      const allowed = ["waterRadius", "autoWet", "allSeason", "speedMul"];
       for (const key of Object.keys(eff))
         if (!allowed.includes(key))
           k.fail(`effects.${key}`, `hiệu ứng không được core hỗ trợ (core biết: ${allowed.join(", ")})`);
-      for (const n of ["waterRadius", "income", "harvestRadius"])
+      for (const n of ["waterRadius"])
         if (eff[n] !== undefined && (!isNum(eff[n]) || (eff[n] as number) < 0))
           k.fail(`effects.${n}`, "phải là số >= 0");
       if (eff["autoWet"] !== undefined && typeof eff["autoWet"] !== "boolean")
         k.fail("effects.autoWet", "phải là boolean");
     }
 
-    const pw = k.obj(item, "power");
-    if (pw) {
-      k.merge(numsIn(pw, ["produce", "consume"], `buildings[${i}].power`));
-    }
     const art = k.obj(item, "art");
     if (art) colors(k, art, ["body", "dark", "accent"], "art");
     c.merge(k);

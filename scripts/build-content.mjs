@@ -93,7 +93,7 @@ console.log(
     `${content.propOrder.length} địa hình · ${content.materialOrder.length} vật liệu · ` +
     `${content.recipes.length} công thức · ${content.toolOrder.length} công cụ`,
 );
-console.log(`✓ ${content.stages.length} mốc mở khoá · ${content.goals.length} mục tiêu`);
+console.log(`✓ ${content.stages.length} mốc tiến trình · ${content.goals.length} mục tiêu`);
 
 /* ---- 3. đóng gói cho OTA ------------------------------------------------ */
 const version = raw.manifest.contentVersion;

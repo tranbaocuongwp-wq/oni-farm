@@ -940,33 +940,6 @@ function makeBuilding(id: string, art: PropArt, kind: "floor" | "object"): HTMLC
       for (let i = 0; i < 3; i++) s.px(10 + i, 11 + i, "#ffffff");
       break;
     }
-    case "solar": {
-      s.shadow(8, 14, 6, 2);
-      s.rect(4, 11, 2, 4, P.metalDark);
-      s.rect(10, 11, 2, 4, P.metalDark);
-      s.rect(1, 4, 14, 8, art.dark);
-      s.rect(2, 5, 12, 6, art.body);
-      for (let x = 4; x < 14; x += 3) s.vline(x, 5, 6, art.dark);
-      s.hline(2, 8, 12, art.dark);
-      s.hline(2, 5, 12, art.accent);
-      s.px(3, 6, "#ffffff");
-      break;
-    }
-    case "drone": {
-      s.shadow(8, 15, 4, 1.5);
-      s.rect(5, 7, 6, 4, art.body);
-      s.rect(5, 7, 6, 1, art.dark);
-      s.rect(6, 11, 4, 1, art.dark);
-      s.px(6, 9, art.accent);
-      s.px(9, 9, art.accent);
-      s.rect(1, 5, 4, 1, art.dark);
-      s.rect(11, 5, 4, 1, art.dark);
-      s.vline(2, 6, 2, art.dark);
-      s.vline(13, 6, 2, art.dark);
-      s.rect(0, 4, 5, 1, P.metal);
-      s.rect(11, 4, 5, 1, P.metal);
-      break;
-    }
     default: {
       s.rect(2, 2, 12, 12, art.dark);
       s.rect(3, 3, 10, 10, art.body);

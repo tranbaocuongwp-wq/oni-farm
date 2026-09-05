@@ -431,71 +431,6 @@ test("4. sàn nhà kính giữ ẩm qua nhiều ngày, cây lớn không cần t
 /* 5. Điện: drone cần pin mặt trời                                            */
 /* ========================================================================== */
 
-function droneScenario(store, { solar, drones }) {
-  setState(store, (s) => {
-    const blk = findOpenBlock(s, 5, 5);
-    const cx = blk.x + 2;
-    const cy = blk.y + 2;
-    // cây chín ở 4 góc khối
-    for (const [dx, dy] of [[0, 0], [4, 0], [0, 4], [4, 4]]) {
-      setTile(s, blk.x + dx, blk.y + dy, {
-        tilled: true,
-        wet: false,
-        crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false },
-      });
-    }
-    for (let i = 0; i < drones; i++) setTile(s, cx + (i === 0 ? 0 : 1), cy, { b: "drone" });
-    if (solar > 0) setTile(s, cx, cy + 1, { b: "solar" });
-    s.energy = BAL.energyMax;
-  });
-  return store;
-}
-
-test("5. điện: không pin thì drone đứng im, có pin thì thu hoạch", () => {
-  // --- không có pin mặt trời ---
-  const a = mkStore(7);
-  droneScenario(a, { solar: 0, drones: 1 });
-  const cropsBefore = a.getState().tiles.filter((t) => t.crop).length;
-  eq(cropsBefore, 4, "chuẩn bị 4 cây chín");
-  sleep(a);
-  eq(a.getState().tiles.filter((t) => t.crop).length, 4, "không điện → drone không thu hoạch");
-  eq(a.getState().stats.harvested, 0, "harvested vẫn 0");
-  ok(
-    a.getState().log.some((l) => l.text === content.strings.msg.droneNoPower),
-    "phải có toast droneNoPower",
-  );
-  eq(
-    a.getState().log.filter((l) => l.text === content.strings.msg.droneNoPower).length,
-    1,
-    "toast droneNoPower chỉ đẩy MỘT lần",
-  );
-
-  // --- có pin mặt trời ---
-  const b = mkStore(7);
-  droneScenario(b, { solar: 1, drones: 1 });
-  sleep(b);
-  eq(b.getState().tiles.filter((t) => t.crop).length, 0, "có điện → drone thu sạch 4 cây");
-  eq(b.getState().stats.harvested, 4, "harvested = 4");
-  ok(
-    b.getState().inv.some((v) => v && v.id === "crop:lettuce" && v.n >= 4),
-    "nông sản vào túi",
-  );
-
-  // --- hai drone, một pin: đúng một drone chạy ---
-  const c = mkStore(7);
-  droneScenario(c, { solar: 1, drones: 2 });
-  sleep(c);
-  eq(c.getState().stats.harvested, 4, "một drone chạy, thu hết 4 cây trong bán kính");
-  eq(
-    c.getState().log.filter((l) => l.text === content.strings.msg.droneNoPower).length,
-    1,
-    "drone thứ hai báo thiếu điện đúng một lần",
-  );
-});
-
-/* ========================================================================== */
-/* 6. Progression                                                             */
-/* ========================================================================== */
 
 test("6. CÓ TIỀN LÀ MUA ĐƯỢC, không mốc nào chặn; mốc chỉ đánh dấu tiến độ", () => {
   const store = mkStore();
@@ -757,7 +692,7 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
     s.money = 2000;
   });
   let built = 0;
-  let solared = 0;
+  let sanKinh = 0;
   const FARM = [PLOTS[0], PLOTS[1], PLOTS[2], PLOTS[5]]; // 3 và 4 để dành cho công trình
 
   for (let day = 1; day <= 30; day++) {
@@ -818,11 +753,11 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
         if (tile(store, PLOTS[4].x, PLOTS[4].y).b === "sprinkler") built = 1;
       }
     }
-    if (solared === 0 && store.getState().money > 700) {
-      store.dispatch({ t: "BUY", id: "solar", n: 1 });
-      if (store.getState().inv.some((v) => v && v.id === "build:solar")) {
-        place(store, "solar", PLOTS[3].x, PLOTS[3].y);
-        if (tile(store, PLOTS[3].x, PLOTS[3].y).b === "solar") solared = 1;
+    if (sanKinh === 0 && store.getState().money > 700) {
+      store.dispatch({ t: "BUY", id: "greenhouse", n: 1 });
+      if (store.getState().inv.some((v) => v && v.id === "build:greenhouse")) {
+        place(store, "greenhouse", PLOTS[3].x, PLOTS[3].y);
+        if (tile(store, PLOTS[3].x, PLOTS[3].y).b === "greenhouse") sanKinh = 1;
       }
     }
 
@@ -843,8 +778,19 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
   ok(store.getState().stats.harvested > 5, "phải có thu hoạch đáng kể trong 30 ngày");
   ok(store.getState().stats.earned > 0, "phải kiếm được tiền");
   eq(built, 1, "đã lắp được vòi tưới trong 30 ngày");
-  eq(solared, 1, "đã dựng được pin mặt trời trong 30 ngày");
-  ok(store.getState().stagesDone.includes("auto"), "mốc 'auto' (có điện) đã bắn");
+  eq(sanKinh, 1, "đã lát được sàn nhà kính trong 30 ngày");
+  /* Mốc 'auto' trước đây đo bằng "đã dựng pin mặt trời" nên chạy tới đâu là
+     bắn tới đó. Pin không còn, nó đo bằng số lượt thu hoạch — mà kịch bản này
+     chỉ chăm sáu ô nên không tới ngưỡng đó. Đổi sang khẳng định thứ nó THẬT SỰ
+     chứng minh: chạy ba mươi ngày thì lộ trình có tiến, và mốc theo NGÀY bắn. */
+  ok(
+    store.getState().stagesDone.includes("tropic"),
+    "chạy quá ngày 20 thì mốc theo ngày đã bắn",
+  );
+  ok(
+    store.getState().stagesDone.length >= 5,
+    `nhiều mốc đã bắn trong 30 ngày: ${store.getState().stagesDone.length}`,
+  );
   ok(store.getState().log.length <= 30, "log giữ tối đa 30 mục");
 });
 
@@ -2831,7 +2777,11 @@ test("50. quét theo VÒNG cho kết quả y hệt quét vét cạn (bẫy ô ch
 /* 51-53. HẠ TẦNG: đường nhựa, hàng rào, xây theo tuyến                       */
 /* ========================================================================== */
 
-test("51. đường nhựa: đi nhanh hơn, và A* tự vòng qua đường thay vì cắt qua cỏ", () => {
+test("51. đường nhựa (NỀN asphalt): đi nhanh hơn, và A* tự vòng qua đường", () => {
+  /* Đường không còn là công trình mua được — nó là NỀN `asphalt` do bản đồ vẽ
+     sẵn. Luật thì y nguyên: `speedMul` vừa làm nhân vật đi nhanh hơn, vừa chia
+     chi phí mỗi bước của A*. Kịch bản này đo đúng hai điều đó, chỉ đổi cách
+     dựng cảnh từ `t.b = "road"` sang `t.g = "asphalt"`. */
   const store = mkStore(901);
   walkTo(store, HOME.x, HOME.y);
   const spot = findOpenBlock(store.getState(), 8, 3);
@@ -2843,7 +2793,7 @@ test("51. đường nhựa: đi nhanh hơn, và A* tự vòng qua đường thay
       const x = spot.x, y = spot.y;
       for (let i = 0; i < 8; i++) {
         const t = s.tiles[idx(s.w, x + i, y)];
-        t.b = tren;
+        if (tren) t.g = tren;
       }
       s.player = { ...s.player, x: (x + 0.5) * TILE, y: (y + 0.5) * TILE, moving: false };
     });
@@ -2851,12 +2801,13 @@ test("51. đường nhựa: đi nhanh hơn, và A* tự vòng qua đường thay
     for (let i = 0; i < 60; i++) st.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 1 / 60 });
     return st.getState().player.x - x0;
   };
+  const nhanh = content.tiles.grounds.asphalt.speedMul;
   const treoCo = diBaoXa(null);
-  const treoDuong = diBaoXa("road");
+  const treoDuong = diBaoXa("asphalt");
   const tiSo = treoDuong / treoCo;
   ok(
-    Math.abs(tiSo - content.buildings.road.effects.speedMul) < 0.02,
-    `đi trên đường nhanh hơn đúng speedMul: tỉ số ${tiSo.toFixed(3)}, mong đợi ${content.buildings.road.effects.speedMul}`,
+    Math.abs(tiSo - nhanh) < 0.02,
+    `đi trên đường nhanh hơn đúng speedMul: tỉ số ${tiSo.toFixed(3)}, mong đợi ${nhanh}`,
   );
 
   /* A*: hai đường vòng DÀI BẰNG NHAU, một lát nhựa một không. Đường thẳng ở
@@ -2876,7 +2827,7 @@ test("51. đường nhựa: đi nhanh hơn, và A* tự vòng qua đường thay
     // tường rào chắn lối thẳng ở hàng giữa
     for (let i = 1; i <= 9; i++) s.tiles[idx(s.w, X + i, Y + 2)].b = "fence";
     // đường vòng PHÍA TRÊN lát nhựa
-    for (let i = 0; i <= 10; i++) s.tiles[idx(s.w, X + i, Y)].b = "road";
+    for (let i = 0; i <= 10; i++) s.tiles[idx(s.w, X + i, Y)].g = "asphalt";
     s.player = { ...s.player, x: (X + 0.5) * TILE, y: (Y + 2.5) * TILE, moving: false };
   });
   ok(nav.goTo(st.getState(), content, X + 10, Y + 2, { act: false }), "tìm được đường vòng");
@@ -2940,19 +2891,19 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   const cx = Math.floor(p.x / TILE);
   const cy = Math.floor(p.y / TILE);
 
-  // đủ vật liệu: 6 ô đường cho tuyến 5 ô
+  // đủ vật liệu: 6 ô sàn nhà kính cho tuyến 5 ô
   setState(store, (s) => {
-    s.inv[3] = { id: "build:road", n: 6 };
+    s.inv[3] = { id: "build:greenhouse", n: 6 };
     s.energy = 100;
   });
-  selectItem(store, "build:road");
+  selectItem(store, "build:greenhouse");
   const nl0 = store.getState().energy;
-  store.dispatch({ t: "BUILD_LINE", id: "road", x0: cx + 1, y0: cy, x1: cx + 5, y1: cy });
+  store.dispatch({ t: "BUILD_LINE", id: "greenhouse", x0: cx + 1, y0: cy, x1: cx + 5, y1: cy });
   const s1 = store.getState();
   let dung = 0;
-  for (let i = 1; i <= 5; i++) if (s1.tiles[idx(s1.w, cx + i, cy)]?.b === "road") dung++;
+  for (let i = 1; i <= 5; i++) if (s1.tiles[idx(s1.w, cx + i, cy)]?.b === "greenhouse") dung++;
   ok(dung >= 3, `dựng được nhiều ô trong một lệnh: ${dung} ô`);
-  eq(countInv(store, "build:road"), 6 - dung, "trừ đúng một vật phẩm mỗi ô, không giảm giá theo lô");
+  eq(countInv(store, "build:greenhouse"), 6 - dung, "trừ đúng một vật phẩm mỗi ô, không giảm giá theo lô");
   eq(
     Math.round(nl0 - s1.energy),
     dung * content.balance.energyCost.build,
@@ -2962,11 +2913,11 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   // ô ĐẦU ngoài tầm với → không làm gì cả
   const st2 = mkStore(906);
   walkTo(st2, HOME.x, HOME.y);
-  setState(st2, (s) => { s.inv[3] = { id: "build:road", n: 20 }; });
-  selectItem(st2, "build:road");
+  setState(st2, (s) => { s.inv[3] = { id: "build:greenhouse", n: 20 }; });
+  selectItem(st2, "build:greenhouse");
   const truoc = st2.getState();
-  const sau = st2.dispatch({ t: "BUILD_LINE", id: "road", x0: 2, y0: 2, x1: 6, y1: 2 });
-  eq(countInv(st2, "build:road"), 20, "ngoài tầm với: không tốn vật phẩm nào");
+  const sau = st2.dispatch({ t: "BUILD_LINE", id: "greenhouse", x0: 2, y0: 2, x1: 6, y1: 2 });
+  eq(countInv(st2, "build:greenhouse"), 20, "ngoài tầm với: không tốn vật phẩm nào");
   ok(truoc.tiles === sau.tiles, "và không đụng vào lưới ô");
 
   /* VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU: hết hàng trong balo thì mua tại chỗ. */
@@ -2974,15 +2925,15 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   walkTo(st3, HOME.x, HOME.y);
   const q = st3.getState().player;
   const qx = Math.floor(q.x / TILE), qy = Math.floor(q.y / TILE);
-  const gia = content.buildings.road.price;
-  setState(st3, (s) => { s.inv[3] = { id: "build:road", n: 2 }; s.energy = 100; s.money = 9999; });
-  selectItem(st3, "build:road");
+  const gia = content.buildings.greenhouse.price;
+  setState(st3, (s) => { s.inv[3] = { id: "build:greenhouse", n: 2 }; s.energy = 100; s.money = 9999; });
+  selectItem(st3, "build:greenhouse");
   const tien0 = st3.getState().money;
-  st3.dispatch({ t: "BUILD_LINE", id: "road", x0: qx + 1, y0: qy, x1: qx + 8, y1: qy, far: true });
-  eq(countInv(st3, "build:road"), 0, "dùng hết hàng có sẵn trước");
+  st3.dispatch({ t: "BUILD_LINE", id: "greenhouse", x0: qx + 1, y0: qy, x1: qx + 8, y1: qy, far: true });
+  eq(countInv(st3, "build:greenhouse"), 0, "dùng hết hàng có sẵn trước");
   const s3 = st3.getState();
   let d3 = 0;
-  for (let i = 1; i <= 8; i++) if (s3.tiles[idx(s3.w, qx + i, qy)]?.b === "road") d3++;
+  for (let i = 1; i <= 8; i++) if (s3.tiles[idx(s3.w, qx + i, qy)]?.b === "greenhouse") d3++;
   ok(d3 > 2, `hết hàng thì mua tiếp, dựng được ${d3} ô chứ không dừng ở 2`);
   eq(tien0 - s3.money, (d3 - 2) * gia, `trả đúng ${d3 - 2} ô × ${gia}đ, hai ô đầu dùng hàng có sẵn`);
   deepEq(checkInvariants(s3, content), [], "bất biến sau khi vừa dùng hàng vừa mua");
@@ -2993,10 +2944,10 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   const r4 = st4.getState().player;
   const rx = Math.floor(r4.x / TILE), ry = Math.floor(r4.y / TILE);
   setState(st4, (s) => { s.inv[3] = null; s.energy = 100; s.money = gia * 3; });
-  st4.dispatch({ t: "BUILD_LINE", id: "road", x0: rx + 1, y0: ry, x1: rx + 8, y1: ry, far: true });
+  st4.dispatch({ t: "BUILD_LINE", id: "greenhouse", x0: rx + 1, y0: ry, x1: rx + 8, y1: ry, far: true });
   const s4 = st4.getState();
   let d4 = 0;
-  for (let i = 1; i <= 8; i++) if (s4.tiles[idx(s4.w, rx + i, ry)]?.b === "road") d4++;
+  for (let i = 1; i <= 8; i++) if (s4.tiles[idx(s4.w, rx + i, ry)]?.b === "greenhouse") d4++;
   eq(d4, 3, "chỉ dựng đúng số ô tiền mua nổi");
   eq(s4.money, 0, "tiêu hết tiền, không âm");
 });

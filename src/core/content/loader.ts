@@ -337,15 +337,6 @@ export function validatePack(raw: RawPack): string[] {
       if (!knownItem(v.id)) errors.push(`recipes '${rc.id}': cần '${v.id}' không tồn tại`);
   }
 
-  // điện: nếu có thiết bị tiêu thụ điện thì phải có thiết bị sinh điện, không thì
-  // người chơi mua về mà không bao giờ dùng được
-  const produces = buildings.some((b) => b.power.produce > 0);
-  const consumes = buildings.filter((b) => b.power.consume > 0);
-  if (consumes.length && !produces)
-    errors.push(
-      `buildings: ${consumes.map((b) => b.id).join(", ")} cần điện nhưng không công trình nào sinh điện`,
-    );
-
   return errors;
 }
 

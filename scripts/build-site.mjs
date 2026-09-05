@@ -460,7 +460,7 @@ const HANH_DONG = [
     nut: "XÂY",
     ten: "Chế độ xây dựng",
     can: null,
-    y: "Mọi công trình — vòi tưới, nhà kính, pin mặt trời, drone, đường nhựa — đều dựng ở đây. Bấm XÂY là thời gian dừng lại; ấn ở đầu đoạn, rê tới cuối, nhả tay là cả đoạn hiện ra. Hàng rào thì không: các khu chuồng đã rào sẵn từ đầu.",
+    y: "Công trình — vòi tưới và sàn nhà kính — dựng ở đây. Bấm XÂY là thời gian dừng lại; ấn ở đầu đoạn, rê tới cuối, nhả tay là cả đoạn hiện ra. Hàng rào thì không: các khu chuồng đã rào sẵn từ đầu.",
     meo: "Vẽ bao nhiêu ô thì trả tiền bấy nhiêu, không phải mua trước rồi đoán xem cần mấy ô.",
   },
   {
@@ -627,7 +627,7 @@ function hubPage() {
             <p>Từng việc nhân vật làm được, cần cầm gì, và mẹo cho mỗi việc.</p>
           </a>
           <a class="hub-card" href="/cach-hoat-dong/">
-            <div class="hub-art">${cx("ui:moon", 30, "Ngày đêm")}${cx("ui:water", 30, "Mưa")}${cx("ui:power", 30, "Điện")}</div>
+            <div class="hub-art">${cx("ui:moon", 30, "Ngày đêm")}${cx("ui:water", 30, "Mưa")}${cx("ui:sun", 30, "Thời tiết")}</div>
             <h3>Cách game vận hành</h3>
             <p>Vì sao cây lớn khi bạn ngủ, thời tiết ảnh hưởng gì, tiền từ đâu ra.</p>
           </a>

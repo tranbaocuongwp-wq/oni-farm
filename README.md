@@ -2,7 +2,7 @@
 
 Game nông trại **hiện đại** phong cách pixel, **chơi offline hoàn toàn**.
 Cày → gieo → tưới → ngủ → thu hoạch → bán, rồi nâng cấp lên vòi tưới tự động,
-nhà kính, pin mặt trời và drone thu hoạch.
+nhà kính, chăn nuôi và người làm thuê.
 
 **Chơi ngay: https://oni-farm.pages.dev/farm/** — điện thoại, tablet hay máy tính.
 
@@ -107,8 +107,9 @@ khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hư�
 **Luật quan trọng nhất:** cây chỉ lớn nếu ô **được tưới trong đêm đó**. Nhìn màu
 đất là biết — đất sẫm nghĩa là đêm nay cây sẽ lớn.
 
-**Lộ trình:** xà lách (3 ngày) → thu 5 cây mở cà chua → đủ 800đ mở vòi tưới +
-nhà kính → ngày 8 mở pin mặt trời → có pin mới dùng được drone → đủ 3.000đ mở bí đỏ.
+**Lộ trình:** xà lách (3 ngày) → dư vốn thì chuyển sang cà chua → đủ 800đ mua vòi
+tưới + nhà kính → đủ 3.000đ mua hạt bí đỏ → rồi tới chăn nuôi và người làm thuê.
+Không có bậc mở khoá nào: điều kiện duy nhất là TIỀN.
 
 ---
 
@@ -227,7 +228,7 @@ qua cửa: nhảy vị trí **và** `setWorld` kích thước mới — thiếu 
 bản đồ cũ.
 
 **Bẫy lớn nhất của việc tách map:** ngủ trong nhà thì ngoài ruộng vẫn phải chạy. `newDay` xử
-lý **mọi** bản đồ (tăng trưởng, vòi tưới, làm khô, drone, cỏ lan), còn `TICK` — chạy mỗi khung
+lý **mọi** bản đồ (tăng trưởng, vòi tưới, làm khô, cỏ lan, rừng mọc lại), còn `TICK` — chạy mỗi khung
 hình — chỉ đụng bản đồ đang chơi.
 
 ### Hiệu năng, đo thật
@@ -258,7 +259,7 @@ bỏ không đủ `tilledIdleDays` đêm thì MỌC CỎ và trở lại địa 
 ### Bảng gỡ lỗi
 
 `F2` bật/tắt bảng gỡ lỗi — một **bảng NỔI ở góc trên phải, không chặn game**. 13 lệnh chia ba
-nhóm: tài nguyên (tiền, năng lượng, nước, vật liệu, mở khoá) · thời gian (sang ngày, đổi thời
+nhóm: tài nguyên (tiền, năng lượng, nước, vật liệu) · thời gian (sang ngày, đổi thời
 tiết) · ruộng (chín hết, thu tất cả, cày + gieo quanh đây, rắc cỏ, rắc cây, gây bệnh). Cộng
 một dòng số liệu sống ở chân bảng.
 
@@ -293,10 +294,10 @@ hết hạt, kẹt đường.
 
 ### Hạ tầng: đường nhựa, hàng rào, kho
 
-**Đường nhựa** là công trình sàn (`build:road`, chế từ đá), không phải nền — cố ý: `mergeGrid`
-dựng lại NỀN từ bản đồ mỗi lần cập nhật content, nên đường ghi vào nền sẽ bị xoá sạch sau một
-lần đẩy OTA, còn `Tile.b` thì được giữ. Nền `asphalt` vẫn có để người thiết kế bản đồ vẽ sẵn
-đường trục.
+**Đường nhựa** là NỀN (`asphalt`) vẽ sẵn trong `farm.ascii`, không còn là công trình mua được.
+Trục đường là một phần của bố cục nông trại — cùng lý do với hàng rào: thứ quyết định hình
+dáng khu đất thì người thiết kế bản đồ đặt, chứ không để người chơi lát từng ô rồi tự khoét
+thủng quy hoạch của chính mình.
 
 Đường làm hai việc: đi trên đó nhanh hơn `speedMul` lần, **và A\* tự vòng qua đường** — vì
 chi phí mỗi bước được CHIA cho `speedMul`. Không có luật "ưu tiên đường" riêng nào; thêm một
@@ -324,8 +325,7 @@ nó ăn". Trước đây gộp làm một qua `feed: null`, nên vừa cho gà �
 lập tức mất luôn khả năng mổ sâu của nó — hai câu khác nhau bị nhét vào một ô.
 
 Thức ăn **mua được**: `MaterialDef.buyPrice` bật một vật liệu lên kệ (tab Thức
-ăn), và nó phải qua mốc mở khoá đúng như hạt và công trình — `validatePack`
-chặn cả hai chiều (bày bán mà không mốc nào mở, hoặc mốc mở một thứ không bán).
+ăn), bán ngay từ ngày đầu như mọi thứ khác trên kệ.
 Mua đắt hơn tự cắt cỏ: đó là chỗ đánh đổi, không phải chỗ thay thế.
 
 **Cho cá ăn** đi qua nút DÙNG chứ không phải nút TƯƠNG TÁC, vì mặt nước đã nhận
@@ -393,7 +393,7 @@ chơi chỉ phát hiện khi bấm hụt. Hình vùng trong content khớp đún
 trên giấy còn nhìn vào vẫn là một mảng ruộng liền.
 
 Đi kèm là một khoảng **sân sau** phía đông bắc để trống hẳn — ruộng chia lô hết
-rồi thì phải có chỗ đặt vòi tưới, pin mặt trời, drone mà không tranh đất với cây.
+rồi thì phải có chỗ đặt vòi tưới và nhà kho mà không tranh đất với cây.
 
 **CẦU GỖ** (`PropDef.bridge`) là vật thể BẮC QUA một ô không đi được. Ô có nó
 thì người và vật nuôi qua được bất kể NỀN bên dưới, còn loài BƠI vẫn bơi được
@@ -524,7 +524,7 @@ Về đồ hoạ họ dùng lại **nguyên bộ 28 khung** của nhân vật ch
 đổi bảng màu. Thêm một bộ đồ mới là thêm năm mã màu trong `actors.json`.
 
 Lương trả ở **bước 2 của `newDay`** (bước tiền tệ), bắt buộc trước bước 8 `applyProgression`:
-trả sau thì mốc mở khoá theo `money` sẽ tính bằng số tiền chưa trừ lương.
+trả sau thì mốc tiến trình theo `money` sẽ tính bằng số tiền chưa trừ lương.
 
 ### Hiển thị & camera
 
@@ -742,12 +742,11 @@ Ba luật đồ hoạ cho màn hình nhỏ (bản thiết kế lại):
 
 Chi tiết ở [`docs/CONTENT.md`](docs/CONTENT.md). Tóm tắt:
 
-**Thêm cây** — thêm một object vào `src/content/crops.json`, thêm `seed:<id>` vào
-`unlocks` của một mốc trong `progression.json`, chạy `npm run content:build`. Xong.
-Không sửa một dòng code nào.
+**Thêm cây** — thêm một object vào `src/content/crops.json`, chạy
+`npm run content:build`. Xong. Không sửa một dòng code nào.
 
 **Thêm công trình** — thêm vào `buildings.json`. Nếu chỉ dùng các hiệu ứng core đã
-biết (`waterRadius`, `autoWet`, `income`, `harvestRadius`) thì cũng không cần sửa code;
+biết (`waterRadius`, `autoWet`, `speedMul`) thì cũng không cần sửa code;
 `atlas.ts` sẽ vẽ hộp mặc định cho id lạ. Muốn hình riêng thì thêm một `case` trong
 `makeBuilding()`. Hiệu ứng **mới** thì phải sửa core → đó là làn chậm.
 
@@ -757,7 +756,7 @@ biết (`waterRadius`, `autoWet`, `income`, `harvestRadius`) thì cũng không c
 **Đổi cân bằng** — `balance.json`. Toàn bộ giá, số ngày, năng lượng, nhịp thời gian.
 
 `npm run content:build` chạy đúng bộ schema mà game dùng lúc chạy, kèm kiểm tham
-chiếu chéo (mở khoá cây không tồn tại, thiết bị cần điện mà không có nguồn điện…),
+chiếu chéo (mốc đòi cây không tồn tại, con vật ăn thứ không có trên kệ…),
 nên sai là fail ngay ở đây chứ không lọt tới người chơi.
 
 ---
@@ -826,8 +825,8 @@ Không có server, không gửi dữ liệu đi đâu.
 bị kiểm sau **mọi** dispatch (tiền không âm, năng lượng trong khoảng, cây không lớn
 khi chưa tưới, người chơi không nằm trong ô đặc…).
 
-Phủ 40 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · drone
-đứng im khi thiếu điện · save round-trip khớp hoàn toàn · cùng seed cho ra state y
+Phủ 69 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn nếu quên tưới · đặt
+đồ xuống không nhốt được người chơi · save round-trip khớp hoàn toàn · cùng seed cho ra state y
 hệt · **load save cũ với content đã gỡ cây thì không crash** · `reduce` không mutate
 state cũ · **nhãn nút ngữ cảnh đổi đúng CÀY → GIEO → TƯỚI → THU** · parse cài đặt hỏng vẫn ra hợp lệ ·
 **thao tác có hiệu lực trễ đúng mốc chạm đất, nhát dở bị bỏ khi ngủ** · SWAP balo gộp stack và giữ
@@ -847,9 +846,9 @@ không chạy khi trang bị ẩn.
 
 ## Chế độ xây dựng
 
-Công trình KHÔNG đặt được bằng nút DÙNG. Tất cả — vòi tưới, nhà kính, pin mặt
-trời, drone, đường nhựa — đi qua `src/ui/buildmode.ts`. Hàng rào KHÔNG: nó là địa hình
-dựng sẵn của các khu chuồng (`buildable: false`).
+Công trình KHÔNG đặt được bằng nút DÙNG. Cả hai — vòi tưới và sàn nhà kính — đi
+qua `src/ui/buildmode.ts`. Hàng rào KHÔNG: nó là địa hình dựng sẵn của các khu
+chuồng (`buildable: false`).
 
 Vì sao: đặt từng ô là thao tác của việc SỬA, còn kéo một tuyến đường ra kho hay
 kéo một con đường ra kho là việc QUY HOẠCH — nghĩ theo đoạn, không theo ô. Trộn

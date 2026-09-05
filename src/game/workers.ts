@@ -167,7 +167,7 @@ export function giveToWorker(
 /**
  * Trả lương. Gọi ở BƯỚC 2 của `newDay` — bước tiền tệ.
  *
- * Phải nằm TRƯỚC bước 8 (`applyProgression`): nếu trả sau, mốc mở khoá theo
+ * Phải nằm TRƯỚC bước 8 (`applyProgression`): nếu trả sau, mốc tiến trình theo
  * `money` sẽ được tính bằng số tiền CHƯA trừ lương, tức là mở khoá bằng tiền
  * chưa thật sự có.
  *

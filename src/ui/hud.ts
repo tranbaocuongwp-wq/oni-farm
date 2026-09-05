@@ -136,7 +136,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
           <span id="hud-energy">100</span>
         </span>
         <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
-        <span class="stat power" id="hud-power-line"><i class="ic" data-ic="power"></i><span id="hud-power">0</span></span>
         <span class="stat weather" id="hud-wx-line" title="Thời tiết hôm nay · dự báo ngày mai"><i class="ic" id="hud-wx"></i><span id="hud-wx-name"></span><i class="ic next" id="hud-wx-next"></i></span>
       </div>
       <button class="goal-chip" id="goal-box" type="button" aria-label="Mục tiêu hiện tại">
@@ -184,8 +183,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elEnergyStat = $("hud-energy-stat");
   const elBar = $("hud-bar");
   const elBarFill = elBar.querySelector("i") as HTMLElement;
-  const elPower = $("hud-power");
-  const elPowerLine = $("hud-power-line");
   const elWater = $("hud-water");
   const elWaterLine = $("hud-water-line");
   const elGoal = $("goal");
@@ -211,7 +208,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elBagCount = $("bag-count");
   elBagBtn.addEventListener("click", () => bagFn());
   const prev = {
-    money: -1, day: -1, clock: "", night: false, energy: -1, power: -1, water: -1, cap: -1,
+    money: -1, day: -1, clock: "", night: false, energy: -1, water: -1, cap: -1,
     goal: "", hotbar: "", hint: "", bag: -1, wx: "", sel: "",
   };
 
@@ -597,17 +594,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         elWater.textContent = `${water}/${cap}`;
         elWaterLine.classList.toggle("warn", cap > 0 && water <= cap * 0.15);
         elWaterLine.hidden = cap <= 0;
-      }
-
-      let power = 0;
-      for (const t of s.tiles) {
-        if (!t.b) continue;
-        power += content.buildings[t.b]?.power.produce ?? 0;
-      }
-      if (power !== prev.power) {
-        prev.power = power;
-        elPower.textContent = String(power);
-        elPowerLine.hidden = power <= 0;
       }
 
       const goal = currentGoal(s, content);

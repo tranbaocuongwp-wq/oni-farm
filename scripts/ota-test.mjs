@@ -118,9 +118,6 @@ reject("công thức chế tạo cần nguyên liệu không tồn tại", (p) =
 reject("legend dùng vật thể chưa định nghĩa", (p) => {
   p.tiles.legend["T"] = { ground: "grass", prop: "khongCoLoaiNay" };
 });
-reject("có thiết bị tiêu điện nhưng không có nguồn điện", (p) => {
-  for (const b of p.buildings.buildings) b.power.produce = 0;
-});
 reject("weather: tổng weight = 0 thì không rút thăm được", (p) => {
   for (const w of p.weather.weathers) w.weight = 0;
 });

@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — đẩy OTA được. kind 'floor' = thay nền ô, đi lên được; kind 'object' = vật thể đứng trên ô. Các hiệu ứng ăn khớp nhau qua hệ ĐIỆN: pin mặt trời sinh điện, drone tiêu thụ điện.",
+  "$comment": "LÀN NHANH — đẩy OTA được. kind 'floor' = thay nền ô, đi lên được; kind 'object' = vật thể đứng trên ô. Có tiền là mua được ngay — không mốc mở khoá nào chắn trước.",
   "buildings": [
     {
       "id": "sprinkler",
@@ -10,10 +10,6 @@
       "solid": true,
       "effects": {
         "waterRadius": 1
-      },
-      "power": {
-        "produce": 0,
-        "consume": 0
       },
       "art": {
         "body": "#b8c6d4",
@@ -32,74 +28,10 @@
         "autoWet": true,
         "allSeason": true
       },
-      "power": {
-        "produce": 0,
-        "consume": 0
-      },
       "art": {
         "body": "#cfe9f2",
         "dark": "#7fa8b8",
         "accent": "#a9dbe8"
-      }
-    },
-    {
-      "id": "solar",
-      "name": "Pin mặt trời",
-      "desc": "Mỗi sáng cộng 45đ và cấp 1 điện cho thiết bị tự động.",
-      "price": 500,
-      "kind": "object",
-      "solid": true,
-      "effects": {
-        "income": 45
-      },
-      "power": {
-        "produce": 1,
-        "consume": 0
-      },
-      "art": {
-        "body": "#1e3a5f",
-        "dark": "#0f1f36",
-        "accent": "#4fa3e3"
-      }
-    },
-    {
-      "id": "drone",
-      "name": "Drone thu hoạch",
-      "desc": "Mỗi sáng tự thu hoạch cây chín trong bán kính 4 ô. Cần 1 điện từ pin mặt trời.",
-      "price": 900,
-      "kind": "object",
-      "solid": true,
-      "effects": {
-        "harvestRadius": 4
-      },
-      "power": {
-        "produce": 0,
-        "consume": 1
-      },
-      "art": {
-        "body": "#e2e8f0",
-        "dark": "#64748b",
-        "accent": "#f59e0b"
-      }
-    },
-    {
-      "id": "road",
-      "name": "Đường nhựa",
-      "desc": "Đi trên đường nhanh hơn hẳn. Người và xe đều tự chọn đường mà đi.",
-      "price": 18,
-      "kind": "floor",
-      "solid": false,
-      "effects": {
-        "speedMul": 1.35
-      },
-      "power": {
-        "produce": 0,
-        "consume": 0
-      },
-      "art": {
-        "body": "#4a4a52",
-        "dark": "#35353b",
-        "accent": "#c9c07a"
       }
     },
     {
@@ -111,10 +43,6 @@
       "solid": true,
       "autotile": "fence",
       "effects": {},
-      "power": {
-        "produce": 0,
-        "consume": 0
-      },
       "art": {
         "body": "#a97d4e",
         "dark": "#6b4a2c",

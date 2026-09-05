@@ -53,7 +53,7 @@
       "require": {
         "day": 8
       },
-      "toast": "Sang ngày thứ tám. Pin mặt trời mở đường cho drone."
+      "toast": "Sang ngày thứ tám. Đủ tiền thì tậu vòi tưới với nhà kính đi."
     },
     {
       "id": "field",
@@ -65,11 +65,11 @@
     },
     {
       "id": "auto",
-      "name": "Tự động hoá",
+      "name": "Vào guồng",
       "require": {
-        "built.solar": 1
+        "harvested": 45
       },
-      "toast": "Có điện rồi — drone thu hoạch hộ bạn được."
+      "toast": "Bốn mươi lăm lượt thu hoạch — nông trại vào guồng rồi."
     },
     {
       "id": "scale",
@@ -160,20 +160,6 @@
       "text": "Lắp vòi tưới tự động đầu tiên",
       "require": {
         "built.sprinkler": 1
-      }
-    },
-    {
-      "id": "g_solar",
-      "text": "Dựng pin mặt trời để có điện",
-      "require": {
-        "built.solar": 1
-      }
-    },
-    {
-      "id": "g_drone",
-      "text": "Cho drone thu hoạch thay bạn",
-      "require": {
-        "built.drone": 1
       }
     },
     {

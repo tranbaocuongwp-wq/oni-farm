@@ -247,10 +247,6 @@ export interface BuildingEffects {
   /** Nhân tốc độ đi khi đứng trên công trình này (đường nhựa > 1). Cùng ý nghĩa
    *  với `GroundDef.speedMul`; ô có cả hai thì lấy cái LỚN HƠN. */
   speedMul?: number;
-  /** Cộng tiền mỗi sáng. */
-  income?: number;
-  /** Tự thu hoạch cây chín trong bán kính này mỗi sáng. */
-  harvestRadius?: number;
 }
 
 /** Kiểu tự nối hình theo hàng xóm cùng loại. */
@@ -275,7 +271,6 @@ export interface BuildingDef {
    */
   buildable?: boolean;
   effects: BuildingEffects;
-  power: { produce: number; consume: number };
   art: { body: string; dark: string; accent: string };
 }
 

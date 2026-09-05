@@ -447,6 +447,17 @@ body[data-hand="left"] .mid-col {
   image-rendering: pixelated;
   margin-bottom: 2px;
 }
+/* MỘT DÒNG, cắt bằng dấu ba chấm. Trước đây thẻ nào chữ dài thì cao vống lên,
+   và cả lưới thành răng cưa cao thấp — đúng thứ làm bảng giá trông lộn xộn dù
+   từng thẻ vẫn đọc được. Chi tiết dài nằm ở trang Thư viện, không nhồi vào ô
+   rộng 88px. */
+.shop-card .nm,
+.shop-card .sub {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .shop-card .nm {
   font-size: calc(var(--fs-sm) * 0.92);
   font-weight: 700;
@@ -1105,6 +1116,11 @@ body.touch .slot .k {
   background: transparent;
   color: var(--ink-dim);
   min-height: var(--tap);
+  /* MỘT DÒNG: năm cái tab tự xuống dòng thành hai hàng thì hàng tab cao gần
+     bằng một hàng thẻ hàng hoá, mà nó chỉ là cái để chọn chỗ đứng. */
+  padding: 0 2px;
+  font-size: calc(var(--fs-sm) * 0.86);
+  white-space: nowrap;
 }
 .tabs .tab.on {
   background: var(--panel-2);
