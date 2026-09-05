@@ -418,18 +418,14 @@ export function createMenus(
       for (const id of c.cropOrder) {
         if (!cropInSeason(id, s.day, c)) continue;
         const crop = c.crops[id]!;
-        const mo = s.unlocked.includes(`seed:${id}`);
         const days = crop.growthDays.reduce((a, b) => a + b, 0);
         grid.appendChild(
           buyCard({
             art: `plant:${id}`,
-            name: mo ? crop.name : "???",
-            subs: [
-              mo ? `${days}n · ${money(crop.sellPrice)}${crop.regrowDays ? " ↻" : ""}` : "chưa mở",
-            ],
+            name: crop.name,
+            subs: [`${days}n · ${money(crop.sellPrice)}${crop.regrowDays ? " ↻" : ""}`],
             price: money(crop.seedPrice),
-            locked: !mo,
-            disabled: !mo || s.money < crop.seedPrice,
+            disabled: s.money < crop.seedPrice,
             onClick: () => {
               h.buy(`seed:${id}`, 1);
               openShop();
@@ -460,18 +456,16 @@ export function createMenus(
         const gia = m.buyPrice ?? 0;
         if (gia <= 0) continue;
         coMon++;
-        const mo = s.unlocked.includes(`item:${id}`);
         const an = c.animalOrder
           .filter((a) => c.animals[a]?.job !== "pest" && c.animals[a]?.feed.includes(`item:${id}`))
           .map((a) => c.animals[a]!.name);
         gf.appendChild(
           buyCard({
             art: `item:${id}`,
-            name: mo ? m.name : "???",
-            subs: [mo ? (an.length ? `cho ${an.join(", ")}` : "chưa loài nào ăn") : "chưa mở"],
+            name: m.name,
+            subs: [an.length ? `cho ${an.join(", ")}` : "chưa loài nào ăn"],
             price: money(gia),
-            locked: !mo,
-            disabled: !mo || s.money < gia,
+            disabled: s.money < gia,
             onClick: () => {
               h.buy(`item:${id}`, 1);
               openShop();
@@ -547,31 +541,25 @@ export function createMenus(
       for (const id of c.animalOrder) {
         const a = c.animals[id]!;
         if (a.job === "pest") continue; // chuột sóc không phải hàng bán
-        const mo = s.unlocked.includes(`animal:${id}`);
         const sanPham = a.products.map((p) => itemLabel(p.id, c)).join(", ");
         const thit = a.meat ? itemLabel(a.meat.id, c) : null;
         ga.appendChild(
           buyCard({
             art: `animal:${id}`,
-            name: mo ? a.name : "???",
+            name: a.name,
             // Trên thẻ hẹp thì mỗi dòng phải NGẮN. Gộp hết vào một dòng dài như
             // bản danh sách cũ là chữ tràn ra ba dòng và lưới cao thấp lởm chởm.
-            subs: mo
-              ? [
-                  sanPham || (thit ? `thịt: ${thit}` : ""),
-                  a.feed.length
-                    ? `ăn ${a.feed.map((f) => itemLabel(f, c)).join(", ")}`
-                    : "tự kiếm ăn",
-                  /* Nói TÊN KHU nó sẽ về, không nói "cần rào" nữa: nông trại
-                     đã chia lô sẵn nên người chơi không phải chuẩn bị gì, chỉ
-                     cần biết mua xong ra đâu mà tìm con vật. */
-                  c.tiles.pens?.find((q) => q.id === a.pen)?.name ??
-                    (a.housing === "water" ? "dưới ao" : "thả rông"),
-                ]
-              : ["chưa mở"],
+            subs: [
+              sanPham || (thit ? `thịt: ${thit}` : ""),
+              a.feed.length ? `ăn ${a.feed.map((f) => itemLabel(f, c)).join(", ")}` : "tự kiếm ăn",
+              /* Nói TÊN KHU nó sẽ về, không nói "cần rào" nữa: nông trại đã
+                 chia lô sẵn nên người chơi không phải chuẩn bị gì, chỉ cần
+                 biết mua xong ra đâu mà tìm con vật. */
+              c.tiles.pens?.find((q) => q.id === a.pen)?.name ??
+                (a.housing === "water" ? "dưới ao" : "thả rông"),
+            ],
             price: money(a.price),
-            locked: !mo,
-            disabled: !mo || s.money < a.price,
+            disabled: s.money < a.price,
             onClick: () => {
               h.buyAnimal(id);
               openShop();
@@ -596,7 +584,6 @@ export function createMenus(
         // Để nó nằm trong bảng giá thì người chơi sẽ đi tìm chỗ mua cho bằng
         // được — một cuộc đi tìm không có đích.
         if (b.buildable === false) continue;
-        const mo = s.unlocked.includes(id);
         /* KHÔNG có nút Mua nữa: công trình trả tiền theo SỐ Ô VẼ trong chế độ
            xây dựng. Bán theo chồng thì người chơi phải đoán "cần bao nhiêu ô
            rào" trước khi vẽ, mà đoán sai con số đó chính là lý do người ta ngại
@@ -604,10 +591,9 @@ export function createMenus(
         gb.appendChild(
           buyCard({
             art: `build:${id}`,
-            name: mo ? b.name : "???",
-            subs: [mo ? b.desc : "chưa mở khoá"],
+            name: b.name,
+            subs: [b.desc],
             price: `${money(b.price)}/ô`,
-            locked: !mo,
             disabled: true,
             onClick: () => {},
           }),

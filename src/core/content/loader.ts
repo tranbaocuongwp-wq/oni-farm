@@ -122,58 +122,12 @@ export function validatePack(raw: RawPack): string[] {
 
   const cropIds = new Set(crops.map((c) => c.id));
   const buildingIds = new Set(buildings.map((b) => b.id));
-  const actorsRaw = (raw.actors ?? null) as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
-  const animalIds = new Set(
-    [...(actorsRaw?.animals ?? []), ...(actorsRaw?.pests ?? [])].map((a) => a.id),
-  );
-  const known = new Set<string>([
-    ...[...cropIds].map((id) => `seed:${id}`),
-    ...buildingIds,
-    // Vật nuôi mở khoá bằng tiền tố `animal:` — CỐ Ý không phải một trong 5 tiền
-    // tố vật phẩm: con vật sống không bao giờ vào túi đồ, nên nó không cần và
-    // không được có mặt trong hệ vật phẩm.
-    ...[...animalIds].map((id) => `animal:${id}`),
-    /* Vật liệu BÁN ĐƯỢC (có `buyPrice`) cũng phải qua mốc mở khoá, cùng luật
-       với hạt và công trình: bày bó rơm ở cửa hàng trước khi người chơi có con
-       bò nào là bày một món không dùng vào đâu. */
-    ...(items.materials ?? []).filter((m) => (m.buyPrice ?? 0) > 0).map((m) => `item:${m.id}`),
-  ]);
-
   for (const key of Object.keys(balance.startSeeds ?? {})) {
     if (!key.startsWith("seed:")) errors.push(`balance.startSeeds.${key}: khoá phải dạng 'seed:<id cây>'`);
     else if (!cropIds.has(key.slice(5)))
       errors.push(`balance.startSeeds.${key}: không có cây '${key.slice(5)}' trong crops.json`);
   }
 
-  const unlockedAt = new Map<string, string>();
-  for (const s of prog.stages)
-    for (const u of s.unlocks) {
-      if (!known.has(u))
-        errors.push(
-          `progression stage '${s.id}' mở khoá '${u}' — không khớp cây (seed:<id>) hay công trình nào`,
-        );
-      const prev = unlockedAt.get(u);
-      if (prev !== undefined)
-        errors.push(
-          `progression: '${u}' được mở khoá ở cả hai mốc '${prev}' và '${s.id}' — chỉ được một`,
-        );
-      else unlockedAt.set(u, s.id);
-    }
-
-  // Cây không nằm trong mốc nào thì vĩnh viễn không mua được ở cửa hàng: nó tồn
-  // tại trong content, tốn công vẽ, nhưng người chơi không bao giờ chạm tới.
-  // Đây là lỗi im lặng đúng kiểu dễ lọt khi bộ cây trồng phình to, nên chặn hẳn.
-  for (const m of items.materials ?? [])
-    if ((m.buyPrice ?? 0) > 0 && !unlockedAt.has(`item:${m.id}`))
-      errors.push(
-        `items.json: vật liệu '${m.id}' có buyPrice nhưng không mốc nào mở khoá — sẽ không bao giờ mua được`,
-      );
-
-  for (const id of cropIds)
-    if (!unlockedAt.has(`seed:${id}`))
-      errors.push(
-        `crops.json: cây '${id}' không được mốc nào trong progression.json mở khoá — sẽ không bao giờ mua được`,
-      );
 
   // require chỉ được dùng khoá mà progression.ts biết đọc
   const statKeys = new Set([
@@ -429,6 +383,8 @@ const BALANCE_DEFAULTS = {
   troughMax: 12,
   // core 1.9 — rừng mọc lại cây con
   forestRegrowChance: 0.06,
+  // core 1.10 — leo lên giường rồi màn mới mờ
+  sleepSeconds: 1.1,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */

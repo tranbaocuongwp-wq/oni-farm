@@ -1,14 +1,10 @@
 {
-  "$comment": "LÀN NHANH — lộ trình người chơi. Mốc mở khoá còn mở cả THỨC ĂN mua được (item:<id> có buyPrice) — mở cùng lúc với loài ăn nó, để tab Thức ăn không bày một thứ chưa dùng vào đâu.\\n\\n'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>. Mốc mở khoá chặn thứ được bán ở cửa hàng; mục tiêu chỉ dẫn dắt, không chặn gì.\\n\\nMỗi cây trong crops.json phải được mở khoá ở ĐÚNG MỘT mốc — scripts/build-content.mjs kiểm tra điều này, vì một cây không nằm trong mốc nào sẽ vĩnh viễn không mua được ở cửa hàng.",
+  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>.\n\nKHÔNG CÒN MỞ KHOÁ. Cửa hàng bán mọi thứ ngay từ đầu — có tiền thì mua, hết. Mốc và mục tiêu giờ chỉ để ĐÁNH DẤU tiến độ và nói một câu chúc mừng, không chặn gì cả: một cái cửa hàng bày ra bốn ô '??? chưa mở' là bốn lời hứa mà người chơi không làm gì được với chúng.",
   "stages": [
     {
       "id": "start",
       "name": "Bắt đầu",
       "require": {},
-      "unlocks": [
-        "seed:lettuce",
-        "road"
-      ],
       "toast": "Nông trại là của bạn rồi. Cày một ô và gieo hạt đi!"
     },
     {
@@ -17,16 +13,7 @@
       "require": {
         "harvested": 5
       },
-      "unlocks": [
-        "seed:bokchoy",
-        "seed:coriander",
-        "seed:radish",
-        "seed:scallion",
-        "animal:chicken",
-        "animal:duck",
-        "item:feedmix"
-      ],
-      "toast": "Vào nghề rồi! Cửa hàng mở thêm cải thìa, ngò rí, củ cải và hành lá."
+      "toast": "Vào nghề rồi — năm cây đầu tiên đã xong."
     },
     {
       "id": "green",
@@ -34,14 +21,7 @@
       "require": {
         "harvested": 15
       },
-      "unlocks": [
-        "seed:mustard",
-        "seed:spinach",
-        "seed:carrot",
-        "seed:waterspinach",
-        "seed:cucumber"
-      ],
-      "toast": "Luống rau xanh tốt: cải xanh, rau bina, cà rốt, rau muống và dưa leo đã có bán."
+      "toast": "Mười lăm cây. Luống rau bắt đầu ra dáng."
     },
     {
       "id": "herb",
@@ -49,14 +29,7 @@
       "require": {
         "harvested": 30
       },
-      "unlocks": [
-        "seed:basil",
-        "seed:mint",
-        "seed:perilla",
-        "seed:chive",
-        "seed:amaranth"
-      ],
-      "toast": "Vườn rau thơm mở: húng quế, bạc hà, tía tô, hẹ và rau dền."
+      "toast": "Ba mươi cây. Tay nghề lên rồi đấy."
     },
     {
       "id": "mech",
@@ -64,17 +37,7 @@
       "require": {
         "money": 800
       },
-      "unlocks": [
-        "sprinkler",
-        "greenhouse",
-        "seed:tomato",
-        "seed:chili",
-        "seed:onion",
-        "animal:goat",
-        "animal:pig",
-        "item:fodder"
-      ],
-      "toast": "Cơ giới hoá: vòi tưới, sàn nhà kính, kèm cà chua, ớt và hành tây."
+      "toast": "Có vốn rồi: vòi tưới và sàn nhà kính đáng đồng tiền lắm."
     },
     {
       "id": "root",
@@ -82,14 +45,7 @@
       "require": {
         "planted": 60
       },
-      "unlocks": [
-        "seed:potato",
-        "seed:sweetpotato",
-        "seed:garlic",
-        "seed:kohlrabi",
-        "seed:beet"
-      ],
-      "toast": "Ruộng củ mở: khoai tây, khoai lang, tỏi, su hào và củ dền."
+      "toast": "Mốc Ruộng củ — xong rồi!"
     },
     {
       "id": "modern",
@@ -97,17 +53,7 @@
       "require": {
         "day": 8
       },
-      "unlocks": [
-        "solar",
-        "seed:corn",
-        "seed:eggplant",
-        "seed:greenbean",
-        "seed:okra",
-        "animal:cow",
-        "animal:sheep",
-        "item:hay"
-      ],
-      "toast": "Hiện đại hoá: pin mặt trời, ngô, cà tím, đậu que và đậu bắp."
+      "toast": "Sang ngày thứ tám. Pin mặt trời mở đường cho drone."
     },
     {
       "id": "field",
@@ -115,13 +61,6 @@
       "require": {
         "harvested": 60
       },
-      "unlocks": [
-        "seed:rice",
-        "seed:soybean",
-        "seed:peanut",
-        "seed:sesame",
-        "seed:zucchini"
-      ],
       "toast": "Ruộng lớn: lúa, đậu nành, đậu phộng, vừng và bí ngòi."
     },
     {
@@ -130,16 +69,7 @@
       "require": {
         "built.solar": 1
       },
-      "unlocks": [
-        "drone",
-        "seed:watermelon",
-        "seed:wintermelon",
-        "seed:gourd",
-        "animal:fish",
-        "animal:dog",
-        "item:fishfeed"
-      ],
-      "toast": "Có điện rồi! Drone thu hoạch, dưa hấu, bí đao và bầu đã mở khoá."
+      "toast": "Có điện rồi — drone thu hoạch hộ bạn được."
     },
     {
       "id": "scale",
@@ -147,13 +77,6 @@
       "require": {
         "money": 3000
       },
-      "unlocks": [
-        "seed:pumpkin",
-        "seed:melon",
-        "seed:bittermelon",
-        "seed:luffa",
-        "seed:bellpepper"
-      ],
       "toast": "Nông trại lớn mạnh: bí đỏ, dưa lưới, khổ qua, mướp và ớt chuông."
     },
     {
@@ -162,13 +85,6 @@
       "require": {
         "day": 20
       },
-      "unlocks": [
-        "seed:cassava",
-        "seed:taro",
-        "seed:ginger",
-        "seed:turmeric",
-        "seed:sugarcane"
-      ],
       "toast": "Vườn nhiệt đới: khoai mì, khoai môn, gừng, nghệ và mía."
     },
     {
@@ -177,13 +93,6 @@
       "require": {
         "harvested": 150
       },
-      "unlocks": [
-        "seed:strawberry",
-        "seed:blueberry",
-        "seed:pea",
-        "seed:kale",
-        "seed:celery"
-      ],
       "toast": "Vườn quả mọng: dâu tây, việt quất, đậu Hà Lan, cải xoăn và cần tây."
     },
     {
@@ -192,13 +101,6 @@
       "require": {
         "money": 8000
       },
-      "unlocks": [
-        "seed:sunflower",
-        "seed:marigold",
-        "seed:chrysanthemum",
-        "seed:lemongrass",
-        "seed:perillared"
-      ],
       "toast": "Vườn hoa nở: hướng dương, cúc vạn thọ, hoa cúc, sả và kinh giới."
     },
     {
@@ -207,14 +109,6 @@
       "require": {
         "earned": 30000
       },
-      "unlocks": [
-        "seed:coffee",
-        "seed:tea",
-        "seed:lavender",
-        "seed:rose",
-        "seed:wheat",
-        "seed:barley"
-      ],
       "toast": "Điền trang: cà phê, trà xanh, oải hương, hoa hồng, lúa mì và lúa mạch."
     }
   ],

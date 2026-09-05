@@ -94,7 +94,6 @@ export function createBuildMode(
       for (const id of content.buildingOrder) {
         const def = content.buildings[id];
         if (!def || def.buildable === false) continue;
-        if (!s.unlocked.includes(id)) continue;
         let n = 0;
         for (const v of s.inv) if (v?.id === `build:${id}`) n += v.n;
         items.push({ id, n, def });

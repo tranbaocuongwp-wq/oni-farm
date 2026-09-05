@@ -75,7 +75,7 @@
       "prop": "bed"
     },
     "C": {
-      "ground": "wood",
+      "ground": "path",
       "prop": "bench"
     },
     "d": {

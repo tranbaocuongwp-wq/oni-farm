@@ -95,6 +95,15 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       // Nắng gắt: qua trưa là ruộng khô (một lần mỗi ngày).
       weatherTick(d, content, was, s.minutes);
 
+      /* Leo lên giường xong thì sang ngày mới. Xét TRƯỚC mốc ngất: ai đã nằm
+         lên giường rồi thì không đáng bị tính là ngất giữa đồng chỉ vì cái
+         đồng hồ vắt qua mốc trong lúc màn đang mờ dần. */
+      if (s.sleeping && s.busy <= 0) {
+        newDay(d, content, { passedOut: false });
+        toastKey(d, content, "sleep", "good");
+        return commit(d);
+      }
+
       if (s.minutes >= bal.dayEndMinutes) {
         newDay(d, content, { passedOut: true });
         toastKey(d, content, "passOut", "bad");
@@ -154,8 +163,28 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       if (!inInteractRange(state, ix, iy)) return state;
       // SHOP/SELL/CRAFT do UI mở modal — state không đổi.
       if (kind === "SLEEP") {
-        newDay(d, content, { passedOut: false });
-        toastKey(d, content, "sleep", "good");
+        /* LEO LÊN GIƯỜNG rồi mới sang hôm sau. Trước đây bấm một cái là màn
+           hình nhảy thẳng sang sáng mai — đúng luật nhưng mắt không kịp thấy
+           chuyện gì vừa xảy ra, và cái giường thành một cái nút bấm.
+
+           Ở đây chỉ ĐẶT nhân vật nằm lên giường và khoá `busy`; TICK sẽ gọi
+           `newDay` khi hết khoá. Đi qua `busy` thay vì một đồng hồ riêng vì
+           `busy` đã khoá sẵn mọi thao tác khác — không ai cày ruộng trong lúc
+           đang leo lên giường. */
+        const cho = Math.max(0, content.balance.sleepSeconds ?? 0);
+        if (cho <= 0) {
+          newDay(d, content, { passedOut: false });
+          toastKey(d, content, "sleep", "good");
+          return commit(d);
+        }
+        const s = touch(d);
+        s.sleeping = true;
+        s.busy = cho;
+        s.pending = null;
+        const np = dPlayer(d);
+        np.x = tileCenterX(ix);
+        np.y = tileCenterY(iy);
+        np.moving = false;
         return commit(d);
       }
       if (kind === "PORTAL") return reduce(state, { t: "PORTAL", x: ix, y: iy }, content);
@@ -289,7 +318,6 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       if (state.busy > 0) return state;
       const def = content.animals[action.def];
       if (!def) return state;
-      if (!state.unlocked.includes(`animal:${action.def}`)) return state; // chưa mở khoá
       if (state.money < def.price) {
         toastKey(d, content, "noMoney", "bad");
         return commit(d);

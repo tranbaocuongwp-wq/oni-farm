@@ -347,12 +347,6 @@ export function buildLine(
     toastKey(d, content, "tooFar", "bad");
     return out;
   }
-  // Chưa mở khoá thì không xây được, kể cả khi đủ tiền — mốc tiến trình là mốc.
-  if (!d.s.unlocked.includes(id)) {
-    toastKey(d, content, "locked", "bad");
-    return out;
-  }
-
   const cells = linePath(x0 | 0, y0 | 0, x1 | 0, y1 | 0);
   out.wanted = cells.length;
   const cost = content.balance.energyCost.build;

@@ -309,11 +309,10 @@ export function toastText(d: Draft, text: string, kind: LogEntry["kind"] = "info
 
 /* ------------------------------------------------------------ progression */
 
-/** Áp kết quả progression vào draft (mở khoá + toast). Gọi sau mọi action đổi stats. */
+/** Áp kết quả progression vào draft (mốc đã đạt + toast). Gọi sau mọi action đổi stats. */
 export function applyProgression(d: Draft, content: Content): void {
   const res = evaluateProgression(d.s, content);
   if (!res) return;
-  if (res.unlocked.length) d.s.unlocked = [...d.s.unlocked, ...res.unlocked];
   if (res.stagesDone.length) d.s.stagesDone = [...d.s.stagesDone, ...res.stagesDone];
   if (res.goalsDone.length) d.s.goalsDone = [...d.s.goalsDone, ...res.goalsDone];
   d.changed = true;
@@ -356,7 +355,6 @@ export function createNewGame(content: Content, seed = 1): GameState {
     inv: createInventory(content),
     sel: 0,
 
-    unlocked: [],
     stagesDone: [],
     goalsDone: [],
     stats: {

@@ -340,6 +340,36 @@ bờ mới là ô cấm. Nên mỗi lần nạp save, con cá bị "cứu" từ 
 rồi chính `checkInvariants` tố cáo cái state mà hàm đó vừa dựng. Giờ cả phép
 kiểm lẫn phép nhích đều hỏi theo đúng loài (`blockedForActor`/`nudgeForActor`).
 
+### Bỏ hẳn mở khoá; bàn ra sân; leo lên giường mới ngủ (core 1.10)
+
+**Không còn mở khoá.** `GameState.unlocked` và `ProgressionStage.unlocks` bị gỡ
+sạch — cửa hàng bán mọi thứ ngay từ ngày đầu, điều kiện duy nhất là TIỀN. Lý do
+rất cụ thể: mở tab Vật nuôi lên thấy tám ô "??? chưa mở" là tám lời hứa mà
+người chơi không làm gì được với chúng, còn nhìn thấy con bò 800đ thì họ biết
+mình đang tiết kiệm để làm gì. Mốc và mục tiêu vẫn còn, nhưng giờ chỉ ĐÁNH DẤU
+chặng đường và nói một câu chúc mừng — không chặn gì.
+
+Gỡ luôn cả bộ máy đi kèm: `isUnlocked`, `canBuy`, mấy phép kiểm chéo trong
+`validatePack` ("cây nào cũng phải được mốc nào đó mở"), và dòng chữ
+`strings.ui.locked`. Để lại một hàm luôn trả `true` thì nơi gọi vẫn tưởng còn
+một luật nào đó — mà không còn luật nào cả.
+
+**Bàn chế tạo ra sân trước nhà.** Trước đây nó nằm trong phòng ngủ: muốn chế
+một cái rìu là phải mở cửa, đi vào, chế, đi ra. Giờ nó đứng ngay cạnh lối ra
+cửa (`legend.C` đổi nền thành lối mòn), cạnh quầy thu mua — cả ba việc "mua,
+bán, chế" nằm chung một cái sân.
+
+**Leo lên giường mới ngủ.** Bấm giường không sang ngày ngay nữa: nhân vật nằm
+lên ô giường, màn tối dần trong `balance.sleepSeconds` giây rồi TICK mới gọi
+`newDay`. Đi qua `busy` sẵn có chứ không dựng một đồng hồ riêng — `busy` đã khoá
+mọi thao tác khác, nên không ai cày ruộng trong lúc đang leo lên giường. Cái
+giường vì thế phải ĐI LÊN ĐƯỢC (`solid: false`), nếu không thì đặt nhân vật lên
+đó là vỡ ngay bất biến "người chơi nằm trong ô solid".
+
+Tư thế nằm là sprite đứng XOAY 90°, không phải một bộ khung hình mới: trong
+tranh nhìn từ trên xuống, một hình xoay ngang đọc ra ngay là "đang nằm", và nó
+rẻ hơn hẳn bốn khung hình chỉ dùng đúng một giây mỗi ngày.
+
 ### Chia vùng đất: ruộng, rừng, và cái hồ (core 1.9)
 
 `tiles.json:zones[]` khai những VÙNG có luật riêng — khác `pens` ở chỗ nó nói về

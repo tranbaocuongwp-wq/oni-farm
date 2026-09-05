@@ -660,9 +660,22 @@ export function createRenderer(
        hiểu mình đang cầm cái gì. Nhún nhẹ theo bước đi để nó trông có sức nặng. */
     const vac = s.carry ? (atlas.props[s.carry] ?? null) : null;
     const nhun = vac && p.moving ? (Math.floor(p.anim * 8) % 2 === 0 ? 0 : 1) : 0;
+    /* ĐANG NGỦ: vẽ nhân vật NẰM NGANG trên giường bằng cách xoay 90°. Không
+       phải một bộ sprite nằm riêng, nhưng trong tranh nhìn từ trên xuống thì
+       một hình đứng xoay ngang đọc ra ngay là "đang nằm" — và nó rẻ hơn hẳn
+       việc vẽ thêm bốn khung hình chỉ dùng đúng một giây mỗi ngày. */
+    const nam = s.sleeping;
     items.push({
       base: Math.round(p.y) + 5,
       run: () => {
+        if (nam) {
+          g.save();
+          g.translate(px + TILE / 2, py + 11);
+          g.rotate(Math.PI / 2);
+          g.drawImage(img, -TILE / 2, -11);
+          g.restore();
+          return;
+        }
         // công cụ vẽ SAU (đè lên) người khi ở trước mặt/dưới, TRƯỚC khi giơ lên phía sau
         if (toolRef && raising && dir !== "down") g.drawImage(toolRef.img, toolRef.x, toolRef.y);
         g.drawImage(img, px, py);
@@ -906,7 +919,13 @@ export function createRenderer(
     drawNight(s, lights);
     drawWeatherScreen(timeSec, opts.weather, opts.reduceMotion);
 
-    const fade = s.sleeping ? Math.max(opts.fade, 0.55) : opts.fade;
+    /* Mờ DẦN theo `busy` còn lại thay vì đứng ở một mức cố định: nhìn thấy màn
+       tối dần mới ra "thiếp đi", còn một bức màn xám bật lên rồi tắt thì chỉ
+       là một khung hình lạ chen vào giữa. */
+    const nguSec = Math.max(0.0001, content.balance.sleepSeconds ?? 0);
+    const fade = s.sleeping
+      ? Math.max(opts.fade, Math.min(1, 1 - s.busy / nguSec))
+      : opts.fade;
     if (fade > 0.001) {
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.fillStyle = `rgba(0,0,0,${Math.min(1, fade)})`;

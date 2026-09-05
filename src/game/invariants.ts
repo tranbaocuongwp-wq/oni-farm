@@ -552,18 +552,7 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
     if (storeBefore !== storeAfter)
       notes.push(`kho: giữ ${storeAfter}/${storeBefore} ô có đồ (content đổi số ô)`);
 
-    // ---- mở khoá / thống kê ---------------------------------------------
-    const unlocked = state.unlocked.filter((u) => {
-      if (u.startsWith("seed:")) {
-        if (content.crops[u.slice(5)]) return true;
-        notes.push(`bỏ mở khoá '${u}' — cây không còn`);
-        return false;
-      }
-      if (content.buildings[u]) return true;
-      notes.push(`bỏ mở khoá '${u}' — công trình không còn`);
-      return false;
-    });
-
+    // ---- thống kê --------------------------------------------------------
     const built: Record<string, number> = {};
     for (const [k, v] of Object.entries(state.stats.built ?? {})) {
       if (Number.isFinite(v) && v > 0) built[k] = Math.floor(v);
@@ -621,7 +610,6 @@ export function migrateForContent(state: GameState, content: Content): MigrateRe
       planCursor: Number.isFinite(state.planCursor) ? Math.max(0, Math.floor(state.planCursor)) : 0,
       sel,
       carry,
-      unlocked,
       stagesDone: [...state.stagesDone],
       goalsDone: [...state.goalsDone],
       stats: { ...state.stats, built, cured },

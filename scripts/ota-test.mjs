@@ -85,7 +85,6 @@ reject("ô bắt đầu nằm ngoài bản đồ", (p) => {
 reject("ô bắt đầu trỏ vào bản đồ không tồn tại", (p) => {
   p.tiles.spawn = { map: "khongCo", x: 1, y: 1 };
 });
-reject("progression mở khoá cây không tồn tại", (p) => p.progression.stages[1].unlocks.push("seed:khongCo"));
 reject("progression require khoá thống kê lạ", (p) => (p.progression.goals[0].require = { soLanNhayLen: 3 }));
 reject("startSeeds trỏ vào cây không tồn tại", (p) => (p.balance.startSeeds = { "seed:khongCo": 3 }));
 reject("hotbarSlots lớn hơn inventorySlots", (p) => (p.balance.hotbarSlots = 999));
@@ -121,17 +120,6 @@ reject("legend dùng vật thể chưa định nghĩa", (p) => {
 });
 reject("có thiết bị tiêu điện nhưng không có nguồn điện", (p) => {
   for (const b of p.buildings.buildings) b.power.produce = 0;
-});
-reject("thêm cây mà quên mốc mở khoá — cây sẽ không bao giờ mua được", (p) => {
-  p.crops.crops.push({
-    ...clone(p.crops.crops[0]),
-    id: "duaGang",
-    name: "Dưa gang",
-    seedName: "Hạt dưa gang",
-  });
-});
-reject("một cây được mở khoá ở HAI mốc khác nhau", (p) => {
-  p.progression.stages[3].unlocks.push("seed:lettuce");
 });
 reject("weather: tổng weight = 0 thì không rút thăm được", (p) => {
   for (const w of p.weather.weathers) w.weight = 0;
@@ -184,9 +172,6 @@ reject("legend dựng một công trình không có thật", (p) => (p.tiles.leg
 /* THỨC ĂN — mỗi luật một cách làm hỏng ván chơi mà nhìn content thì không thấy. */
 reject("loài ăn một thứ không tồn tại", (p) => (p.actors.animals[0].feed = ["item:khongCoThat"]));
 reject("khu đổ được một thứ không tồn tại", (p) => (p.tiles.pens[0].feeds = ["item:khongCoThat"]));
-reject("thức ăn bày bán nhưng không mốc nào mở khoá", (p) => {
-  p.items.materials.push({ id: "camMaQuai", name: "Cám ma quái", sellPrice: 3, buyPrice: 9 });
-});
 reject("vùng đất tràn ra ngoài bản đồ", (p) => (p.tiles.zones[0].x = 9000));
 reject("vùng đất trỏ vào bản đồ không có", (p) => (p.tiles.zones[0].map = "hamMo"));
 reject("kind vùng lạ", (p) => (p.tiles.zones[0].kind = "bai_bien"));
@@ -234,14 +219,11 @@ const addCrop = (p) => {
     growthDays: [2, 2, 3],
   });
 };
-accept("thêm một cây hoàn toàn mới (kèm mốc mở khoá)", (p) => {
+accept("thêm một cây hoàn toàn mới", (p) => {
   addCrop(p);
-  p.progression.stages[p.progression.stages.length - 1].unlocks.push("seed:duaGang");
 });
 accept("gỡ bỏ một cây (kèm mọi tham chiếu tới nó)", (p) => {
   p.crops.crops = p.crops.crops.filter((c) => c.id !== "pumpkin");
-  for (const st of p.progression.stages)
-    st.unlocks = st.unlocks.filter((u) => u !== "seed:pumpkin");
 });
 accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   p.maps.farm = { w: 5, h: 3, rows: ["TTTTT", "T:::T", "TTTTT"] };

@@ -183,7 +183,7 @@
     {
       "id": "bed",
       "name": "Giường",
-      "solid": true,
+      "solid": false,
       "interact": "SLEEP",
       "art": {
         "body": "#d9c9a3",

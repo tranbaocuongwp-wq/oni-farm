@@ -207,26 +207,17 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
     }
 
     case "unlockAll": {
-      const all = new Set(d.s.unlocked);
-      for (const id of content.cropOrder) all.add(`seed:${id}`);
-      // `buildable: false` là ĐỊA HÌNH dựng sẵn (hàng rào các khu chuồng), không
-      // phải hàng chưa mở khoá. Mở nó ra thì cửa hàng bán một thứ mà cả bộ luật
-      // xây dựng từ chối đặt — nút "mở hết" hoá ra tạo thêm một món hỏng.
-      for (const id of content.buildingOrder)
-        if (content.buildings[id]?.buildable !== false) all.add(id);
-      // Vật nuôi cũng phải mở — nút này hứa "mở hết", mà từ khi có chăn nuôi thì
-      // nó vẫn chỉ mở cây với công trình, nên bấm xong tab Vật nuôi vẫn khoá
-      // sạch. Duyệt thẳng content chứ không liệt kê tay, để loài thêm sau tự có.
-      for (const id of content.animalOrder) {
-        if (content.animals[id]?.job === "pest") continue;
-        all.add(`animal:${id}`);
-      }
+      /* Không còn khoá nào để mở — cửa hàng bán tất từ đầu. Nút này giờ chỉ
+         ĐÁNH DẤU mọi mốc là đã qua, để thử nhanh phần cuối lộ trình mà không
+         phải cày thật. Giữ tên `unlockAll` cho save/replay cũ khỏi vỡ. */
       const stages = new Set(d.s.stagesDone);
       for (const st of content.stages) stages.add(st.id);
+      const goals = new Set(d.s.goalsDone);
+      for (const g of content.goals) goals.add(g.id);
       const s = touch(d);
-      s.unlocked = [...all];
       s.stagesDone = [...stages];
-      toastText(d, "[debug] đã mở hết mốc", "good");
+      s.goalsDone = [...goals];
+      toastText(d, "[debug] đã đánh dấu xong mọi mốc", "good");
       return;
     }
 

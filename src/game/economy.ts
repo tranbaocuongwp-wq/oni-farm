@@ -5,24 +5,20 @@
    progression — reduce() gọi applyProgression() một lần sau cùng.
 ============================================================================ */
 
-import type { Content, GameState } from "./types.ts";
+import type { Content } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dStats, setInv, toastKey, touch } from "./state.ts";
 import { addItem, canAdd, countItem, cropSlots, removeItem } from "./inventory.ts";
-import { buyPriceOf, itemName, sellPriceOf, shopItemId, shopKey } from "./items.ts";
+import { buyPriceOf, itemName, sellPriceOf, shopItemId } from "./items.ts";
 import { cropInSeason } from "./season.ts";
 
-/** Món này có đang bày bán (đã mở khoá) không. Nhận cả 'sprinkler' lẫn 'build:sprinkler'. */
-export function canBuy(state: GameState, id: string): boolean {
-  return state.unlocked.includes(shopKey(id));
-}
+/* Không còn `canBuy`: cửa hàng bán tất, điều kiện duy nhất là TIỀN — và tiền
+   thì `buy()` kiểm ngay dưới đây. Giữ một hàm luôn trả true chỉ tổ làm nơi gọi
+   tưởng còn một luật nào đó. */
 
 export function buy(d: Draft, content: Content, id: string, n: number): void {
   const count = Math.floor(n);
   if (!Number.isFinite(count) || count <= 0) return;
-
-  const key = shopKey(id);
-  if (!d.s.unlocked.includes(key)) return; // chưa mở khoá: im lặng từ chối
 
   const itemIdent = shopItemId(id, content);
   if (!itemIdent) return;

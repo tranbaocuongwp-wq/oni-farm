@@ -1,5 +1,10 @@
 /* ============================================================================
-   PROGRESSION — mốc mở khoá và mục tiêu.
+   PROGRESSION — MỐC tiến độ và mục tiêu.
+
+   KHÔNG còn mở khoá hàng hoá: cửa hàng bán mọi thứ ngay từ đầu, có tiền thì
+   mua. Mốc ở đây chỉ ĐÁNH DẤU chặng đường và nói một câu chúc mừng. Bày ra
+   bốn ô "??? chưa mở" là bày bốn lời hứa mà người chơi không làm gì được với
+   chúng — thà cho họ nhìn thấy giá rồi tự quyết có đủ tiền hay không.
 
    Hàm THUẦN, không phụ thuộc draft: nhận state + content, trả về phần DELTA
    cần áp. Nhờ vậy không có vòng import với state.ts, và UI cũng gọi được để
@@ -13,8 +18,6 @@
 import type { Content, GameState, LogEntry, Requirement } from "./types.ts";
 
 export interface ProgressionResult {
-  /** id mở khoá MỚI (chưa có trong state.unlocked) */
-  unlocked: string[];
   stagesDone: string[];
   goalsDone: string[];
   toasts: { text: string; kind: LogEntry["kind"] }[];
@@ -60,26 +63,15 @@ export function requirementProgress(state: GameState, req: Requirement): number 
   return sum / entries.length;
 }
 
-/** Một id (dạng khoá cửa hàng) đã mở khoá chưa. */
-export function isUnlocked(state: GameState, shopId: string): boolean {
-  return state.unlocked.includes(shopId);
-}
-
 /** Tính phần mới đạt được. Trả null nếu không có gì mới (khỏi tạo rác). */
 export function evaluateProgression(state: GameState, content: Content): ProgressionResult | null {
-  const res: ProgressionResult = { unlocked: [], stagesDone: [], goalsDone: [], toasts: [] };
+  const res: ProgressionResult = { stagesDone: [], goalsDone: [], toasts: [] };
   const doneStages = new Set(state.stagesDone);
-  const haveUnlocked = new Set(state.unlocked);
 
   for (const st of content.stages) {
     if (doneStages.has(st.id)) continue;
     if (!meetsRequirement(state, st.require)) continue;
     res.stagesDone.push(st.id);
-    for (const u of st.unlocks) {
-      if (haveUnlocked.has(u)) continue;
-      haveUnlocked.add(u);
-      res.unlocked.push(u);
-    }
     if (st.toast) res.toasts.push({ text: st.toast, kind: "good" });
   }
 
@@ -92,7 +84,6 @@ export function evaluateProgression(state: GameState, content: Content): Progres
   }
 
   if (
-    res.unlocked.length === 0 &&
     res.stagesDone.length === 0 &&
     res.goalsDone.length === 0 &&
     res.toasts.length === 0

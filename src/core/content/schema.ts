@@ -722,6 +722,7 @@ export function validateBalance(raw: unknown): string[] {
     ["tilledIdleDays", 0, 999],
     ["troughMax", 1, 999],
     ["forestRegrowChance", 0, 1],
+    ["sleepSeconds", 0, 10],
   ] as [string, number, number][])
     if (raw[k] !== undefined) c.num(raw, k, min, max);
 
@@ -901,8 +902,9 @@ export function validateProgression(raw: unknown): string[] {
       }
       if (key === "stages") {
         k.str(item, "name");
-        const un = k.arr(item, "unlocks");
-        if (un) un.forEach((u, j) => { if (!isStr(u)) k.fail(`unlocks[${j}]`, "phải là chuỗi"); });
+        /* `unlocks` đã bỏ hẳn: cửa hàng bán mọi thứ ngay từ đầu. Pack cũ còn
+           trường đó thì BỎ QUA, không báo lỗi — nó chỉ là dữ liệu thừa, không
+           làm hỏng gì, và từ chối cả pack vì một trường thừa là quá tay. */
       } else {
         k.str(item, "text");
       }

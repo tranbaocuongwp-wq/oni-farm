@@ -38,5 +38,6 @@
   "sickYieldMul": 0.5,
   "noonDryMinutes": 780,
   "troughMax": 12,
-  "forestRegrowChance": 0.06
+  "forestRegrowChance": 0.06,
+  "sleepSeconds": 1.1
 }

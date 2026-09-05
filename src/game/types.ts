@@ -465,6 +465,14 @@ export interface Balance {
    * 0 = tắt hẳn, chặt xong là hết.
    */
   forestRegrowChance?: number;
+  /**
+   * Bấm NGỦ ở giường thì mất ngần này GIÂY THẬT để leo lên nằm rồi màn mờ dần.
+   *
+   * Trước đây bấm một cái là sang hôm sau ngay lập tức — đúng luật, nhưng mắt
+   * không kịp thấy chuyện gì vừa xảy ra, và cái giường thành một cái nút.
+   * 0 = tắt diễn hoạt, ngủ tức thì như cũ.
+   */
+  sleepSeconds?: number;
 }
 
 export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt";
@@ -632,7 +640,6 @@ export interface ProgressionStage {
   id: string;
   name: string;
   require: Requirement;
-  unlocks: string[];
   toast?: string;
 }
 
@@ -959,8 +966,6 @@ export interface GameState {
    */
   carry?: string | null;
 
-  /** id đã mở khoá: 'seed:tomato', 'sprinkler'... — chặn hàng trong cửa hàng */
-  unlocked: string[];
   stagesDone: string[];
   goalsDone: string[];
   stats: Stats;

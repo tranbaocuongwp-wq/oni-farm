@@ -236,18 +236,11 @@ function countInv(store, id) {
   return n;
 }
 
+/** Nạp tiền. Từ khi bỏ hệ mở khoá thì đây là ĐIỀU KIỆN DUY NHẤT để mua được —
+ *  giữ tên cũ để các kịch bản cũ khỏi phải sửa hàng loạt. */
 function unlockAll(store) {
   setState(store, (s) => {
     s.money = 100000;
-    const all = new Set(s.unlocked);
-    for (const id of content.cropOrder) all.add(`seed:${id}`);
-    for (const id of content.buildingOrder) all.add(id);
-    // Thức ăn bán được cũng qua mốc mở khoá, cùng luật với hạt và công trình.
-    for (const id of content.materialOrder)
-      if ((content.materials[id].buyPrice ?? 0) > 0) all.add(`item:${id}`);
-    for (const id of content.animalOrder)
-      if (content.animals[id]?.job !== "pest") all.add(`animal:${id}`);
-    s.unlocked = [...all];
   });
 }
 
@@ -500,30 +493,47 @@ test("5. điện: không pin thì drone đứng im, có pin thì thu hoạch", (
 /* 6. Progression                                                             */
 /* ========================================================================== */
 
-test("6. mốc mở khoá bắn đúng thứ tự, hàng chưa mở khoá không mua được", () => {
+test("6. CÓ TIỀN LÀ MUA ĐƯỢC, không mốc nào chặn; mốc chỉ đánh dấu tiến độ", () => {
   const store = mkStore();
   deepEq(store.getState().stagesDone, ["start"], "mốc start áp ngay từ createNewGame");
-  deepEq(
-    store.getState().unlocked,
-    ["seed:lettuce", "road"],
-    "mốc start mở hạt xà lách + đường nhựa (hàng rào KHÔNG còn mua được: khu chuồng dựng sẵn)",
+
+  /* Cửa hàng bán TẤT từ ngày đầu. Trước đây hàng khoá theo mốc, và người chơi
+     mở tab lên thấy bốn ô "??? chưa mở" — bốn lời hứa mà họ không làm gì được
+     với chúng. Giờ điều kiện duy nhất là TIỀN. */
+  setState(store, (s) => { s.money = 5000; });
+  const gia = content.crops.tomato.seedPrice;
+  const tien0 = store.getState().money;
+  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
+  ok(
+    store.getState().inv.some((v) => v && v.id === "seed:tomato"),
+    "ngày đầu đã mua được hạt cà chua — không chờ mốc nào",
+  );
+  eq(store.getState().money, tien0 - gia, "trừ đúng tiền");
+
+  // …còn KHÔNG đủ tiền thì vẫn bị từ chối, và không mất gì
+  setState(store, (s) => { s.money = 1; });
+  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
+  eq(store.getState().money, 1, "thiếu tiền: không trừ");
+  eq(countInv(store, "seed:tomato"), 1, "…và không nhận thêm hạt nào");
+
+  // vật nuôi cũng vậy: đủ tiền là gọi xe chở tới ngay
+  setState(store, (s) => { s.money = 99999; });
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  ok(
+    store.getState().entities.some((e) => e.kind === "vehicle"),
+    "mua được con bò từ ngày đầu — xe đã lên đường",
   );
 
-  // mua hàng chưa mở khoá → bị từ chối, không mất tiền
-  setState(store, (s) => {
-    s.money = 5000;
-  });
-  const money0 = store.getState().money;
-  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
-  eq(store.getState().money, money0, "mua hạt cà chua khi chưa mở khoá: không trừ tiền");
-  ok(!store.getState().inv.some((v) => v && v.id === "seed:tomato"), "không nhận được hạt cà chua");
-  store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
-  ok(!store.getState().inv.some((v) => v && v.id === "build:sprinkler"), "không mua được vòi tưới");
+  /* MỐC vẫn chạy, chỉ là nó không CHẶN gì nữa: nó đánh dấu chặng đường và nói
+     một câu chúc mừng. Mốc chỉ được đánh giá sau một action ĐỔI ĐƯỢC state.
 
-  // thu hoạch 5 cây → mốc 'pro'
-  walkTo(store, HOME.x, HOME.y);
-  setState(store, (s) => {
-    s.money = 100; // để mốc 'mech' (money 800) chưa bắn
+     Dùng store MỚI: phần trên vừa nạp gần trăm nghìn để thử mua, mà mấy mốc
+     giữa lộ trình đo bằng TIỀN — nạp tiền là chúng bắn hết, và phép so thứ tự
+     mốc bên dưới không còn nói lên điều gì. */
+  const st2 = mkStore();
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => {
+    s.money = 100;
     for (const p of PLOTS) {
       setTile(s, p.x, p.y, {
         tilled: true,
@@ -531,29 +541,18 @@ test("6. mốc mở khoá bắn đúng thứ tự, hàng chưa mở khoá không
       });
     }
   });
-  for (let i = 0; i < 5; i++) use(store, PLOTS[i].x, PLOTS[i].y);
-  eq(store.getState().stats.harvested, 5, "đã thu hoạch 5");
-  deepEq(store.getState().stagesDone, ["start", "pro"], "mốc 'pro' bắn sau mốc 'start'");
-  ok(store.getState().unlocked.includes("seed:bokchoy"), "seed:bokchoy đã mở khoá ở mốc 'pro'");
-  ok(!store.getState().unlocked.includes("seed:tomato"), "cà chua vẫn khoá: nó nằm ở mốc 'mech'");
+  for (let i = 0; i < 5; i++) use(st2, PLOTS[i].x, PLOTS[i].y);
+  eq(st2.getState().stats.harvested, 5, "đã thu hoạch 5");
+  deepEq(st2.getState().stagesDone, ["start", "pro"], "mốc 'pro' bắn sau mốc 'start'");
+  ok(
+    st2.getState().log.some((l) => l.text.includes("Vào nghề")),
+    "…và nói một câu chúc mừng, không hứa mở khoá gì cả",
+  );
 
-  // hàng vừa mở khoá là mua được ngay
-  store.dispatch({ t: "BUY", id: "seed:bokchoy", n: 1 });
-  ok(store.getState().inv.some((v) => v && v.id === "seed:bokchoy"), "mua được hạt cải thìa sau khi mở khoá");
-
-  // Tiền đủ giữa ngày là mốc 'mech' bắn ngay, không cần ngủ — nhưng mốc chỉ được
-  // ĐÁNH GIÁ sau một action ĐỔI ĐƯỢC state. Đặt thẳng money rồi thử mua hàng còn
-  // khoá thì action bị từ chối, không có gì để đánh giá, và mốc vẫn nằm im.
-  setState(store, (s) => {
-    s.money = 900;
-  });
-  ok(!store.getState().stagesDone.includes("mech"), "đặt thẳng money chưa đủ làm mốc bắn");
-  store.dispatch({ t: "BUY", id: "seed:bokchoy", n: 1 });
-  ok(store.getState().stagesDone.includes("mech"), "một action thành công là mốc 'mech' bắn ngay");
-  ok(store.getState().unlocked.includes("sprinkler"), "vòi tưới đã mở khoá");
-
-  store.dispatch({ t: "BUY", id: "seed:tomato", n: 1 });
-  ok(store.getState().inv.some((v) => v && v.id === "seed:tomato"), "mua được cà chua sau mốc 'mech'");
+  setState(st2, (s) => { s.money = 900; });
+  ok(!st2.getState().stagesDone.includes("mech"), "đặt thẳng money chưa đủ làm mốc bắn");
+  st2.dispatch({ t: "BUY", id: "seed:bokchoy", n: 1 });
+  ok(st2.getState().stagesDone.includes("mech"), "một action thành công là mốc 'mech' bắn ngay");
 });
 
 /* ========================================================================== */
@@ -693,17 +692,10 @@ test("9. tất định: cùng seed + cùng chuỗi action → hai state y hệt"
 test("10. content gỡ 'pumpkin' → migrateForContent không ném lỗi, cây bí biến mất", () => {
   const raw = rawPack();
   raw.crops = { ...raw.crops, crops: raw.crops.crops.filter((c) => c.id !== "pumpkin") };
-  raw.progression = {
-    ...raw.progression,
-    stages: raw.progression.stages.map((s) => ({
-      ...s,
-      unlocks: s.unlocks.filter((u) => u !== "seed:pumpkin"),
-    })),
-  };
   const newContent = buildContent(raw);
   ok(!newContent.crops.pumpkin, "content mới không còn bí đỏ");
 
-  // save cũ có bí đỏ trên ruộng, trong túi, và trong danh sách mở khoá
+  // save cũ có bí đỏ trên ruộng và trong túi
   const store = mkStore(31337);
   setState(store, (s) => {
     setTile(s, PLOTS[0].x, PLOTS[0].y, {
@@ -717,7 +709,6 @@ test("10. content gỡ 'pumpkin' → migrateForContent không ném lỗi, cây b
     s.inv[5] = { id: "seed:pumpkin", n: 3 };
     s.inv[6] = { id: "crop:pumpkin", n: 2 };
     s.inv[7] = { id: "crop:lettuce", n: 4 };
-    s.unlocked = [...s.unlocked, "seed:pumpkin"];
   });
   const old = clone(store.getState());
 
@@ -735,7 +726,6 @@ test("10. content gỡ 'pumpkin' → migrateForContent không ném lỗi, cây b
   );
   ok(!res.state.inv.some((v) => v && v.id.endsWith(":pumpkin")), "vật phẩm bí đỏ bị gỡ khỏi túi");
   ok(res.state.inv.some((v) => v && v.id === "crop:lettuce" && v.n === 4), "nông sản khác còn nguyên");
-  ok(!res.state.unlocked.includes("seed:pumpkin"), "gỡ mở khoá bí đỏ");
   ok(res.notes.length > 0, "phải có ghi chú migrate");
   deepEq(checkInvariants(res.state, newContent), [], "bất biến vẫn xanh với content mới");
   deepEq(old, clone(store.getState()), "migrate không sửa state cũ");
@@ -789,8 +779,7 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
         use(store, p.x, p.y);
       }
       if (tile(store, p.x, p.y).tilled && !tile(store, p.x, p.y).crop) {
-        const seed = store.getState().unlocked.includes("seed:tomato") &&
-          store.getState().inv.some((v) => v && v.id === "seed:tomato")
+        const seed = store.getState().inv.some((v) => v && v.id === "seed:tomato")
           ? "seed:tomato"
           : "seed:lettuce";
         if (store.getState().inv.some((v) => v && v.id === seed)) {
@@ -806,11 +795,11 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
 
     // mua thêm hạt khi rẻ, xây khi đủ điều kiện
     const s = store.getState();
-    if (s.unlocked.includes("seed:lettuce") && s.money > 300)
+    if (s.money > 300)
       store.dispatch({ t: "BUY", id: "seed:lettuce", n: 3 });
-    if (s.unlocked.includes("seed:tomato") && s.money > 600)
+    if (s.money > 600)
       store.dispatch({ t: "BUY", id: "seed:tomato", n: 2 });
-    if (built === 0 && s.unlocked.includes("sprinkler") && s.money > 500) {
+    if (built === 0 && s.money > 500) {
       store.dispatch({ t: "BUY", id: "sprinkler", n: 1 });
       if (store.getState().inv.some((v) => v && v.id === "build:sprinkler")) {
         // đặt vật thể solid lên chính ô mình đứng → phải bị từ chối (không tự nhốt mình)
@@ -820,7 +809,7 @@ test("11. chạy dài 30 ngày có mua bán/xây dựng, bất biến xanh sau m
         if (tile(store, PLOTS[4].x, PLOTS[4].y).b === "sprinkler") built = 1;
       }
     }
-    if (solared === 0 && store.getState().unlocked.includes("solar") && store.getState().money > 700) {
+    if (solared === 0 && store.getState().money > 700) {
       store.dispatch({ t: "BUY", id: "solar", n: 1 });
       if (store.getState().inv.some((v) => v && v.id === "build:solar")) {
         place(store, "solar", PLOTS[3].x, PLOTS[3].y);
@@ -930,10 +919,21 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   eq(p1.moving, false, "dịch chuyển xong thì đứng yên");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau dịch chuyển");
 
-  // --- giường mới ngủ được ---
+  // --- giường mới ngủ được, và có DIỄN HOẠT leo lên nằm ---
   walkTo(store, 2, 3);
   store.dispatch({ t: "INTERACT", x: 2, y: 2 }); // 'E' — giường
-  eq(store.getState().day, day0 + 1, "giường = ngủ");
+  const ngu = store.getState();
+  eq(ngu.sleeping, true, "bấm giường: bắt đầu leo lên nằm");
+  eq(ngu.day, day0, "…nhưng CHƯA sang hôm sau — mắt phải kịp thấy chuyện gì xảy ra");
+  eq(Math.floor(ngu.player.x / TILE), 2, "nhân vật nằm ĐÚNG lên ô giường");
+  eq(Math.floor(ngu.player.y / TILE), 2, "…đúng hàng của giường");
+  ok(ngu.busy > 0, "đang khoá thao tác trong lúc leo lên giường");
+  // đang nằm thì không cày cấy gì được nữa
+  store.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 1 / 60 });
+  eq(Math.floor(store.getState().player.x / TILE), 2, "đang leo lên giường thì không đi đâu được");
+  store.dispatch({ t: "TICK", dt: (content.balance.sleepSeconds ?? 0) + 0.01 });
+  eq(store.getState().day, day0 + 1, "hết diễn hoạt thì mới sang hôm sau");
+  eq(store.getState().sleeping, false, "…và tỉnh dậy");
 
   // --- cửa trong nhà đưa ra ngoài ---
   walkTo(store, 6, 6);
@@ -1299,10 +1299,16 @@ test("23. hết nước không tưới được; múc đầy ở giếng và ở
 /* ========================================================================== */
 
 /** Đưa nhân vật vào đứng cạnh bàn chế tạo trong nhà, đi bằng cửa như người chơi. */
+/** Đứng cạnh BÀN CHẾ TẠO. Bàn nằm NGOÀI TRỜI, ngay cạnh lối ra cửa nhà —
+ *  không còn phải chui vào phòng ngủ mới chế được cái rìu. */
 function goToBench(store) {
-  walkTo(store, 16, 4);
-  store.dispatch({ t: "PORTAL", x: 16, y: 3 }); // vào bản đồ 'house', hiện ra ở (6,6)
-  walkTo(store, 11, 5); // ngay dưới bàn chế tạo 'C' ở (11,4)
+  const s = store.getState();
+  let ban = null;
+  for (let y = 0; y < s.h && !ban; y++)
+    for (let x = 0; x < s.w; x++)
+      if (s.tiles[idx(s.w, x, y)]?.prop === "bench") { ban = { x, y }; break; }
+  ok(!!ban, "bản đồ có bàn chế tạo");
+  walkTo(store, ban.x, ban.y + 1);
 }
 
 test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì bị từ chối", () => {
@@ -1345,8 +1351,29 @@ test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì b�
   selectItem(store, "tool:can2");
   eq(waterCapacity(store.getState(), content), content.tools.can2.capacity, "cầm bình lớn thì chứa nhiều hơn");
 
-  // --- xa bàn thì không chế được (ra hẳn ngoài nông trại) ---
-  walkTo(store, 6, 6);
+  // --- xa bàn thì không chế được ---
+  // Tìm một ô đứng được và ĐỦ XA cái bàn, thay vì chép cứng một toạ độ mà đợt
+  // vẽ lại bản đồ sau có thể biến thành mặt nước.
+  {
+    const s = store.getState();
+    let ban = null;
+    for (let y = 0; y < s.h && !ban; y++)
+      for (let x = 0; x < s.w; x++)
+        if (s.tiles[idx(s.w, x, y)]?.prop === "bench") { ban = { x, y }; break; }
+    let xa = null;
+    for (let y = 1; y < s.h - 1 && !xa; y++)
+      for (let x = 1; x < s.w - 1; x++) {
+        if (Math.hypot(x - ban.x, y - ban.y) < 8) continue;
+        if (isSolid(s, content, x, y)) continue;
+        xa = { x, y };
+        break;
+      }
+    ok(!!xa, "tìm được chỗ đứng xa bàn chế tạo");
+    setState(store, (st) => {
+      st.player.x = xa.x * TILE + TILE / 2;
+      st.player.y = xa.y * TILE + TILE / 2;
+    });
+  }
   store.dispatch({ t: "PORTAL", x: 6, y: 7 });
   const before = store.getState();
   store.dispatch({ t: "CRAFT", id: "pickaxe" });
@@ -1564,19 +1591,13 @@ test("28. các lệnh DEBUG chạy đúng và không vỡ bất biến", () => {
   ok(propsAround() > before, "addGrass/addTrees có rắc thêm vật thể");
   green("addGrass/addTrees");
 
+  // Không còn khoá nào để mở: nút này giờ ĐÁNH DẤU mọi mốc và mục tiêu là xong,
+  // để thử nhanh phần cuối lộ trình mà không phải cày thật.
   store.dispatch({ t: "DEBUG", op: "unlockAll" });
-  for (const id of content.cropOrder)
-    ok(store.getState().unlocked.includes(`seed:${id}`), `unlockAll mở hạt ${id}`);
-  for (const id of content.buildingOrder) {
-    // `buildable: false` = địa hình dựng sẵn (hàng rào khu chuồng), không phải
-    // hàng trong cửa hàng — "mở hết" cố ý KHÔNG mở nó.
-    const xayDuoc = content.buildings[id].buildable !== false;
-    eq(
-      store.getState().unlocked.includes(id),
-      xayDuoc,
-      `unlockAll ${xayDuoc ? "mở" : "KHÔNG mở"} công trình ${id}`,
-    );
-  }
+  for (const st of content.stages)
+    ok(store.getState().stagesDone.includes(st.id), `unlockAll đánh dấu xong mốc ${st.id}`);
+  for (const g of content.goals)
+    ok(store.getState().goalsDone.includes(g.id), `unlockAll đánh dấu xong mục tiêu ${g.id}`);
   green("unlockAll");
 
   store.dispatch({ t: "DEBUG", op: "materials" });
@@ -1690,9 +1711,16 @@ function leaveHouse(store) {
 }
 
 /** Ngủ trên giường trong phòng ngủ. */
+/** Leo lên giường ngủ — ĐÚNG như người chơi làm.
+ *
+ *  Từ core 1.10, bấm giường không sang ngày ngay: nhân vật nằm lên giường,
+ *  màn mờ dần trong `sleepSeconds` giây rồi mới sang hôm sau. Nên phải cho
+ *  thời gian trôi hết cú diễn hoạt, không thì store vẫn đứng ở hôm nay. */
 function sleepInBed(store) {
   walkTo(store, 2, 3);
   store.dispatch({ t: "INTERACT", x: 2, y: 2 });
+  const cho = content.balance.sleepSeconds ?? 0;
+  if (cho > 0) store.dispatch({ t: "TICK", dt: cho + 0.01 });
 }
 
 /** Ô (x,y) của NÔNG TRẠI, dù nó đang là bản đồ hoạt động hay đã cất. */
@@ -3058,8 +3086,6 @@ test("55. TICK không bao giờ đụng state.seed — dây bẫy của tính t�
 
   setState(store, (s) => {
     s.money = 999999;
-    for (const id of ["chicken", "duck", "goat", "pig", "cow", "sheep"])
-      if (!s.unlocked.includes(`animal:${id}`)) s.unlocked.push(`animal:${id}`);
   });
   // thả 20 con quanh một khoảng đất trống
   setState(store, (s) => {
@@ -3261,15 +3287,17 @@ test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", 
   const gate = content.tiles.gate;
   ok(drop && gate, "content có khai điểm giao và cổng vào");
 
-  // chưa mở khoá → không mua được, không trừ tiền
+  // THIẾU TIỀN → không mua được, và không mất gì. Đây là điều kiện DUY NHẤT
+  // còn lại: không còn mốc nào chặn hàng nữa.
+  setState(store, (s) => { s.money = content.animals.cow.price - 1; });
+  const ngheo = store.getState().money;
+  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
+  eq(store.getState().entities.length, 0, "thiếu tiền thì không có gì xảy ra");
+  eq(store.getState().money, ngheo, "và không trừ tiền");
+
+  // đủ tiền: trừ tiền, và XE xuất hiện ở cổng — con vật CHƯA có
   setState(store, (s) => { s.money = 99999; });
   const tien0 = store.getState().money;
-  store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
-  eq(store.getState().entities.length, 0, "chưa mở khoá thì không có gì xảy ra");
-  eq(store.getState().money, tien0, "và không trừ tiền");
-
-  // mở khoá rồi: trừ tiền, và XE xuất hiện ở cổng — con vật CHƯA có
-  setState(store, (s) => { s.unlocked.push("animal:cow"); });
   store.dispatch({ t: "BUY_ANIMAL", def: "cow" });
   const s1 = store.getState();
   eq(s1.money, tien0 - content.animals.cow.price, "trừ đúng giá");
@@ -3849,7 +3877,6 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
 
   /* ---- (c) HÀNG RÀO không còn là thứ mua/xây được --------------------- */
   eq(content.buildings.fence.buildable, false, "hàng rào là địa hình dựng sẵn");
-  ok(!s0.unlocked.includes("fence"), "không mốc nào mở khoá hàng rào");
   eq(content.recipes.find((r) => r.id === "fence"), undefined, "không còn công thức đóng rào");
   unlockAll(store);
   const trong = findOpenBlock(store.getState(), 1, 1);
