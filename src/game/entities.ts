@@ -51,11 +51,25 @@ export const MAX_STEPS_PER_TICK = 8;
  *  Nhờ vậy chi phí A* là HẰNG SỐ, không phụ thuộc số con vật. */
 export const MAX_REPLANS_PER_STEP = 2;
 
-/** Trần nút mở của A* cho thực thể — thấp hơn hẳn của người chơi. */
-export const MAX_NODES_ACTOR = 900;
+/**
+ * Trần nút mở của A* cho thực thể.
+ *
+ * Phải PHỦ NỔI chính vùng nó được phép quét: vùng dây buộc 41×41 là 1681 ô, mà
+ * trần cũ là 900 — nên một đường vòng dài (quanh ao, quanh dãy chuồng) cạn ngân
+ * sách giữa chừng, trả `null`, và con vật đứng ngơ ở đầu kia hàng rào. Chi phí
+ * vẫn là hằng số theo số con: `MAX_REPLANS_PER_STEP` mới là thứ chặn tổng.
+ */
+export const MAX_NODES_ACTOR = 2000;
 
 /** Đường đi dài nhất giữ trong save. Cắt thì tới cuối tự tính lại. */
 export const MAX_PATH = 64;
+
+/**
+ * Riêng XE thì dài hơn: chúng chạy men theo đường nhựa từ cổng bản đồ tới tận
+ * bãi đậu trước kho — tuyến (30,36) → (42,5) dễ vượt 64 điểm. Cắt cụt thì xe
+ * dừng giữa đường rồi tự lập lại, ăn thêm ngân sách A* của cả đàn vật nuôi.
+ */
+export const MAX_PATH_VEHICLE = 160;
 
 /** Chỉ tìm đường trong bán kính này quanh mốc — một con kẹt góc không được
  *  phép quét cả bản đồ. */
@@ -528,13 +542,9 @@ export function actorStep(d: Draft, content: Content): void {
          · đang ở NGOÀI khu   → nhắm về ruột khu
        Rào có cổng nên đây là "tự về chuồng", không phải "bị nhốt": máng cạn thì
        nhánh tìm cỏ bên dưới vẫn dắt nó ra ngoài gặm như trước. */
-    let veKhu = false;
     let khu = cur.kind === "animal" ? penOf(content, cur) : null;
     if (khu && khu.map !== s.mapId) khu = null;
-    if (cur.kind === "animal") {
-      g = penGoal(s, content, cur, doi);
-      veKhu = g !== null;
-    }
+    if (cur.kind === "animal") g = penGoal(s, content, cur, doi);
 
     /* Đói thì nhắm thẳng vào bãi cỏ gần nhất thay vì lang thang. Bán kính hẹp
        (8 ô) cho ban ngày: con vật đi trong vài phút game thì không thể băng cả
@@ -578,15 +588,24 @@ export function actorStep(d: Draft, content: Content): void {
       // sang ao khác qua đường bộ (mà nó cũng không đi bộ được).
       /* Dây buộc là HỘP quanh tâm, và ô XUẤT PHÁT không được kiểm — nên hộp
          phải chứa CẢ con vật lẫn đích, nếu không con bò đi lạc quá 20 ô sẽ
-         không bao giờ tìm được đường về chuồng (mọi ô kề đều rơi ra ngoài
-         hộp). Về khu thì nới hộp ra vừa đủ ôm hai đầu; còn lại giữ nguyên. */
-      leash: veKhu
-        ? {
-            x: Math.round((cx + g.x) / 2),
-            y: Math.round((cy + g.y) / 2),
-            r: Math.max(Math.abs(cx - g.x), Math.abs(cy - g.y)) / 2 + 6,
-          }
-        : { x: cx, y: cy, r: def.swims ? 6 : LEASH_TILES },
+         không bao giờ tìm được đường về chuồng (mọi ô kề đều rơi ra ngoài hộp).
+
+         Luật này áp cho MỌI đích, không riêng đường về khu. Trước đây chỉ nhánh
+         "về khu" được nới, nên con chó đi tuần dính đúng cái bẫy ấy: hộp bán
+         kính 20 quanh CHÍNH NÓ, mà bản đồ rộng 48 ô — con chuột ở nửa kia thì
+         không có đường nào, và con chó đứng im. Nuôi chó thành ra vô nghĩa, còn
+         `patrolCatch` thì chưa từng có một dòng test nào để lộ ra.
+
+         Chỉ nhánh LANG THANG không đích mới giữ hộp nhỏ: đó mới là chỗ dây buộc
+         thật sự có việc — giữ con vật khỏi đi lạc cả bản đồ. */
+      leash: {
+        x: Math.round((cx + g.x) / 2),
+        y: Math.round((cy + g.y) / 2),
+        r: Math.max(
+          def.swims ? 6 : LEASH_TILES,
+          Math.max(Math.abs(cx - g.x), Math.abs(cy - g.y)) / 2 + 6,
+        ),
+      },
     });
     if (path && path.length) {
       e.ai.path = path.slice(0, MAX_PATH);

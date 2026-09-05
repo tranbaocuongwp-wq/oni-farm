@@ -17,6 +17,10 @@ import { findPath } from "../src/game/pathfind.ts";
 import { driveable, pondDock } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn } from "../src/game/pen.ts";
 import { penSummary } from "../src/game/animals.ts";
+import { pickTask, findStoreTile } from "../src/game/workers.ts";
+import { storeHasRoom } from "../src/game/storage.ts";
+import { penWander } from "../src/game/pen.ts";
+import { MAX_ENTITIES } from "../src/game/entities.ts";
 import { calmedByPlayer, warySpeedMul } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
@@ -6275,6 +6279,315 @@ test("94. vòng lặp NUÔI → LẤY SẢN PHẨM → BÁN chạy trọn một 
     "kho không còn sữa",
   );
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau trọn một vòng");
+});
+
+
+test("95. vòng đời một người làm: tay đầy → về kho → KHO ĐẦY thì đứng chờ", () => {
+  const store = mkStore(1401);
+  walkTo(store, HOME.x, HOME.y);
+  setState(store, (s) => { s.money = 999999; });
+  store.dispatch({ t: "HIRE", job: "crops" });
+  const nguoi = store.getState().entities.find((e) => e.kind === "worker");
+  ok(!!nguoi, "đã thuê được một người làm");
+  const w = () => store.getState().entities.find((e) => e.kind === "worker");
+  const deo = () => (w()?.worker.carry ?? []).reduce((n, v) => n + (v ? v.n : 0), 0);
+
+  /* --- (a) KHÔNG nhận việc thu khi chỗ trống < sản lượng tối đa ---
+     `giveToWorker` kẹp theo `carryMax` rồi trả về số thật sự nhận, nhưng
+     `doWork` vẫn xoá cây bất kể — nên ở mức `carryMax − 1`, thu một luống cho
+     ba quả là hai quả bốc hơi. */
+  const cay = content.cropOrder.find((id) => content.crops[id].yieldMax > 1);
+  ok(!!cay, "có ít nhất một loại cây cho hơn một quả");
+  const yMax = content.crops[cay].yieldMax;
+  const o = findOpenBlock(store.getState(), 1, 1);
+  setState(store, (s) => {
+    const t = s.tiles[idx(s.w, o.x, o.y)];
+    t.tilled = true; t.wet = true; t.prop = null;
+    t.crop = { id: cay, stage: content.crops[cay].growthDays.length, grow: 0, regrown: false };
+    const e = s.entities.find((x) => x.kind === "worker");
+    e.x = o.x * TILE + 8; e.y = o.y * TILE + 8;
+    // tay gần đầy: còn đúng MỘT chỗ, ít hơn yieldMax
+    e.worker.carry = [{ id: "item:wood", n: content.workers.carryMax - 1 }];
+  });
+  const viec = pickTask(store.getState(), content, w());
+  ok(
+    !viec || !(viec.kind === "use" && viec.tx === o.x && viec.ty === o.y),
+    `chỗ trống 1 < yieldMax ${yMax}: KHÔNG nhận việc thu cây đó`,
+  );
+  ok(tile(store, o.x, o.y).crop, "…và cây vẫn còn nguyên trên ruộng");
+
+  /* --- (b) KHO ĐẦY: về kho là việc VÔ NGHĨA, nên đừng nhận ---
+     `dumpToStore` trả phần không cất được lại vào tay, nên `carried` vẫn đầy,
+     nên lượt sau lại ra lệnh "về kho" — vòng lặp không lối ra. */
+  setState(store, (s) => {
+    for (let i = 0; i < s.store.length; i++) s.store[i] = { id: "crop:" + content.cropOrder[0], n: 1 };
+    const e = s.entities.find((x) => x.kind === "worker");
+    e.worker.carry = [{ id: "item:wood", n: content.workers.carryMax }];
+  });
+  eq(storeHasRoom(store.getState().store, "item:wood"), false, "kho đã đầy thật");
+  eq(pickTask(store.getState(), content, w()), null, "kho đầy + tay đầy → KHÔNG có việc nào, đứng chờ");
+
+  // dọn một ô kho ra thì việc "về kho" quay lại ngay
+  setState(store, (s) => { s.store[0] = null; });
+  const v2 = pickTask(store.getState(), content, w());
+  eq(v2?.kind, "dump", "kho vừa có chỗ → lại về kho đổ");
+  const kho = findStoreTile(store.getState(), content);
+  eq(v2.tx, kho.x, "…đúng ô kho");
+
+  /* --- (c) SA THẢI trả lại hàng, không bốc hơi --- */
+  const truoc = store.getState().store.reduce((n, v) => n + (v ? v.n : 0), 0);
+  const tay = deo();
+  ok(tay > 0, "trước khi nghỉ, người làm còn đeo hàng");
+  store.dispatch({ t: "FIRE", id: nguoi.id });
+  eq(store.getState().entities.filter((e) => e.kind === "worker").length, 0, "đã nghỉ việc");
+  ok(
+    store.getState().store.reduce((n, v) => n + (v ? v.n : 0), 0) > truoc,
+    "hàng đang đeo được đổ vào kho, không bốc hơi",
+  );
+
+  /* --- (d) TRẦN THỰC THỂ: thuê tới đông kín thì từ chối, không vỡ bất biến --- */
+  const st2 = mkStore(1402);
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => { s.money = 9999999; });
+  let n = 0;
+  for (let i = 0; i < MAX_ENTITIES + 6; i++) {
+    st2.dispatch({ t: "HIRE", job: "crops" });
+    n = st2.getState().entities.length;
+    if (n >= MAX_ENTITIES) break;
+  }
+  st2.dispatch({ t: "HIRE", job: "crops" });
+  ok(st2.getState().entities.length <= MAX_ENTITIES, `không vượt trần ${MAX_ENTITIES}: ${st2.getState().entities.length}`);
+  deepEq(checkInvariants(st2.getState(), content), [], "bất biến vẫn sạch khi đã đông kín");
+});
+
+test("96. hết ngân sách A* thì KHÔNG bôi đen ô tốt", () => {
+  /* `workerai` từng chốt `phase:"walk"` + `tx/ty` RỒI mới kiểm `takeBudget()`
+     và cooldown. Cả hai lối thoát sớm để lại `path` rỗng, nên bước sau rơi vào
+     `markBad` — bôi đen một ô hoàn toàn đi tới được, dù A* chưa từng chạy.
+     `MAX_REPLANS_PER_STEP = 2` dùng chung với cả đàn, nên nuôi càng nhiều thì
+     càng nặng: người làm bỏ qua đúng những ô gần nhất rồi đứng thẫn thờ. */
+  const store = mkStore(1403);
+  walkTo(store, HOME.x, HOME.y);
+  setState(store, (s) => { s.money = 999999; });
+
+  /* ĐÀN TRƯỚC, THUÊ SAU — thứ tự này quan trọng.
+     `actorStep` xoay vòng theo `planCursor` và cấp ngân sách cho hai con ĐẦU
+     TIÊN gặp trong vòng ấy. Thuê trước thì người làm nằm ở chỉ số 0, tức là
+     luôn đứng đầu vòng của chính mình và không bao giờ bị cạn ngân sách. Đẩy họ
+     xuống cuối danh sách mới tái hiện được cảnh nông trại đông đúc thật. */
+  const khu = content.tiles.pens.find((p) => p.id === "cattle");
+  setState(store, (s) => {
+    let dat = 0;
+    for (let y = khu.y; y < khu.y + khu.h && dat < 20; y++)
+      for (let x = khu.x; x < khu.x + khu.w && dat < 20; x++) {
+        const t = s.tiles[idx(s.w, x, y)];
+        if (!t || t.prop !== null || t.b !== null) continue; // ô máng là ô ĐẶC
+        s.entSeq += 1;
+        s.entities.push({
+          id: s.entSeq, kind: "animal", def: "cow", map: "farm",
+          x: x * TILE + 8, y: y * TILE + 8,
+          dir: "down", anim: 0, seed: 100 + dat,
+          ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+          animal: { age: 99, fed: 0, hungryDays: 0, prod: [0] },
+        });
+        dat++;
+      }
+    ok(dat >= 12, `thả được ${dat} con vào khu để ép cạn ngân sách A*`);
+  });
+  store.dispatch({ t: "HIRE", job: "crops" });
+  setState(store, (s) => {
+    // ruộng chín ngay cạnh người làm, thừa sức đi tới
+    const e = s.entities.find((x) => x.kind === "worker");
+    e.x = HOME.x * TILE + 8; e.y = HOME.y * TILE + 8;
+  });
+  const oRuong = [];
+  setState(store, (s) => {
+    const e = s.entities.find((x) => x.kind === "worker");
+    const bx = Math.floor(e.x / TILE);
+    const by = Math.floor(e.y / TILE);
+    for (let dy = -2; dy <= 2 && oRuong.length < 6; dy++)
+      for (let dx = -2; dx <= 2 && oRuong.length < 6; dx++) {
+        const x = bx + dx, y = by + dy;
+        const t = s.tiles[idx(s.w, x, y)];
+        if (!t || t.prop || t.b || !isTillable(s, content, x, y)) continue;
+        t.tilled = true; t.wet = true;
+        t.crop = { id: content.cropOrder[0], stage: content.crops[content.cropOrder[0]].growthDays.length, grow: 0, regrown: false };
+        oRuong.push({ x, y });
+      }
+  });
+  ok(oRuong.length >= 3, `dựng được ${oRuong.length} ô chín quanh người làm`);
+
+  /* Trạng thái CHỈ CÓ THỂ xảy ra khi cú bấm bị nuốt: đang "walk", đường rỗng,
+     mà còn xa đích. Với thứ tự đúng thì không thể — hoặc A* trả về đường và
+     `path` có nội dung, hoặc A* thật sự thất bại và nhánh `else` chuyển sang
+     `idle` kèm `markBad` (lúc đó bôi đen là CHÍNH ĐÁNG). Chỉ khi ngân sách nuốt
+     mất cú lập đường thì mới còn "walk" + đường rỗng + chưa tới nơi. */
+  let treo = 0;
+  for (let k = 0; k < 900; k++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    const w0 = store.getState().entities.find((x) => x.kind === "worker");
+    if (!w0) break;
+    if (w0.ai.phase === "walk" && w0.ai.path.length === 0 && w0.ai.tx >= 0) {
+      const xa = Math.max(
+        Math.abs(Math.floor(w0.x / TILE) - w0.ai.tx),
+        Math.abs(Math.floor(w0.y / TILE) - w0.ai.ty),
+      );
+      if (xa > 1) treo++;
+    }
+  }
+  eq(treo, 0, "không khung hình nào ở trạng thái 'đang đi mà không có đường, lại còn xa đích'");
+
+  const e = store.getState().entities.find((x) => x.kind === "worker");
+  const den = new Set(e.ai.bad ?? []);
+  for (const o of oRuong) {
+    const duong = findPath(store.getState(), content, Math.floor(e.x / TILE), Math.floor(e.y / TILE),
+      new Set([idx(store.getState().w, o.x, o.y)]), { maxNodes: 4000 });
+    if (duong && duong.length)
+      ok(!den.has(idx(store.getState().w, o.x, o.y)), `ô (${o.x},${o.y}) đi tới được thì KHÔNG được nằm trong sổ đen`);
+  }
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau 900 khung hình với 21 thực thể");
+
+  /* --- và RUỘNG Ở XA vẫn tới được ---
+     Hai chỗ cùng chặn: `pickTask` chỉ quét bán kính 14, còn `findPath` bị dây
+     buộc hộp 20 ô quanh CHÍNH NGƯỜI LÀM. Ô thả người ở (41,5) mà các lô ruộng ở
+     nửa kia nông trại, nên thuê xong họ đứng im mãi mãi — đo trên trình duyệt
+     thật: 20 giây, 24 ô lúa chín, không nhặt một quả. Rồi khi nới bán kính quét
+     ra thì họ tìm thấy việc nhưng dây buộc lại làm A* trả null, và sổ đen leo
+     đủ 12 ô trong mười giây. Phải sửa CẢ HAI mới đi được. */
+  const st3 = mkStore(1406);
+  setState(st3, (s) => { s.money = 999999; });
+  st3.dispatch({ t: "HIRE", job: "crops" });
+  const cay3 = content.cropOrder[0];
+  const oXa = [];
+  setState(st3, (s) => {
+    const e = s.entities.find((x) => x.kind === "worker");
+    const bx = Math.floor(e.x / TILE);
+    const by = Math.floor(e.y / TILE);
+    for (let y = 0; y < s.h && oXa.length < 5; y++)
+      for (let x = 0; x < s.w && oXa.length < 5; x++) {
+        if (Math.max(Math.abs(x - bx), Math.abs(y - by)) < 22) continue; // XA hơn dây buộc
+        const t = s.tiles[idx(s.w, x, y)];
+        if (!t || t.prop || t.b || !isTillable(s, content, x, y)) continue;
+        t.tilled = true; t.wet = true;
+        t.crop = { id: cay3, stage: content.crops[cay3].growthDays.length, grow: 0, regrown: false };
+        oXa.push({ x, y });
+      }
+  });
+  ok(oXa.length >= 3, `dựng được ${oXa.length} ô chín ở XA hơn 22 ô`);
+
+  const chin = () =>
+    st3.getState().tiles.filter(
+      (t) => t && t.crop && t.crop.stage >= content.crops[t.crop.id].growthDays.length,
+    ).length;
+  const chin0 = chin();
+  for (let k = 0; k < 4000; k++) st3.dispatch({ t: "TICK", dt: 1 / 60 });
+  const e3 = st3.getState().entities.find((x) => x.kind === "worker");
+  eq((e3.ai.bad ?? []).length, 0, "không ô nào bị bôi đen — đường tới lô xa là có thật");
+  ok(chin() < chin0, `người làm đi tới tận lô xa và thu được (${chin0} → ${chin()})`);
+});
+
+test("97. chó tuần bắt được chuột ở ĐẦU KIA bản đồ", () => {
+  /* Dây buộc là hộp bán kính 20 quanh CHÍNH CON CHÓ, mà bản đồ rộng 48 ô — con
+     chuột ở nửa kia thì `findPath` loại sạch mọi ô, trả null, và con chó đứng
+     im. Nuôi chó thành vô nghĩa, và `patrolCatch` chưa từng có test nào để lộ. */
+  const store = mkStore(1404);
+  setState(store, (s) => {
+    // Người chơi đứng XA: luật "tới gần thì đứng lại" (kịch bản 62) đóng băng
+    // con vật CÒN NO, và con chó đang no — đứng cạnh nó là tự tay giữ nó lại.
+    s.player.x = HOME.x * TILE + TILE / 2;
+    s.player.y = HOME.y * TILE + TILE / 2;
+    s.entSeq = 2;
+    s.entities = [
+      { id: 1, kind: "animal", def: "dog", map: "farm",
+        x: 6 * TILE + 8, y: 30 * TILE + 8, dir: "down", anim: 0, seed: 21,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 99, fed: content.animals.dog.fedMinutes, hungryDays: 0, prod: [] } },
+      { id: 2, kind: "animal", def: content.animalOrder.find((a) => content.animals[a].job === "pest"),
+        map: "farm", x: 40 * TILE + 8, y: 8 * TILE + 8, dir: "down", anim: 0, seed: 22,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 1, fed: 999, hungryDays: 0, prod: [] } },
+    ];
+  });
+  const cho = () => store.getState().entities.find((e) => e.id === 1);
+  const xa0 = Math.hypot(cho().x - 40 * TILE, cho().y - 8 * TILE) / TILE;
+  ok(xa0 > 20, `con chuột ở XA hơn dây buộc: ${xa0.toFixed(0)} ô`);
+
+  /* Điều kiện phải CHẶT: lập được đường TRONG LÚC còn cách xa hơn dây buộc.
+
+     Chỉ hỏi "có bao giờ path > 0 không" thì quá lỏng — con chó lang thang cũng
+     tự trôi lại gần rồi mới lập đường, và kịch bản vẫn xanh dù dây buộc hỏng.
+     Với hộp bán kính 20 quanh CHÍNH NÓ thì ở khoảng cách này `findPath` loại
+     sạch mọi ô, nên khẳng định dưới đây không thể đúng bằng cách nào khác. */
+  const chuot = () => store.getState().entities.find((e) => e.id === 2) ?? null;
+  let lanDau = null;
+  let bat = -1;
+  for (let k = 0; k < 6000; k++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    const d0 = cho();
+    const c = chuot();
+    if (!c) { bat = k; break; }
+    if (!lanDau && (d0.ai.path?.length ?? 0) > 0)
+      lanDau = Math.max(
+        Math.abs(Math.floor(d0.x / TILE) - Math.floor(c.x / TILE)),
+        Math.abs(Math.floor(d0.y / TILE) - Math.floor(c.y / TILE)),
+      );
+  }
+  ok(lanDau !== null, "con chó có lập đường");
+  ok(
+    lanDau > 20,
+    `LẦN LẬP ĐƯỜNG ĐẦU TIÊN đã cách ${lanDau} ô — xa hơn dây buộc 20 ô, tức là hộp ôm cả hai đầu`,
+  );
+  ok(bat >= 0, `và đuổi tới nơi bắt được (khung ${bat})`);
+
+  // `patrolCatch` chưa từng có test nào — đây là lần đầu nó được chạy.
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau cuộc đuổi");
+});
+
+test("98. khúc gỗ trên đường KHÔNG chặn xe, và penWander tất định", () => {
+  /* (a) `driveable` từ chối MỌI ô có prop, kể cả prop đi qua được. Một khúc gỗ
+     người chơi đặt xuống mặt đường chặn đứng cả xe giao hàng lẫn xe thu mua. */
+  const store = mkStore(1405);
+  const s0 = store.getState();
+  let duong = null;
+  for (let y = 0; y < s0.h && !duong; y++)
+    for (let x = 0; x < s0.w; x++) {
+      const t = s0.tiles[idx(s0.w, x, y)];
+      if (t && t.g === "asphalt" && !t.prop && !t.b) { duong = { x, y }; break; }
+    }
+  ok(!!duong, "tìm được một ô đường nhựa trống");
+  eq(driveable(store.getState(), content, duong.x, duong.y), true, "đường trống thì xe đi được");
+
+  const memDi = content.propOrder.find((id) => content.props[id].solid === false && id !== "sign");
+  ok(!!memDi, `content có prop đi qua được: ${memDi}`);
+  setState(store, (s) => { s.tiles[idx(s.w, duong.x, duong.y)].prop = memDi; });
+  eq(
+    driveable(store.getState(), content, duong.x, duong.y),
+    true,
+    `'${memDi}' đi qua được thì xe cũng qua được — không chặn giao hàng`,
+  );
+
+  // …còn prop ĐẶC thì vẫn chặn, đúng như trước
+  const dac = content.propOrder.find((id) => content.props[id].solid !== false);
+  setState(store, (s) => { s.tiles[idx(s.w, duong.x, duong.y)].prop = dac; });
+  eq(driveable(store.getState(), content, duong.x, duong.y), false, `'${dac}' đặc thì vẫn chặn xe`);
+
+  /* (b) `penWander` từng dùng `Math.floor(state.minutes)` — mà `runActorSteps`
+     chạy bù các bước SAU khi `minutes` đã cộng trọn `dt`, nên cùng một bước
+     quyết định ở 30fps và 120fps ra hai ô khác nhau. Giờ nó đọc `actStep`, là
+     số nguyên đếm chính các bước ấy. */
+  const khu = content.tiles.pens.find((p) => p.id === "cattle");
+  const con = {
+    id: 1, kind: "animal", def: "cow", map: "farm",
+    x: (khu.x + 2) * TILE + 8, y: (khu.y + 1) * TILE + 8,
+    dir: "down", anim: 0, seed: 12345,
+    ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+    animal: { age: 99, fed: 700, hungryDays: 0, prod: [0] },
+  };
+  const a = penWander({ ...store.getState(), actStep: 40, minutes: 610.017 }, con, khu);
+  const b = penWander({ ...store.getState(), actStep: 40, minutes: 610.983 }, con, khu);
+  deepEq(a, b, "cùng bước quyết định thì cùng ô, dù `minutes` lệch phần lẻ");
+  const c2 = penWander({ ...store.getState(), actStep: 41, minutes: 610.5 }, con, khu);
+  ok(a.x !== c2.x || a.y !== c2.y, "…và bước kế tiếp thì đổi ô, không đứng chết một chỗ");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

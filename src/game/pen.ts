@@ -399,7 +399,19 @@ export function penWander(state: GameState, e: Entity, pen: PenDef): { x: number
      không có trần trong trường hợp ai đó lấp kín cái chuồng. */
   let best = { x: cx, y: cy };
   for (let k = 0; k < 4; k++) {
-    const n = (Math.abs(e.seed | 0) + k * 7919 + Math.floor(state.minutes)) >>> 0;
+    /* `actStep`, KHÔNG PHẢI `minutes`.
+
+       `runActorSteps` chạy bù các bước quyết định SAU khi `minutes` đã cộng
+       trọn `dt`, nên tại thời điểm bước thứ k chạy thì `minutes` là một số thực
+       khác nhau ở 30fps và 120fps — `Math.floor` ra số khác, và con vật đi lang
+       thang sang ô khác. Đó là nguồn ngẫu nhiên DUY NHẤT trong đường TICK không
+       đi qua hạt riêng của con vật, và nó trái đúng LUẬT 2 ghi ở đầu
+       `entities.ts`. Kịch bản 55/56 không bắt được vì chúng replay cùng một
+       chuỗi `dt`.
+
+       `actStep` là số nguyên suy từ `floor(minutes / ACTOR_STEP_MINUTES)` và
+       chính là thứ đếm các bước quyết định — tất định theo định nghĩa. */
+    const n = (Math.abs(e.seed | 0) + k * 7919 + (state.actStep | 0)) >>> 0;
     const g = { x: pen.x + (n % pen.w), y: pen.y + (((n / 31) | 0) % pen.h) };
     best = g;
     const t = tileAt(state, g.x, g.y);

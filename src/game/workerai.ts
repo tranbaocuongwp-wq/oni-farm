@@ -121,19 +121,42 @@ export function workerStep(
     return true;
   }
 
-  e.ai.tx = task.tx;
-  e.ai.ty = task.ty;
-  e.ai.phase = "walk";
-
+  /* ĐỨNG SẴN Ở ĐÓ thì làm luôn — không cần đường, không cần ngân sách. */
   if (atTile(e, task.tx, task.ty)) {
+    e.ai.tx = task.tx;
+    e.ai.ty = task.ty;
+    e.ai.ent = task.ent;
     e.ai.phase = "work";
     e.ai.until = WORK_MINUTES;
     return true;
   }
 
-  if (!takeBudget()) return true;
-  if (d.s.minutes - e.ai.planAt < REPLAN_COOLDOWN) return true;
+  /* NGÂN SÁCH VÀ NGUỘI TRƯỚC, CHỐT VIỆC SAU. Thứ tự này là cả cái sửa.
+
+     Bản cũ chốt `phase:"walk"` cùng `tx/ty` RỒI mới hỏi hai điều kiện này. Cả
+     hai lối thoát sớm đều để lại `phase:"walk"` với `path` rỗng, nên bước quyết
+     định kế tiếp rơi thẳng vào `markBad` ở đầu hàm — bôi đen một ô HOÀN TOÀN đi
+     tới được, trong khi A* chưa từng được gọi lấy một lần.
+
+     `MAX_REPLANS_PER_STEP = 2` dùng chung với cả đàn vật nuôi, nên nuôi càng
+     nhiều thì người làm càng hay trượt lượt, và mỗi lần trượt lại mất thêm một
+     ô tốt vào sổ đen (`MAX_BAD = 12`). Nhìn từ ngoài: người làm bỏ qua đúng
+     những ô gần nhất rồi đứng thẫn thờ.
+
+     Nhánh vật nuôi (`entities.ts`) vẫn luôn kiểm cả hai TRƯỚC khi chốt gì cả —
+     đây chỉ là chép lại đúng thứ tự ấy. */
+  if (!takeBudget() || d.s.minutes - e.ai.planAt < REPLAN_COOLDOWN) {
+    // Không đụng `tx/ty`, không đổi `phase`: lượt sau hỏi lại từ đầu.
+    e.ai.phase = "idle";
+    e.ai.until = 0.5;
+    return true;
+  }
   e.ai.planAt = d.s.minutes;
+
+  e.ai.tx = task.tx;
+  e.ai.ty = task.ty;
+  e.ai.ent = task.ent;
+  e.ai.phase = "walk";
 
   const cx = Math.floor(e.x / TILE);
   const cy = Math.floor(e.y / TILE);
@@ -153,10 +176,27 @@ export function workerStep(
     goals.add(idx(d.s.w, gx, gy));
   }
 
+  /* Dây buộc phải ÔM CẢ HAI ĐẦU — y hệt nhánh vật nuôi, và vì đúng một lý do.
+
+     Hộp bán kính 20 quanh CHÍNH NGƯỜI LÀM thì mọi ô của một lô ruộng ở nửa kia
+     nông trại đều rơi ra ngoài, `findPath` trả null, và nhánh `else` ngay dưới
+     ghi ô đó vào sổ đen. Đo trên trình duyệt thật: thuê người xong, 24 ô lúa
+     chín, sổ đen leo lên đủ 12 ô trong mười giây rồi họ đứng im hẳn — mà đường
+     đi thì có thật.
+
+     Ô XUẤT PHÁT không được kiểm với dây buộc, nên hộp chỉ cần ôm được đích;
+     nhưng ôm cả hai đầu mới cho A* chỗ mà vòng qua chướng ngại giữa đường. */
   const path = findPath(d.s, content, cx, cy, goals, {
     maxNodes: MAX_NODES_ACTOR,
     box: cfg.box,
-    leash: { x: cx, y: cy, r: LEASH_TILES },
+    leash: {
+      x: Math.round((cx + task.tx) / 2),
+      y: Math.round((cy + task.ty) / 2),
+      r: Math.max(
+        LEASH_TILES,
+        Math.max(Math.abs(cx - task.tx), Math.abs(cy - task.ty)) / 2 + 6,
+      ),
+    },
   });
   if (path && path.length) e.ai.path = path.slice(0, MAX_PATH);
   else {
@@ -207,12 +247,22 @@ function doWork(d: Draft, content: Content, index: number): void {
   // ---- đổ hàng vào kho ---------------------------------------------------
   const kho = findStoreTile(d.s, content);
   if (kho && kho.x === tx && kho.y === ty && carried(w) > 0) {
-    dumpToStore(d, d.s.entities[index]!);
+    dumpToStore(d, content, d.s.entities[index]!);
     return;
   }
 
-  // ---- chăn nuôi ---------------------------------------------------------
-  const an = animalNear(d.s, tx, ty);
+  /* ---- chăn nuôi ---------------------------------------------------------
+     Tra theo ID TRƯỚC. Con vật đã đi khỏi ô lúc `pickTask` ghi lại — hỏi
+     "ô này có con nào không" với tầm 1,4 ô thì thường là không, và cả chuyến đi
+     thành công cốc. Bán kính 2 ô cho lần tra theo id: đủ để bắt kịp một con vừa
+     nhích đi, đủ hẹp để không vơ nhầm con khác. */
+  const theoId =
+    e.ai.ent !== undefined
+      ? (d.s.entities.find((v) => v.id === e.ai.ent && v.map === d.s.mapId) ?? null)
+      : null;
+  const gan =
+    theoId && Math.hypot(theoId.x - e.x, theoId.y - e.y) <= 2 * TILE ? theoId : null;
+  const an = gan ?? animalNear(d.s, tx, ty);
   if (an) {
     const def = content.animals[an.def];
     const pi = def ? readyProduct(an, content) : -1;
@@ -220,10 +270,16 @@ function doWork(d: Draft, content: Content, index: number): void {
       const p = def.products[pi]!;
       const r = randInt(d.s.seed, p.min, p.max);
       touch(d).seed = r.seed;
+      /* Chỉ reset đồng hồ sản phẩm theo số THẬT SỰ nhận được.
+         `giveToWorker` kẹp theo `carryMax`; bỏ giá trị trả về rồi vẫn reset là
+         cách làm bốc hơi phần thừa. `pickTask` đã chặn từ trước bằng cách không
+         nhận việc khi chỗ trống < `p.max`, nên tới đây gần như luôn nhận đủ —
+         dòng này là lớp chắn thứ hai, cho trường hợp tay đầy giữa chừng. */
+      const nhan = giveToWorker(d, content, index, p.id, Math.max(1, r.v));
+      if (nhan <= 0) return; // không cầm được gì thì đừng cướp mất lứa sữa
       const ai = d.s.entities.indexOf(an);
       const m = dEntity(d, ai);
       if (m) m.animal.prod[pi] = 0;
-      giveToWorker(d, content, index, p.id, Math.max(1, r.v));
       tieuSuc();
       return;
     }
@@ -264,7 +320,9 @@ function doWork(d: Draft, content: Content, index: number): void {
       touch(d).seed = r.seed;
       let n = Math.max(1, r.v);
       if (t.crop.sick) n = Math.max(1, Math.round(n * (content.balance.sickYieldMul ?? 0.5)));
-      giveToWorker(d, content, index, `crop:${t.crop.id}`, n);
+      // Cùng lý do với nhánh vật nuôi: không cầm được thì đừng xoá cây.
+      const nhan = giveToWorker(d, content, index, `crop:${t.crop.id}`, n);
+      if (nhan <= 0) return;
 
       const m = dTile(d, ti);
       if (m?.crop) {

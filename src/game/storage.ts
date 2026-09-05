@@ -36,7 +36,8 @@ export function storeCount(store: readonly InvSlot[]): number {
   return n;
 }
 
-/** Kho còn ô trống nào không — dùng cho toast và cho AI người làm sau này. */
+/** Kho còn chỗ cho món này không — toast, và `pickTask` hỏi trước khi bảo
+ *  người làm vác hàng về một cái kho đã đầy. */
 export function storeHasRoom(store: readonly InvSlot[], id: string): boolean {
   return canAdd(store, id, 1);
 }

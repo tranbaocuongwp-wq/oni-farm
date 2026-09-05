@@ -65,6 +65,7 @@
     "animalStarved": "Vật nuôi chết đói:",
     "animalHungry": "Vật nuôi đang đói:",
     "deliverElsewhere": "Hàng được giao ngoài nông trại — ra đó nhận.",
-    "wageUnpaid": "Không đủ tiền trả lương, người làm nghỉ việc:"
+    "wageUnpaid": "Không đủ tiền trả lương, người làm nghỉ việc:",
+    "storeFullWorker": "Kho đầy — người làm đứng chờ, dọn bớt kho đi."
   }
 }

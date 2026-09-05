@@ -21,8 +21,8 @@ import type { Content, Entity, GameState, InvSlot, WorkerJob } from "./types.ts"
 import type { Draft } from "./state.ts";
 import { dEntity, randInt, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd } from "./inventory.ts";
-import { setStore } from "./storage.ts";
-import { removeEntity } from "./entities.ts";
+import { setStore, storeHasRoom } from "./storage.ts";
+import { MAX_ENTITIES, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt, idx } from "./world.ts";
 import { animalDef, entityAt } from "./entities.ts";
 import { readyProduct } from "./animals.ts";
@@ -54,6 +54,15 @@ export function hireWorker(d: Draft, content: Content, job: WorkerJob): number |
   const drop = content.tiles.dropoff ?? content.tiles.spawn;
   if (drop.map !== d.s.mapId) {
     toastKey(d, content, "deliverElsewhere", "info");
+    return null;
+  }
+  /* TRẦN THỰC THỂ. Hàm này tự `push` vào `s.entities` thay vì đi qua
+     `spawnEntity`, nên nó bỏ qua `MAX_ENTITIES` — thuê đủ người là
+     `checkInvariants` báo vỡ sau MỖI dispatch, rồi `capEntities` cắt cụt danh
+     sách ở lần migrate kế tiếp: mất cả người làm lẫn vật nuôi, không báo trước.
+     Người làm và vật nuôi dùng chung một trần, nên phải hỏi ở đây. */
+  if (d.s.entities.length >= MAX_ENTITIES) {
+    toastText(d, "Nông trại đã đông kín — không thuê thêm được nữa.", "bad");
     return null;
   }
 
@@ -94,11 +103,11 @@ export function hireWorker(d: Draft, content: Content, job: WorkerJob): number |
   return id;
 }
 
-export function fireWorker(d: Draft, id: number): boolean {
+export function fireWorker(d: Draft, content: Content, id: number): boolean {
   const e = d.s.entities.find((x) => x.id === id);
   if (!e || !isWorker(e)) return false;
   // Hàng đang đeo KHÔNG bốc hơi: đổ hết vào kho trước khi cho nghỉ.
-  dumpToStore(d, e);
+  dumpToStore(d, content, e);
   const name = e.worker!.name;
   removeEntity(d, id);
   toastText(d, `${name} đã nghỉ việc.`, "info");
@@ -120,7 +129,7 @@ export function assignJob(d: Draft, id: number, job: WorkerJob): boolean {
 /* --------------------------------------------------------------- đổ hàng */
 
 /** Đổ sạch thứ đang đeo vào kho tập trung. */
-export function dumpToStore(d: Draft, e: Entity): number {
+export function dumpToStore(d: Draft, content: Content, e: Entity): number {
   if (!e.worker || !e.worker.carry.length) return 0;
   let moved = 0;
   let store = d.s.store;
@@ -136,6 +145,11 @@ export function dumpToStore(d: Draft, e: Entity): number {
     moved += r.added;
   }
   if (moved > 0) setStore(d, store);
+  else if (con.length)
+    /* KHO ĐẦY và người làm vẫn ôm nguyên hàng. Báo ở ĐÂY chứ không ở `pickTask`:
+       hàm này chỉ chạy khi họ đã đứng tới cái kho, tức là đúng một lần mỗi
+       chuyến — tự tiết chế, không cần cờ đếm nào trong save. */
+    toastKey(d, content, "storeFullWorker", "bad");
 
   const i = d.s.entities.indexOf(e);
   const m = dEntity(d, i);
@@ -207,7 +221,7 @@ export function payWages(d: Draft, content: Content): { paid: number; quit: numb
 
   for (const id of nghi) {
     const e = d.s.entities.find((x) => x.id === id);
-    if (e) dumpToStore(d, e);
+    if (e) dumpToStore(d, content, e);
     removeEntity(d, id);
   }
   if (out.paid > 0) toastText(d, `Đã trả lương ${out.paid}đ.`, "info");
@@ -232,6 +246,8 @@ export interface Task {
   kind: TaskKind;
   tx: number;
   ty: number;
+  /** Con vật cần tới, cho `gather`/`feed`. Xem `AiState.ent`. */
+  ent?: number;
 }
 
 /**
@@ -251,16 +267,45 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
   const xau = (x: number, y: number): boolean =>
     !!bad?.length && bad.includes(idx(s.w, x, y));
 
+  const cho = Math.max(0, content.workers.carryMax - carried(w));
+
+  /* VỀ KHO ĐỔ — nhưng chỉ khi kho CÒN CHỖ.
+
+     `dumpToStore` trả phần không cất được lại vào tay. Kho đầy thì tay vẫn đầy,
+     nên lượt sau `pickTask` lại ra lệnh "về kho", lại đi tới, lại đổ được 0
+     món — một vòng lặp không có lối ra, không toast, không đổi việc. Người chơi
+     nhìn thấy một người làm đi tới đi lui giữa ruộng và cái kho đầy, mãi mãi.
+
+     `storeHasRoom` đã nằm sẵn trong `storage.ts` từ lâu, chú thích của chính nó
+     ghi "dùng cho toast và cho AI người làm SAU NÀY" — AI viết xong rồi mà chưa
+     ai gọi nó. Đây là chỗ nó sinh ra để đứng. */
+  const veKho = (): Task | null => {
+    if (carried(w) <= 0) return null;
+    const conCho = w.carry.some((v) => v && storeHasRoom(s.store, v.id));
+    if (!conCho) return null;
+    const kho = findStoreTile(s, content);
+    return kho ? { kind: "dump", tx: kho.x, ty: kho.y } : null;
+  };
+
   // Đầy tay thì việc duy nhất là về kho. Đứng trước mọi thứ khác — người thật
   // cũng vậy, không ai ôm đầy tay rồi còn cúi xuống nhặt thêm.
-  if (carried(w) >= content.workers.carryMax) {
-    const kho = findStoreTile(s, content);
-    if (kho) return { kind: "dump", tx: kho.x, ty: kho.y };
-  }
+  if (cho <= 0) return veKho();
 
   const cx = Math.floor(e.x / TILE);
   const cy = Math.floor(e.y / TILE);
+  /* Bán kính quét THƯỜNG. Cố ý hẹp: người làm nên làm gọn khu quanh mình chứ
+     không nhảy từ góc này sang góc kia nông trại, và quét hẹp thì rẻ. */
   const R = 14;
+  /* …nhưng khi quanh đó KHÔNG CÓ GÌ thì quét cả bản đồ một lần.
+
+     Không có bước này thì thuê người xong họ đứng im mãi mãi ở điểm giao hàng:
+     ô thả người nằm ở (41,5) còn các lô ruộng ở tận nửa kia, xa hơn 14 ô. Người
+     chơi trả 900đ rồi nhìn một người đứng yên cả ngày — đo trên trình duyệt
+     thật: 20 giây, 24 ô lúa chín, không nhặt một quả nào.
+
+     Chỉ chạy khi vòng hẹp đã trắng tay, nên chi phí thêm gần như bằng không
+     trong lúc họ đang có việc. */
+  const RX = Math.max(s.w, s.h);
 
   if (w.job === "livestock") {
     // 1) con vật tới lứa → thu; 2) con vật đói → cho ăn
@@ -273,17 +318,24 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
       const ax = Math.floor(a.x / TILE);
       const ay = Math.floor(a.y / TILE);
       const dist = Math.abs(ax - cx) + Math.abs(ay - cy);
-      if (dist > R) continue;
+      if (dist > RX) continue;
+      const pi = readyProduct(a, content);
       const kind: TaskKind | null =
-        readyProduct(a, content) >= 0 ? "gather" : def.feed && a.animal.fed <= 0 ? "feed" : null;
+        pi >= 0 ? "gather" : def.feed && a.animal.fed <= 0 ? "feed" : null;
       if (!kind) continue;
       if (xau(ax, ay)) continue;
+      /* Không đủ chỗ cho MỨC SẢN LƯỢNG CAO NHẤT thì đừng nhận việc thu.
+         `giveToWorker` kẹp theo `carryMax` và trả về số THẬT SỰ nhận, nhưng
+         `doWork` vẫn reset `prod` / xoá cây bất kể — nên ở mức `carryMax − 1`,
+         thu một luống cho 3 quả là 2 quả bốc hơi. Đọc `p.max` từ content nên
+         không phải rút hạt ngẫu nhiên chỉ để rồi bỏ. */
+      if (kind === "gather" && cho < (def.products[pi]?.max ?? 1)) continue;
       // thu luôn thắng cho ăn: sản phẩm để lâu không mất, nhưng tay đang rảnh
       // thì nên nhặt trước
       const score = (kind === "gather" ? 0 : 1000) + dist;
       if (score < bestD) {
         bestD = score;
-        best = { kind, tx: ax, ty: ay };
+        best = { kind, tx: ax, ty: ay, ent: a.id };
       }
     }
     if (best) return best;
@@ -291,15 +343,11 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
 
   // Việc trên RUỘNG. Dùng chính bộ chấm điểm của `nearestTarget` nhưng đo từ vị
   // trí NGƯỜI LÀM chứ không phải từ người chơi, nên phải tự quét ở đây.
-  const job = cropTask(s, content, cx, cy, R, xau);
+  const job = cropTask(s, content, cx, cy, R, xau, cho) ?? cropTask(s, content, cx, cy, RX, xau, cho);
   if (job) return job;
 
   // Hết việc mà tay còn hàng thì tranh thủ về kho đổ.
-  if (carried(w) > 0) {
-    const kho = findStoreTile(s, content);
-    if (kho) return { kind: "dump", tx: kho.x, ty: kho.y };
-  }
-  return null;
+  return veKho();
 }
 
 /** Ô kho gần nhất trên bản đồ đang chơi. */
@@ -328,6 +376,9 @@ function cropTask(
   R: number,
   /** Ô người làm này vừa không tới được — xem `AiState.bad`. */
   xau: (x: number, y: number) => boolean,
+  /** Chỗ trống còn lại trên tay. Cùng lý do với nhánh chăn nuôi: thu một luống
+   *  mà tay chỉ còn một chỗ thì phần thừa BỐC HƠI, chứ không nằm lại trên cây. */
+  cho: number,
 ): Task | null {
   let best: Task | null = null;
   let bestScore = Infinity;
@@ -344,6 +395,11 @@ function cropTask(
       } else if (t.tilled && !t.wet) uu = 2;
       if (uu < 0) continue;
       if (xau(x, y)) continue;
+      // Thu hoạch mà không đủ chỗ cho `yieldMax` thì để đó, về kho đổ đã.
+      if (uu === 0 && t.crop) {
+        const cd = content.crops[t.crop.id];
+        if (cd && cho < cd.yieldMax) continue;
+      }
       const score = uu * 1000 + Math.abs(x - cx) + Math.abs(y - cy);
       if (score < bestScore) {
         bestScore = score;

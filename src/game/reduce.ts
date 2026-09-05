@@ -424,7 +424,7 @@ export function reduce(state: GameState, action: Action, content: Content): Game
 
     case "FIRE": {
       if (state.busy > 0) return state;
-      fireWorker(d, action.id | 0);
+      fireWorker(d, content, action.id | 0);
       return commit(d);
     }
 

@@ -27,7 +27,7 @@ import { removeEntity } from "./entities.ts";
 import { sellPriceOf, sellable } from "./items.ts";
 import { TILE, idx, nearestWaterTile, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
-import { LEASH_TILES, MAX_PATH, spawnEntity } from "./entities.ts";
+import { LEASH_TILES, MAX_PATH_VEHICLE, spawnEntity } from "./entities.ts";
 
 /** Xe đứng chờ ở điểm giao bao nhiêu phút game trước khi quay ra. */
 const WAIT_MINUTES = 12;
@@ -59,7 +59,11 @@ export function vehicleCount(s: GameState): number {
 export function driveable(s: GameState, content: Content, x: number, y: number): boolean {
   const t = tileAt(s, x, y);
   if (!t) return false;
-  if (t.prop) return false;
+  /* Chỉ chặn vật thể ĐẶC. Bản cũ từ chối MỌI ô có `prop`, nên một khúc gỗ người
+     chơi vừa đặt xuống mặt đường là chặn đứng cả xe giao hàng lẫn xe thu mua —
+     không thông báo gì, chỉ có `v.wait = 3` lặp lại tới hết đời. Mà chính khúc
+     gỗ ấy thì người chơi đi qua được. */
+  if (t.prop && content.props[t.prop]?.solid !== false) return false;
   if (t.b) {
     const def = content.buildings[t.b];
     if (def && def.kind !== "floor") return false;
@@ -91,7 +95,7 @@ function drivePath(
     leash: { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2), r: LEASH_TILES + 14 },
   });
   if (!path) return null;
-  return path.slice(0, MAX_PATH);
+  return path.slice(0, MAX_PATH_VEHICLE);
 }
 
 /* -------------------------------------------------------------------- sinh */

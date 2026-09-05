@@ -925,6 +925,16 @@ export interface AiState {
    * ngày, và nhớ mãi một chỗ không tới được là nhớ một thứ đã cũ.
    */
   bad?: number[];
+  /**
+   * THỰC THỂ đang nhắm tới (id), cho việc chăn nuôi. Vắng = việc trên đất.
+   *
+   * Có nó vì con vật KHÔNG đứng yên. `pickTask` ghi lại ô nó đang đứng lúc quét,
+   * rồi người làm lội mấy chục ô tới đó — luật "tới gần thì đứng lại" cố ý chỉ
+   * áp cho NGƯỜI CHƠI, nên con vật vẫn đi. Tới nơi hỏi "có con nào ở ô này
+   * không" thì thường là không, và cả chuyến đi thành công cốc, lặp vô hạn với
+   * một đàn đang lang thang. Nhớ ID thì hỏi lại được đúng CON đó ở chỗ mới.
+   */
+  ent?: number;
 }
 
 export interface AnimalState {
