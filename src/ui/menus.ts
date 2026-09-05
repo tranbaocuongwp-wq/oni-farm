@@ -74,6 +74,13 @@ export interface MenuHandlers {
   padInfo(): PadInfo;
   /** Mở chế độ xây dựng (dừng thời gian, kéo thả địa hình). */
   buildMode(): void;
+  /** Chế độ "tự động làm" đang bật hay tắt.
+   *
+   *  Công tắc nằm ở ĐÂY chứ không còn là một nút nổi trên màn hình: cụm chạm
+   *  góc dưới-phải giờ chỉ còn hai nút (ngữ cảnh chính + phụ), và AUTO là thứ
+   *  người chơi bật một lần rồi để đó — không đáng một ô chạm thường trực. */
+  autoWork(): boolean;
+  setAutoWork(on: boolean): void;
   /** Hỏi server xem có bản mới không. Trả về câu trả lời để hiện ngay. */
   checkUpdate(): Promise<string>;
   /** BUỘC cập nhật: xoá sạch cache, gỡ service worker, tải lại trang. */
@@ -1386,6 +1393,10 @@ export function createMenus(
         close();
         h.buildMode();
       }, "accent"),
+      tileBtn("power", h.autoWork() ? "Tự động: BẬT" : "Tự động làm", () => {
+        h.setAutoWork(!h.autoWork());
+        openPause();
+      }, h.autoWork() ? "primary" : ""),
       tileBtn("bag", "Balo", () => openBag()),
       tileBtn("gear", "Cài đặt", () => openSettings()),
       tileBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),

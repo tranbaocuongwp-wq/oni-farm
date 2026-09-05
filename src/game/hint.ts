@@ -100,11 +100,12 @@ function interactNear(
   content: Content,
   x: number,
   y: number,
+  scan = INTERACT_SCAN,
 ): { kind: InteractKind; x: number; y: number } | null {
   let best: { kind: InteractKind; x: number; y: number } | null = null;
   let bestD = Infinity;
-  for (let dy = -INTERACT_SCAN; dy <= INTERACT_SCAN; dy++)
-    for (let dx = -INTERACT_SCAN; dx <= INTERACT_SCAN; dx++) {
+  for (let dy = -scan; dy <= scan; dy++)
+    for (let dx = -scan; dx <= scan; dx++) {
       const k = interactAt(state, content, x + dx, y + dy);
       if (!k) continue;
       const d = Math.hypot(dx, dy);
@@ -193,11 +194,14 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
  *   2. việc làm được với vật phẩm đang cầm (thu hoạch luôn thắng, như useAt)
  *   3. không có gì → lý do
  *
- * CỐ Ý KHÔNG có tương tác vật thể (cửa hàng, giường, giếng, kho). Trước đây có,
- * và hậu quả là: đứng cạnh quầy thu mua cầm cái cuốc, bấm nút chính thì mở
- * bảng bán hàng thay vì cày — người chơi đang cày một luống dài, đi ngang qua
- * quầy, và cả nhịp làm việc gãy. Nút chính phải LUÔN làm đúng thứ trên tay;
- * mở cửa hàng là việc của nút tương tác (xem `interactHint`).
+ * Tương tác vật thể (cửa hàng, giường, giếng, kho) CÓ ở đây, nhưng chỉ qua
+ * `contextAction` ở nấc cuối — tức là chỉ khi ô đang ngắm không có việc nào và
+ * món trên tay cũng không dùng được vào đâu. Thứ tự ấy chữa đúng cái lỗi cũ:
+ * đứng cạnh quầy thu mua cầm cái cuốc, bấm nút chính thì phải CÀY, không phải
+ * mở bảng bán hàng — người chơi đang cày một luống dài, đi ngang qua quầy, và
+ * cả nhịp làm việc gãy. Việc nhờ món đang cầm luôn thắng (xem `nhoMonDangCam`).
+ *
+ * Nút PHỤ giờ không mở cửa hàng nữa: nó chỉ TRA CỨU (xem `interactHint`).
  */
 export function hintAt(state: GameState, content: Content, x: number, y: number): Hint {
   /* Con vật đứng ĐÈ LÊN ô được ưu tiên hơn mọi thứ khác trên ô đó: người chơi
@@ -239,33 +243,102 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
 }
 
 /**
- * Gợi ý cho NÚT TƯƠNG TÁC (B): "nói chuyện với thứ ĐỨNG ở đây".
+ * Gợi ý cho NÚT NGỮ CẢNH PHỤ: **chỉ TRA CỨU, không bao giờ đổi state**.
  *
- * Tách khỏi `hintAt` vì hai nút trả lời hai câu khác nhau. Gộp lại thì một
- * trong hai câu luôn bị nuốt — và câu bị nuốt là câu người chơi đang cần.
+ * Cường chốt vai của hai nút bằng đúng một câu: "một nút ngữ cảnh chính là
+ * hành động, một nút ngữ cảnh phụ là tra cứu thông tin gần đó."
+ *
+ * Trước đây nút này gánh cả hai vai — mở cửa hàng, lên giường, múc nước (HÀNH
+ * ĐỘNG) lẫn mở bảng con vật (TRA CỨU) — và vai hành động luôn nuốt vai tra
+ * cứu: đứng cạnh quầy thu mua thì không còn cách nào xem thẻ ô đang ngắm.
+ * Toàn bộ nhánh hành động đã chuyển sang nút CHÍNH (nấc 5 của `contextAction`),
+ * nên ở đây chỉ còn ba thứ, và cả ba đều chỉ MỞ MỘT CÁI BẢNG.
+ *
+ * Thứ tự đi từ CỤ THỂ ra RỘNG: một con vật cụ thể → cả cái khu → cái ô đang
+ * ngắm. Con vật trước vì người chơi nhìn thấy nó chứ không nhìn thấy nền đất.
  */
+export type InfoHint =
+  | { what: "animal"; label: string; id: number }
+  | { what: "pen"; label: string; id: string }
+  | { what: "tile"; label: string; x: number; y: number };
+
 export function interactHint(
   state: GameState,
   content: Content,
   x: number,
   y: number,
-): { kind: Exclude<HintKind, null>; label: string } | null {
-  // Con vật / người làm: B là XEM bảng thông tin, không phải vắt sữa.
-  if (animalNear(state, x, y)) return { kind: "gather", label: "XEM" };
-
-  const ik = interactNear(state, content, x, y);
-  if (ik) {
-    const kind = INTERACT_KIND[ik.kind];
-    return { kind, label: LABEL[kind] };
+): InfoHint | null {
+  const an = animalNear(state, x, y);
+  if (an) {
+    const ten = content.animals[an.def]?.name;
+    return { what: "animal", label: ten ? `XEM ${ten.toUpperCase()}` : "XEM", id: an.id };
   }
 
-  /* KHU CHUỒNG / AO: đứng ở chỗ cái khu mà không chỉ vào con nào thì B mở
-     BẢNG KHU. Trước đây muốn biết "chuồng này có việc gì phải làm không" thì
-     phải đi tới bấm từng con một — mà đó chính là câu hỏi duy nhất người chơi
-     hỏi khi đi ngang qua nó. Xếp SAU vật thể: đứng cạnh cái máng thì máng là
-     thứ cụ thể hơn. */
-  const khu = penNear(state, content, x, y, 1);
-  if (khu) return { kind: "pen", label: LABEL.pen };
+  /* KHU CHUỒNG / AO: đứng ở chỗ cái khu mà không chỉ vào con nào thì mở BẢNG
+     KHU. Trước đây muốn biết "chuồng này có việc gì phải làm không" thì phải
+     đi tới bấm từng con một — mà đó chính là câu hỏi duy nhất người chơi hỏi
+     khi đi ngang qua nó. */
+  const khu = penNear(state, content, x, y, PEN_MARGIN);
+  if (khu) return { what: "pen", label: "BẢNG KHU", id: khu.id };
+
+  /* Cuối cùng: THẺ Ô. Luôn có gì đó để nói về một ô — cây gì còn mấy ngày,
+     máng còn mấy phần, luống đã tưới chưa — nên nút phụ gần như không bao giờ
+     tắt ngóm, và đó là điểm khác lớn nhất so với bản cũ. */
+  if (tileInfo(state, content, x, y)) return { what: "tile", label: "XEM Ô", x, y };
+  return null;
+}
+
+/**
+ * Một câu về Ô này — thứ nút ngữ cảnh PHỤ đọc ra.
+ *
+ * Nói con số mà người chơi thật sự phải nhẩm: cây còn mấy ngày nữa chín, máng
+ * còn mấy phần trên mấy. Không phải tên loại đất.
+ */
+export function tileInfo(
+  state: GameState,
+  content: Content,
+  x: number,
+  y: number,
+): string | null {
+  const t = tileAt(state, x, y);
+  if (!t) return null;
+
+  if (t.prop === "trough") {
+    const con = troughStock(state, x, y);
+    const mon = t.troughId ? ` · ${itemName(t.troughId, content)}` : "";
+    return `Máng: ${con}/${troughMax(content)} phần${mon}`;
+  }
+
+  const ao = pondAt(state, content, x, y);
+  if (ao) {
+    const noi = t.trough ?? 0;
+    return noi > 0 ? `${ao.name}: ${noi} phần cám đang nổi` : `${ao.name}`;
+  }
+
+  if (t.crop) {
+    const def = content.crops[t.crop.id];
+    if (!def) return null;
+    if (t.crop.sick) return `${def.name} — ĐANG BỆNH, cần thuốc`;
+    if (isRipe(t, content)) return `${def.name} — chín, thu được rồi`;
+    /* Còn mấy ngày: cộng nốt phần chưa tích của giai đoạn hiện tại với trọn
+       các giai đoạn sau. Làm tròn LÊN — nói "còn 0 ngày" cho cây chưa chín là
+       nói dối. */
+    const per = Math.max(1, content.balance.growthMinutesPerDay);
+    let phut = Math.max(0, (def.growthDays[t.crop.stage] ?? 0) * per - t.crop.grow);
+    for (let i = t.crop.stage + 1; i < def.growthDays.length; i++) phut += (def.growthDays[i] ?? 0) * per;
+    const ngay = Math.max(1, Math.ceil(phut / per));
+    return `${def.name} — còn ${ngay} ngày${t.wet ? "" : " · chưa tưới"}`;
+  }
+
+  if (t.b) {
+    const def = content.buildings[t.b];
+    if (def) return def.name;
+  }
+  if (t.prop) {
+    const def = propDef(content, t.prop);
+    if (def) return def.hits ? `${def.name} — còn ${t.hp} nhát` : def.name;
+  }
+  if (t.tilled) return t.wet ? "Luống đã cày · đã tưới" : "Luống đã cày · chưa tưới";
   return null;
 }
 
@@ -295,7 +368,29 @@ export function contextAction(
   const px = Math.floor(state.player.x / TILE);
   const py = Math.floor(state.player.y / TILE);
 
-  // 1. CON VẬT quanh mình.
+  /* Ứng viên được xếp theo hai bậc, và bậc trên thắng TUYỆT ĐỐI:
+
+       bậc 1 — việc CÓ ĐƯỢC LÀ NHỜ MÓN ĐANG CẦM (đổ máng, rắc hồ, cho ăn,
+               gieo, tưới, cày, chữa, xây, đặt xuống)
+       bậc 2 — việc vốn vẫn làm được (thu, vắt sữa, chặt, đập, nhấc, mở cửa
+               hàng/giường/giếng/kho)
+
+     Trong cùng bậc thì gần hơn thắng. Nhờ vậy "cầm bao cám đứng gần chuồng gà"
+     luôn ra ĐỔ MÁNG, không bao giờ ra nhổ cỏ — dù bụi cỏ ở ngay dưới chân còn
+     cái máng ở cách bốn ô. */
+  let best: CtxAction | null = null;
+  let bestBac = 9;
+  let bestD = Infinity;
+  const xet = (kind: Exclude<HintKind, null>, at: { x: number; y: number }) => {
+    const bac = nhoMonDangCam(kind) ? 0 : 1;
+    const d = Math.hypot(at.x - px, at.y - py);
+    if (bac > bestBac || (bac === bestBac && d >= bestD)) return;
+    bestBac = bac;
+    bestD = d;
+    best = { kind, label: LABEL[kind], at };
+  };
+
+  // 1. CON VẬT quanh mình — vắt sữa, hoặc cho ăn nếu đang cầm đúng món.
   for (const [ax, ay] of [
     [x, y],
     [px, py],
@@ -305,33 +400,58 @@ export function contextAction(
     const def = content.animals[an.def];
     if (!def) continue;
     const at = { x: Math.floor(an.x / TILE), y: Math.floor(an.y / TILE) };
-    if (readyProduct(an, content) >= 0) return { kind: "gather", label: LABEL.gather, at };
-    if (def.feed && an.animal.fed <= 0) return { kind: "feed", label: LABEL.feed, at };
+    if (readyProduct(an, content) >= 0) xet("gather", at);
+    if (def.feed && an.animal.fed <= 0) xet("feed", at);
   }
 
-  // 2. Việc của cả KHU (đổ máng, thu cả đàn).
+  // 2. Việc của cả KHU (đổ máng, rắc hồ, thu cả đàn) — lề rộng, xem `penAction`.
   const pa = penAction(state, content, x, y);
-  if (pa) return pa;
+  if (pa) xet(pa.kind, pa.at);
 
-  /* 3. Quét quanh CHÂN — nhưng chỉ khi ô đang ngắm KHÔNG CÓ GÌ.
-     Đây là ranh giới quan trọng nhất của cả hàm, và nó nằm ở chỗ "ô ấy có gì"
-     chứ không ở chỗ "có giải thích được không".
+  /* 3. Ô ĐANG NGẮM có vật thì câu trả lời phải nói về NÓ.
 
-     Ô có VẬT: một cái cây, một luống rau, một công trình — hoặc mình đang vác
-     đồ. Người chơi CHỦ Ý chỉ vào nó, và câu "Cần rìu" / "Lùi ra rồi đặt" đúng
-     là thứ họ đang hỏi. Đổi nhãn sang một việc ở ô khác lúc đó là nuốt mất câu
-     trả lời và bấm vào một chỗ họ không hề nhắm tới.
+     Một cái cây, một luống rau, một công trình — hoặc mình đang vác đồ. Người
+     chơi CHỦ Ý chỉ vào đó, và câu "Cần rìu" / "Lùi ra rồi đặt" đúng là thứ họ
+     đang hỏi. Đổi nhãn sang một việc ở ô khác lúc đó là nuốt mất câu trả lời.
 
-     Ô ĐẤT TRỐNG thì ngược lại: đứng trên ngõ cầm cuốc, ngắm vào chính con ngõ
-     dưới chân, mà ruộng thì ngay bên cạnh — "Ngoài khu ruộng" đúng nhưng vô
-     ích, còn "CÀY" thì làm được việc. Nhãn vẫn không nói dối: nó hứa cày, và
-     ô nó dắt tới đúng là ô cày được. */
+     Ngoại lệ: việc thuộc bậc 1 vẫn được phép thắng — cầm bao cám mà ngắm vào
+     bụi cỏ thì ý định vẫn là cho gà ăn, không phải nhổ bụi cỏ ấy. */
   const t0 = tileAt(state, x, y);
-  if (state.carry || (t0 && (t0.prop || t0.crop || t0.b))) return null;
-  const gan = nearestTarget(state, content, null, { x, y }, { radius: 3, requireReach: false });
-  if (gan) return { kind: gan.kind, label: LABEL[gan.kind], at: { x: gan.x, y: gan.y } };
-  return null;
+  const oNgamCoVat = !!state.carry || !!(t0 && (t0.prop || t0.crop || t0.b));
+  if (oNgamCoVat && bestBac > 0) return null;
+
+  /* 4. Quét quanh CHÂN trong `CTX_RADIUS` ô.
+     `nearestTarget` hỏi `canUseAt` với đúng ô hotbar đang chọn — không giả định
+     một món khác, không đổi ô. */
+  const gan = nearestTarget(state, content, null, null, {
+    radius: CTX_RADIUS,
+    requireReach: false,
+  });
+  if (gan && !DON_DEP.has(gan.kind)) xet(gan.kind, { x: gan.x, y: gan.y });
+
+  /* 5. VẬT THỂ BIẾT NÓI CHUYỆN quanh chân: cửa hàng, quầy bán, bàn chế tạo,
+     giường, giếng, kho, cửa nhà.
+
+     Trước đây đây là việc của nút PHỤ. Cường tách lại cho đúng vai: "một nút
+     ngữ cảnh chính là hành động, một nút ngữ cảnh phụ là tra cứu thông tin gần
+     đó" — mà mở cửa hàng, lên giường, múc nước đều là HÀNH ĐỘNG.
+
+     Bậc 1, nên bất cứ việc nào nhờ món đang cầm vẫn thắng: đứng cạnh cái giếng
+     cầm bình tưới mà ô dưới chân cày rồi thì nút vẫn ghi TƯỚI, không phải MÚC
+     NƯỚC. Trong cùng bậc thì gần hơn thắng.
+
+     Lề ở đây CỐ Ý hẹp hơn `CTX_RADIUS` — `INTERACT_SCAN` = 2 ô, tức "tôi đang
+     đứng NGAY chỗ nó". Nới ra sáu ô thì đứng ở sân nhà là cái giếng và cái cửa
+     lúc nào cũng nằm trong tầm, và nút ngữ cảnh thôi nói về ô người chơi đang
+     ngắm: cầm hạt đứng trên ruộng chưa cày mà nút ghi "MÚC" thì nó vừa nuốt
+     mất câu "Cày trước đã" vừa rủ đi làm một việc không ai hỏi. Còn một cái
+     quầy thì đằng nào cũng phải đi tới tận nơi mới mua bán được. */
+  const vt = interactNear(state, content, px, py);
+  if (vt) xet(INTERACT_KIND[vt.kind], { x: vt.x, y: vt.y });
+
+  return best;
 }
+
 
 /**
  * Việc đáng làm nhất ở KHU quanh (x,y), kèm ô phải đứng để làm.
@@ -341,13 +461,79 @@ export function contextAction(
  * chỉ cách ba ô. Nút phải nói được việc của CHỖ ĐANG ĐỨNG, không chỉ việc của
  * đúng một ô.
  */
+/**
+ * Bán kính nút ngữ cảnh CHÍNH nhìn quanh NHÂN VẬT, tính bằng ô.
+ *
+ * Sáu ô: đủ rộng để "đứng gần chuồng gà" tính là gần thật (rào cách vài ô vẫn
+ * nhận ra), đủ hẹp để một cú bấm không bao giờ đưa nhân vật ra khỏi chỗ người
+ * chơi đang nhìn.
+ *
+ * Trước đây chỗ này hỏi `autoJob` với bán kính `max(w, h)` — tức CẢ BẢN ĐỒ —
+ * và còn tự đổi ô hotbar. Đó chính là cảnh Cường gặp: đứng cạnh chuồng gà cầm
+ * bao bắp, bấm một cái, nhân vật đổi sang cái cuốc rồi chạy đi nhổ cỏ ở góc
+ * khác.
+ */
+export const CTX_RADIUS = 6;
+
+/**
+ * Lề quanh hình chữ nhật KHU vẫn còn tính là "đang ở gần chuồng", tính bằng ô.
+ *
+ * Trước đây là 1 — đứng cách rào hai ô là đã ngoài tầm, nên `penAction` không
+ * nổ và nút rơi xuống nhánh quét chung rồi rủ đi nhổ cỏ. Cường mô tả đúng cảnh
+ * đó: "rõ ràng là tôi đang ở gần chuồng gà".
+ */
+export const PEN_MARGIN = 4;
+
+/**
+ * Việc này CÓ ĐƯỢC LÀ NHỜ MÓN ĐANG CẦM, hay nó vốn vẫn làm được?
+ *
+ * Đây là ranh giới quyết định của cả nút ngữ cảnh. `canUseAt` trả về `chop`
+ * cho một bụi cỏ kể cả khi tay đang cầm bao cám — vì cỏ nhổ được bằng tay
+ * không. Nên nếu chỉ lấy "việc gần nhất" thì nhổ cỏ luôn thắng đổ máng, và
+ * người chơi thấy nhân vật bỏ cái chuồng gà mà đi nhổ cỏ.
+ *
+ * Việc thuộc nhóm này thắng TUYỆT ĐỐI mọi việc ngoài nhóm: người chơi chọn cái
+ * món đó trên hotbar là đã nói rõ mình định làm gì.
+ */
+/**
+ * Việc DỌN DẸP — chặt, đập, nhấc, nhổ.
+ *
+ * Chúng KHÔNG bao giờ được tự nhận từ phép quét quanh chân, chỉ khi người chơi
+ * NGẮM THẲNG vào chúng (`hintAt` hỏi ô đang ngắm trước, rồi mới tới đây).
+ *
+ * Vì sao: `canUseAt` cho phép nhổ cỏ và nhấc đá bằng tay không, nên chúng có
+ * mặt ở gần như mọi chỗ trên bản đồ. Để chúng vào phép quét thì cầm bao hạt
+ * đứng giữa đồng, bấm một cái, nhân vật đi nhổ một bụi cỏ nào đó — đúng câu
+ * Cường tả: "bấm vô cái nó chạy đi tùm lum nhổ cỏ lượm đá". Ba trong bốn cái
+ * này còn không hoàn tác được.
+ */
+const DON_DEP = new Set<Exclude<HintKind, null>>(["chop", "mine", "lift", "pull"]);
+
+export function nhoMonDangCam(kind: Exclude<HintKind, null>): boolean {
+  switch (kind) {
+    case "pour":
+    case "feedpond":
+    case "feed":
+    case "plant":
+    case "water":
+    case "till":
+    case "cure":
+    case "pull":
+    case "build":
+    case "putdown":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function penAction(
   state: GameState,
   content: Content,
   x: number,
   y: number,
 ): { kind: Exclude<HintKind, null>; label: string; at: { x: number; y: number } } | null {
-  const khu = penNear(state, content, x, y, 1);
+  const khu = penNear(state, content, x, y, PEN_MARGIN);
   if (!khu) return null;
   const tt = penSummary(state, content, khu);
 

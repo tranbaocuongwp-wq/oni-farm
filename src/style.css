@@ -57,8 +57,12 @@
   --hotbar-slots: 10;
   --slot-gap: 2px;
   --slot: clamp(26px, calc((100vw - 2 * var(--hud-gap) - 2 * var(--sa-l) - 20px - var(--tap) - var(--hotbar-slots) * var(--slot-gap)) / var(--hotbar-slots)), 52px);
-  --btn-a: 72px;          /* nút hành động chính */
-  --btn-b: 52px;          /* nút phụ E */
+  /* Cụm chạm chỉ còn HAI nút, nên chỗ trống dôi ra được trả thẳng vào bề mặt
+     chạm. Cường báo "các nút tương tác rất khó với chế độ cảm ứng": ở 72/52 và
+     khe 10px, hai vòng tròn nằm cách nhau chưa tới bề ngang một đầu ngón cái,
+     và nút phụ 52px thì thấp hơn ngưỡng 64px mà mọi hướng dẫn cảm ứng khuyên. */
+  --btn-a: 80px;          /* nút ngữ cảnh CHÍNH — hành động */
+  --btn-b: 64px;          /* nút ngữ cảnh PHỤ — tra cứu */
   --gap: 8px;
   --hud-gap: clamp(6px, 1.6vw, 12px);
   --radius: 8px;
@@ -81,13 +85,13 @@
 /* Cỡ giao diện do người chơi chọn: ghi đè các token, không đụng thành phần. */
 body[data-ui="small"] {
   --fs: 12px;
-  --btn-a: 60px;
-  --btn-b: 44px;
+  --btn-a: 68px;
+  --btn-b: 54px;
 }
 body[data-ui="large"] {
   --fs: clamp(15px, 4vw, 18px);
-  --btn-a: 84px;
-  --btn-b: 60px;
+  --btn-a: 92px;
+  --btn-b: 72px;
   /* Cỡ LỚN cũng phải nới ô hotbar. Trước đây nó chỉ đụng chữ và hai cái nút
      tròn, nên người chơi chọn "Lớn" vì bấm hụt hotbar lại thấy hotbar y
      nguyên — đúng thứ họ than thì không đổi. Nới khe trước (rẻ nhất, giảm hẳn
@@ -1562,8 +1566,7 @@ body[data-control="stick"][data-hand="left"] #stick {
      một vùng "bấm không ăn" bằng 7% màn hình. Cùng cách `#hud` đã làm. */
   pointer-events: none;
 }
-#abtn .btns button,
-#abtn .linebtn {
+#abtn .btns button {
   pointer-events: auto;
 }
 body[data-hand="left"] #abtn {
@@ -1585,14 +1588,23 @@ body[data-hand="left"] #abtn {
 
    Cụm dính vào GÓC MÀN HÌNH (theo camera), không dính vào nhân vật — nhân vật
    chạy khắp nơi, mà nút thì phải luôn nằm dưới ngón cái. */
-/* CẢM ỨNG / CHUỘT: một HÀNG NGANG, ba nút, cao đúng một nút.
-   Hình thoi chỉ có nghĩa khi có tay cầm — nó ở đó để KHỚP với mặt tay cầm. Bật
-   nó cho cảm ứng thì cụm cao gấp ba, đè lên hotbar trên màn hình nhỏ, và không
-   đổi lại được gì: ngón cái không có bốn vị trí cố định như tay cầm. */
+/* CẢM ỨNG / CHUỘT: HAI nút xếp theo CUNG, không phải hàng ngang.
+
+   Ngón cái quay quanh khớp gốc bàn tay, nên tầm với tự nhiên của nó là một
+   CUNG TRÒN chứ không phải một đường thẳng. Hàng ngang bắt ngón cái duỗi ra
+   xa dần khi với sang nút thứ hai; nâng nút phụ lên chừng một phần ba đường
+   kính nút chính thì cả hai nằm trên cùng cung, và quãng với tới hai nút bằng
+   nhau.
+
+   Hình thoi bốn nút chỉ bật khi có TAY CẦM — nó ở đó để KHỚP với mặt tay cầm,
+   còn ngón cái thì không có bốn vị trí cố định như thế. */
 #abtn .btns {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 16px;
+}
+#abtn .btns .b {
+  margin-bottom: calc(var(--btn-a) * 0.34);
 }
 body[data-hand="left"] #abtn .btns {
   flex-direction: row-reverse;
@@ -1616,8 +1628,9 @@ body[data-input^="pad"] #abtn .btns .y {
   display: grid;
   grid-area: 1 / 2;
 }
-body[data-input^="pad"] #abtn .btns .auto {
-  grid-area: 2 / 1;
+/* Lưới hình thoi tự lo chỗ — cung của chế độ chạm không được lẫn vào. */
+body[data-input^="pad"] #abtn .btns .b {
+  margin-bottom: 0;
 }
 body[data-input^="pad"] #abtn .btns .b {
   grid-area: 2 / 3;
@@ -1627,9 +1640,6 @@ body[data-input^="pad"] #abtn .btns .a {
 }
 /* Tay trái: lật NGANG cụm, giữ nguyên trên–dưới. Nút chính vẫn ở dưới vì đó
    là chỗ ngón cái nghỉ, dù cầm máy tay nào. */
-body[data-hand="left"][data-input^="pad"] #abtn .btns .auto {
-  grid-area: 2 / 3;
-}
 body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   grid-area: 2 / 1;
 }
@@ -1699,22 +1709,6 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   min-height: var(--btn-b);
   font-size: 1.05em;
 }
-/* TỰ ĐỘNG LÀM: nút công tắc, nhỏ hơn nút E, đặt xa nút DÙNG nhất trong cụm để
-   không bấm nhầm khi đang thao tác dồn dập. Sáng lên khi đang bật. */
-#abtn .auto {
-  width: var(--btn-b);
-  height: var(--btn-b);
-  min-height: var(--btn-b);
-  font-size: 0.62em;
-  letter-spacing: 0;
-  color: var(--ink-dim);
-}
-#abtn .auto.on {
-  background: rgba(61, 90, 130, 0.96);
-  border-color: #5aa9e6;
-  color: #dceeff;
-  box-shadow: 0 0 0 3px rgba(90, 169, 230, 0.3), 0 0 14px rgba(90, 169, 230, 0.4);
-}
 /* Nút BALO ở đỉnh hình thoi — cùng cỡ với hai nút cạnh cho cụm cân. */
 #abtn .y {
   width: var(--btn-b);
@@ -1728,28 +1722,6 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   transform: translateY(2px);
   border-bottom-width: 2px;
 }
-/* Nút XÂY THEO TUYẾN — chỉ hiện khi đang cầm công trình. */
-.linebtn {
-  align-self: flex-end;
-  margin-bottom: 3px;
-  /* Cao đúng chuẩn chạm. Trước đây `min-height: 0` đè lên luật chung
-     `button { min-height: var(--tap) }` và nút này chỉ còn ~27px — nhỏ hơn
-     nửa đầu ngón tay, mà nó lại là lối vào DUY NHẤT của chế độ xây dựng. */
-  min-height: var(--tap);
-  padding: 3px 14px;
-  font-size: calc(var(--fs-sm) * 0.9);
-  border-radius: 999px;
-  color: var(--ink-dim);
-}
-.linebtn[hidden] {
-  display: none;
-}
-.linebtn.on {
-  background: rgba(61, 90, 130, 0.96);
-  border-color: #5aa9e6;
-  color: #dceeff;
-}
-
 /* lý do không làm được — dòng nhỏ trên nút */
 #abtn .why {
   max-width: 46vw;
@@ -1841,8 +1813,8 @@ body.touch[data-orientation="landscape"] .hud-mid {
 @media (max-height: 460px) {
   :root {
     --hud-gap: 5px;
-    --btn-a: 58px;
-    --btn-b: 44px;
+    --btn-a: 64px;
+    --btn-b: 52px;
   }
   .meter {
     height: 7px;
@@ -2345,16 +2317,14 @@ body.pointer-focus .animal-card button:focus:not(:focus-visible) {
    bỏ đúng thứ dạy người chơi bấm cái gì. Chỉ tắt nhận chạm và đeo tên nút
    thật lên từng cái.
 
-   CHỈ khi `pad-std`. Trình duyệt không nhận ra sơ đồ chuẩn thì game cố ý chỉ
-   gán hai nút mặt đầu tiên (xem `input.ts`), nên người chơi KHÔNG có nút nào
-   mở chế độ xây. Giấu nút XÂY và tắt luôn nhận chạm của cụm nút lúc đó là bịt
-   nốt đường vào cuối cùng — cắm một tay cầm lạ vào là mất hẳn một tính năng. */
-body[data-input="pad-std"] #stick,
-body[data-input="pad-std"] #linebtn {
+   CHỈ tắt nhận chạm khi `pad-std`. Trình duyệt không nhận ra sơ đồ chuẩn thì
+   game cố ý chỉ gán hai nút mặt đầu tiên (xem `input.ts`) — lúc đó cụm trên
+   màn hình vẫn phải bấm được, nếu không thì cắm một tay cầm lạ vào là mất
+   luôn đường vào của mấy việc kia. */
+body[data-input="pad-std"] #stick {
   display: none;
 }
-body[data-input="pad-std"] #abtn .btns button,
-body[data-input="pad-std"] #abtn .linebtn {
+body[data-input="pad-std"] #abtn .btns button {
   pointer-events: none;
 }
 body[data-input^="pad"] #abtn .btns button {
@@ -2396,7 +2366,6 @@ body[data-input^="pad"] #abtn .btns button[data-pad]::after {
    Dòng `.why` cũng tắt: nó nói lại đúng câu mà thanh gợi ý dưới hotbar đã nói. */
 body[data-input^="pad"] #abtn .why,
 body[data-input^="pad"] #abtn .btns .b,
-body[data-input^="pad"] #abtn .btns .auto,
 body[data-input^="pad"] #abtn .btns .y {
   display: none;
 }
@@ -2419,7 +2388,8 @@ body[data-input^="pad"] #abtn .btns .y {
 .padctx {
   display: none;
 }
-body[data-input^="pad"] .padctx {
+body[data-input^="pad"] .padctx,
+body[data-auto="1"] .padctx {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2437,12 +2407,21 @@ body[data-input^="pad"] .padctx {
 .padctx[hidden] {
   display: none !important;
 }
-/* TỰ ĐỘNG ĐANG BẬT. Nút `.auto` bị giấu ở chế độ tay cầm, nên trạng thái này
-   phải hiện ở đây — và thanh phải bật lên kể cả khi không có gì khác để nói,
-   vì "nhân vật đang tự làm" là thứ quan trọng hơn cả cái nhãn trên nút. */
+/* TỰ ĐỘNG ĐANG BẬT. Công tắc nằm trong menu Tạm dừng chứ không còn trên màn
+   hình, nên trạng thái này phải hiện ở đây — và thanh phải bật lên kể cả khi
+   không có gì khác để nói, vì "nhân vật đang tự làm" là thứ quan trọng hơn cả
+   cái nhãn trên nút. */
 body[data-input^="pad"][data-auto="1"] .padctx {
   display: flex !important;
 }
+/* KHÔNG có tay cầm thì dải này vốn tắt — nhưng công tắc "Tự động làm" đã dời
+   vào menu Tạm dừng, nên trên màn hình không còn gì nói rằng nó đang bật.
+   Nhân vật tự đi làm mà người chơi không biết vì sao là kiểu mất kiểm soát khó
+   chịu nhất, nên bật dải lên cho riêng trạng thái này. */
+body[data-auto="1"] .padctx {
+  display: flex !important;
+}
+body[data-auto="1"] .padctx::after,
 body[data-input^="pad"][data-auto="1"] .padctx::after {
   content: "TỰ ĐỘNG";
   padding: 1px 8px;
@@ -2659,13 +2638,12 @@ body[data-motion="reduce"] .selname.fade {
    ========================================================================== */
 @media (max-height: 700px) {
   :root {
-    --btn-a: 62px;
-    --btn-b: 46px;
+    --btn-a: 70px;
+    --btn-b: 56px;
     --hud-gap: 6px;
   }
-  /* Cụm nút phải nằm HẲN dưới dải hotbar. Đo trên 375×600: cột cao 113px, đặt
-     cách đáy 14px thì đỉnh nó rơi vào 473 trong khi hotbar kết thúc ở 475 —
-     đúng hai pixel, đủ để nút XÂY đè lên góc nút balo. Hạ xuống 8px là hết. */
+  /* Cụm nút phải nằm HẲN dưới dải hotbar: màn thấp thì hai dải này tranh nhau
+     đúng một dòng, và cụm nút thua thì mất luôn cách chơi. */
   #abtn {
     gap: 4px;
     bottom: calc(8px + var(--sa-b));
@@ -2688,8 +2666,8 @@ body[data-motion="reduce"] .selname.fade {
    hành động là thứ không có thì không chơi được. */
 @media (max-height: 560px) {
   :root {
-    --btn-a: 56px;
-    --btn-b: 42px;
+    --btn-a: 62px;
+    --btn-b: 50px;
   }
   #minimap {
     display: none;

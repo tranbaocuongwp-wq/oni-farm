@@ -47,8 +47,8 @@ import { PAD, createGamepad, type PadInfo } from "./gamepad.ts";
 /** Một việc mà tay cầm gọi được. Trùng tên với `Intent` ở đâu được thì trùng. */
 export type PadJob =
   | "use"
+  | "interact"
   | "back"
-  | "closePopup"
   | "inventory"
   | "hotbarPrev"
   | "hotbarNext"
@@ -80,14 +80,22 @@ export interface PadBind {
 }
 
 export const PAD_MAP: readonly PadBind[] = [
-  /* MỘT nút ngữ cảnh, và nó làm TRỌN việc.
-     Trong tầm với thì làm ngay — cày, gieo, tưới, thu, đổ máng, và mở cửa hàng
-     hay cái giường khi trên tay không có việc gì cho ô đó. Ngoài tầm thì nhận
-     cả chuyến: tự đi tới, làm tới hết, bấm lần nữa là dừng. Cầm bao cám gà bấm
-     một cái là đi hết các khu mà đổ — đó mới là "nút ngữ cảnh". */
-  { nut: PAD.A, viec: "use", mo: "Làm — trong tầm thì làm ngay, ngoài tầm thì tự đi làm cho xong. Bấm nữa để dừng." },
-  { nut: PAD.B, viec: "back", mo: "Quay lại — đóng thứ đang mở, không mở gì thì bật menu." },
-  { nut: PAD.X, viec: "closePopup", mo: "Tắt popup đang nổi (bảng con vật, bản đồ nhỏ, chế độ xây).", canStd: true },
+  /* HAI nút ngữ cảnh, và chúng trả lời hai câu khác nhau — đúng lời Cường:
+     "một nút ngữ cảnh chính là hành động, một nút ngữ cảnh phụ là tra cứu
+     thông tin gần đó."
+
+     A quyết định bằng MÓN ĐANG CẦM × hoàn cảnh trong một bán kính quanh nhân
+     vật, và có kèm di chuyển: việc trong bán kính mà ngoài tầm với thì tự đi
+     tới làm cho xong rồi DỪNG. Nó KHÔNG còn "nhận cả chuyến" quét cả bản đồ —
+     ở 1.27.0 nó làm thế, và chơi thật thì thành "bấm vô cái nó chạy đi tùm lum
+     nhổ cỏ lượm đá" trong khi người chơi đang đứng cạnh chuồng gà. */
+  { nut: PAD.A, viec: "use", mo: "Làm — theo món đang cầm và những gì quanh mình. Ngoài tầm thì tự đi tới làm rồi dừng." },
+  { nut: PAD.B, viec: "interact", mo: "Tra cứu — bảng con vật, bảng khu, thẻ ô gần mình. Không đổi gì cả." },
+  /* X = QUAY LẠI. Cố ý KHÔNG rào sau `canStd`: từ khi B mang việc tra cứu thì
+     đây là nút thoát duy nhất ngoài START, và cắm một tay cầm mà trình duyệt
+     không nhận ra sơ đồ chuẩn thì mất hẳn đường lùi. Đoán sai thì cái giá chỉ
+     là mở nhầm một cái menu đóng lại được. */
+  { nut: PAD.X, viec: "back", mo: "Quay lại — đóng thứ đang mở, không mở gì thì bật menu." },
   /* Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó rồi
      bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới. */
   { nut: PAD.Y, viec: "inventory", mo: "Mở balo.", canStd: true },
@@ -134,7 +142,6 @@ export type Intent =
   /** QUAY LẠI: đóng thứ đang mở, không có gì mở thì bật menu tạm dừng. */
   | { t: "back" }
   /** TẮT popup đang nổi (bảng con vật, con trỏ bản đồ nhỏ, chế độ xây). */
-  | { t: "closePopup" }
   /** Đổi mức phóng khung nhìn: gần → vừa → xa → gần. */
   | { t: "zoom" }
   /** Bấm/chạm vào thế giới — toạ độ WORLD px.
@@ -544,8 +551,8 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         if (!st.pressed.has(m.nut)) continue;
         switch (m.viec) {
           case "use": push({ t: "use" }); break;
+          case "interact": push({ t: "interact" }); break;
           case "back": push({ t: "back" }); break;
-          case "closePopup": push({ t: "closePopup" }); break;
           case "inventory": push({ t: "inventory" }); break;
           case "hotbarPrev": push({ t: "selectDelta", d: -1 }); break;
           case "hotbarNext": push({ t: "selectDelta", d: 1 }); break;

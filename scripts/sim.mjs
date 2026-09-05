@@ -21,14 +21,13 @@ import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
 import { MAX_ENTITIES } from "../src/game/entities.ts";
-import { calmedByPlayer, warySpeedMul } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
 import { sellSlots } from "../src/game/inventory.ts";
-import { hintAt, interactHint, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
+import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -2285,15 +2284,23 @@ test("37. hintAt: nhãn nút đổi đúng theo vật phẩm đang cầm và tr�
     return null;
   })();
   ok(shop, "bản đồ có máy bán hạt");
-  /* Nút NGỮ CẢNH thôi mở cửa hàng — nó bám theo thứ trên tay, không hơn.
-     Trước đây nó làm cả hai, và hậu quả là: đang cày một luống dài, đi ngang
-     qua quầy thu mua, bấm tiếp thì bật bảng bán hàng. Mở cửa hàng giờ là việc
-     của NÚT TƯƠNG TÁC. */
+  /* Mở cửa hàng là HÀNH ĐỘNG, nên nó thuộc nút CHÍNH — nhưng chỉ khi đang
+     đứng NGAY chỗ nó, và chỉ khi món trên tay không dùng được vào đâu.
+
+     Hai vế đó chữa hai lỗi ngược nhau. Ở XA mà nút vẫn ghi MUA thì đang cày
+     một luống dài, đi ngang qua quầy, bấm tiếp là bật bảng bán hàng — lỗi cũ.
+     Còn dồn nó sang nút phụ thì nút phụ thôi tra cứu được, mà tra cứu mới là
+     việc Cường giao cho nó. */
+  ok(hintAt(store.getState(), content, shop.x, shop.y + 1).kind !== "shop",
+    "đứng ở NHÀ mà ngắm cửa hàng thì nút chính chưa nói MUA");
+  walkTo(store, shop.x, shop.y + 1);
   h = hintAt(store.getState(), content, shop.x, shop.y + 1);
-  ok(h.kind !== "shop", "nút ngữ cảnh KHÔNG mở cửa hàng nữa");
+  eq(h.kind, "shop", "đứng NGAY cửa hàng thì nút chính nói MUA");
+  eq(h.label, "MUA", "nhãn MUA");
+  /* Và nút PHỤ tuyệt đối KHÔNG mở cửa hàng — nó chỉ đọc. */
   const ih = interactHint(store.getState(), content, shop.x, shop.y + 1);
-  eq(ih?.kind, "shop", "nút tương tác mới là nút mở cửa hàng");
-  eq(ih?.label, "MUA", "nhãn MUA");
+  ok(ih === null || ih.what === "tile", "nút phụ không mở cửa hàng, cùng lắm là thẻ ô");
+  walkTo(store, HOME.x, HOME.y);
 
   // Ô trước mặt tính đúng theo hướng
   setState(store, (st) => { st.player.dir = "left"; });
@@ -3677,13 +3684,22 @@ test("61. TỰ ĐỘNG LÀM tự đổi tay: thứ tự THU → CHỮA → GIEO 
     "tự động KHÔNG chặt cây đập đá — đó là thứ không hoàn tác được");
 });
 
-test("62. con vật ĐỨNG LẠI khi người chơi tới gần, đi xa thì đi tiếp", () => {
+test("62. con vật KHÔNG dừng lại vì người chơi, mà bấm vẫn trúng", () => {
   const content = loadContent();
   const store = createStore(createNewGame(content, 777), content, { validate: true, strict: true });
 
-  /* Con bò đi lang thang mà tầm với chỉ 1,6 ô: nhắm vào nó rồi bấm thì trong
-     nửa giây nó đã nhích ra ngoài tầm, và thao tác trượt vì một lý do không
-     nhìn thấy được. */
+  /* Hợp đồng ĐẢO NGƯỢC so với bản cũ, và đảo có chủ ý.
+
+     Ở đây từng có hai vành làm con vật chậm lại rồi đứng phắt khi người chơi
+     tới gần (`calmedByPlayer`, `warySpeedMul`). Chúng sinh ra để chữa lo ngại
+     "nhắm vào con bò, bấm, mà nó đã nhích ra ngoài tầm". Cường bảo ba lần rằng
+     anh không muốn thế, và đo lại thì lo ngại kia không đứng vững:
+
+       trễ một thao tác = 0,42 × (1 − 0,5) = 0,21 s
+       con nhanh nhất   = 30 px/s → nhích 0,39 ô
+       tầm với          = 1,4 ô
+
+     Kịch bản này khoá cả hai vế: con vật VẪN ĐI, và thao tác VẪN TRÚNG. */
   setState(store, (s) => {
     const id = (s.entSeq || 0) + 1;
     s.entSeq = id;
@@ -3699,20 +3715,28 @@ test("62. con vật ĐỨNG LẠI khi người chơi tới gần, đi xa thì đ
   const bo = () => store.getState().entities[0];
   const x0 = bo().x;
   const y0 = bo().y;
-  for (let i = 0; i < 600; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
-  eq(bo().x, x0, "người chơi đứng sát: con bò không nhích ngang");
-  eq(bo().y, y0, "…cũng không nhích dọc");
-
-  // đẩy người chơi ra xa: con bò được đi tiếp
-  setState(store, (s) => {
-    s.player.x = s.player.x + 12 * TILE;
-  });
-  let dichuyen = false;
-  for (let i = 0; i < 3000 && !dichuyen; i++) {
+  let diDuoc = false;
+  for (let i = 0; i < 3000 && !diDuoc; i++) {
     store.dispatch({ t: "TICK", dt: 1 / 60 });
-    if (bo().x !== x0 || bo().y !== y0) dichuyen = true;
+    if (bo().x !== x0 || bo().y !== y0) diDuoc = true;
   }
-  ok(dichuyen, "người chơi đi xa thì con bò lang thang trở lại");
+  ok(diDuoc, "người chơi đứng SÁT mà con bò vẫn đi — không còn vùng bất động quanh người");
+
+  /* …và vế thứ hai: thao tác nhắm vào nó vẫn trúng dù nó đang đi.
+     Đặt nó tới lứa, đứng sát, bấm THU — phải ra sữa. */
+  setState(store, (s) => {
+    const e = s.entities[0];
+    e.animal.age = 99;
+    e.animal.prod = [999999];
+    e.x = s.player.x + TILE;
+    e.y = s.player.y;
+  });
+  const sua = content.animals.cow.products[0].id;
+  const truoc = countInv(store, sua);
+  const ox = Math.floor(bo().x / TILE);
+  const oy = Math.floor(bo().y / TILE);
+  store.dispatch({ t: "GATHER", x: ox, y: oy });
+  ok(countInv(store, sua) > truoc, "bấm THU vào con đang đi vẫn trúng — tầm với 1,4 ô thừa sức");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến vẫn sạch");
 });
 
@@ -5482,7 +5506,9 @@ test("79. bảng khu: nút chính nói việc của CẢ KHU, nút phụ mở b�
 
   /* --- nút PHỤ: không con nào kề bên → mở BẢNG KHU */
   const h2 = interactHint(store.getState(), content, gx, gy);
-  eq(h2?.kind, "pen", "nút phụ mở bảng khu");
+  eq(h2?.what, "pen", "nút phụ mở bảng khu");
+  eq(h2?.id, khu.id, "…đúng cái khu đang đứng");
+  eq(h2?.label, "BẢNG KHU", "nhãn BẢNG KHU");
 
   /* --- BẢNG KHU đếm đúng ------------------------------------------------ */
   const tt = penSummary(store.getState(), content, khu);
@@ -5528,7 +5554,7 @@ test("79. bảng khu: nút chính nói việc của CẢ KHU, nút phụ mở b�
    hai ô: ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại.
    Đi tới thì thấy nó nhơn nhơn đi lại cho tới lúc bụp một cái đứng im, và cảm
    giác đọc ra đúng là "nó chẳng để ý gì tới mình". */
-test("80. con vật chậm dần khi người tới gần; nút chính bám theo quanh chân", () => {
+test("80. con vật đi đúng tốc độ dù người đứng sát; nút bám theo quanh chân", () => {
   const content = loadContent();
   const store = mkStore(606);
   const loai = content.animals.cow;
@@ -5549,32 +5575,12 @@ test("80. con vật chậm dần khi người tới gần; nút chính bám theo
     return store.getState().entities[0];
   };
 
-  /* --- Ba VÀNH, ba tốc độ khác nhau. Đây là dây bẫy: gộp về một ngưỡng là
-     luật quay lại thành cái công tắc cũ. */
-  /* Gọi `dat()` TRƯỚC rồi mới đọc state: đối số hàm tính từ trái sang phải, nên
-     viết `warySpeedMul(store.getState(), content, dat(1))` là đưa vào state CŨ
-     (người chơi còn ở chỗ khác) cùng con vật MỚI — và phép đo ra sai. */
-  const he = (cachO) => {
-    const e = dat(cachO);
-    return warySpeedMul(store.getState(), content, e);
-  };
-  const k0 = he(1);
-  const k1 = he(3);
-  const k2 = he(8);
-  ok(k0 < k1, `sát bên phải chậm hơn ở tầm trung (${k0} vs ${k1})`);
-  ok(k1 < k2, `tầm trung phải chậm hơn ở xa (${k1} vs ${k2})`);
-  eq(k2, 1, "ra xa hẳn thì đi đúng tốc độ của content");
-  ok(k0 > 0, "không được là 0 — dừng hẳn là việc của `calmedByPlayer`, một chỗ thôi");
+  /* KHOẢNG CÁCH TỚI NGƯỜI CHƠI KHÔNG CÒN ĐỔI TỐC ĐỘ GÌ CẢ.
 
-  /* --- Và ĐỨNG HẲN trong hai ô, đúng như trước. */
-  const im = (cachO) => {
-    const e = dat(cachO);
-    return calmedByPlayer(store.getState(), content, e);
-  };
-  ok(im(1), "trong hai ô thì đứng hẳn lại");
-  ok(!im(3), "ba ô thì chưa dừng, chỉ chậm lại");
-
-  /* --- Đi thật: cùng một khoảng thời gian, ở gần đi được ÍT hơn ở xa. */
+     Bản cũ có ba vành tốc độ (sát / tầm trung / xa) và một vành đứng hẳn. Cường
+     bảo ba lần rằng anh không muốn con vật dừng lại khi anh tới gần, nên cả bốn
+     đã bị gỡ. Kịch bản này khoá chiều ngược lại: đứng sát hay đứng xa, trong
+     cùng một khoảng thời gian con vật phải đi được NGẦN ẤY. */
   const diDuoc = (cachO) => {
     dat(cachO);
     setState(store, (s) => {
@@ -5589,10 +5595,14 @@ test("80. con vật chậm dần khi người tới gần; nút chính bám theo
     for (let i = 0; i < 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
     return store.getState().entities[0].x - x0;
   };
+  const sat = diDuoc(1);
   const gan = diDuoc(3);
   const xa = diDuoc(9);
-  ok(gan > 0 && xa > 0, "cả hai đều đi được");
-  ok(gan < xa * 0.95, `ở gần phải đi CHẬM hơn hẳn (${gan.toFixed(1)} vs ${xa.toFixed(1)} px/giây)`);
+  ok(sat > 0, `đứng SÁT một ô mà con vật vẫn đi (${sat.toFixed(1)} px/giây)`);
+  ok(
+    Math.abs(sat - xa) < 0.5 && Math.abs(gan - xa) < 0.5,
+    `ba khoảng cách, một tốc độ: ${sat.toFixed(1)} / ${gan.toFixed(1)} / ${xa.toFixed(1)}`,
+  );
 
   /* --- NÚT PHỤ bám theo công trình quanh mình, kể cả ô CHÉO --------------
      Bốn ô kề thẳng bỏ sót đúng ca hay gặp nhất: đứng chéo góc quầy. */
@@ -5601,13 +5611,13 @@ test("80. con vật chậm dần khi người tới gần; nút chính bám theo
      nên câu trả lời chỉ có thể tới từ phép quét chéo. Quét bốn ô kề thẳng như
      bản cũ thì ở đây nút phụ tắt ngóm. */
   walkTo(store, quay.x + 1, quay.y + 1);
-  const ih = interactHint(
-    store.getState(),
-    content,
-    Math.floor(store.getState().player.x / TILE),
-    Math.floor(store.getState().player.y / TILE),
-  );
-  eq(ih?.kind, "sell", "đứng CHÉO góc quầy thu mua vẫn bấm bán được");
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+  const caQuay = contextAction(store.getState(), content, px, py);
+  eq(caQuay?.kind, "sell", "đứng CHÉO góc quầy thu mua vẫn bấm bán được");
+  /* Và đó là việc của nút CHÍNH, không phải nút phụ: nút phụ chỉ ĐỌC. */
+  const ih = interactHint(store.getState(), content, px, py);
+  ok(ih === null || ih.what === "tile", "nút phụ không mở bảng bán, cùng lắm là thẻ ô");
 
   /* --- NÚT CHÍNH bám theo địa hình quanh chân --------------------------- */
   const store2 = mkStore(607);
@@ -5689,17 +5699,25 @@ test("81. sơ đồ nút tay cầm: không nút nào hai việc, không việc n
   deepEq(conTrong, [], "không được để nút mặt/vai/cò/cần nào trống việc");
 
   // --- Và những việc quan trọng nhất phải CÓ MẶT ---
-  for (const v of ["use", "back", "closePopup", "inventory", "run", "zoom", "map", "menu", "build", "padHelp"])
+  for (const v of ["use", "interact", "back", "inventory", "run", "zoom", "map", "menu", "build", "padHelp"])
     ok(theoViec.has(v), `phải có nút cho việc '${v}'`);
 
-  /* MỘT nút ngữ cảnh duy nhất. `interact` và `auto` KHÔNG còn là nút riêng trên
-     tay cầm: nút A làm cả hai (mở cửa hàng khi trên tay không có việc cho ô đó;
-     nhận cả chuyến khi ngoài tầm với). Hai chỗ đó được giải phóng cho B = quay
-     lại và X = tắt popup, đúng thứ Cường yêu cầu. */
-  ok(!theoViec.has("interact"), "không còn nút TƯƠNG TÁC riêng — nút A gánh");
-  ok(!theoViec.has("auto"), "không còn nút TỰ ĐỘNG riêng — nút A gánh");
-  eq(theoNut.get(PAD.B), "back", "B là QUAY LẠI");
-  eq(theoNut.get(PAD.X), "closePopup", "X là TẮT POPUP");
+  /* HAI nút ngữ cảnh, hai câu hỏi khác nhau — đúng lời Cường: "một nút ngữ
+     cảnh chính là hành động, một nút ngữ cảnh phụ là tra cứu thông tin gần
+     đó". A hành động, B tra cứu, và "quay lại" dời sang X. `closePopup` biến
+     mất: X đã gánh cả việc đóng, nên giữ thêm một việc thứ hai cho nó là để
+     một nút hai việc. */
+  eq(theoNut.get(PAD.A), "use", "A là HÀNH ĐỘNG");
+  eq(theoNut.get(PAD.B), "interact", "B là TRA CỨU");
+  eq(theoNut.get(PAD.X), "back", "X là QUAY LẠI / ĐÓNG");
+  eq(theoNut.get(PAD.Y), "inventory", "Y là BALO");
+  ok(!theoViec.has("closePopup"), "không còn việc 'closePopup' riêng — X gánh");
+  ok(!theoViec.has("auto"), "không còn nút TỰ ĐỘNG riêng — công tắc nằm trong menu");
+
+  /* X phải chạy được cả trên tay cầm mà trình duyệt KHÔNG nhận ra sơ đồ chuẩn.
+     Từ khi B mang việc tra cứu thì đây là đường lùi duy nhất ngoài START; rào
+     nó sau `canStd` là cắm một tay cầm lạ vào thì mất hẳn nút thoát. */
+  ok(!PAD_MAP.find((m) => m.viec === "back").canStd, "nút QUAY LẠI không được rào sau sơ đồ chuẩn");
 
   /* --- CHẠY chỉ ở một chỗ: cò trái. `run` là việc GIỮ nên `poll` phải BỎ QUA
      nó — nếu không thì mỗi lần bóp cò lại phát thêm một ý định thứ hai. */
@@ -5972,11 +5990,14 @@ test("87. máng NHỚ MÓN đang có, và không trộn hai món vào một mán
   eq(troughItem(store.getState(), m.x, m.y), null, "…và quên luôn tên món, nên hình vẽ về đúng 'trống'");
 });
 
-test("88. con vật ĐÓI thì bất chấp người đứng cạnh — cái bụng thắng sự dè chừng", () => {
-  /* Luật "tới gần thì đứng lại" (kịch bản 62) từng áp cho cả con đang đói. Hậu
-     quả: người chơi rắc cám ngay dưới chân mình rồi đứng đó xem, mà chỗ rắc thì
-     lúc nào cũng nằm trong tầm dè chừng — con vật dừng cách mẻ cám một ô và
-     không bao giờ tới. Đứng cạnh cái máng vừa đổ cũng y hệt. */
+test("88. rắc/đổ xong đứng ngay đó xem thì con vật vẫn tới ăn", () => {
+  /* Luật "tới gần thì đứng lại" từng chặn đúng cảnh này: người chơi đổ máng rồi
+     đứng đó xem, mà chỗ đổ thì lúc nào cũng nằm trong tầm dè chừng — con vật
+     dừng cách cái máng một ô và không bao giờ tới.
+
+     Đợt ấy tôi mới miễn cho con ĐANG ĐÓI. Giờ cả luật đã bị gỡ (kịch bản 62),
+     nên kịch bản này thôi hỏi hàm nào cả và chỉ khoá đúng thứ người chơi thấy:
+     đứng sát máng, con vật vẫn tới, vẫn ăn. */
   const store = mkStore(1202);
   const khu = content.tiles.pens.find((p) => p.id === "cattle");
   const m = pourSpotIn(store.getState(), content, khu);
@@ -5997,20 +6018,10 @@ test("88. con vật ĐÓI thì bất chấp người đứng cạnh — cái b�
     }];
   });
   const bo = () => store.getState().entities[0];
-  eq(calmedByPlayer(store.getState(), content, bo()), false, "đang đói thì KHÔNG đứng lại vì người");
-  eq(warySpeedMul(store.getState(), content, bo()), 1, "…và cũng không đi chậm lại");
-
   let k = 0;
   for (; k < 2000 && bo().animal.fed <= 0; k++) store.dispatch({ t: "TICK", dt: 1 / 60 });
   ok(bo().animal.fed > 0, `con bò vẫn tới ăn dù người đứng ngay cạnh máng (${k} khung hình)`);
 
-  // …còn con ĐÃ NO thì luật dè chừng vẫn nguyên (kịch bản 62 không bị phá)
-  setState(store, (s) => {
-    s.entities[0].animal.fed = content.animals.cow.fedMinutes;
-    s.entities[0].x = s.player.x + TILE;
-    s.entities[0].y = s.player.y;
-  });
-  eq(calmedByPlayer(store.getState(), content, bo()), true, "con NO đứng gần người thì vẫn dừng lại");
 });
 
 test("89. rắc cám xuống hồ để lại thức ăn THẬT, và bảng khu đọc được nó", () => {
@@ -6049,10 +6060,12 @@ test("89. rắc cám xuống hồ để lại thức ăn THẬT, và bảng khu 
   eq(bang.mang.n, troughStock(store.getState(), oAn.x, oAn.y), "…và nó nói đúng số phần đang có");
 });
 
-test("90. nút ngữ cảnh nhận CẢ CHUYẾN: cầm thức ăn thì đổ máng đứng đầu bảng ưu tiên", () => {
-  /* "Cầm bao cám gà, bấm một cái, nhân vật tự đi tới khu gà mà đổ cho xong."
-     Bộ máy đã có sẵn (`autoJob` biết đi tới, đổi công cụ, tự tắt khi hết việc);
-     thứ thiếu là ĐỔ MÁNG chưa có tên trong bảng ưu tiên. */
+test("90. chế độ TỰ ĐỘNG LÀM: đổ máng đứng đầu bảng ưu tiên", () => {
+  /* `autoJob` là bộ máy của công tắc "Tự động làm" — từ 1.31.0 nó nằm trong
+     menu Tạm dừng, KHÔNG còn là thứ nút ngữ cảnh lén bật lên. Nút ngữ cảnh chỉ
+     làm MỘT việc trong bán kính quanh chân (xem kịch bản 99–100); còn cái công
+     tắc này mới là "làm cho tới hết", và ở đó thứ tự ưu tiên vẫn quan trọng:
+     con vật chết đói được, cây thì chỉ đứng chờ. */
   eq(AUTO_ORDER[0], "pour", "ĐỔ MÁNG đứng đầu — con vật chết đói được, cây thì chỉ đứng chờ");
   eq(AUTO_ORDER[1], "feedpond", "…rồi tới RẮC HỒ");
 
@@ -6588,6 +6601,210 @@ test("98. khúc gỗ trên đường KHÔNG chặn xe, và penWander tất đị
   deepEq(a, b, "cùng bước quyết định thì cùng ô, dù `minutes` lệch phần lẻ");
   const c2 = penWander({ ...store.getState(), actStep: 41, minutes: 610.5 }, con, khu);
   ok(a.x !== c2.x || a.y !== c2.y, "…và bước kế tiếp thì đổi ô, không đứng chết một chỗ");
+});
+
+
+/* ========================================================================== */
+/* 99–102. Nút ngữ cảnh: món đang cầm × bán kính quanh chân                   */
+/* ========================================================================== */
+
+test("99. cầm cám gà đứng gần chuồng gà thì nút chính nói ĐỔ MÁNG, không nhổ cỏ", () => {
+  /* Đây là kịch bản viết thẳng từ lời Cường sau khi chơi bản 1.30.0:
+
+       "Tôi thấy bấm vô cái nó chạy đi tùm lum nhổ cỏ lượm đá gì. Mà rõ ràng
+        là tôi đang ở trong gần chuồng gà."
+
+     Hai lỗi cộng lại thành cảnh đó. (a) `canUseAt` trả về việc nhổ cỏ kể cả
+     khi tay đang cầm bao cám — vì cỏ nhổ được bằng tay không — nên "gần nhất
+     thắng" cho ra nhổ cỏ. (b) `penAction` chỉ nhận lề MỘT ô quanh khu, nên
+     đứng cách rào ba ô đã là "không ở gần chuồng gà". */
+  const store = mkStore(1401);
+  const khu = content.tiles.pens.find((p) => p.id === "coop");
+  const m = pourSpotIn(store.getState(), content, khu);
+  ok(!!m, "khu gia cầm có máng");
+
+  /* Đứng BA Ô dưới mép chuồng — ngoài hàng rào hẳn hoi. (38,27) là một ô
+     trống trên dải đất dưới khu gia cầm; hàng 25 là rào, hàng 26 là đường. */
+  const px = 38;
+  const py = khu.y + khu.h - 1 + 3;
+  ok(px >= khu.x && px < khu.x + khu.w, "…và đứng thẳng dưới bề ngang của khu");
+  ok(py - (khu.y + khu.h - 1) <= PEN_MARGIN, "…và ba ô vẫn nằm trong lề coi là 'gần chuồng'");
+  setState(store, (s) => {
+    s.player.x = px * TILE + 8;
+    s.player.y = py * TILE + 8;
+    // Một bụi cỏ NGAY CẠNH: nhổ được bằng tay không, nên `canUseAt` gật đầu
+    // kể cả khi tay đang ôm bao bắp. Nút vẫn không được chọn nó.
+    putProp(s, px + 3, py, "bush");
+    /* Và một luống RAU CHÍN ngay dưới chân. Đây mới là cái bẫy thật: thu hoạch
+       KHÔNG nằm trong nhóm "việc dọn dẹp" nên phép quét quanh chân nhận nó, và
+       nó cách 1 ô trong khi cái máng cách bốn. Không có luật "việc nhờ món
+       đang cầm thắng tuyệt đối" thì nút sẽ ghi THU — tức là bỏ chuồng gà mà đi
+       hái rau, đúng loại lạc đề Cường đang phàn nàn. */
+    const t = s.tiles[idx(s.w, px, py + 1)];
+    t.prop = null;
+    t.tilled = true;
+    t.crop = { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false };
+  });
+  eq(tile(store, px + 3, py).prop, "bush", "có bụi cỏ nhổ được ở gần");
+  eq(canUseAt(store.getState(), content, px, py + 1), "harvest", "và một luống rau CHÍN ngay dưới chân");
+  deepEq(checkInvariants(store.getState(), content), [], "chỗ đứng dựng ra vẫn hợp lệ");
+
+  /* `crop:corn` CHỈ khu gia cầm nhận — `item:feedmix` cả ba chuồng khô đều
+     nhận, nên nó không phân biệt được chuồng nào là chuồng đúng. */
+  giveItem(store, "crop:corn", 20);
+  selectItem(store, "crop:corn");
+
+  const ca = contextAction(store.getState(), content, px, py);
+  ok(!!ca, "đứng gần chuồng gà cầm bắp thì nút chính PHẢI có việc");
+  eq(ca.kind, "pour", "và việc đó là ĐỔ MÁNG, không phải nhổ cỏ");
+  eq(`${ca.at.x},${ca.at.y}`, `${m.x},${m.y}`, "…dắt tới đúng cái máng của khu gia cầm");
+
+  /* Vế còn lại: BỎ món ra khỏi tay thì nút thôi nói ĐỔ MÁNG. Nếu không có vế
+     này thì kịch bản xanh cả khi `penAction` bỏ qua món đang cầm. */
+  selectItem(store, "tool:hoe");
+  const ca2 = contextAction(store.getState(), content, px, py);
+  ok(ca2?.kind !== "pour", "cầm cuốc thì không còn là ĐỔ MÁNG — quyết định BÁM theo món đang cầm");
+});
+
+test("100. nút chính đi tới cho xong việc, nhưng KHÔNG quá bán kính", () => {
+  /* Nút CHÍNH kèm di chuyển — Cường nhấn mạnh: "nút ngữ cảnh chính là phải kèm
+     di chuyển để hoàn thành hành động". Nhưng chỉ trong `CTX_RADIUS`. Xa hơn
+     thì lắc đầu, chứ không nhận cả chuyến rồi chạy đi mất. */
+  ok(CTX_RADIUS >= 4 && CTX_RADIUS <= 8, `bán kính phải vừa tay (đang là ${CTX_RADIUS})`);
+  const store = mkStore(1402);
+
+  /* Chỗ đứng: một ô ruộng trống, quanh đó DỌN SẠCH mọi việc khác trong bán
+     kính để phép đo chỉ còn nói về đúng ô ta đặt ra. */
+  const plot = PLOTS[0];
+  const px = plot.x;
+  const py = plot.y;
+  const donSach = (s, r) => {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        const t = s.tiles[idx(s.w, px + dx, py + dy)];
+        if (!t) continue;
+        t.prop = null;
+        t.crop = null;
+        t.tilled = false;
+        t.wet = false;
+        t.hp = 0;
+      }
+  };
+  setState(store, (s) => {
+    s.player.x = px * TILE + 8;
+    s.player.y = py * TILE + 8;
+    s.entities = [];
+    donSach(s, CTX_RADIUS + 8);
+  });
+  selectItem(store, "tool:hoe");
+
+  /* (a) Ô cày được cách 4 ô, TRONG bán kính → nút nhận việc và chỉ đúng ô đó. */
+  const gan = { x: px + 4, y: py };
+  ok(isTillable(store.getState(), content, gan.x, gan.y), "ô cách 4 ô cày được");
+  const ca = contextAction(store.getState(), content, px, py);
+  ok(!!ca, "việc cách 4 ô thì nút chính nhận");
+  eq(ca.kind, "till", "và nó là CÀY");
+  const d = Math.hypot(ca.at.x - px, ca.at.y - py);
+  ok(d <= CTX_RADIUS, `đích phải nằm trong bán kính (đang cách ${d.toFixed(1)} ô)`);
+
+  /* (b) Đẩy mọi ô cày được ra NGOÀI bán kính → nút lắc đầu, không nhận chuyến.
+     `nearestTarget` không bị giới hạn thì chỗ này vẫn ra `till` ở tận đầu kia
+     nông trại, đúng cái "chạy đi tùm lum" phải chặn. */
+  setState(store, (s) => {
+    for (let dy = -CTX_RADIUS; dy <= CTX_RADIUS; dy++)
+      for (let dx = -CTX_RADIUS; dx <= CTX_RADIUS; dx++) {
+        const t = s.tiles[idx(s.w, px + dx, py + dy)];
+        if (t) t.tilled = true; // đã cày rồi thì không cày nữa
+      }
+  });
+  ok(!isTillable(store.getState(), content, gan.x, gan.y), "…giờ quanh chân không còn ô nào cày được");
+  const ca2 = contextAction(store.getState(), content, px, py);
+  ok(ca2?.kind !== "till", "ngoài bán kính thì nút chính KHÔNG nhận việc cày ở xa");
+});
+
+test("101. trễ một thao tác không đủ để con vật đi khỏi tầm với", () => {
+  /* Con số nền của quyết định ở Đợt 5: đã bỏ hẳn hai vành làm con vật chậm lại
+     rồi đứng phắt khi người chơi tới gần. Bỏ được là vì trễ một thao tác quá
+     ngắn so với tầm với — và kịch bản này khoá đúng phép đo ấy, để sau này ai
+     tăng tốc độ con vật hay kéo dài `actionSeconds` thì đỏ ngay chứ không phải
+     phát hiện bằng cách chơi. */
+  const tre = content.balance.actionSeconds * (1 - content.balance.actionImpact);
+  ok(tre > 0, `trễ một thao tác = ${tre.toFixed(2)}s`);
+  const nhanhNhat = Math.max(...Object.values(content.animals).map((d) => d.speed));
+  const nhichO = (nhanhNhat * tre) / TILE;
+  ok(nhichO < 1.0, `con nhanh nhất (${nhanhNhat} px/s) chỉ nhích ${nhichO.toFixed(2)} ô trong lúc thao tác chạy`);
+
+  /* …và đo THẬT: cho con bò đi suốt quãng trễ rồi mới bấm THU. */
+  const store = mkStore(1403);
+  const loai = content.animals.cow;
+  setState(store, (s) => {
+    s.entSeq = 1;
+    const cx = Math.floor(s.player.x / TILE);
+    const cy = Math.floor(s.player.y / TILE);
+    s.entities = [{
+      id: 1, kind: "animal", def: "cow", map: s.mapId,
+      x: (cx + 1) * TILE + 8, y: cy * TILE + 8,
+      dir: "right", anim: 0, seed: 77,
+      ai: { phase: "wander", until: 9, tx: -1, ty: -1, path: [1, 2, 3, 4].map((k) => idx(s.w, cx + 1 + k, cy)) },
+      animal: { age: 99, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map(() => 999999) },
+    }];
+    s.entities[0].ai.planAt = -999;
+  });
+  const con = () => store.getState().entities[0];
+  const x0 = con().x;
+  for (let i = 0; i < Math.round(tre * 60); i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  ok(con().x !== x0, "con bò VẪN ĐI trong lúc thao tác đang chạy — không còn vùng bất động");
+
+  const sua = loai.products[0].id;
+  const truoc = countInv(store, sua);
+  store.dispatch({ t: "GATHER", x: Math.floor(con().x / TILE), y: Math.floor(con().y / TILE) });
+  ok(countInv(store, sua) > truoc, "…mà bấm THU sau khi hết trễ vẫn trúng");
+});
+
+test("102. nút ngữ cảnh PHỤ chỉ tra cứu, không bao giờ đổi state", () => {
+  /* "Một nút ngữ cảnh chính là hành động / một nút ngữ cảnh phụ là tra cứu
+     thông tin gần đó." Trước đợt này nút phụ mở cửa hàng, lên giường, múc
+     nước — tức là đổi state — và vai hành động luôn nuốt vai tra cứu. */
+  const store = mkStore(1404);
+  const quay = timVatThe("counter");
+  walkTo(store, quay.x + 1, quay.y + 1);
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+
+  const ih = interactHint(store.getState(), content, px, py);
+  /* Không có gì trong `InfoHint` là một việc: ba nhánh đều chỉ MỞ MỘT BẢNG. */
+  for (const k of ["shop", "sell", "craft", "sleep", "refill", "enter", "store", "pour", "gather"])
+    ok(ih?.what !== k, `nút phụ không được mang việc '${k}'`);
+  ok(ih === null || ["animal", "pen", "tile"].includes(ih.what), "nút phụ chỉ trả về thứ ĐỌC ĐƯỢC");
+
+  /* Bên cạnh con vật thì nó mở bảng CON VẬT, và nhãn gọi đúng tên con. */
+  const loai = content.animals.cow;
+  setState(store, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "cow", map: s.mapId,
+      x: s.player.x + TILE * 0.6, y: s.player.y,
+      dir: "left", anim: 0, seed: 9,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map(() => 0) },
+    }];
+  });
+  const truoc = clone(store.getState());
+  const ih2 = interactHint(store.getState(), content, px, py);
+  eq(ih2?.what, "animal", "cạnh con bò thì nút phụ mở BẢNG CON VẬT");
+  eq(ih2?.id, 1, "…đúng con đang đứng cạnh");
+  eq(ih2?.label, `XEM ${loai.name.toUpperCase()}`, "nhãn gọi đúng tên con");
+  deepEq(store.getState(), truoc, "hỏi nút phụ KHÔNG đổi state một chút nào");
+
+  /* Thẻ Ô: nói con số người chơi phải nhẩm, chứ không nói tên loại đất. */
+  const plot = PLOTS[0];
+  selectItem(store, "tool:hoe");
+  walkTo(store, plot.x, plot.y);
+  use(store, plot.x, plot.y);
+  selectItem(store, "seed:lettuce");
+  use(store, plot.x, plot.y);
+  const tt = tileInfo(store.getState(), content, plot.x, plot.y);
+  ok(!!tt && /còn \d+ ngày/.test(tt), `thẻ ô nói còn mấy ngày nữa chín (đang là "${tt}")`);
 });
 
 /* ------------------------------------------------------------------ tổng kết */

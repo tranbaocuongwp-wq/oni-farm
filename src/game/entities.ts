@@ -185,72 +185,25 @@ export function removeEntity(d: Draft, id: number): boolean {
   return true;
 }
 
-/** Bán kính con vật ĐỨNG LẠI khi người chơi tới gần, tính bằng ô.
- *  Rộng hơn tầm tương tác (`animalNear` dùng 1,4 ô) một chút, để lúc bấm được
- *  thì con vật đã đứng yên rồi chứ không phải đang nhích ra khỏi tầm. */
-export const CALM_TILES = 2;
+/* CON VẬT KHÔNG DỪNG LẠI VÌ NGƯỜI CHƠI. Chấm hết.
 
-/**
- * Bán kính con vật bắt đầu DÈ CHỪNG — đi chậm dần lại vì thấy có người tới.
- *
- * Vì sao cần một vành thứ hai: chỉ có `CALM_TILES` thì luật là một cái công
- * tắc — ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại.
- * Người chơi đi tới thấy nó vẫn nhơn nhơn đi lại cho tới lúc bụp một cái đứng
- * im, và cảm giác đọc ra là "nó chẳng để ý gì tới mình". Con vật thật thì
- * NGẦN NGỪ trước đã: nghe tiếng chân là chậm lại, tới gần nữa mới dừng hẳn.
- *
- * Bốn ô rưỡi là quãng vừa đủ để cái chậm lại đó nhìn thấy được ở tốc độ đi bộ
- * mà không biến cả nông trại thành một vùng bất động quanh người chơi.
- */
-export const WARY_TILES = 4.5;
+   Ở đây từng có hai vành: `calmedByPlayer` (đứng phắt trong 2 ô) và
+   `warySpeedMul` (chậm còn 25 % từ 4,5 ô). Cả hai sinh ra để chữa một lo ngại:
+   "nhắm vào con bò, bấm, mà trong lúc tay chưa chạm tới thì nó đã nhích ra
+   ngoài tầm".
 
-/**
- * Hệ số tốc độ của con vật theo khoảng cách tới người chơi: 1 khi ở xa, giảm
- * dần trong vành dè chừng, 0 khi đã đứng hẳn lại.
- *
- * Không bao giờ trả về đúng 0 trong vành dè chừng — 0 là việc của
- * `calmedByPlayer`, và hai chỗ cùng quyết định "dừng" là hai chỗ để lệch nhau.
- */
-export function warySpeedMul(s: GameState, content: Content, e: Entity): number {
-  if (e.kind !== "animal") return 1;
-  if (animalDef(content, e.def)?.job === "pest") return 1;
-  if (e.map !== s.mapId) return 1;
-  if (onFarmTile(s, e)) return 1; // đang đứng trên luống thì phải đi cho khuất, đừng chậm lại
-  if (isHungry(e)) return 1; // ĐÓI thì cái bụng thắng sự dè chừng — xem `calmedByPlayer`
-  const d = Math.hypot(e.x - s.player.x, e.y - s.player.y) / TILE;
-  if (d >= WARY_TILES) return 1;
-  if (d <= CALM_TILES) return 0.25;
-  return 0.25 + 0.75 * ((d - CALM_TILES) / (WARY_TILES - CALM_TILES));
-}
+   Đo lại bằng chính con số trong content thì lo ngại đó không đứng vững:
 
-/**
- * Con vật này có đang đứng yên vì người chơi tới gần không?
- *
- * Lý do có hàm này: con bò đi lang thang liên tục, mà tầm với chỉ hơn một ô.
- * Người chơi nhắm vào nó, bấm, thì trong nửa giây giữa lúc nhắm và lúc tay chạm
- * tới, con bò đã nhích ra ngoài tầm — thao tác trượt, và trượt vì một lý do
- * không nhìn thấy được. Đứng lại khi có người tới là hành vi vừa tự nhiên vừa
- * sửa đúng chỗ đó.
- *
- * KHÔNG áp cho sâu bọ (chúng phải chạy), cho người làm thuê (đứng cạnh nhau mà
- * cả hai đứng đực ra thì việc không xong) và cho xe.
- */
-export function calmedByPlayer(s: GameState, content: Content, e: Entity): boolean {
-  if (e.kind !== "animal") return false;
-  if (animalDef(content, e.def)?.job === "pest") return false;
-  if (e.map !== s.mapId) return false;
-  /* Đang đứng trên LUỐNG thì KHÔNG đứng lại — phải đi cho khuất.
-     Nếu không thì cày ngay dưới chân con bò là nó đứng chết trên luống vừa
-     cày: luật "tới gần thì đứng lại" giữ nó ở đúng chỗ nó không được ở, và
-     người chơi phải đi vòng ra xa mới đuổi được nó đi. */
-  if (onFarmTile(s, e)) return false;
-  /* ĐÓI thì KHÔNG đứng lại. Người chơi vừa rắc cám ngay dưới chân mình rồi đứng
-     đó xem — mà chỗ rắc thì lúc nào cũng nằm trong tầm dè chừng, nên con vật
-     dừng lại cách mẻ cám một ô và không bao giờ tới. Đứng bên cái máng vừa đổ
-     cũng y hệt. Cái bụng phải thắng sự dè chừng, đúng như ngoài đời. */
-  if (isHungry(e)) return false;
-  return Math.hypot(e.x - s.player.x, e.y - s.player.y) <= CALM_TILES * TILE;
-}
+     trễ của một thao tác = actionSeconds 0,42 × (1 − actionImpact 0,5) = 0,21 s
+     con nhanh nhất (gà)  = 30 px/s  → nhích 0,39 ô
+     tầm với animalNear   = 1,4 ô
+
+   Con nhanh nhất cũng chỉ đi hết một phần tư tầm với trong lúc thao tác đang
+   chạy. Cái giá thì Cường trả suốt: cả nông trại hoá thành vùng bất động mỗi
+   khi đi ngang, và anh phải nói ba lần mới hết. Bỏ hẳn.
+
+   Nếu sau này lại thấy bấm hụt con vật, chỗ sửa là TẦM VỚI của thao tác, không
+   phải đóng băng thế giới. */
 
 /** Con vật này có đang đứng trên ô ĐÃ CÀY không. */
 export function onFarmTile(s: GameState, e: Entity): boolean {
@@ -311,26 +264,6 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
     const cur = s.entities[i]!;
     if (cur.map !== s.mapId) continue;
 
-    /* Người chơi tới gần: ĐỨNG LẠI và NGƯỚC NHÌN.
-       Phải xét TRƯỚC cái `continue` của "không có đường đi" bên dưới — con vật
-       đang đứng yên chính là con hay bị bấm nhất, mà nó lại là con duy nhất
-       không bao giờ chạy tới được nhánh này nếu xét sau.
-       Giữ nguyên `path` thay vì xoá: xoá thì bước quyết định kế tiếp lại tính
-       đường mới, và mỗi lần đi ngang qua chuồng là cả đàn tiêu sạch ngân sách
-       A*. Giữ lại thì bước ra xa một cái là nó đi tiếp đúng chỗ đang đi. */
-    if (calmedByPlayer(s, content, cur)) {
-      /* Quay đầu nhìn là chi tiết rẻ nhất trong cả file mà đổi cảm giác nhiều
-         nhất: tới gần con bò mà nó ngoái lại thì nó là một con vật; đứng trơ
-         một hướng thì nó là hình dán. Suy thẳng từ vị trí người chơi nên vẫn
-         tất định, không rút hạt ngẫu nhiên nào. */
-      const look = dirOf(s.player.x - cur.x, s.player.y - cur.y, cur.dir);
-      if (look !== cur.dir) {
-        const m = dEntity(d, i);
-        if (m) m.dir = look;
-      }
-      continue;
-    }
-
     if (!cur.ai.path.length) continue;
 
     const def = actorShape(content, cur);
@@ -358,7 +291,7 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
        của content: content nói con vật đi nhanh bao nhiêu, còn đây là chuyện
        nó đang dè chừng — hai thứ khác nhau, và trộn vào nhau thì mỗi lần chỉnh
        cân bằng lại phải nhớ trừ hao cho cái vành này. */
-    const step = Math.min(len, def.speed * warySpeedMul(s, content, cur) * dt);
+    const step = Math.min(len, def.speed * dt);
     const nx = cur.x + (dx / len) * step;
     const ny = cur.y + (dy / len) * step;
     let mx = cur.x;
@@ -453,8 +386,6 @@ export function actorStep(d: Draft, content: Content): void {
 
     // Còn đường để đi thì cứ đi, không phải nghĩ gì.
     if (cur.ai.path.length) continue;
-    // Người chơi đang đứng sát: đừng lập đường mới, để nó yên mà bấm.
-    if (calmedByPlayer(s, content, cur)) continue;
 
     // Người làm thuê có bộ não riêng (workers.ts). Trả về true nghĩa là họ đã
     // tự lo xong lượt này — vật nuôi mới đi tiếp nhánh lang thang bên dưới.
