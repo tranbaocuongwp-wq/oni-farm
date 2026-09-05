@@ -321,7 +321,8 @@
         "h": 7,
         "snout": 0.55,
         "tailUp": true
-      }
+      },
+      "pen": "cattle"
     }
   ],
   "pests": [

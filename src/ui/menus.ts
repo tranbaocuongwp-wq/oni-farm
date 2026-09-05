@@ -25,6 +25,8 @@ import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Settings } from "../core/settings.ts";
 import { padButtonName, type PadInfo } from "../core/gamepad.ts";
 import { PAD_MAP, type PadBind } from "../core/input.ts";
+import { fromAnimals, sellPriceOf } from "../game/items.ts";
+import { sellSlots } from "../game/inventory.ts";
 import { penSummary } from "../game/animals.ts";
 
 export interface MenuHandlers {
@@ -791,16 +793,15 @@ export function createMenus(
       .filter((x) => x.slot !== null) as { slot: { id: string; n: number }; i: number }[];
     const inBag = s.inv
       .map((slot, i) => ({ slot, i }))
+      // Cất được thì nhận: nông sản và MỌI vật liệu, kể cả vật tư không bán được
+      // (cất rơm vào kho là việc bình thường).
       .filter((x) => x.slot !== null && (x.slot.id.startsWith("crop:") || x.slot.id.startsWith("item:"))) as {
       slot: { id: string; n: number };
       i: number;
     }[];
 
     const dang = inStore.reduce((n, x) => n + x.slot.n, 0);
-    const banDuoc = inStore.reduce(
-      (sum, x) => sum + (x.slot.id.startsWith("crop:") ? (c.crops[x.slot.id.slice(5)]?.sellPrice ?? 0) * x.slot.n : 0),
-      0,
-    );
+    const banDuoc = inStore.reduce((sum, x) => sum + sellPriceOf(x.slot.id, c) * x.slot.n, 0);
 
     const { body, foot } = shell(
       "Kho tập trung",
@@ -856,69 +857,80 @@ export function createMenus(
     const s = getState();
     const c = getContent();
 
-    const stock = s.inv
-      .map((slot, i) => ({ slot, i }))
-      .filter((x) => x.slot?.id.startsWith("crop:")) as {
-      slot: { id: string; n: number };
-      i: number;
-    }[];
-
-    const total = stock.reduce(
-      (sum, x) => sum + (c.crops[x.slot.id.slice(5)]?.sellPrice ?? 0) * x.slot.n,
-      0,
-    );
+    /* HÀNG BÁN ĐƯỢC, hỏi `sellable` — không lọc theo tiền tố id nữa.
+       Bản cũ lọc `startsWith("crop:")`, nên mười hai sản phẩm chăn nuôi (sữa
+       42đ … thịt bò 180đ) nằm ngay trong túi mà cái quầy không nhìn thấy: nuôi
+       cả đàn bò cũng không ra một đồng. */
+    const stock = sellSlots(s.inv, c);
+    const total = stock.reduce((sum, x) => sum + sellPriceOf(x.id, c) * x.n, 0);
 
     const { body, foot } = shell(
       c.strings.ui["sell"] ?? "Quầy thu mua",
-      stock.length ? `Bán hết được ${money(total)}` : "Túi chưa có nông sản nào",
+      stock.length ? `Bán hết được ${money(total)}` : "Túi chưa có gì để bán",
       "sheet",
     );
 
-    for (const { slot } of stock) {
-      const crop = c.crops[slot.id.slice(5)];
-      if (!crop) continue;
-      const qty = Math.max(1, Math.min(slot.n, sellQty.get(slot.id) ?? slot.n));
-      sellQty.set(slot.id, qty);
+    /* Chia hai mục vì đây là HAI NGHỀ. Nhìn riêng từng cột tiền mới biết đàn bò
+       đang nuôi mình hay đang ăn không. Nhóm suy từ content (`products`/`meat`
+       của các loài) chứ không liệt kê id. */
+    const tuVat = fromAnimals(c);
+    const nhom: { ten: string; hang: typeof stock }[] = [
+      { ten: "NÔNG SẢN & VẬT LIỆU", hang: stock.filter((x) => !tuVat.has(x.id)) },
+      { ten: "SẢN PHẨM CHĂN NUÔI", hang: stock.filter((x) => tuVat.has(x.id)) },
+    ];
 
-      const stepper = document.createElement("div");
-      stepper.className = "stepper";
-      const minus = mkBtn("−", () => {
-        sellQty.set(slot.id, Math.max(1, qty - 1));
-        openSell();
-      });
-      minus.disabled = qty <= 1;
-      minus.setAttribute("aria-label", "Bớt một");
-      const num = document.createElement("span");
-      num.textContent = `${qty}/${slot.n}`;
-      const plus = mkBtn("+", () => {
-        sellQty.set(slot.id, Math.min(slot.n, qty + 1));
-        openSell();
-      });
-      plus.disabled = qty >= slot.n;
-      plus.setAttribute("aria-label", "Thêm một");
-      stepper.append(minus, num, plus);
+    for (const g of nhom) {
+      if (!g.hang.length) continue;
+      const tien = g.hang.reduce((sum, x) => sum + sellPriceOf(x.id, c) * x.n, 0);
+      body.appendChild(note(`${g.ten} — ${money(tien)}`));
+      for (const { id, n } of g.hang) {
+        const gia = sellPriceOf(id, c);
+        const qty = Math.max(1, Math.min(n, sellQty.get(id) ?? n));
+        sellQty.set(id, qty);
 
-      body.appendChild(
-        row({
-          id: slot.id,
-          name: `${crop.name} ×${slot.n}`,
-          desc: `${money(crop.sellPrice)} / cái`,
-          price: money(crop.sellPrice * qty),
-          extra: stepper,
-          action: {
-            label: "Bán",
-            disabled: false,
-            onClick: () => {
-              h.sell(slot.id, qty);
-              sellQty.delete(slot.id);
-              openSell();
+        const stepper = document.createElement("div");
+        stepper.className = "stepper";
+        const minus = mkBtn("−", () => {
+          sellQty.set(id, Math.max(1, qty - 1));
+          openSell();
+        });
+        minus.disabled = qty <= 1;
+        minus.setAttribute("aria-label", "Bớt một");
+        const num = document.createElement("span");
+        num.textContent = `${qty}/${n}`;
+        const plus = mkBtn("+", () => {
+          sellQty.set(id, Math.min(n, qty + 1));
+          openSell();
+        });
+        plus.disabled = qty >= n;
+        plus.setAttribute("aria-label", "Thêm một");
+        stepper.append(minus, num, plus);
+
+        body.appendChild(
+          row({
+            id,
+            name: `${itemLabel(id, c)} ×${n}`,
+            desc: `${money(gia)} / cái`,
+            price: money(gia * qty),
+            extra: stepper,
+            action: {
+              label: "Bán",
+              disabled: false,
+              onClick: () => {
+                h.sell(id, qty);
+                sellQty.delete(id);
+                openSell();
+              },
             },
-          },
-        }),
-      );
+          }),
+        );
+      }
     }
 
-    if (!stock.length) body.appendChild(note("Trồng và thu hoạch trước đã, rồi quay lại đây bán."));
+    if (!stock.length)
+      body.appendChild(
+        note("Trồng và thu hoạch, hoặc vắt sữa nhặt trứng — rồi quay lại đây bán."),
+      );
 
     const all = mkBtn(`${c.strings.ui["sellAll"] ?? "Bán tất cả"} · ${money(total)}`, () => {
       h.sellAll();

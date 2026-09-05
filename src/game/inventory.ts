@@ -11,7 +11,7 @@
 ============================================================================ */
 
 import type { Content, InvSlot } from "./types.ts";
-import { isKnownItem, isTool } from "./items.ts";
+import { isKnownItem, isTool, sellable } from "./items.ts";
 
 /** Hai slot đầu dành riêng cho công cụ. */
 export const TOOL_SLOTS = 2;
@@ -146,12 +146,21 @@ export function hotbar(inv: readonly InvSlot[], content: Content): InvSlot[] {
   return inv.slice(0, Math.max(0, content.balance.hotbarSlots | 0));
 }
 
-/** Mọi slot chứa nông sản — dùng cho SELL_ALL và bảng giá ở quầy. */
-export function cropSlots(inv: readonly InvSlot[]): { slot: number; id: string; n: number }[] {
+/**
+ * Mọi slot chứa HÀNG BÁN ĐƯỢC — dùng cho SELL_ALL và bảng giá ở quầy.
+ *
+ * Hỏi `sellable` chứ không hỏi tiền tố id. Bản cũ lọc `startsWith("crop:")` nên
+ * sữa, trứng, len, thịt — mười hai món từ 26đ tới 180đ — đứng ngay trong túi mà
+ * quầy không nhìn thấy.
+ */
+export function sellSlots(
+  inv: readonly InvSlot[],
+  content: Content,
+): { slot: number; id: string; n: number }[] {
   const out: { slot: number; id: string; n: number }[] = [];
   for (let i = 0; i < inv.length; i++) {
     const s = inv[i];
-    if (s && s.id.startsWith("crop:")) out.push({ slot: i, id: s.id, n: s.n });
+    if (s && sellable(s.id, content)) out.push({ slot: i, id: s.id, n: s.n });
   }
   return out;
 }

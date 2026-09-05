@@ -63,12 +63,14 @@
       "id": "fodder",
       "name": "Cỏ khô",
       "sellPrice": 4,
-      "buyPrice": 7
+      "buyPrice": 7,
+      "sell": false
     },
     {
       "id": "medicine",
       "name": "Thuốc trừ sâu",
-      "sellPrice": 10
+      "sellPrice": 10,
+      "sell": false
     },
     {
       "id": "milk",
@@ -134,19 +136,22 @@
       "id": "hay",
       "name": "Rơm",
       "sellPrice": 6,
-      "buyPrice": 10
+      "buyPrice": 10,
+      "sell": false
     },
     {
       "id": "feedmix",
       "name": "Cám tổng hợp",
       "sellPrice": 7,
-      "buyPrice": 16
+      "buyPrice": 16,
+      "sell": false
     },
     {
       "id": "fishfeed",
       "name": "Cám cá",
       "sellPrice": 8,
-      "buyPrice": 20
+      "buyPrice": 20,
+      "sell": false
     }
   ]
 }

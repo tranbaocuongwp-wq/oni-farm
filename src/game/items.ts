@@ -66,8 +66,40 @@ export function sellPriceOf(id: string, content: Content): number {
   const it = parseItem(id);
   if (!it) return 0;
   if (it.kind === "crop") return content.crops[it.ref]?.sellPrice ?? 0;
-  if (it.kind === "item") return content.materials[it.ref]?.sellPrice ?? 0;
+  if (it.kind === "item") {
+    const m = content.materials[it.ref];
+    // Vật tư đầu vào (rơm, cám, thuốc) có giá chỉ để TÍNH GIÁ MUA — không phải
+    // hàng để bán. Xem `MaterialDef.sell`.
+    if (!m || m.sell === false) return 0;
+    return m.sellPrice ?? 0;
+  }
   return 0;
+}
+
+/**
+ * Quầy thu mua có nhận món này không — MỘT NGUỒN cho mọi đường bán.
+ *
+ * Trước đây cả năm chỗ tự lọc `id.startsWith("crop:")`: quầy, "bán hết trong
+ * kho", `storeSellAll`, xe thu mua, và `SELL_ALL`. Hậu quả là hai mươi vật liệu
+ * CÓ GIÁ trong `items.json` — trong đó mười hai là sản phẩm chăn nuôi từ 26đ tới
+ * 180đ — bán ra đúng 0đ. Nuôi cả đàn bò không ra một đồng, và nửa game coi như
+ * không tồn tại. Hỏi một hàm thì năm chỗ không thể lệch nhau nữa.
+ */
+export function sellable(id: string, content: Content): boolean {
+  return sellPriceOf(id, content) > 0;
+}
+
+/** Món này là SẢN PHẨM CHĂN NUÔI (đến từ con vật) hay nông sản/vật liệu?
+ *  Suy từ content — duyệt `products` và `meat` của các loài, không liệt kê id. */
+export function fromAnimals(content: Content): Set<string> {
+  const out = new Set<string>();
+  for (const id of content.animalOrder) {
+    const a = content.animals[id];
+    if (!a) continue;
+    for (const p of a.products ?? []) out.add(p.id);
+    if (a.meat) out.add(a.meat.id);
+  }
+  return out;
 }
 
 /** Giá MUA ở cửa hàng. 0 = không mua được. Nhận cả 'sprinkler' lẫn 'build:sprinkler'. */

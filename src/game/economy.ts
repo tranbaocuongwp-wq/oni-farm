@@ -8,7 +8,7 @@
 import type { Content } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dStats, setInv, toastKey, touch } from "./state.ts";
-import { addItem, canAdd, countItem, cropSlots, removeItem } from "./inventory.ts";
+import { addItem, canAdd, countItem, sellSlots, removeItem } from "./inventory.ts";
 import { buyPriceOf, itemName, sellPriceOf, shopItemId } from "./items.ts";
 import { cropInSeason } from "./season.ts";
 
@@ -73,7 +73,7 @@ export function sell(d: Draft, content: Content, id: string, n: number): void {
 }
 
 export function sellAll(d: Draft, content: Content): void {
-  const slots = cropSlots(d.s.inv);
+  const slots = sellSlots(d.s.inv, content);
   if (slots.length === 0) return;
   // gom theo id để mỗi loại chỉ một toast, thứ tự ổn định theo slot
   const order: string[] = [];

@@ -288,6 +288,25 @@ accept("pack CŨ không khai signs — bản đồ không có tấm biển nào"
      không phải sửa lại một ký tự nào của bản đồ. */
   delete p.tiles.signs;
 });
+accept("pack CŨ không khai cờ `sell` của vật liệu — mọi thứ vẫn bán được như trước", (p) => {
+  /* Cờ mới tách HÀNG BÁN (sữa, trứng, gỗ) khỏi VẬT TƯ ĐẦU VÀO (rơm, cám,
+     thuốc). Vắng = bán được, đúng hành vi pack cũ — thêm một cờ mà làm pack cũ
+     mất luôn khả năng bán vật liệu thì đó là một bản OTA phá game. */
+  for (const m of p.items.materials) delete m.sell;
+});
+reject("cờ `sell` không phải true/false", (p) => {
+  p.items.materials[0].sell = "co";
+});
+reject("sản lượng ngược: products max < min", (p) => {
+  const a = p.actors.animals.find((x) => (x.products ?? []).length);
+  a.products[0].min = 5;
+  a.products[0].max = 2;
+});
+reject("thịt ngược: meat max < min", (p) => {
+  const a = p.actors.animals.find((x) => x.meat);
+  a.meat.min = 4;
+  a.meat.max = 1;
+});
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });
 });

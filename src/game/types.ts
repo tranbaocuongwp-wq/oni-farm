@@ -311,6 +311,21 @@ export interface MaterialDef {
    * vẫn mua được cám, chỉ là tốn tiền hơn — một lựa chọn, không phải ngõ cụt.
    */
   buyPrice?: number;
+  /**
+   * Có phải HÀNG BÁN không. Vắng = có (mọi vật liệu đều bán được như trước).
+   *
+   * Cần cờ này vì `sellPrice` một mình không phân biệt được hai loại vật liệu
+   * hoàn toàn khác nhau về vai trò:
+   *
+   *   · HÀNG BÁN — sữa, trứng, len, thịt, gỗ, đá, sợi. Người chơi làm ra chúng
+   *     để đổi lấy tiền.
+   *   · VẬT TƯ ĐẦU VÀO — rơm, cỏ khô, cám, cám cá, thuốc. Người chơi MUA chúng
+   *     và giữ để dùng, và chúng có `sellPrice` chỉ vì công thức tính giá mua.
+   *
+   * Không tách ra thì nút "Bán hết" quét sạch luôn kho thức ăn của cả đàn — một
+   * cú bấm, và sáng mai cả nông trại nhịn đói.
+   */
+  sell?: boolean;
 }
 
 export interface RecipeInput {

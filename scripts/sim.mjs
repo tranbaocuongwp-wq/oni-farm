@@ -22,6 +22,8 @@ import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
+import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
+import { sellSlots } from "../src/game/inventory.ts";
 import { hintAt, interactHint, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
@@ -3109,7 +3111,15 @@ test("54. kho tập trung: cất/lấy giữ nguyên tổng số món, bán từ
   eq(countInv(store, "tool:hoe"), 1, "KHÔNG cất công cụ");
   eq(tongTruoc(store), t0, "cất hết vẫn giữ nguyên tổng");
 
-  // bán hết trong kho: chỉ nông sản, nguyên liệu ở lại
+  /* Bán hết trong kho: MỌI HÀNG BÁN ĐƯỢC đi, VẬT TƯ ĐẦU VÀO ở lại.
+
+     Ranh giới đổi rồi và đổi có chủ ý. Trước đây chỉ nông sản bán được, nên gỗ
+     đá sợi và cả mười hai sản phẩm chăn nuôi (26đ–180đ) đứng trong kho mà bán
+     ra đúng 0đ. Giờ ranh giới không còn là tiền tố id nữa mà là cờ
+     `materials[].sell`: rơm, cỏ khô, cám, cám cá, thuốc là thứ người chơi MUA
+     về để dùng — quét sạch chúng bằng một cú bấm là sáng mai cả đàn nhịn đói. */
+  giveItem(store, "item:hay", 4);
+  store.dispatch({ t: "STORE_PUT_ALL" });
   const tien0 = store.getState().money;
   const ban0 = store.getState().stats.sold;
   store.dispatch({ t: "STORE_SELL_ALL" });
@@ -3121,11 +3131,20 @@ test("54. kho tập trung: cất/lấy giữ nguyên tổng số món, bán từ
   );
   eq(
     s2.store.reduce((n, v) => n + (v && v.id === "item:wood" ? v.n : 0), 0),
-    5,
-    "nguyên liệu KHÔNG bị bán theo",
+    0,
+    "GỖ cũng bán được — nó có giá 5đ và luôn là hàng bán",
   );
-  eq(s2.money - tien0, c.crops.lettuce.sellPrice * 7, "cộng đúng tiền bán 7 cây xà lách");
-  eq(s2.stats.sold - ban0, 7, "thống kê đã bán tăng đúng");
+  eq(
+    s2.store.reduce((n, v) => n + (v && v.id === "item:hay" ? v.n : 0), 0),
+    4,
+    "…nhưng RƠM thì ở lại: vật tư đầu vào, không phải hàng bán",
+  );
+  eq(
+    s2.money - tien0,
+    c.crops.lettuce.sellPrice * 7 + c.materials.wood.sellPrice * 5,
+    "cộng đúng tiền 7 cây xà lách + 5 gỗ",
+  );
+  eq(s2.stats.sold - ban0, 12, "thống kê đã bán tăng đúng");
   deepEq(checkInvariants(s2, content), [], "bất biến sau khi dùng kho");
 
   // round-trip qua JSON: kho phải sống sót
@@ -4015,7 +4034,22 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
     "…và cả thứ dê ăn được, nên chung máng là hợp lý",
   );
   ok(khuCua("pig") !== khuCua("cow"), "heo ăn thứ khác nên ở khu khác");
-  eq(khuCua("dog"), null, "chó đi tuần, không nhốt khu nào");
+  /* Con chó CÓ khu — nhưng khu ở đây nghĩa là CHỖ ĂN, không phải chỗ bị nhốt.
+
+     Trước đây nó là loài DUY NHẤT không có đường sống nào: `pecks` không khai
+     nên không gặm được gì, không có khu nên không ăn máng được, `meat: null`
+     nên không bán vớt vát được — quên cho ăn sáu ngày là chết, mà cửa sổ cho ăn
+     tay lại rất hẹp. Giờ nó ăn chung máng khu gia súc (cám và cỏ khô, đúng thứ
+     nó ăn), còn `housing: "free"` vẫn giữ cho nó đi tuần khắp nông trại. */
+  const khuCho = khuCua("dog");
+  ok(!!khuCho, "chó có chỗ ăn — không còn là loài duy nhất không có đường sống");
+  eq(content.animals.dog.housing, "free", "…nhưng vẫn THẢ RÔNG, không bị lôi về khu");
+  ok(
+    (content.tiles.pens.find((p) => p.id === khuCho)?.feeds ?? []).some((f) =>
+      content.animals.dog.feed.includes(f),
+    ),
+    "máng khu đó phải có món con chó ăn được",
+  );
 
   /* ---- (c) HÀNG RÀO không còn là thứ mua/xây được --------------------- */
   eq(content.buildings.fence.buildable, false, "hàng rào là địa hình dựng sẵn");
@@ -6054,6 +6088,193 @@ test("90. nút ngữ cảnh nhận CẢ CHUYẾN: cầm thức ăn thì đổ m�
   selectItem(st2, "tool:hoe");
   const v2 = autoJob(st2.getState(), content, Math.max(st2.getState().w, st2.getState().h));
   ok(!v2 || v2.kind !== "pour", "không có thức ăn trong túi thì không có việc đổ máng");
+});
+
+
+test("91. sản phẩm chăn nuôi BÁN ĐƯỢC — cả 12 món, ở cả ba đường bán", () => {
+  /* Lỗi làm đứt hẳn nửa game: `sellPriceOf` xử lý đúng cả `item:`, nhưng CẢ NĂM
+     đường bán đều lọc cứng `startsWith("crop:")`. Hai mươi vật liệu có giá
+     trong `items.json` — trong đó mười hai là sản phẩm chăn nuôi từ 26đ tới
+     180đ — bán ra đúng 0đ. Nuôi cả đàn bò không ra một đồng. */
+  const tuVat = fromAnimals(content);
+  ok(tuVat.size >= 12, `content khai ${tuVat.size} món đến từ con vật`);
+  for (const id of tuVat) {
+    ok(sellPriceOf(id, content) > 0, `${id} phải có giá bán`);
+    ok(sellable(id, content), `${id} phải bán được ở quầy`);
+  }
+
+  // (a) QUẦY THU MUA nhìn thấy chúng
+  const store = mkStore(1301);
+  giveItem(store, "item:milk", 3);
+  giveItem(store, "item:egg", 5);
+  const thay = sellSlots(store.getState().inv, content).map((v) => v.id);
+  ok(thay.includes("item:milk"), "quầy thấy sữa trong túi");
+  ok(thay.includes("item:egg"), "quầy thấy trứng trong túi");
+
+  const tien0 = store.getState().money;
+  store.dispatch({ t: "SELL", id: "item:milk", n: 3 });
+  eq(
+    store.getState().money - tien0,
+    content.materials.milk.sellPrice * 3,
+    `bán 3 sữa ra đúng ${content.materials.milk.sellPrice * 3}đ`,
+  );
+  eq(countInv(store, "item:milk"), 0, "…và sữa rời khỏi túi");
+
+  // (b) BÁN TẤT CẢ quét cả sản phẩm chăn nuôi, KHÔNG quét vật tư đầu vào
+  giveItem(store, "item:hay", 6);
+  giveItem(store, "item:wool", 2);
+  const tien1 = store.getState().money;
+  store.dispatch({ t: "SELL_ALL" });
+  eq(countInv(store, "item:wool"), 0, "len bán hết");
+  eq(countInv(store, "item:hay"), 6, "RƠM ở lại — vật tư đầu vào, không phải hàng bán");
+  ok(
+    store.getState().money - tien1 >= content.materials.wool.sellPrice * 2,
+    "tiền cộng ít nhất bằng giá len",
+  );
+
+  // (c) XE THU MUA chịu ghé khi kho chỉ có sản phẩm chăn nuôi
+  const st2 = mkStore(1302);
+  setState(st2, (s) => {
+    s.store = s.store.map(() => null);
+    s.store[0] = { id: "item:beef", n: 2 };
+  });
+  ok(
+    st2.getState().store.some((v) => v && sellable(v.id, content)),
+    "kho toàn thịt bò vẫn được tính là CÓ HÀNG cho xe thu mua",
+  );
+  const banKho = st2.getState().money;
+  st2.dispatch({ t: "STORE_SELL_ALL" });
+  eq(
+    st2.getState().money - banKho,
+    content.materials.beef.sellPrice * 2,
+    "bán từ kho ra đúng tiền thịt bò",
+  );
+});
+
+test("92. vật tư đầu vào KHÔNG bao giờ bị bán nhầm", () => {
+  /* Ranh giới mới không phải tiền tố id mà là cờ `materials[].sell`. Không có
+     nó thì một cú "Bán tất cả" quét sạch kho thức ăn của cả đàn, và sáng mai
+     người chơi mở game ra thấy vật nuôi đói hàng loạt mà không hiểu vì sao. */
+  const vatTu = content.materialOrder.filter((id) => content.materials[id].sell === false);
+  ok(vatTu.length > 0, `content khai ${vatTu.length} món là vật tư đầu vào`);
+  for (const id of vatTu) {
+    ok(content.materials[id].sellPrice > 0, `${id} vẫn có giá (để tính giá MUA)`);
+    eq(sellPriceOf(`item:${id}`, content), 0, `…nhưng bán ra 0đ: ${id}`);
+    eq(sellable(`item:${id}`, content), false, `…và quầy không nhận: ${id}`);
+  }
+  // đúng những món ĐỔ MÁNG được thì phải nằm trong nhóm này
+  const anDuoc = new Set((content.tiles.pens ?? []).flatMap((p) => p.feeds ?? []));
+  for (const f of anDuoc)
+    if (f.startsWith("item:"))
+      eq(sellable(f, content), false, `${f} là thức ăn của khu — không được bán nhầm`);
+
+  const store = mkStore(1303);
+  giveItem(store, "item:feedmix", 9);
+  const tien = store.getState().money;
+  store.dispatch({ t: "SELL_ALL" });
+  eq(countInv(store, "item:feedmix"), 9, "bán tất cả KHÔNG đụng tới cám");
+  eq(store.getState().money, tien, "…và không cộng một đồng nào");
+});
+
+test("93. giết mổ ra thịt, và thịt đó bán được", () => {
+  /* `slaughter` chưa từng có một dòng test nào, dù nó là một trong hai nguồn
+     thu của cả nghề chăn nuôi. */
+  const store = mkStore(1304);
+  walkTo(store, HOME.x, HOME.y);
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+  const def = content.animals.pig;
+  ok(!!def.meat, "con heo bán thịt được");
+
+  setState(store, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "pig", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 4,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: def.fedMinutes, hungryDays: 0, prod: [] },
+    }];
+  });
+  eq(countInv(store, def.meat.id), 0, "chưa có thịt");
+  store.dispatch({ t: "SLAUGHTER", x: px + 1, y: py });
+  const thit = countInv(store, def.meat.id);
+  ok(thit >= def.meat.min && thit <= def.meat.max, `ra ${thit} thịt, trong khoảng khai báo`);
+  eq(store.getState().entities.length, 0, "con vật biến mất");
+
+  const tien = store.getState().money;
+  store.dispatch({ t: "SELL", id: def.meat.id, n: thit });
+  eq(
+    store.getState().money - tien,
+    sellPriceOf(def.meat.id, content) * thit,
+    "thịt bán ra đúng tiền — nguồn thu thứ hai của nghề chăn nuôi",
+  );
+
+  // con CHƯA LỚN thì không mổ được: giữ nguyên luật cũ
+  const st2 = mkStore(1305);
+  walkTo(st2, HOME.x, HOME.y);
+  setState(st2, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "pig", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 4,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 0, fed: def.fedMinutes, hungryDays: 0, prod: [] },
+    }];
+  });
+  st2.dispatch({ t: "SLAUGHTER", x: px + 1, y: py });
+  eq(st2.getState().entities.length, 1, "con chưa lớn thì không mổ được");
+});
+
+test("94. vòng lặp NUÔI → LẤY SẢN PHẨM → BÁN chạy trọn một vòng", () => {
+  /* Kịch bản chốt của cả đợt: từ con bò đói tới đồng tiền trong túi, không bước
+     nào là giả. Trước đây vòng này đứt ở khâu cuối — vắt được sữa, cầm được
+     sữa, và bán ra đúng 0đ. */
+  const store = mkStore(1306);
+  walkTo(store, HOME.x, HOME.y);
+  const px = Math.floor(store.getState().player.x / TILE);
+  const py = Math.floor(store.getState().player.y / TILE);
+  const bo = content.animals.cow;
+  const sua = bo.products[0];
+
+  setState(store, (s) => {
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 6,
+      // đã tới lứa, đang no — đây là bước SAU khi nuôi, kịch bản 57 lo phần nuôi
+      animal: { age: 99, fed: bo.fedMinutes, hungryDays: 0, prod: [sua.every * 99999] },
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+    }];
+  });
+
+  // 1. THU
+  store.dispatch({ t: "GATHER", x: px + 1, y: py });
+  const n = countInv(store, sua.id);
+  ok(n > 0, `vắt được ${n} ${sua.id}`);
+
+  // 2. CẤT VÀO KHO rồi 3. BÁN TỪ KHO — đường dài nhất, đi qua nhiều bộ lọc nhất
+  store.dispatch({ t: "STORE_PUT_ALL" });
+  eq(countInv(store, sua.id), 0, "sữa đã vào kho");
+  ok(
+    store.getState().store.some((v) => v && v.id === sua.id),
+    "…và kho giữ đúng món đó",
+  );
+  const tien0 = store.getState().money;
+  store.dispatch({ t: "STORE_SELL_ALL" });
+  eq(
+    store.getState().money - tien0,
+    sellPriceOf(sua.id, content) * n,
+    `bán ${n} sữa từ kho ra đúng ${sellPriceOf(sua.id, content) * n}đ`,
+  );
+  eq(
+    store.getState().store.filter((v) => v && v.id === sua.id).length,
+    0,
+    "kho không còn sữa",
+  );
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau trọn một vòng");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -24,7 +24,7 @@ import type { Draft } from "./state.ts";
 import { dEntity, randInt, toastText, touch } from "./state.ts";
 import { setStore } from "./storage.ts";
 import { removeEntity } from "./entities.ts";
-import { sellPriceOf } from "./items.ts";
+import { sellPriceOf, sellable } from "./items.ts";
 import { TILE, idx, nearestWaterTile, tileAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { LEASH_TILES, MAX_PATH, spawnEntity } from "./entities.ts";
@@ -378,7 +378,7 @@ function doErrand(d: Draft, content: Content, index: number): void {
     return;
   }
 
-  // xe thu mua: gom sạch nông sản trong kho, trả cao hơn quầy `buyBonus`
+  // xe thu mua: gom sạch hàng bán được trong kho, trả cao hơn quầy `buyBonus`
   const vd = vehicleDef(content, e.def);
   const bonus = 1 + (vd?.buyBonus ?? 0);
   let count = 0;
@@ -386,7 +386,7 @@ function doErrand(d: Draft, content: Content, index: number): void {
   const store: InvSlot[] = d.s.store.slice();
   for (let i = 0; i < store.length; i++) {
     const s = store[i];
-    if (!s || !s.id.startsWith("crop:")) continue;
+    if (!s || !sellable(s.id, content)) continue;
     const unit = sellPriceOf(s.id, content);
     if (unit <= 0) continue;
     count += s.n;
@@ -409,7 +409,9 @@ function doErrand(d: Draft, content: Content, index: number): void {
 /** Thỉnh thoảng cho một xe thu mua ghé, nếu kho có hàng. Gọi lúc sang ngày. */
 export function maybeSendBuyer(d: Draft, content: Content): boolean {
   if (!content.vehicles["buyer"]) return false;
-  const coHang = d.s.store.some((v) => v && v.id.startsWith("crop:"));
+  // Có hàng BÁN ĐƯỢC — không chỉ nông sản. Một kho đầy sữa với len mà xe thu
+  // mua không thèm ghé là đúng cái lỗi đã làm cả nghề chăn nuôi thành vô nghĩa.
+  const coHang = d.s.store.some((v) => v && sellable(v.id, content));
   if (!coHang) return false;
   if (vehicleCount(d.s) >= MAX_VEHICLES) return false;
 

@@ -269,6 +269,8 @@ export function validateItems(raw: unknown): string[] {
       k.str(m, "name");
       k.num(m, "sellPrice", 0);
       if (m["buyPrice"] !== undefined) k.num(m, "buyPrice", 0);
+      if (m["sell"] !== undefined && typeof m["sell"] !== "boolean")
+        k.fail("sell", "phải là true/false");
       c.merge(k);
     });
   return c.errors;
@@ -437,6 +439,11 @@ export function validateActors(raw: unknown): string[] {
         k.num(p, "every", 1, 999);
         k.num(p, "min", 0);
         k.num(p, "max", 0);
+        // `max < min` hỏng LẶNG: `randInt` gặp `max <= min` thì trả về `min`,
+        // nên một pack ghi ngược hai số vẫn chạy, chỉ là sản lượng khoá cứng ở
+        // cận dưới mãi mãi. Cây trồng đã kiểm điều này, vật nuôi thì chưa.
+        if (typeof p["min"] === "number" && typeof p["max"] === "number" && p["max"] < p["min"])
+          k.fail(`products[${j}].max`, "phải >= min");
       });
 
     const meat = item["meat"];
@@ -446,6 +453,12 @@ export function validateActors(raw: unknown): string[] {
         if (!isStr(meat["id"])) k.fail("meat.id", "phải là chuỗi");
         k.num(meat, "min", 0);
         k.num(meat, "max", 0);
+        if (
+          typeof meat["min"] === "number" &&
+          typeof meat["max"] === "number" &&
+          meat["max"] < meat["min"]
+        )
+          k.fail("meat.max", "phải >= min");
       }
     }
 

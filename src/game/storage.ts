@@ -15,7 +15,7 @@ import type { Content, GameState, InvSlot } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { setInv, storeSize, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, removeItem } from "./inventory.ts";
-import { itemName, sellPriceOf } from "./items.ts";
+import { itemName, sellPriceOf, sellable } from "./items.ts";
 
 /** Bản sao sửa được của kho. */
 export function dStore(d: Draft): InvSlot[] {
@@ -108,7 +108,7 @@ export function putAllToStore(d: Draft, content: Content): number {
 }
 
 /**
- * Bán sạch nông sản trong kho.
+ * Bán sạch HÀNG BÁN ĐƯỢC trong kho — nông sản lẫn sản phẩm chăn nuôi.
  *
  * Duyệt theo THỨ TỰ Ô chứ không theo id, để kết quả tất định — cùng lý do
  * `sellAll` bên economy.ts giữ một mảng `order` riêng.
@@ -117,7 +117,7 @@ export function sellStore(d: Draft, content: Content): { count: number; gain: nu
   const out = { count: 0, gain: 0 };
   for (let i = 0; i < d.s.store.length; i++) {
     const v = d.s.store[i];
-    if (!v || !v.id.startsWith("crop:")) continue;
+    if (!v || !sellable(v.id, content)) continue;
     const unit = sellPriceOf(v.id, content);
     if (unit <= 0) continue;
     const left = removeItem(d.s.store, v.id, v.n);

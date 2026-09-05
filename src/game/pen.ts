@@ -365,6 +365,13 @@ export function penGoal(
   }
   if (inside) return null;
 
+  /* THẢ RÔNG thì khu chỉ là CHỖ ĂN, không phải chỗ phải về.
+     Gà vịt và con chó khai `housing: "free"` — mà bản cũ vẫn lôi chúng về khu
+     mỗi khi không đói, tức là "thả rông" chỉ có trên giấy. Với con chó thì tệ
+     hơn hẳn: nhánh này chạy TRƯỚC nhánh đi tuần, nên nó bỏ con chuột giữa ruộng
+     mà đi về chuồng bò. */
+  if (content.animals[e.def]?.housing === "free") return null;
+
   const k = Math.abs(e.seed | 0);
   return { x: pen.x + (k % pen.w), y: pen.y + (((k / 7) | 0) % pen.h) };
 }
