@@ -328,8 +328,12 @@ function mergeGrid(
       const oi = old && x < old.w && y < old.h ? y * old.w + x : -1;
       const prev = old && oi >= 0 ? old.tiles[oi] : undefined;
       if (prev) {
-        t.tilled = prev.tilled === true;
-        t.wet = prev.wet === true;
+        /* Luống cày chỉ theo save khi ô MỚI vẫn là đất cỏ. Quy hoạch lại bản đồ
+           là chuyện có thật: ô hôm qua là ruộng, hôm nay là mặt đường. Bê
+           nguyên `tilled` sang thì mặt đường nhựa hiện ra một vệt đất cày, mà
+           không luật nào dọn nó đi — `tilledIdleDays` chỉ đếm cho ô cỏ. */
+        t.tilled = prev.tilled === true && t.g === "grass";
+        t.wet = prev.wet === true && t.g === "grass";
 
         // ---- vật thể: bản đồ lo phần CÔNG TRÌNH, người chơi lo phần KHAI THÁC
         //

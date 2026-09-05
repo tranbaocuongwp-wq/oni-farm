@@ -275,7 +275,7 @@ ${nuoi.map(animalCard).join("\n")}
     <section>
       <div class="wrap">
         <h2>Nông trại chia lô</h2>
-        <p class="lead">Bản đồ chia sẵn thành từng vùng, mỗi vùng một việc — bạn không phải quy hoạch gì cả.</p>
+        <p class="lead">Bản đồ quy hoạch sẵn thành từng vùng, mỗi vùng một việc — bạn không phải phân lô gì cả. Ruộng là một lưới BÀN CỜ: lô nào cũng bằng nhau, giữa hai lô là một ô bờ lát lối mòn, và mỗi lô có một tấm biển cắm ghi tên.</p>
         <div class="ents">
 ${(content.tiles.zones ?? [])
   .map((z) => `        <article class="ent sm">

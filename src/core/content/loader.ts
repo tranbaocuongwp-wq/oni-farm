@@ -193,6 +193,36 @@ export function validatePack(raw: RawPack): string[] {
     if (!maps?.[id]) errors.push(`tiles.indoorMaps: bản đồ '${id}' không tồn tại`);
 
   // ---- vật nuôi: mọi vật phẩm nhắc tới phải có thật ------------------------
+  /* ---- BIỂN CẮM -------------------------------------------------------
+     Một dòng chữ lơ lửng trên bãi cỏ trống là thứ trông như lỗi vẽ chứ không
+     như một cái biển. Nên mỗi tấm biển phải có ĐÚNG cái cọc của nó dưới chân:
+     kiểm ở đây để không bao giờ có chữ mà không có biển, hay biển mà không có
+     chữ. */
+  const oCoBien = new Set<string>();
+  for (const sg of tilesDef.signs ?? []) {
+    const sm = maps?.[sg.map];
+    if (!sm) {
+      errors.push(`tiles.signs '${sg.text}': bản đồ '${sg.map}' không tồn tại`);
+      continue;
+    }
+    if (sg.x < 0 || sg.y < 0 || sg.x >= sm.w || sg.y >= sm.h) {
+      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm ngoài bản đồ '${sg.map}'`);
+      continue;
+    }
+    const key = `${sg.map}:${sg.x},${sg.y}`;
+    if (oCoBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
+    oCoBien.add(key);
+    if (tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."]?.prop !== "sign")
+      errors.push(
+        `tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) không có vật thể 'sign' — chữ sẽ lơ lửng giữa không trung`,
+      );
+  }
+  for (const [id, m] of Object.entries(maps ?? {}))
+    for (let y = 0; y < m.h; y++)
+      for (let x = 0; x < m.w; x++)
+        if (tilesDef.legend[m.rows[y]?.[x] ?? "."]?.prop === "sign" && !oCoBien.has(`${id}:${x},${y}`))
+          errors.push(`bản đồ '${id}': biển ở (${x},${y}) không có chữ nào trong tiles.signs`);
+
   if (raw.actors !== undefined) {
     const ar = raw.actors as { animals?: AnimalDef[]; pests?: AnimalDef[] } | null;
     for (const a of [...(ar?.animals ?? []), ...(ar?.pests ?? [])]) {
@@ -323,6 +353,36 @@ export function validatePack(raw: RawPack): string[] {
     if (cayDuoc === 0)
       errors.push(`tiles.zones '${z.id}': khu ruộng không có ô nào cuốc được`);
   }
+
+  /* ---- BIỂN CẮM -------------------------------------------------------
+     Một dòng chữ lơ lửng trên bãi cỏ trống là thứ trông như lỗi vẽ chứ không
+     như một cái biển. Nên mỗi tấm biển phải có ĐÚNG cái cọc của nó dưới chân:
+     kiểm ở đây để không bao giờ có chữ mà không có biển, hay biển mà không có
+     chữ. */
+  const coBien = new Set<string>();
+  for (const sg of tilesDef.signs ?? []) {
+    const sm = maps?.[sg.map];
+    if (!sm) {
+      errors.push(`tiles.signs '${sg.text}': bản đồ '${sg.map}' không tồn tại`);
+      continue;
+    }
+    if (sg.x < 0 || sg.y < 0 || sg.x >= sm.w || sg.y >= sm.h) {
+      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm ngoài bản đồ '${sg.map}'`);
+      continue;
+    }
+    const key = `${sg.map}:${sg.x},${sg.y}`;
+    if (coBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
+    coBien.add(key);
+    if (tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."]?.prop !== "sign")
+      errors.push(
+        `tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) không có vật thể 'sign' — chữ sẽ lơ lửng giữa không trung`,
+      );
+  }
+  for (const [id, m] of Object.entries(maps ?? {}))
+    for (let y = 0; y < m.h; y++)
+      for (let x = 0; x < m.w; x++)
+        if (tilesDef.legend[m.rows[y]?.[x] ?? "."]?.prop === "sign" && !coBien.has(`${id}:${x},${y}`))
+          errors.push(`bản đồ '${id}': biển ở (${x},${y}) không có chữ nào trong tiles.signs`);
 
   if (raw.actors !== undefined) {
     const ar2 = raw.actors as { animals?: AnimalDef[] } | null;

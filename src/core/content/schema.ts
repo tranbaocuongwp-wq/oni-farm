@@ -845,6 +845,29 @@ export function validateTiles(raw: unknown): string[] {
     }
   }
 
+  const signs = raw["signs"];
+  if (signs !== undefined) {
+    if (!Array.isArray(signs)) c.fail("signs", "phải là mảng các tấm biển");
+    else
+      signs.forEach((v, i) => {
+        const k = new Check(`signs[${i}]`);
+        if (!isObj(v)) {
+          c.fail(`signs[${i}]`, "phải là object");
+          return;
+        }
+        k.str(v, "map");
+        k.num(v, "x", 0, 1000);
+        k.num(v, "y", 0, 1000);
+        /* Chữ trên biển nằm ĐÈ lên mặt ruộng. Dài quá thì nó che mất chính cái
+           lô mà nó đang gọi tên, nên chặn ngay ở đây thay vì để người thiết kế
+           tự phát hiện lúc nhìn màn hình. */
+        const t = k.str(v, "text");
+        if (t !== null && t.length > 18)
+          k.fail("text", `dài ${t.length} ký tự — biển cắm chỉ chứa được 18`);
+        c.merge(k);
+      });
+  }
+
   const spawn = c.obj(raw, "spawn");
   if (spawn) c.merge(numsIn(spawn, ["x", "y"], "spawn"));
   const indoor = raw["indoorMaps"];

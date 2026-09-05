@@ -209,7 +209,7 @@
       "interact": "PORTAL",
       "portal": {
         "map": "farm",
-        "x": 16,
+        "x": 18,
         "y": 4
       },
       "art": {
@@ -373,6 +373,16 @@
         "body": "#a97d4e",
         "dark": "#6b4a2c",
         "accent": "#d8c08a"
+      }
+    },
+    {
+      "id": "sign",
+      "name": "Biển khu",
+      "solid": false,
+      "art": {
+        "body": "#c39a63",
+        "dark": "#5a3b21",
+        "accent": "#e6c894"
       }
     },
     {

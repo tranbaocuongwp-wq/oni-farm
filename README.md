@@ -207,7 +207,7 @@ cả hai đều là `interact: "REFILL"`, một cái khai ở prop, một cái k
 
 ### Nhiều bản đồ rời nhau
 
-Mỗi bản đồ là một **lưới riêng**: nông trại 40×30 (1200 ô), phòng ngủ 14×8 (112 ô).
+Mỗi bản đồ là một **lưới riêng**: nông trại 48×37 (1776 ô), phòng ngủ 14×8 (112 ô).
 
 Bản đầu nhét phòng ngủ vào một góc lưới 40×40 chung, độn **288 ô "hư vô"** chỉ để ngăn cách.
 Số ô đó không vô hại: vẫn phải nạp, vẫn bị quét mỗi lần sang ngày, vẫn nằm trong file save,
@@ -377,7 +377,7 @@ rẻ hơn hẳn bốn khung hình chỉ dùng đúng một giây mỗi ngày.
 
 | kind | Luật | Vì sao |
 |---|---|---|
-| `farm` | CHỈ trong đây mới cuốc được — ruộng chia thành **9 LÔ** riêng, mỗi lô một vùng | ngoài vùng cái cuốc không ăn, nên không ai vô tình băm cả bản đồ thành luống — mà luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại, tức là gần như không hoàn tác được |
+| `farm` | CHỈ trong đây mới cuốc được — ruộng chia thành **12 LÔ** riêng, mỗi lô một vùng | ngoài vùng cái cuốc không ăn, nên không ai vô tình băm cả bản đồ thành luống — mà luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại, tức là gần như không hoàn tác được |
 | `forest` | mỗi đêm ô cỏ trống có `balance.forestRegrowChance` mọc lên cây con | rừng chặt xong không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ "rừng" chỉ là trang trí |
 
 Vắng `zones` = không giới hạn, đúng hành vi trước core 1.9, nên pack cũ không
@@ -385,15 +385,13 @@ Vắng `zones` = không giới hạn, đúng hành vi trước core 1.9, nên pa
 không có, và **khu ruộng không có lấy một ô cuốc được** — cái cuối là thứ biến
 cây cuốc thành đồ trang trí ngay từ phút đầu mà nhìn content không thấy.
 
-**Phân lô.** Ruộng không phải một mảng cỏ to mà là chín lô (A1–C3, mỗi lô 18–21
-ô), giữa các lô là **bờ** lát lối mòn. Bờ là ô `path` nên tự nó đã không cuốc
-được — nghĩa là ranh giới NHÌN THẤY ĐƯỢC, không phải một luật vô hình mà người
-chơi chỉ phát hiện khi bấm hụt. Hình vùng trong content khớp đúng hình trên bản
-đồ, và kịch bản 70 bắt hai lô dính nhau: dính nhau thì "phân lô" chỉ là chia
-trên giấy còn nhìn vào vẫn là một mảng ruộng liền.
-
-Đi kèm là một khoảng **sân sau** phía đông bắc để trống hẳn — ruộng chia lô hết
-rồi thì phải có chỗ đặt vòi tưới và nhà kho mà không tranh đất với cây.
+**Phân lô kiểu BÀN CỜ.** Ruộng không phải một mảng cỏ to mà là một lưới **4 cột
+× 3 hàng = 12 lô**, MỌI lô đúng `6×5` ô, cách nhau đúng một ô **bờ** lát lối
+mòn. Bờ là ô `path` nên tự nó đã không cuốc được — nghĩa là ranh giới NHÌN THẤY
+ĐƯỢC, không phải một luật vô hình mà người chơi chỉ phát hiện khi bấm hụt. Kịch
+bản 71 đo cả ba việc: mọi lô cùng cỡ, khoảng cách giữa các cột (và các hàng)
+đều nhau, và giữa hai lô luôn có bờ. Thiếu bất kỳ điều nào thì "phân lô" chỉ là
+chia trên giấy còn nhìn vào vẫn là một mảng ruộng liền.
 
 **CẦU GỖ** (`PropDef.bridge`) là vật thể BẮC QUA một ô không đi được. Ô có nó
 thì người và vật nuôi qua được bất kể NỀN bên dưới, còn loài BƠI vẫn bơi được
@@ -407,6 +405,48 @@ và `bankRim` (gờ đất ở mép ô ĐẤT giáp nước). Chỉ có nửa d�
 vẫn chạy phẳng lì tới sát mép và cái hồ trông như dán lên đồng cỏ — tôi đã làm
 đúng lỗi đó một lần, và phải tô cái gờ thành màu đỏ chói mới nhận ra nó vẫn
 đang được vẽ, chỉ là nhạt tới mức mắt gộp luôn vào vệt bọt nước.
+
+### Quy hoạch lại cả nông trại: bàn cờ, đường sá, biển cắm (core 1.12)
+
+Trước 1.12 bản đồ 40×30 là thứ lớn dần theo từng yêu cầu: cái hồ nhét vào góc trên, dãy
+chuồng dán vào rìa đông, rừng rải ở đáy, và giữa chúng là những dải cỏ không thuộc về ai. Nhìn
+vào thì đọc ra được "có ruộng, có chuồng, có rừng", nhưng không đọc ra được **ranh giới** —
+mà một nông trại không có ranh giới thì cũng không có quy hoạch.
+
+Bản đồ giờ là **48×37**, cắt thành các dải ngang dứt khoát:
+
+```
+y=1..7    dải bắc — hồ cá (cầu ra giữa hồ) · nhà + sân · chợ · kho + bãi đậu
+y=8       ĐƯỜNG TRỤC BẮC   (asphalt, suốt chiều ngang)
+y=9..25   ruộng bàn cờ x=1..29 │ ĐƯỜNG TRỤC DỌC x=30 │ dãy chuồng x=31..46
+y=26      ĐƯỜNG TRỤC NAM
+y=27..35  rừng, có ngõ xuyên qua
+```
+
+Ba con đường nhựa chia bản đồ thành đúng bốn mảnh việc, và cũng chính là đường xe tải chạy từ
+cổng phía nam lên tới bãi đậu trước kho. **Đường không còn là công trình mua được** mà là NỀN
+`asphalt` vẽ sẵn trong `farm.ascii`: trục đường quyết định hình dáng khu đất, cùng lý do với
+hàng rào — thứ đó thuộc về người thiết kế bản đồ, không phải thứ để người chơi lát từng ô rồi
+tự khoét thủng quy hoạch của chính mình.
+
+**Biển cắm** (`tiles.signs`) là mảnh cuối. Chia lô rồi thì người chơi phải ĐỌC ĐƯỢC mình đang
+đứng ở lô nào mà không phải mở bản đồ nhỏ ra dò — nên mỗi lô, mỗi chuồng, cái nhà, cái kho,
+bãi đậu xe, chợ, giếng, hồ cá và rừng đều có một tấm biển. Ba quyết định trong đó:
+
+* **Chữ KHÔNG nằm trong sprite.** Tên khu là chữ Việt có dấu; dựng một bộ phông pixel đủ dấu
+  chỉ để in "Lô A1" thì vừa tốn cả ngày vừa khó đọc trên màn điện thoại. `drawSignLabels` in
+  chữ ở lớp THIẾT BỊ theo phông của trang, cỡ chữ neo theo `scale` nên phóng to thu nhỏ thì
+  biển to nhỏ theo. Vẽ SAU `drawNight`: cái biển vẫn phải đọc được lúc trời tối.
+* **Biển KHÔNG ĐẶC.** Phần lớn cắm giữa ngõ rộng đúng một ô — đặc là chặn đường tới chính cái
+  khu mà nó gọi tên. Và không tấm nào cắm vào ruột lô: một ô có vật thể là một ô không cuốc
+  được.
+* **`validatePack` chặn cả hai chiều**: chữ mà dưới chân không có cọc (dòng chữ lơ lửng trên
+  bãi cỏ trông như lỗi vẽ), và cọc mà không tấm nào ghi chữ.
+
+Bản đồ được sinh bằng script rồi mới ghi ra `farm.ascii` — trong đó có một bước **vá liên
+thông**: flood-fill từ ô spawn, ô nào đi được mà lạc khỏi khối chính thì đục thông. Rừng rải
+ngẫu nhiên luôn đẻ ra vài túi cụt, và một túi cụt trong rừng là thứ không ai phát hiện cho tới
+lúc có người đi vào đó.
 
 ### Khu chuồng dựng sẵn (core 1.8)
 
@@ -423,8 +463,13 @@ Giờ nông trại **chia lô sẵn**, và cả ba mảnh đều nằm trong con
 | Ai ở khu nào | `actors.json` ô `pen` | id khu, vắng = thả rông thật (con chó) |
 
 Bốn khu: **gia súc** (bò/dê/cừu — có món ăn chung nên **chung một máng**), **heo** (máng
-riêng), **gia cầm** (gà/vịt, có máng cám nhưng vẫn mổ sâu trên cỏ), và **ao cá** (`swim: true`
+riêng), **gia cầm** (gà/vịt, có máng cám nhưng vẫn mổ sâu trên cỏ), và **hồ cá** (`swim: true`
 — ruột là ô nước, không rào vì bờ ao đã là rào, và không máng vì không đặt được máng giữa hồ).
+
+Ba khu trên cạn **xếp chồng và dùng chung bức rào giữa**. Chừa một ngõ giữa hai chuồng thì mỗi
+con vật có một hành lang riêng chẳng dẫn đi đâu; dùng chung vách thì cả dãy đọc ra một khu
+trại liền mạch. Cổng của cả ba đều mở về phía ngõ dọc chạy sát đường trục — một lối đi, ba
+cái cổng.
 
 **Máng** (`src/game/pen.ts`) là chỗ thức ăn NẰM LẠI, không phải chỗ bấm cho ăn: đổ một lần,
 máng giữ tới `balance.troughMax` phần, con vật đói tự tới ăn một phần mỗi bữa. Vì thế đi vắng
@@ -559,7 +604,7 @@ nhìn ngoài biên). Lý do rất cụ thể: trên điện thoại dọc khung 
 30 hàng, nên ở nửa trên — khu nhà, nơi chơi nhiều nhất — camera cũ kẹp lại và đẩy nhân vật
 lên ngay dưới HUD, đúng chỗ toast và chip mục tiêu che. Phần ngoài biên renderer vẽ **rừng
 rậm** (ngoài trời) hoặc **tường tối** (trong nhà) — đọc ra là "hết đất", không phải lỗi.
-Bản đồ vẫn 40×30 ô cố định, chỉ khung nhìn co giãn; người chơi còn chọn được mức phóng
+Bản đồ vẫn 48×37 ô cố định, chỉ khung nhìn co giãn; người chơi còn chọn được mức phóng
 gần/vừa/xa trong Cài đặt (`camera.setZoom`, đổi dải số ô chứ không đổi luật).
 
 `MAX_TILES_LONG = 24` là lưới an toàn cho màn siêu dài (điện thoại ngang 20:9, màn ultrawide):
@@ -613,7 +658,7 @@ giá trị mặc định cho save cũ — thiếu bước này thì mọi phép 
 
 ### Bản đồ nhỏ
 
-`src/ui/minimap.ts` — 1 pixel = 1 ô (40×30), phóng to bằng CSS `image-rendering: pixelated`.
+`src/ui/minimap.ts` — 1 pixel = 1 ô (48×37), phóng to bằng CSS `image-rendering: pixelated`.
 Vừa để nhìn tổng thể nông trại (camera bám sát nên bình thường chỉ thấy ~10 ô quanh mình),
 vừa là bàn đạp **đi xa**: bấm-để-đi trên khung chính chỉ tới được chỗ đang nhìn thấy, còn
 bấm trên bản đồ nhỏ thì tới đâu cũng được. Đi kiểu này là **đi thuần tuý, không thao tác** —
@@ -668,7 +713,7 @@ Con trỏ ô cũng đổi nghĩa theo: **trắng** = có việc làm được �
 
 Trên điện thoại một ô chỉ rộng **32 CSS px** mà đầu ngón tay cần khoảng **44 px** — chạm
 trượt là chuyện đương nhiên, không phải người chơi vụng. Ba thứ xử lý việc này, và **không
-thứ nào đụng tới tỉ lệ bản đồ** (bản đồ vẫn 40×30 ô cố định, chỉ camera co giãn theo màn hình):
+thứ nào đụng tới tỉ lệ bản đồ** (bản đồ vẫn 48×37 ô cố định, chỉ camera co giãn theo màn hình):
 
 1. **Con trỏ ô nhìn thấy được.** Bản đầu chỉ là 12 chấm 1px ở bốn góc — phóng ×7 trên desktop
    thì đủ, nhưng phóng ×2 trên điện thoại thì gần như vô hình. Giờ là ba lớp: nền mờ làm cả ô

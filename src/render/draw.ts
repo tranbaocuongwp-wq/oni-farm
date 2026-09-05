@@ -764,6 +764,51 @@ export function createRenderer(
     }
   }
 
+  /**
+   * Chữ trên các tấm BIỂN CẮM.
+   *
+   * Vẽ ở không gian THIẾT BỊ, không phải world px — cố ý. Tên khu là chữ Việt
+   * có dấu; dựng một bộ phông pixel đủ dấu chỉ để in "Lô A1" là công việc của
+   * cả một ngày mà kết quả vẫn khó đọc trên màn điện thoại. Ở lớp thiết bị thì
+   * chữ nét theo đúng độ phân giải máy, và cỡ chữ neo theo `scale` nên phóng
+   * to thu nhỏ bản đồ thì biển to nhỏ theo, không phải một nhãn dán cố định.
+   *
+   * Vẽ SAU `drawNight`: cái biển vẫn phải đọc được lúc trời tối, đó là lúc
+   * người chơi cần nó nhất.
+   */
+  function drawSignLabels(
+    s: GameState,
+    content: Content,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    scale: number,
+    tx: number,
+    ty: number,
+  ) {
+    const bien = content.tiles.signs;
+    if (!bien || !bien.length) return;
+    const px = 5 * scale; // 5 world px — vừa dưới nửa chiều cao tấm ván
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.font = `${px}px ui-sans-serif, system-ui, sans-serif`;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    for (const b of bien) {
+      if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
+      const cx = (b.x * TILE + TILE / 2 - camera.rx) * scale + tx;
+      const cy = (b.y * TILE + 2 - camera.ry) * scale + ty;
+      const w = g.measureText(b.text).width + px * 0.8;
+      /* Nền đục sau chữ: biển đứng trên cỏ, trên đường nhựa và trên đất cày —
+         chữ trắng trơn thì có nền nó chìm nghỉm. */
+      g.fillStyle = "rgba(24,18,10,0.72)";
+      g.fillRect(Math.round(cx - w / 2), Math.round(cy - px * 1.05), Math.round(w), Math.round(px * 1.35));
+      g.fillStyle = "#f3e2be";
+      g.fillText(b.text, Math.round(cx), Math.round(cy));
+    }
+    g.textAlign = "left";
+  }
+
   function drawNight(s: GameState, lights: Light[]) {
     const [color, alpha] = nightTint(s.minutes);
     if (alpha <= 0.001) return;
@@ -915,6 +960,7 @@ export function createRenderer(
     g.restore();
 
     drawNight(s, lights);
+    drawSignLabels(s, content, x0, y0, x1, y1, scale, tx, ty);
     drawWeatherScreen(timeSec, opts.weather, opts.reduceMotion);
 
     /* Mờ DẦN theo `busy` còn lại thay vì đứng ở một mức cố định: nhìn thấy màn

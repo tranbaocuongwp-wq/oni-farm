@@ -186,6 +186,20 @@ reject("tên công thức tự chép số lượng vào (\"Đường nhựa ×4\
   const r = p.recipes.recipes.find((q) => q.out.n > 1);
   r.name = `${r.name} ×${r.out.n}`;
 });
+reject("biển ghi chữ mà dưới chân không có cái cọc nào", (p) => {
+  p.tiles.signs[0].x += 1;
+});
+reject("có cọc biển trên bản đồ mà không tấm nào ghi chữ", (p) => {
+  p.tiles.signs.pop();
+});
+reject("hai tấm biển chồng lên cùng một ô", (p) => {
+  p.tiles.signs[1] = { ...p.tiles.signs[0], text: "Trùng chỗ" };
+});
+reject("chữ trên biển dài quá tấm ván", (p) => {
+  p.tiles.signs[0].text = "Lô A1 khu đông bắc gần bờ ao";
+});
+reject("biển trỏ vào bản đồ không có", (p) => (p.tiles.signs[0].map = "hamMo"));
+
 reject("khu dưới nước lại đặt máng", (p) => {
   const pen = p.tiles.pens.find((q) => q.swim);
   const r = p.maps.farm.rows[pen.y].split("");
@@ -238,6 +252,14 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   // …và VÙNG ĐẤT: khu ruộng cũ nằm ngoài cái bản đồ 5×3 này. Bỏ hẳn `zones`
   // nghĩa là "không giới hạn" — cuốc lại ăn khắp nơi, đúng hành vi pack cũ.
   delete p.tiles.zones;
+  // …và BIỂN CẮM: chúng trỏ vào ô của bản đồ cũ. Bỏ hết, đúng như một bản OTA
+  // đổi bản đồ phải làm.
+  delete p.tiles.signs;
+});
+accept("pack CŨ không khai signs — bản đồ không có tấm biển nào", (p) => {
+  delete p.tiles.signs;
+  for (const id of Object.keys(p.maps))
+    p.maps[id].rows = p.maps[id].rows.map((r) => r.split("N").join(":"));
 });
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });

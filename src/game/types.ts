@@ -582,6 +582,27 @@ export interface TilesDef {
   /** Các VÙNG ĐẤT có luật riêng (ruộng, rừng). Vắng = không vùng nào, cuốc
    *  được khắp nơi — đúng hành vi cũ, nên pack cũ không đổi gì. */
   zones?: ZoneDef[];
+  /** BIỂN CẮM: tên đọc được ngay trên mặt đất. Vắng = bản đồ không có biển nào. */
+  signs?: SignDef[];
+}
+
+/**
+ * Một tấm BIỂN cắm trên bản đồ: ô nào, và ghi chữ gì.
+ *
+ * Nông trại chia lô rồi thì người chơi phải ĐỌC ĐƯỢC mình đang đứng ở lô nào mà
+ * không cần mở bản đồ nhỏ ra dò. Chữ để trong content chứ không suy từ `zones`:
+ * không phải cái biển nào cũng ứng với một vùng — nhà, kho, bãi đậu xe và chợ
+ * đều cần biển mà chẳng cái nào là một `ZoneDef` cả.
+ *
+ * Ô mang biển phải thực sự có vật thể `sign`: một dòng chữ lơ lửng trên bãi cỏ
+ * trống là lỗi content, và `validatePack` chặn nó.
+ */
+export interface SignDef {
+  map: string;
+  x: number;
+  y: number;
+  /** Chữ in trên biển. Ngắn thôi — nó nằm đè lên mặt ruộng. */
+  text: string;
 }
 
 /**

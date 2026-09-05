@@ -13,6 +13,7 @@ import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal } from "../src/game/world.ts";
+import { findPath } from "../src/game/pathfind.ts";
 import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
@@ -86,25 +87,64 @@ function setTile(s, x, y, patch) {
   Object.assign(t, patch);
 }
 
-/** Đi bộ tới tâm ô (tx,ty) bằng các action MOVE thật (không dịch chuyển tức thời). */
+/**
+ * Bước thẳng tới một điểm world px.
+ *
+ * `eps` là bán kính coi như "tới nơi": điểm mốc giữa đường thì 2,5px là đủ
+ * (đúng ngưỡng `createNavigator` dùng), riêng ô ĐÍCH mới đòi đứng đúng tâm.
+ *
+ * Đi CHÉO qua góc giữa hai ô đặc thì một nhịp thẳng bị chặn sạch — nhân vật
+ * rộng 10px mà cái góc rộng 0. Gặp vậy thì tách làm hai nhịp, mỗi nhịp một
+ * trục, đúng như người chơi lách góc.
+ */
+function buocToi(store, gx, gy, eps = 1e-6) {
+  let ket = 0;
+  for (let i = 0; i < 900; i++) {
+    const p = store.getState().player;
+    const dx = gx - p.x;
+    const dy = gy - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= eps) return true;
+    const truoc = { x: p.x, y: p.y };
+    const dt = Math.min(1 / 60, d / 60);
+    const nhich = () => {
+      const a = store.getState().player;
+      return Math.hypot(a.x - truoc.x, a.y - truoc.y) > 1e-9;
+    };
+    store.dispatch({ t: "MOVE", dx, dy, dt });
+    if (!nhich() && Math.abs(dx) > 1e-6) store.dispatch({ t: "MOVE", dx, dy: 0, dt });
+    if (!nhich() && Math.abs(dy) > 1e-6) store.dispatch({ t: "MOVE", dx: 0, dy, dt });
+    if (!nhich()) {
+      if (++ket > 3) return false;
+    } else ket = 0;
+  }
+  return false;
+}
+
+/**
+ * Đi bộ tới tâm ô (tx,ty) bằng các action MOVE thật (không dịch chuyển tức thời).
+ *
+ * Đi theo A* CỦA GAME, đúng cái mà nút "chạm để đi" dùng, chứ không bẻ đường
+ * thành hai đoạn thẳng theo trục nữa. Lối cũ hoạt động được khi nông trại còn
+ * là một bãi cỏ trống; từ lúc có hồ, có dãy chuồng và có hệ đường ngang dọc thì
+ * "đi thẳng trục Y rồi trục X" đâm vào mặt hồ và test đỏ vì lý do chẳng liên
+ * quan gì tới thứ nó đang kiểm.
+ */
 function walkTo(store, tx, ty) {
   const gx = (tx + 0.5) * TILE;
   const gy = (ty + 0.5) * TILE;
-  // đi trục Y trước rồi trục X — hành lang trong bản đồ này là các dải thẳng
-  for (const axis of ["y", "x", "y"]) {
-    for (let i = 0; i < 4000; i++) {
-      const p = store.getState().player;
-      const dx = axis === "x" ? gx - p.x : 0;
-      const dy = axis === "y" ? gy - p.y : 0;
-      const d = Math.hypot(dx, dy);
-      if (d < 1e-6) break;
-      const dt = Math.min(1 / 60, d / 60);
-      const before = { x: p.x, y: p.y };
-      store.dispatch({ t: "MOVE", dx, dy, dt });
-      const after = store.getState().player;
-      if (after.x === before.x && after.y === before.y) break; // đụng tường
+  const s0 = store.getState();
+  const px = Math.floor(s0.player.x / TILE);
+  const py = Math.floor(s0.player.y / TILE);
+  const duong = findPath(s0, content, px, py, new Set([idx(s0.w, tx, ty)]), { maxNodes: 40000 });
+  if (duong) {
+    for (const i of duong) {
+      const x = i % s0.w;
+      const y = (i - x) / s0.w;
+      buocToi(store, (x + 0.5) * TILE, (y + 0.5) * TILE, 2.5);
     }
   }
+  buocToi(store, gx, gy);
   store.dispatch({ t: "MOVE", dx: 0, dy: 0, dt: 0 });
   const p = store.getState().player;
   ok(
@@ -263,15 +303,53 @@ function findOpenBlock(s, bw, bh) {
   throw new Error(`không tìm được khối đất trống ${bw}x${bh}`);
 }
 
-/* Ô ruộng dùng chung: đứng ở (16,8) trên lối đi, với tới 6 ô cỏ hai bên. */
-/* Chỗ đứng làm ruộng trong các kịch bản: ĐỨNG TRÊN LỐI MÒN CHÍNH, hai bên là
-   hai lô. Sáu ô quanh nó là sáu ô cuốc được, và chỉ sáu — y hệt hình cũ, nên
-   các kịch bản đo "hết ô thì dừng" vẫn đo đúng thứ chúng định đo. Ô cũ (16,8)
-   giờ vắt qua BỜ giữa hai hàng lô nên nửa số nhát cuốc rơi vào chỗ cấm. */
-const HOME = { x: 16, y: 9 };
+/* ------------------------------------------------------- MỐC trên bản đồ
+   Toạ độ của giếng, cửa nhà, quầy… KHÔNG chép tay vào từng kịch bản nữa: quy
+   hoạch lại nông trại một lần là phải đi sửa hai chục con số rải khắp file, và
+   con số bỏ sót thì hỏng ở một kịch bản chẳng liên quan gì tới bản đồ. Hỏi
+   thẳng bản đồ thay vì nhớ hộ nó. */
+const MAP0 = mkStore().getState();
+/* Kích thước nông trại: hỏi bản đồ, không chép số. Đổi quy hoạch là đổi số này,
+   và một con số chép cứng ở đây sẽ đỏ ở kịch bản "tách bản đồ" — nơi chẳng ai
+   nghĩ tới lúc đang vẽ lại ruộng. */
+const FARM_W = MAP0.w, FARM_H = MAP0.h;
+function timVatThe(id) {
+  for (let y = 0; y < MAP0.h; y++)
+    for (let x = 0; x < MAP0.w; x++) {
+      const t = MAP0.tiles[idx(MAP0.w, x, y)];
+      if (t && t.prop === id) return { x, y };
+    }
+  throw new Error(`bản đồ không có vật thể '${id}'`);
+}
+/** Ô ĐỨNG để bấm vào vật thể `id`: ô kề bên, đi được. Ưu tiên ô PHÍA DƯỚI vì
+ *  nhà và quầy đều quay mặt xuống nam. */
+function standBy(id) {
+  const p = timVatThe(id);
+  for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    const t = MAP0.tiles[idx(MAP0.w, p.x + dx, p.y + dy)];
+    if (!t || t.g === "water") continue;
+    const pd = t.prop ? content.props[t.prop] : null;
+    if (!pd || !pd.solid) return { x: p.x + dx, y: p.y + dy };
+  }
+  throw new Error(`không có ô đứng cạnh '${id}'`);
+}
+const WELL = timVatThe("well");
+const SHOP = timVatThe("shop");
+const COUNTER = timVatThe("counter");
+const DOOR = timVatThe("door");
+const AT_WELL = standBy("well");
+const AT_DOOR = standBy("door");
+/* Quầy bán và quầy thu mua nằm hai bên MỘT ô sân: đứng đó bấm được cả hai. */
+const AT_SHOP = { x: (SHOP.x + COUNTER.x) / 2, y: SHOP.y };
+
+/* Chỗ đứng làm ruộng trong các kịch bản: ĐỨNG TRÊN NGÕ giữa hai lô, hai bên là
+   hai lô khác nhau. Sáu ô quanh nó là sáu ô cuốc được, và chỉ sáu (hai ô trên
+   dưới là ngõ, không cuốc được) — các kịch bản đo "hết ô thì dừng" vì thế vẫn
+   đo đúng thứ chúng định đo. */
+const HOME = { x: 8, y: 10 };
 const PLOTS = [
-  { x: 15, y: 8 }, { x: 15, y: 9 }, { x: 15, y: 10 },
-  { x: 17, y: 8 }, { x: 17, y: 9 }, { x: 17, y: 10 },
+  { x: 7, y: 9 }, { x: 7, y: 10 }, { x: 7, y: 11 },
+  { x: 9, y: 9 }, { x: 9, y: 10 }, { x: 9, y: 11 },
 ];
 
 /* ========================================================================== */
@@ -563,25 +641,25 @@ test("8. save round-trip: JSON.parse(JSON.stringify(snapshot)) → replace() kh�
 
 const SCRIPT = [
   { t: "SELECT", slot: 0 },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 2 },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 1 },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "TICK", dt: 12 },
@@ -592,26 +670,26 @@ const SCRIPT = [
   { t: "MOVE", dx: 0, dy: 1, dt: 0.25 },
   { t: "MOVE", dx: -1, dy: 0, dt: 0.25 },
   { t: "MOVE", dx: 0, dy: -1, dt: 0.25 },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SLEEP" },
   { t: "DEBUG", op: "growAll" },
-  { t: "USE", x: 15, y: 8 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 15, y: 9 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.4 },
-  { t: "USE", x: 17, y: 8 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SELL_ALL" },
 ];
@@ -845,26 +923,25 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   const store = mkStore();
 
   // --- SHOP / SELL: UI tự mở modal, reducer không đụng state ---
-  walkTo(store, 12, 5);
+  walkTo(store, AT_SHOP.x, AT_SHOP.y);
   let before = store.getState();
-  store.dispatch({ t: "INTERACT", x: 11, y: 5 }); // 'S' — cửa hàng
+  store.dispatch({ t: "INTERACT", x: SHOP.x, y: SHOP.y }); // 'S' — cửa hàng
   eq(store.getState(), before, "INTERACT SHOP không đổi state");
 
-  walkTo(store, 22, 6);
   before = store.getState();
-  store.dispatch({ t: "INTERACT", x: 22, y: 5 }); // 'B' — quầy thu mua
+  store.dispatch({ t: "INTERACT", x: COUNTER.x, y: COUNTER.y }); // 'B' — quầy thu mua
   eq(store.getState(), before, "INTERACT SELL không đổi state");
 
   // --- cửa nhà = PORTAL, KHÔNG còn là ngủ ---
-  walkTo(store, 16, 4);
+  walkTo(store, AT_DOOR.x, AT_DOOR.y);
   const day0 = store.getState().day;
-  const door = portalAt(store.getState(), content, 16, 3);
+  const door = portalAt(store.getState(), content, DOOR.x, DOOR.y);
   ok(
     door && door.map === "house" && door.x === 6 && door.y === 6,
     "props.json khai cửa nhà dẫn vào bản đồ 'house' ô (6,6)",
   );
 
-  store.dispatch({ t: "INTERACT", x: 16, y: 3 }); // 'D' — cửa nhà
+  store.dispatch({ t: "INTERACT", x: DOOR.x, y: DOOR.y }); // 'D' — cửa nhà
   eq(store.getState().day, day0, "cửa nhà KHÔNG còn là chỗ ngủ nữa");
   eq(store.getState().mapId, "house", "đã sang bản đồ phòng ngủ");
   const p1 = store.getState().player;
@@ -895,18 +972,18 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   store.dispatch({ t: "PORTAL", x: 6, y: 7 }); // 'd' — cửa ra
   eq(store.getState().mapId, "farm", "về lại nông trại");
   const p2 = store.getState().player;
-  eq(Math.floor(p2.x / TILE), 16, "ra ngoài đúng cột");
-  eq(Math.floor(p2.y / TILE), 4, "ra ngoài đúng hàng");
+  eq(Math.floor(p2.x / TILE), AT_DOOR.x, "ra ngoài đúng cột");
+  eq(Math.floor(p2.y / TILE), AT_DOOR.y, "ra ngoài đúng hàng");
 
   // --- PORTAL vào ô không phải cửa thì không làm gì ---
   before = store.getState();
-  store.dispatch({ t: "PORTAL", x: 16, y: 5 });
+  store.dispatch({ t: "PORTAL", x: AT_DOOR.x, y: AT_DOOR.y + 1 });
   eq(store.getState(), before, "PORTAL vào ô thường trả về ĐÚNG state cũ");
 
   // --- và không dịch chuyển được từ xa ---
-  walkTo(store, 16, 8);
+  walkTo(store, AT_DOOR.x, AT_DOOR.y + 4);
   before = store.getState();
-  store.dispatch({ t: "PORTAL", x: 16, y: 3 });
+  store.dispatch({ t: "PORTAL", x: DOOR.x, y: DOOR.y });
   eq(store.getState(), before, "PORTAL ngoài tầm với: không làm gì");
 });
 
@@ -1006,17 +1083,17 @@ test("16. reduce THUẦN: không action nào sửa state cũ tại chỗ", () =>
   walkTo(store, HOME.x, HOME.y);
   const script = [
     { t: "SELECT", slot: 0 },
-    { t: "USE", x: 15, y: 8 },
+    { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
     { t: "SELECT", slot: 2 },
-    { t: "USE", x: 15, y: 8 },
+    { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
     { t: "SELECT", slot: 1 },
-    { t: "USE", x: 15, y: 8 },
+    { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
     { t: "MOVE", dx: 1, dy: 1, dt: 0.1 },
     { t: "TICK", dt: 4 },
     { t: "SLEEP" },
     { t: "SLEEP" },
     { t: "SLEEP" },
-    { t: "USE", x: 15, y: 8 },
+    { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
     { t: "SELL_ALL" },
     { t: "BUY", id: "seed:lettuce", n: 2 },
     { t: "DEBUG", op: "money", n: 50 },
@@ -1024,9 +1101,9 @@ test("16. reduce THUẦN: không action nào sửa state cũ tại chỗ", () =>
     { t: "DEBUG", op: "addGrass" },
     { t: "DEBUG", op: "water" },
     { t: "REFILL" },
-    { t: "PORTAL", x: 16, y: 3 },
+    { t: "PORTAL", x: DOOR.x, y: DOOR.y },
     { t: "CRAFT", id: "axe" },
-    { t: "INTERACT", x: 15, y: 8 },
+    { t: "INTERACT", x: PLOTS[0].x, y: PLOTS[0].y },
     { t: "DEBUG", op: "skipDay" },
     { t: "LOG_SEEN", upTo: 3 },
   ];
@@ -1197,7 +1274,7 @@ test("23. hết nước không tưới được; múc đầy ở giếng và ở
   eq(store.getState().water, 0, "xa nước thì không múc được");
 
   // --- giếng ---
-  walkTo(store, 10, 8); // ô kề giếng 'G' ở (9,8)
+  walkTo(store, AT_WELL.x, AT_WELL.y); // ô kề giếng
   store.dispatch({ t: "REFILL" });
   eq(store.getState().water, content.tools.can.capacity, "múc ở giếng thì đầy bình");
   eq(store.dispatch({ t: "REFILL" }), store.getState(), "bình đã đầy: REFILL trả về ĐÚNG state cũ");
@@ -1239,7 +1316,6 @@ test("23. hết nước không tưới được; múc đầy ở giếng và ở
   eq(store.getState().water, content.tools.can.capacity, "múc ở bờ ao cũng đầy bình");
 
   // tưới lại được, và trừ đúng một nước
-  walkTo(store, 10, 7); // vòng lên hàng 7: giếng ở (9,8) chặn ngang hàng 8
   walkTo(store, HOME.x, HOME.y);
   const w0 = store.getState().water;
   selectItem(store, "tool:can");
@@ -1653,8 +1729,8 @@ test("29. migrate: save cũ thiếu hp/water/grow và content gỡ vật thể v
 
 /** Vào nhà bằng cửa 'D' của nông trại — đi bằng chân như người chơi thật. */
 function enterHouse(store) {
-  walkTo(store, 16, 4);
-  store.dispatch({ t: "INTERACT", x: 16, y: 3 });
+  walkTo(store, AT_DOOR.x, AT_DOOR.y);
+  store.dispatch({ t: "INTERACT", x: DOOR.x, y: DOOR.y });
   eq(store.getState().mapId, "house", "đã sang bản đồ 'house'");
 }
 
@@ -1700,9 +1776,9 @@ test("30. tách bản đồ: farm ⇄ house đổi lưới, bản đồ rời đ
   const store = mkStore(555);
   let s = store.getState();
   eq(s.mapId, "farm", "ván mới bắt đầu ở nông trại");
-  eq(s.w, 40, "nông trại rộng 40");
-  eq(s.h, 30, "nông trại cao 30");
-  eq(s.tiles.length, 40 * 30, "lưới nông trại đúng w*h");
+  eq(s.w, FARM_W, `nông trại rộng ${FARM_W}`);
+  eq(s.h, FARM_H, `nông trại cao ${FARM_H}`);
+  eq(s.tiles.length, FARM_W * FARM_H, "lưới nông trại đúng w*h");
   ok(!Object.prototype.hasOwnProperty.call(s.maps, "farm"), "mapId KHÔNG nằm trong maps");
   ok(s.maps.house, "phòng ngủ được cất sẵn từ đầu ván");
   eq(s.maps.house.w, 14, "phòng ngủ rộng 14");
@@ -1732,16 +1808,16 @@ test("30. tách bản đồ: farm ⇄ house đổi lưới, bản đồ rời đ
   eq(s.tiles.length, 14 * 8, "tiles là lưới của phòng ngủ");
   ok(!Object.prototype.hasOwnProperty.call(s.maps, "house"), "bản đồ đang chơi đã lấy RA khỏi maps");
   ok(s.maps.farm, "nông trại được cất vào maps");
-  eq(s.maps.farm.w, 40, "nông trại cất đi giữ nguyên w");
-  eq(s.maps.farm.h, 30, "nông trại cất đi giữ nguyên h");
+  eq(s.maps.farm.w, FARM_W, "nông trại cất đi giữ nguyên w");
+  eq(s.maps.farm.h, FARM_H, "nông trại cất đi giữ nguyên h");
   deepEq(s.maps.farm.tiles, farmBefore, "lưới nông trại cất đi nguyên vẹn từng ô");
   deepEq(checkInvariants(s, content), [], "bất biến khi đang ở trong nhà");
 
   // --- house → farm: ruộng phải y như lúc rời đi ---
   leaveHouse(store);
   s = store.getState();
-  eq(s.w, 40, "về nông trại thì w trở lại 40");
-  eq(s.h, 30, "về nông trại thì h trở lại 30");
+  eq(s.w, FARM_W, `về nông trại thì w trở lại ${FARM_W}`);
+  eq(s.h, FARM_H, `về nông trại thì h trở lại ${FARM_H}`);
   deepEq(s.tiles, farmBefore, "ruộng còn nguyên như lúc rời đi");
   const t = farmTile(store, plot.x, plot.y);
   ok(t.tilled && t.crop && t.wet, "ô đã cày/gieo/tưới vẫn còn đó");
@@ -1843,8 +1919,8 @@ test("32. qua lại nhiều lần: mapId không bao giờ nằm trong maps; save
   store.replace(round.state);
   deepEq(store.getState(), before, "state sau round-trip giữ nguyên CẢ HAI bản đồ");
   eq(store.getState().mapId, "house", "round-trip giữ đúng bản đồ đang chơi");
-  eq(store.getState().maps.farm.tiles.length, 40 * 30, "lưới nông trại trong save đủ ô");
-  ok(store.getState().maps.farm.tiles[idx(40, PLOTS[0].x, PLOTS[0].y)].tilled, "dấu vết ngoài ruộng còn trong save");
+  eq(store.getState().maps.farm.tiles.length, FARM_W * FARM_H, "lưới nông trại trong save đủ ô");
+  ok(store.getState().maps.farm.tiles[idx(FARM_W, PLOTS[0].x, PLOTS[0].y)].tilled, "dấu vết ngoài ruộng còn trong save");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau round-trip");
 });
 
@@ -1907,7 +1983,7 @@ test("33. migrate: save thiếu mapId/maps, và content gỡ hẳn một bản �
   }
   eq(res2.state.mapId, "farm", "đang đứng trong bản đồ bị gỡ → về bản đồ spawn");
   eq(Object.keys(res2.state.maps).length, 0, "bản đồ content không còn thì bị bỏ khỏi save");
-  eq(res2.state.w, 40, "lưới hoạt động là nông trại");
+  eq(res2.state.w, FARM_W, "lưới hoạt động là nông trại");
   ok(
     res2.state.tiles[idx(res2.state.w, PLOTS[0].x, PLOTS[0].y)].tilled,
     "tiến độ ngoài ruộng vẫn còn sau khi phòng ngủ biến mất",
@@ -4310,6 +4386,107 @@ test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lạ
   ok(nuocQuanh.length > 0, "cầu nằm giữa mặt nước, không phải nằm sát bờ");
 
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi dùng vùng đất và cầu");
+});
+
+/* ========================================================================== */
+/* 71. Quy hoạch: bàn cờ, đường sá, và mỗi khu một việc                       */
+/* ========================================================================== */
+
+test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều có đường tới", () => {
+  const store = mkStore();
+  const s = store.getState();
+  const lo = content.tiles.zones.filter((z) => z.kind === "farm");
+  const rung = content.tiles.zones.filter((z) => z.kind === "forest");
+  const chuong = content.tiles.pens;
+
+  ok(lo.length >= 9, `ruộng phải chia thành nhiều lô (đang có ${lo.length})`);
+  ok(rung.length >= 1, "có vùng rừng");
+  ok(chuong.length >= 4, "có đủ các khu chuồng, kể cả ao cá");
+
+  /* --- BÀN CỜ: mọi lô CÙNG kích thước, và xếp thành lưới thẳng hàng ------ */
+  const w0 = lo[0].w;
+  const h0 = lo[0].h;
+  for (const z of lo) eq(`${z.w}×${z.h}`, `${w0}×${h0}`, `lô '${z.id}' cùng cỡ với các lô khác`);
+  const cot = [...new Set(lo.map((z) => z.x))].sort((a, b) => a - b);
+  const hang = [...new Set(lo.map((z) => z.y))].sort((a, b) => a - b);
+  eq(cot.length * hang.length, lo.length, "các lô xếp kín một lưới cột × hàng");
+  const deu = (v) => v.slice(1).every((n, i) => n - v[i] === v[1] - v[0]);
+  ok(deu(cot), `khoảng cách giữa các cột lô đều nhau: ${cot.join(",")}`);
+  ok(deu(hang), `khoảng cách giữa các hàng lô đều nhau: ${hang.join(",")}`);
+  ok(cot[1] - cot[0] > w0, "giữa hai cột lô phải có BỜ, không dính vào nhau");
+  ok(hang[1] - hang[0] > h0, "giữa hai hàng lô phải có BỜ, không dính vào nhau");
+
+  /* --- Ruột lô SẠCH: cuốc được từng ô một, không lẫn đá lẫn cây --------- */
+  let cuoc = 0;
+  for (const z of lo)
+    for (let y = z.y; y < z.y + z.h; y++)
+      for (let x = z.x; x < z.x + z.w; x++) {
+        const t = tile(store, x, y);
+        ok(t && t.g === "grass" && !t.prop && !t.b, `lô '${z.id}' ô (${x},${y}) phải là đất trống`);
+        cuoc++;
+      }
+  eq(cuoc, lo.length * w0 * h0, "tổng số ô cuốc được đúng bằng số lô × diện tích lô");
+  ok(cuoc >= 300, `khu trồng trọt phải RỘNG (đang có ${cuoc} ô)`);
+
+  /* --- BỜ giữa hai lô không cuốc được: ranh giới phải NHÌN THẤY --------- */
+  const bo = { x: cot[0] + w0, y: hang[0] };
+  ok(!inZone(s, content, "farm", bo.x, bo.y), "ô bờ giữa hai lô nằm ngoài mọi khu ruộng");
+  ok(!isTillable(s, content, bo.x, bo.y), "…nên không cuốc được");
+
+  /* --- ĐƯỜNG SÁ: đi bộ tới được mọi khu, không phải leo rào ------------- */
+  const oDi = (o) => {
+    for (const [dx, dy] of [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      const x = o.x + dx;
+      const y = o.y + dy;
+      if (!isSolid(s, content, x, y) && tile(store, x, y)?.g !== "water") return { x, y };
+    }
+    return null;
+  };
+  const dich = [
+    ["ruộng", oDi({ x: lo[lo.length - 1].x, y: lo[lo.length - 1].y })],
+    ["rừng", oDi({ x: rung[0].x + ((rung[0].w / 2) | 0), y: rung[0].y + rung[0].h - 1 })],
+    ["kho", oDi(timVatThe("store_door"))],
+    ["quầy", oDi(timVatThe("counter"))],
+    ["bờ ao", oDi({ x: content.tiles.pens.find((p) => p.swim).x - 1, y: content.tiles.pens.find((p) => p.swim).y })],
+  ];
+  for (const c of chuong) if (!c.swim) dich.push([c.name, { x: c.x, y: c.y }]);
+  const px = Math.floor(s.player.x / TILE);
+  const py = Math.floor(s.player.y / TILE);
+  for (const [ten, o] of dich) {
+    ok(!!o, `có ô đứng được ở ${ten}`);
+    ok(
+      findPath(s, content, px, py, new Set([idx(s.w, o.x, o.y)]), { maxNodes: 60000 }),
+      `từ chỗ bắt đầu đi bộ tới ${ten} (${o.x},${o.y}) được`,
+    );
+  }
+
+  /* --- Xe cũng phải vào tới nơi: cổng → điểm giao → bãi đậu ------------- */
+  const chay = (o) => {
+    const t = tile(store, o.x, o.y);
+    return !!t && !t.prop && (t.g === "asphalt" || t.g === "path");
+  };
+  ok(chay(content.tiles.gate), "cổng nằm trên mặt đường");
+  ok(chay(content.tiles.dropoff), "điểm giao nằm trên mặt đường");
+  for (const o of content.tiles.parking.spots)
+    ok(chay(o), `ô đậu (${o.x},${o.y}) nằm trên mặt đường`);
+
+  /* --- BIỂN CẮM: đứng ở đâu cũng đọc được tên chỗ đó ------------------- */
+  const bien = content.tiles.signs ?? [];
+  ok(bien.length >= lo.length + chuong.length, `mỗi khu một tấm biển (đang có ${bien.length})`);
+  const chu = new Set(bien.map((b) => b.text));
+  for (const z of lo) ok(chu.has(z.name), `có biển '${z.name}'`);
+  for (const c of chuong) ok(chu.has(c.name), `có biển '${c.name}'`);
+  for (const t of ["Nhà", "Kho", "Bãi đậu xe", "Chợ", "Rừng"]) ok(chu.has(t), `có biển '${t}'`);
+  for (const b of bien) {
+    const t = tile(store, b.x, b.y);
+    eq(t?.prop, "sign", `biển '${b.text}' cắm đúng lên một cái cọc`);
+    /* Biển KHÔNG ĐẶC: nhiều tấm cắm giữa ngõ rộng đúng một ô, đặc là chặn
+       đường tới chính cái khu mà nó gọi tên. */
+    ok(!isSolid(s, content, b.x, b.y), `biển '${b.text}' không chặn lối đi`);
+    ok(!inZone(s, content, "farm", b.x, b.y), `biển '${b.text}' không ăn mất một ô cuốc được`);
+  }
+
+  deepEq(checkInvariants(s, content), [], "bất biến trên bản đồ vừa quy hoạch");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

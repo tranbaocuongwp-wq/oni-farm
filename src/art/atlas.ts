@@ -596,6 +596,27 @@ function makePier(art: PropArt): HTMLCanvasElement {
   return s.c;
 }
 
+/**
+ * BIỂN CẮM khu. Một tấm ván nhỏ trên cọc, cao chưa tới nửa ô.
+ *
+ * Cố ý VẼ TRỐNG — chữ trên biển không nằm trong sprite. Tên khu là chữ VIỆT có
+ * dấu và dài ngắn khác nhau ("Lô A1" cạnh "Khu gia cầm"), nhét vào một tấm ván
+ * 10×5 pixel thì hoặc là không đọc được, hoặc là phải vẽ tay từng bộ chữ cho
+ * từng cái tên. Chữ vì thế do `drawSignLabels` in ra ở lớp trên, theo phông của
+ * trang; tấm ván ở đây chỉ để mắt biết CÓ một cái biển cắm ở đó.
+ */
+function makeSign(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 6, 1.5);
+  s.rect(7, 9, 2, 5, art.dark);          // cọc
+  s.px(7, 9, art.accent);
+  s.rect(3, 3, 10, 7, art.dark);         // viền tấm ván
+  s.rect(4, 4, 8, 5, art.body);
+  s.hline(4, 4, 8, art.accent);          // mặt trên ăn nắng
+  s.hline(4, 8, 8, art.dark);
+  return outline(s).c;
+}
+
 function makeTrough(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 13, 11, 2);
@@ -884,6 +905,7 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "bed": return makeBed(art);
     case "bench": return makeBench(art);
     case "trough": return makeTrough(art);
+    case "sign": return makeSign(art);
     case "pier": return makePier(art);
     case "wall": return makeWall(art);
     case "door_in": return makeDoorIn(art);

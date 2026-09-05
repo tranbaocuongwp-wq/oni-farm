@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feeds` liệt kê MỌI thứ đổ được vào máng khu này — loài nào ăn một trong số đó thì dùng CHUNG cái máng, nên bò/dê/cừu chia nhau một máng. Khu DƯỚI NƯỚC (`swim`) cũng có `feeds` nhưng KHÔNG có máng: đứng bờ ao bấm CHO CÁ ĂN, chứ không đặt được cái máng giữa hồ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.\n\nzones: các VÙNG có luật riêng, khác `pens` ở chỗ vùng nói về ĐẤT chứ không về con vật.\n  · kind 'farm'   — CHỈ trong đây mới cuốc được. Ruộng chia thành TỪNG LÔ, mỗi lô một vùng riêng, giữa các lô là BỜ lát lối mòn. Bờ là ô path nên tự nó đã không cuốc được: ranh giới vì thế NHÌN THẤY ĐƯỢC chứ không phải một luật vô hình mà người chơi chỉ biết khi bấm hụt.\n  · kind 'forest' — mỗi đêm có xác suất mọc thêm cây con lên ô cỏ trống. Rừng chặt xong mà không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ 'rừng' chỉ là trang trí.\nNhiều vùng cùng `kind` thì luật áp cho HỢP của chúng — vùng không nhất thiết phải là một hình chữ nhật.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Ba chuồng trên cạn xếp CHỒNG và dùng CHUNG bức rào giữa — chừa ngõ giữa hai chuồng thì mỗi con vật có một hành lang riêng chẳng dẫn đi đâu, còn dùng chung vách thì cả dãy đọc ra một khu trại liền mạch. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feeds` liệt kê MỌI thứ đổ được vào máng khu này — loài nào ăn một trong số đó thì dùng CHUNG cái máng, nên bò/dê/cừu chia nhau một máng. Khu DƯỚI NƯỚC (`swim`) cũng có `feeds` nhưng KHÔNG có máng: đứng bờ ao bấm CHO CÁ ĂN, chứ không đặt được cái máng giữa hồ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.\n\nzones: các VÙNG có luật riêng, khác `pens` ở chỗ vùng nói về ĐẤT chứ không về con vật.\n  · kind 'farm'   — CHỈ trong đây mới cuốc được. Ruộng chia thành TỪNG LÔ, mỗi lô một vùng riêng, giữa các lô là BỜ lát lối mòn. Bờ là ô path nên tự nó đã không cuốc được: ranh giới vì thế NHÌN THẤY ĐƯỢC chứ không phải một luật vô hình mà người chơi chỉ biết khi bấm hụt.\n  · kind 'forest' — mỗi đêm có xác suất mọc thêm cây con lên ô cỏ trống. Rừng chặt xong mà không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ 'rừng' chỉ là trang trí.\nNhiều vùng cùng `kind` thì luật áp cho HỢP của chúng — vùng không nhất thiết phải là một hình chữ nhật.\n\nsigns: BIỂN CẮM — tên đọc được ngay trên mặt đất, không phải mở bản đồ nhỏ ra dò. Mỗi ô khai ở đây PHẢI có vật thể 'sign' dưới chân và ngược lại (validatePack chặn cả hai chiều): một dòng chữ lơ lửng trên bãi cỏ trông như lỗi vẽ chứ không như một cái biển. Biển KHÔNG ĐẶC vì phần lớn cắm giữa ngõ rộng đúng một ô — đặc là chặn đường tới chính cái khu mà nó gọi tên. Chữ do render in ở lớp thiết bị theo phông của trang, không nằm trong sprite: tên khu là chữ Việt có dấu, dựng một bộ phông pixel đủ dấu chỉ để in 'Lô A1' thì vừa tốn vừa khó đọc trên màn điện thoại.\n\nBỐ CỤC nông trại 48×37, chia thành các dải ngang rõ ràng:\n  y=1..7   dải bắc — hồ cá (có cầu ra giữa hồ), nhà + sân, chợ, kho + bãi đậu\n  y=8      đường trục bắc (asphalt, suốt chiều ngang)\n  y=9..25  ruộng BÀN CỜ 4 cột × 3 hàng lô (mỗi lô 6×5) ở x=1..29 · đường trục dọc x=30 · dãy chuồng ở x=31..46\n  y=26     đường trục nam\n  y=27..35 rừng, có ngõ xuyên qua để không phải lách từng gốc cây\nMọi lô cùng kích thước và cách nhau đúng một ô BỜ lát lối mòn — bờ là ô path nên tự nó không cuốc được, ranh giới vì thế NHÌN THẤY ĐƯỢC chứ không phải một luật vô hình mà người chơi chỉ biết khi bấm hụt.",
   "grounds": {
     "water": {
       "solid": true,
@@ -124,11 +124,15 @@
     "P": {
       "ground": "water",
       "prop": "pier"
+    },
+    "N": {
+      "ground": "path",
+      "prop": "sign"
     }
   },
   "spawn": {
     "map": "farm",
-    "x": 16,
+    "x": 18,
     "y": 5
   },
   "indoorMaps": [
@@ -136,28 +140,28 @@
   ],
   "dropoff": {
     "map": "farm",
-    "x": 26,
-    "y": 12
+    "x": 30,
+    "y": 4
   },
   "gate": {
     "map": "farm",
-    "x": 26,
-    "y": 29
+    "x": 30,
+    "y": 36
   },
   "parking": {
     "map": "farm",
     "spots": [
       {
-        "x": 23,
-        "y": 11
+        "x": 39,
+        "y": 6
       },
       {
-        "x": 24,
-        "y": 11
+        "x": 40,
+        "y": 6
       },
       {
-        "x": 25,
-        "y": 11
+        "x": 41,
+        "y": 6
       }
     ]
   },
@@ -166,9 +170,9 @@
       "id": "cattle",
       "name": "Khu gia súc",
       "map": "farm",
-      "x": 29,
-      "y": 14,
-      "w": 8,
+      "x": 33,
+      "y": 10,
+      "w": 12,
       "h": 4,
       "feeds": [
         "item:hay",
@@ -180,10 +184,10 @@
       "id": "pigpen",
       "name": "Khu heo",
       "map": "farm",
-      "x": 29,
-      "y": 21,
-      "w": 8,
-      "h": 2,
+      "x": 33,
+      "y": 15,
+      "w": 12,
+      "h": 4,
       "feeds": [
         "item:fodder",
         "item:feedmix",
@@ -195,10 +199,10 @@
       "id": "coop",
       "name": "Khu gia cầm",
       "map": "farm",
-      "x": 29,
-      "y": 26,
-      "w": 8,
-      "h": 2,
+      "x": 33,
+      "y": 20,
+      "w": 12,
+      "h": 5,
       "feeds": [
         "item:feedmix",
         "crop:corn"
@@ -206,11 +210,11 @@
     },
     {
       "id": "pond",
-      "name": "Ao cá",
+      "name": "Hồ cá",
       "map": "farm",
-      "x": 3,
+      "x": 2,
       "y": 2,
-      "w": 4,
+      "w": 10,
       "h": 5,
       "swim": true,
       "feeds": [
@@ -221,104 +225,268 @@
   ],
   "zones": [
     {
-      "id": "lo1",
+      "id": "loa1",
       "name": "Lô A1",
       "kind": "farm",
       "map": "farm",
       "x": 2,
-      "y": 8,
+      "y": 9,
       "w": 6,
-      "h": 3
+      "h": 5
     },
     {
-      "id": "lo2",
+      "id": "loa2",
       "name": "Lô A2",
       "kind": "farm",
       "map": "farm",
-      "x": 2,
-      "y": 12,
+      "x": 9,
+      "y": 9,
       "w": 6,
-      "h": 3
+      "h": 5
     },
     {
-      "id": "lo3",
+      "id": "loa3",
       "name": "Lô A3",
       "kind": "farm",
       "map": "farm",
-      "x": 2,
-      "y": 16,
+      "x": 16,
+      "y": 9,
       "w": 6,
-      "h": 3
+      "h": 5
     },
     {
-      "id": "lo4",
+      "id": "loa4",
+      "name": "Lô A4",
+      "kind": "farm",
+      "map": "farm",
+      "x": 23,
+      "y": 9,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "id": "lob1",
       "name": "Lô B1",
       "kind": "farm",
       "map": "farm",
-      "x": 9,
-      "y": 8,
-      "w": 7,
-      "h": 3
+      "x": 2,
+      "y": 15,
+      "w": 6,
+      "h": 5
     },
     {
-      "id": "lo5",
+      "id": "lob2",
       "name": "Lô B2",
       "kind": "farm",
       "map": "farm",
       "x": 9,
-      "y": 12,
-      "w": 7,
-      "h": 3
+      "y": 15,
+      "w": 6,
+      "h": 5
     },
     {
-      "id": "lo6",
+      "id": "lob3",
       "name": "Lô B3",
       "kind": "farm",
       "map": "farm",
-      "x": 9,
-      "y": 16,
-      "w": 7,
-      "h": 3
+      "x": 16,
+      "y": 15,
+      "w": 6,
+      "h": 5
     },
     {
-      "id": "lo7",
+      "id": "lob4",
+      "name": "Lô B4",
+      "kind": "farm",
+      "map": "farm",
+      "x": 23,
+      "y": 15,
+      "w": 6,
+      "h": 5
+    },
+    {
+      "id": "loc1",
       "name": "Lô C1",
       "kind": "farm",
       "map": "farm",
-      "x": 17,
-      "y": 8,
+      "x": 2,
+      "y": 21,
       "w": 6,
-      "h": 3
+      "h": 5
     },
     {
-      "id": "lo8",
+      "id": "loc2",
       "name": "Lô C2",
       "kind": "farm",
       "map": "farm",
-      "x": 17,
-      "y": 12,
+      "x": 9,
+      "y": 21,
       "w": 6,
-      "h": 3
+      "h": 5
     },
     {
-      "id": "lo9",
+      "id": "loc3",
       "name": "Lô C3",
       "kind": "farm",
       "map": "farm",
-      "x": 17,
-      "y": 16,
+      "x": 16,
+      "y": 21,
       "w": 6,
-      "h": 3
+      "h": 5
+    },
+    {
+      "id": "loc4",
+      "name": "Lô C4",
+      "kind": "farm",
+      "map": "farm",
+      "x": 23,
+      "y": 21,
+      "w": 6,
+      "h": 5
     },
     {
       "id": "woods",
       "name": "Rừng",
       "kind": "forest",
       "map": "farm",
-      "x": 2,
-      "y": 20,
-      "w": 23,
+      "x": 1,
+      "y": 27,
+      "w": 46,
       "h": 9
+    }
+  ],
+  "signs": [
+    {
+      "map": "farm",
+      "x": 1,
+      "y": 9,
+      "text": "Lô A1"
+    },
+    {
+      "map": "farm",
+      "x": 8,
+      "y": 9,
+      "text": "Lô A2"
+    },
+    {
+      "map": "farm",
+      "x": 15,
+      "y": 9,
+      "text": "Lô A3"
+    },
+    {
+      "map": "farm",
+      "x": 22,
+      "y": 9,
+      "text": "Lô A4"
+    },
+    {
+      "map": "farm",
+      "x": 1,
+      "y": 15,
+      "text": "Lô B1"
+    },
+    {
+      "map": "farm",
+      "x": 8,
+      "y": 15,
+      "text": "Lô B2"
+    },
+    {
+      "map": "farm",
+      "x": 15,
+      "y": 15,
+      "text": "Lô B3"
+    },
+    {
+      "map": "farm",
+      "x": 22,
+      "y": 15,
+      "text": "Lô B4"
+    },
+    {
+      "map": "farm",
+      "x": 1,
+      "y": 21,
+      "text": "Lô C1"
+    },
+    {
+      "map": "farm",
+      "x": 8,
+      "y": 21,
+      "text": "Lô C2"
+    },
+    {
+      "map": "farm",
+      "x": 15,
+      "y": 21,
+      "text": "Lô C3"
+    },
+    {
+      "map": "farm",
+      "x": 22,
+      "y": 21,
+      "text": "Lô C4"
+    },
+    {
+      "map": "farm",
+      "x": 15,
+      "y": 4,
+      "text": "Nhà"
+    },
+    {
+      "map": "farm",
+      "x": 25,
+      "y": 4,
+      "text": "Chợ"
+    },
+    {
+      "map": "farm",
+      "x": 13,
+      "y": 4,
+      "text": "Giếng"
+    },
+    {
+      "map": "farm",
+      "x": 38,
+      "y": 5,
+      "text": "Kho"
+    },
+    {
+      "map": "farm",
+      "x": 37,
+      "y": 6,
+      "text": "Bãi đậu xe"
+    },
+    {
+      "map": "farm",
+      "x": 31,
+      "y": 11,
+      "text": "Khu gia súc"
+    },
+    {
+      "map": "farm",
+      "x": 31,
+      "y": 16,
+      "text": "Khu heo"
+    },
+    {
+      "map": "farm",
+      "x": 31,
+      "y": 21,
+      "text": "Khu gia cầm"
+    },
+    {
+      "map": "farm",
+      "x": 12,
+      "y": 3,
+      "text": "Hồ cá"
+    },
+    {
+      "map": "farm",
+      "x": 16,
+      "y": 26,
+      "text": "Rừng"
     }
   ]
 }
