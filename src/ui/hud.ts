@@ -638,17 +638,44 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
       // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
-      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}|${iHint?.label ?? ""}`;
+      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}|${s.carry ?? ""}|${iHint?.label ?? ""}`;
       if (hk !== prev.hint) {
         prev.hint = hk;
         const btn = document.querySelector<HTMLElement>("#abtn .a");
         const why = document.querySelector<HTMLElement>("#abtn .why");
         if (btn) {
-          btn.textContent = hint?.label ?? "DÙNG";
+          /* THỨ ĐANG CẦM, ngay trên nhãn việc.
+
+             Nhãn một mình không đủ và chưa bao giờ đủ: cùng chữ "DÙNG" thì cầm
+             cuốc là cày, cầm hạt là gieo, cầm bó rơm là đổ máng. Mắt người chơi
+             đang ở nhân vật, không ở dải hotbar dưới đáy — nên câu trả lời cho
+             "tôi đang cầm gì" phải nằm ngay trên cái nút sắp bấm.
+
+             Đang VÁC một khúc gỗ thì hình là chính khúc gỗ đó, không phải món
+             trong hotbar: lúc ấy nút ghi ĐẶT XUỐNG, và thứ sắp đặt xuống là cái
+             đang trên đầu. */
+          const camId = s.carry ?? s.inv[s.sel]?.id ?? null;
+          const camSrc = s.carry ? (atlas.props[s.carry] ?? null) : camId ? atlas.icon(camId) : null;
+          btn.innerHTML = "";
+          if (camSrc) {
+            const c = document.createElement("canvas");
+            c.width = camSrc.width;
+            c.height = camSrc.height;
+            c.getContext("2d")!.drawImage(camSrc, 0, 0);
+            c.className = "it";
+            btn.appendChild(c);
+          }
+          const nhan = document.createElement("span");
+          nhan.textContent = hint?.label ?? "DÙNG";
+          btn.appendChild(nhan);
+          btn.classList.toggle("cocam", !!camSrc);
           btn.dataset["kind"] = hint?.kind ?? "none";
           btn.classList.toggle("ready", !!hint?.ready);
           btn.classList.toggle("far", !!hint && !hint.ready && hint.kind !== null);
-          btn.setAttribute("aria-label", hint?.label ?? "Dùng vật phẩm");
+          btn.setAttribute(
+            "aria-label",
+            `${hint?.label ?? "Dùng vật phẩm"}${camId ? ` — ${itemName(camId, content)}` : ""}`,
+          );
         }
         if (why) {
           why.textContent = hint?.why ?? "";
@@ -679,15 +706,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         if (pc) {
           pc.innerHTML = "";
           const heldId = s.inv[s.sel]?.id;
-          const src = heldId ? atlas.icon(heldId) : null;
-          if (src) {
-            const c = document.createElement("canvas");
-            c.width = src.width;
-            c.height = src.height;
-            c.getContext("2d")!.drawImage(src, 0, 0);
-            c.className = "it";
-            pc.appendChild(c);
-          }
+          /* KHÔNG còn icon ở đây nữa — nó đã nằm trên chính cái nút. Thanh này
+             giữ phần mà một hình 16px không nói được: TÊN đầy đủ, và vì sao
+             chưa làm được. */
           if (heldId) {
             const t = document.createElement("span");
             t.textContent = itemName(heldId, content);

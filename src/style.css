@@ -1650,6 +1650,29 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   border-color: #5c9b40;
   box-shadow: 0 0 0 0 rgba(108, 201, 79, 0);
   transition: box-shadow 0.25s, background 0.2s, transform 0.08s;
+  /* Hình đồ đang cầm xếp TRÊN nhãn việc. Cột dọc chứ không phải hàng ngang:
+     nút tròn thì chiều ngang hẹp nhất ở hai đầu, mà nhãn ("ĐẶT XUỐNG") lại là
+     thứ dài nhất — xếp ngang là nhãn tràn ra ngoài vòng tròn. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1.05;
+}
+/* Hình 16px phóng lên 20px — vẫn ghim lưới pixel, không nhoè. */
+#abtn .a .it {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: 20px;
+  height: auto;
+  flex: none;
+  /* Bóng đổ mỏng để hình tách khỏi nền nút, kể cả khi nút đổi màu theo việc. */
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.45));
+}
+/* Có hình thì nhãn nhỏ lại một chút để cả hai cùng lọt trong vòng tròn. */
+#abtn .a.cocam span {
+  font-size: 0.82em;
 }
 /* Nút ngữ cảnh: SÁNG khi làm được ngay, mờ hơn khi phải đi tới, xám khi không có gì */
 #abtn .a.ready {
