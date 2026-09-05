@@ -223,6 +223,29 @@ export function validatePack(raw: RawPack): string[] {
        cản chứ không ra vật chỉ đường. */
     if (oBien?.ground === "asphalt")
       errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
+    /* BIỂN CỦA MỘT KHU PHẢI ĐỨNG BÊN TRONG CHÍNH KHU ĐÓ.
+       Cắm ra con ngõ giữa hai lô thì nó thành biển của con ngõ: lô nào cũng
+       đọc thấy mà chẳng lô nào nhận, và ngõ rộng đúng một ô nên tấm biển
+       chiếm trọn mặt đi. Chỗ đúng là ô GÓC của khu — bên trong, mà vẫn ở mép
+       ngoài để đứng ngoài đọc được. */
+    const trong = (r: { x: number; y: number; w: number; h: number }) =>
+      sg.x >= r.x && sg.x < r.x + r.w && sg.y >= r.y && sg.y < r.y + r.h;
+    for (const z of tilesDef.zones ?? [])
+      if (z.map === sg.map && z.name === sg.text && !trong(z))
+        errors.push(`tiles.signs '${sg.text}': phải cắm BÊN TRONG khu '${z.id}' mà nó gọi tên`);
+    for (const c of tilesDef.pens ?? []) {
+      if (c.map !== sg.map || c.name !== sg.text) continue;
+      /* Ao cá là ngoại lệ duy nhất, và vì lý do vật lý: ruột nó là NƯỚC, không
+         cắm cọc xuống được. Biển của ao đứng SÁT BỜ — sát đủ để không ai nhầm
+         nó là biển của khoảnh cỏ bên cạnh. */
+      const sat = { x: c.x - 1, y: c.y - 1, w: c.w + 2, h: c.h + 2 };
+      if (c.swim ? !trong(sat) : !trong(c))
+        errors.push(
+          c.swim
+            ? `tiles.signs '${sg.text}': phải cắm SÁT BỜ ao '${c.id}' mà nó gọi tên`
+            : `tiles.signs '${sg.text}': phải cắm BÊN TRONG chuồng '${c.id}' mà nó gọi tên`,
+        );
+    }
   }
   for (const [id, m] of Object.entries(maps ?? {}))
     for (let y = 0; y < m.h; y++)
@@ -391,6 +414,29 @@ export function validatePack(raw: RawPack): string[] {
        cản chứ không ra vật chỉ đường. */
     if (oBien?.ground === "asphalt")
       errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
+    /* BIỂN CỦA MỘT KHU PHẢI ĐỨNG BÊN TRONG CHÍNH KHU ĐÓ.
+       Cắm ra con ngõ giữa hai lô thì nó thành biển của con ngõ: lô nào cũng
+       đọc thấy mà chẳng lô nào nhận, và ngõ rộng đúng một ô nên tấm biển
+       chiếm trọn mặt đi. Chỗ đúng là ô GÓC của khu — bên trong, mà vẫn ở mép
+       ngoài để đứng ngoài đọc được. */
+    const trong = (r: { x: number; y: number; w: number; h: number }) =>
+      sg.x >= r.x && sg.x < r.x + r.w && sg.y >= r.y && sg.y < r.y + r.h;
+    for (const z of tilesDef.zones ?? [])
+      if (z.map === sg.map && z.name === sg.text && !trong(z))
+        errors.push(`tiles.signs '${sg.text}': phải cắm BÊN TRONG khu '${z.id}' mà nó gọi tên`);
+    for (const c of tilesDef.pens ?? []) {
+      if (c.map !== sg.map || c.name !== sg.text) continue;
+      /* Ao cá là ngoại lệ duy nhất, và vì lý do vật lý: ruột nó là NƯỚC, không
+         cắm cọc xuống được. Biển của ao đứng SÁT BỜ — sát đủ để không ai nhầm
+         nó là biển của khoảnh cỏ bên cạnh. */
+      const sat = { x: c.x - 1, y: c.y - 1, w: c.w + 2, h: c.h + 2 };
+      if (c.swim ? !trong(sat) : !trong(c))
+        errors.push(
+          c.swim
+            ? `tiles.signs '${sg.text}': phải cắm SÁT BỜ ao '${c.id}' mà nó gọi tên`
+            : `tiles.signs '${sg.text}': phải cắm BÊN TRONG chuồng '${c.id}' mà nó gọi tên`,
+        );
+    }
   }
   for (const [id, m] of Object.entries(maps ?? {}))
     for (let y = 0; y < m.h; y++)

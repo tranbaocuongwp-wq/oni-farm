@@ -209,6 +209,22 @@ reject("biển cắm ra giữa lòng đường nhựa", (p) => {
   p.tiles.legend["N"] = { ground: "asphalt", prop: "sign" };
 });
 reject("side của biển không phải e/w", (p) => (p.tiles.signs[0].side = "bac"));
+/* Biển phải đứng TRONG khu nó gọi tên. Đẩy nó ra con ngõ bên cạnh là đúng cái
+   lỗi người chơi bắt được: tấm biển đè lên lối đi, lô nào cũng đọc thấy mà
+   chẳng lô nào nhận. Chuyển cả cái cọc theo để lỗi DUY NHẤT còn lại là "sai
+   chỗ" — nếu không thì test này xanh nhờ luật "chữ không có cọc". */
+reject("biển của một lô bị đẩy ra con ngõ ngoài lô", (p) => {
+  const z = p.tiles.zones.find((q) => q.kind === "farm");
+  const sg = p.tiles.signs.find((q) => q.text === z.name);
+  const doO = (x, y, c) => {
+    const r = p.maps[sg.map].rows[y].split("");
+    r[x] = c;
+    p.maps[sg.map].rows[y] = r.join("");
+  };
+  doO(sg.x, sg.y, ".");        // trả ô cũ về cỏ trống
+  sg.x = z.x - 1;              // ngõ dọc sát mép tây của lô
+  doO(sg.x, sg.y, "J");        // cọc biển trên nền lối đi
+});
 
 reject("khu dưới nước lại đặt máng", (p) => {
   const pen = p.tiles.pens.find((q) => q.swim);
@@ -268,8 +284,11 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
 });
 accept("pack CŨ không khai signs — bản đồ không có tấm biển nào", (p) => {
   delete p.tiles.signs;
+  /* Ba ký tự biển, mỗi ký tự trả về ĐÚNG nền của nó: biển không được đổi mặt
+     đất dưới chân mình, nên gỡ biển cũng không được đổi. */
+  const nen = { N: ".", n: "#", J: ":" };
   for (const id of Object.keys(p.maps))
-    p.maps[id].rows = p.maps[id].rows.map((r) => r.split("N").join(":"));
+    p.maps[id].rows = p.maps[id].rows.map((r) => r.replace(/[NnJ]/g, (c) => nen[c]));
 });
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });

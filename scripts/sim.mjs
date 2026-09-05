@@ -355,10 +355,12 @@ const AT_SHOP = { x: (SHOP.x + COUNTER.x) / 2, y: SHOP.y };
    hai lô khác nhau. Sáu ô quanh nó là sáu ô cuốc được, và chỉ sáu (hai ô trên
    dưới là ngõ, không cuốc được) — các kịch bản đo "hết ô thì dừng" vì thế vẫn
    đo đúng thứ chúng định đo. */
-const HOME = { x: 8, y: 10 };
+/* Tránh HÀNG TRÊN CÙNG của lô: ô góc trên-trái của mỗi lô là chỗ cắm biển tên
+   lô, nên hàng y=9 không còn sáu ô cuốc được. Lùi xuống một hàng là đủ. */
+const HOME = { x: 8, y: 11 };
 const PLOTS = [
-  { x: 7, y: 9 }, { x: 7, y: 10 }, { x: 7, y: 11 },
-  { x: 9, y: 9 }, { x: 9, y: 10 }, { x: 9, y: 11 },
+  { x: 7, y: 10 }, { x: 7, y: 11 }, { x: 7, y: 12 },
+  { x: 9, y: 10 }, { x: 9, y: 11 }, { x: 9, y: 12 },
 ];
 
 /* ========================================================================== */
@@ -4431,16 +4433,36 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   ok(hang[1] - hang[0] > h0, "giữa hai hàng lô phải có BỜ, không dính vào nhau");
 
   /* --- Ruột lô SẠCH: cuốc được từng ô một, không lẫn đá lẫn cây --------- */
+  /* Ngoại lệ duy nhất: đúng MỘT tấm biển tên lô, cắm ở góc trên-trái CỦA CHÍNH
+     LÔ đó — bên trong khu nó gọi tên, ở mép ngoài, không đứng ra lối đi. */
   let cuoc = 0;
-  for (const z of lo)
+  for (const z of lo) {
+    let bien = 0;
     for (let y = z.y; y < z.y + z.h; y++)
       for (let x = z.x; x < z.x + z.w; x++) {
         const t = tile(store, x, y);
-        ok(t && t.g === "grass" && !t.prop && !t.b, `lô '${z.id}' ô (${x},${y}) phải là đất trống`);
+        ok(t && t.g === "grass" && !t.b, `lô '${z.id}' ô (${x},${y}) phải là nền cỏ trống`);
+        if (t.prop === "sign") {
+          bien++;
+          eq(`${x},${y}`, `${z.x},${z.y}`, `biển của lô '${z.id}' phải ở góc trên-trái của chính lô`);
+          continue;
+        }
+        ok(!t.prop, `lô '${z.id}' ô (${x},${y}) không được có vật thể (đang là '${t.prop}')`);
         cuoc++;
       }
-  eq(cuoc, lo.length * w0 * h0, "tổng số ô cuốc được đúng bằng số lô × diện tích lô");
+    eq(bien, 1, `lô '${z.id}' có đúng một tấm biển tên lô`);
+  }
+  eq(cuoc, lo.length * (w0 * h0 - 1), "mỗi lô cuốc được cả diện tích trừ ô cắm biển");
   ok(cuoc >= 300, `khu trồng trọt phải RỘNG (đang có ${cuoc} ô)`);
+
+  /* --- BIỂN HIỆU: không tấm nào được đứng giữa đường/lối đi giữa các lô ---
+     Yêu cầu của người chơi: "biển phải nằm bên trong và mép ngoài của khu vực
+     của nó". Dây bẫy: một tấm biển rơi ra bờ giữa hai lô là hỏng ngay. */
+  const trongLo = (x, y) => lo.some((z) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  for (let y = hang[0]; y < hang[hang.length - 1] + h0; y++)
+    for (let x = cot[0]; x < cot[cot.length - 1] + w0; x++)
+      if (!trongLo(x, y))
+        ok(tile(store, x, y)?.prop !== "sign", `ô bờ (${x},${y}) giữa các lô không được cắm biển`);
 
   /* --- BỜ giữa hai lô không cuốc được: ranh giới phải NHÌN THẤY --------- */
   const bo = { x: cot[0] + w0, y: hang[0] };
@@ -4497,7 +4519,13 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
     /* Biển KHÔNG ĐẶC: nhiều tấm cắm giữa ngõ rộng đúng một ô, đặc là chặn
        đường tới chính cái khu mà nó gọi tên. */
     ok(!isSolid(s, content, b.x, b.y), `biển '${b.text}' không chặn lối đi`);
-    ok(!inZone(s, content, "farm", b.x, b.y), `biển '${b.text}' không ăn mất một ô cuốc được`);
+    /* Biển của một lô ĐỨNG TRONG lô đó, ở ô góc — đó là chỗ duy nhất nó được
+       ăn vào đất cuốc được. Biển của khu khác thì tuyệt đối không lấn sang. */
+    const oLo = lo.find((z) => b.x >= z.x && b.x < z.x + z.w && b.y >= z.y && b.y < z.y + z.h);
+    if (oLo) {
+      eq(b.text, oLo.name, `biển đứng trong lô '${oLo.id}' phải là biển CỦA lô đó`);
+      eq(`${b.x},${b.y}`, `${oLo.x},${oLo.y}`, `biển '${b.text}' cắm ở ô góc của lô`);
+    }
   }
 
   deepEq(checkInvariants(s, content), [], "bất biến trên bản đồ vừa quy hoạch");

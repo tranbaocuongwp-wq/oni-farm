@@ -46,7 +46,7 @@ PARKING = [(40, 6), (41, 6), (42, 6)]
 # Ruộng chia lô kín, chuồng lát bê tông kín, rừng thì dày: không chừa chỗ này
 # thì cả nông trại không còn một mảnh đất trống nào để đặt vòi tưới hay nhà
 # kính mà không phải hy sinh một ô ruộng.
-YARD = (31, 1, 38, 3)
+YARD = (31, 1, 38, 5)
 DROPOFF = (30, 4)
 GATE = (30, H - 1)
 SPAWN = (18, 5)
@@ -100,8 +100,11 @@ g[WELL[1]][WELL[0]] = "G"
 box(25, 2, 29, 5, ":")           # sân chợ
 g[SHOP[1]][SHOP[0]] = "S"; g[COUNTER[1]][COUNTER[0]] = "B"
 box(*WARE, "K"); g[STORE_DOOR[1]][STORE_DOOR[0]] = "k"
-box(36, 5, 45, 5, ":")           # lối trước kho
-box(*YARD, ".")                  # sân sau: để trống hẳn, không rắc gì lên
+box(39, 5, 45, 5, ":")           # lối trước kho (dừng ở mép sân sau)
+# Sân sau: khoảnh đất trống DUY NHẤT còn lại sau khi cả bản đồ đã chia lô.
+# Cao 5 hàng chứ không 3, vì mỗi lô ruộng đã mất ô góc cho tấm biển tên lô,
+# nên trong ruộng không còn khối 6×5 nào sạch — sân sau phải gánh chỗ đó.
+box(*YARD, ".")                  # để trống hẳn, không rắc gì lên
 
 # ------------------------------------------------------------- 3. đường sá
 box(1, AVE_N, W - 2, AVE_N, "=")
@@ -184,31 +187,41 @@ g[SPAWN[1]][SPAWN[0]] = ":"
 # ăn mất một ô của chính nó thì vô lý. Biển KHÔNG ĐẶC nên cắm giữa ngõ rộng một
 # ô vẫn đi qua được.
 BIEN = []
+# Ký tự biển theo NỀN vốn có của ô. Một ký tự duy nhất là ô nào cắm biển cũng
+# bị biến thành lối mòn — mỗi tấm biển tự đắp một vệt đường dưới chân mình,
+# đúng thứ nhìn ra ngay trên bản đồ mà đọc code thì không thấy.
+BIEN_CHU = {".": "N", ",": "N", "g": "N", "w": "N", "#": "n", ":": "J"}
+
 def cam(x, y, chu, side="e"):
-    assert g[y][x] not in SOLID and g[y][x] != "~", f"cắm biển vào ô đặc ({x},{y})={g[y][x]}"
-    # Ô mang biển có nền `path`. Cắm lên asphalt là đục thủng mặt đường thành
-    # một ô lối mòn — và cái cọc thì đứng giữa lòng đường.
-    assert g[y][x] != "=", f"cắm biển ra giữa đường nhựa ({x},{y})"
-    g[y][x] = "N"
+    cu = g[y][x]
+    assert cu not in SOLID and cu != "~", f"cắm biển vào ô đặc ({x},{y})={cu}"
+    assert cu != "=", f"cắm biển ra giữa đường nhựa ({x},{y})"
+    assert cu in BIEN_CHU, f"chưa có ký tự biển cho nền '{cu}' ở ({x},{y})"
+    g[y][x] = BIEN_CHU[cu]
     BIEN.append((x, y, chu, side))
 
+# Biển của một lô nằm BÊN TRONG lô đó, ở ô góc trên-trái — tức là mép ngoài
+# của chính nó. Đứng ra ngõ thì nó là biển của con ngõ, không phải của cái lô;
+# và con ngõ rộng đúng một ô nên tấm biển chiếm trọn mặt đi.
+# Giá phải trả: mỗi lô mất một ô cuốc được (29 thay vì 30). Đáng, vì đổi lại
+# ranh giới đọc được ngay mà không phải suy.
 for ri, (ly0, ly1) in enumerate(LOT_ROWS):
     for ci, (lx0, lx1) in enumerate(LOT_COLS):
-        cam(lx0 - 1, ly0, f"Lô {'ABCD'[ri]}{ci + 1}")
+        cam(lx0, ly0, f"Lô {'ABCD'[ri]}{ci + 1}")
 cam(DOOR[0] - 3, DOOR[1] + 1, "Nhà")
 cam(SHOP[0] - 1, SHOP[1] + 1, "Chợ")
 cam(WELL[0], WELL[1] + 1, "Giếng", "w")
 cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
 # Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
 cam(PARKING[2][0] + 2, 5, "Bãi đậu xe", "w")  # bãi đậu nằm bên trái-dưới
-cam(YARD[0] - 1, YARD[1] + 1, "Sân sau")
+cam(YARD[0], YARD[1], "Sân sau")
 for (_id, nm, fy0, fy1, gates) in PENS:
-    cam(PEN_X0 - 1, gates[0], nm)
+    cam(PEN_X0 + 1, fy0 + 1, nm)   # trong ruột chuồng, góc trên-trái
 cam(POND[2] + 1, PIER_Y - 1, "Hồ cá", "w")   # hồ nằm bên TRÁI ô biển
 # Biển RỪNG cắm ở đầu NGÕ xuyên rừng, không cắm ra giữa đường trục: ô mang
 # biển có nền `path`, nên cắm lên mặt đường là đục thủng một lỗ lối mòn giữa
 # đường nhựa — nhìn thấy ngay mà chẳng ai ngờ tới lúc đặt.
-cam(FOREST_LANE_X[1], FOREST_Y0, "Rừng")
+cam(FOREST_LANE_X[1] + 1, FOREST_Y0, "Rừng")   # trong rừng, sát mép trên
 
 # ------------------------------------------------- 8. kiểm tra & vá liên thông
 def walkable(x, y): return g[y][x] not in SOLID and g[y][x] != "~"
@@ -261,12 +274,12 @@ assert patch(), "không vá nổi liên thông"
 for (_id, _nm, fy0, fy1, _gt) in PENS:
     for y in range(fy0+1, fy1):
         for x in range(PEN_X0+1, PEN_X1):
-            assert g[y][x] in "#m", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
+            assert g[y][x] in "#mn", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
 for (lx0, lx1) in LOT_COLS:
     for (ly0, ly1) in LOT_ROWS:
         for y in range(ly0, ly1+1):
             for x in range(lx0, lx1+1):
-                assert g[y][x] in ".,", f"lô bẩn ở ({x},{y}) = {g[y][x]}"
+                assert g[y][x] in ".,N", f"lô bẩn ở ({x},{y}) = {g[y][x]}"
 for y in range(POND[1], POND[3]+1):
     for x in range(POND[0], POND[2]+1):
         assert g[y][x] in "~P", f"ao thủng ở ({x},{y}) = {g[y][x]}"
@@ -322,7 +335,8 @@ io.open(p,"w",encoding="utf8").write(json.dumps(pr,ensure_ascii=False,indent=2)+
 
 # ------------------------------------------------------------------ báo cáo
 til = sum(1 for (lx0,lx1) in LOT_COLS for (ly0,ly1) in LOT_ROWS
-          for y in range(ly0,ly1+1) for x in range(lx0,lx1+1))
+          for y in range(ly0,ly1+1) for x in range(lx0,lx1+1)
+          if g[y][x] != "N")
 print(f"bản đồ {W}×{H}")
 print(f"vá liên thông: {VA[0]} chỗ kẹt, đục {VA[1]} ô")
 

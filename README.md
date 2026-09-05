@@ -530,11 +530,20 @@ bãi đậu xe, chợ, giếng, hồ cá và rừng đều có một tấm biể
   chỉ để in "Lô A1" thì vừa tốn cả ngày vừa khó đọc trên màn điện thoại. `drawSignLabels` in
   chữ ở lớp THIẾT BỊ theo phông của trang, cỡ chữ neo theo `scale` nên phóng to thu nhỏ thì
   biển to nhỏ theo. Vẽ SAU `drawNight`: cái biển vẫn phải đọc được lúc trời tối.
-* **Biển KHÔNG ĐẶC.** Phần lớn cắm giữa ngõ rộng đúng một ô — đặc là chặn đường tới chính cái
-  khu mà nó gọi tên. Và không tấm nào cắm vào ruột lô: một ô có vật thể là một ô không cuốc
-  được.
-* **`validatePack` chặn cả hai chiều**: chữ mà dưới chân không có cọc (dòng chữ lơ lửng trên
-  bãi cỏ trông như lỗi vẽ), và cọc mà không tấm nào ghi chữ.
+* **Biển đứng BÊN TRONG khu nó gọi tên, ở ô GÓC của khu đó** (core 1.17). Chỗ đầu tiên tôi
+  chọn là con ngõ giữa hai lô — sai hai lần liền: ngõ rộng đúng một ô nên tấm biển đè trọn mặt
+  đi, và một tấm biển đứng ngoài ranh giới thì lô nào cũng đọc thấy mà chẳng lô nào nhận. Ô góc
+  trên-trái vừa nằm trong lô vừa ở mép ngoài của nó, nên đứng ngoài ngõ vẫn đọc được. Giá phải
+  trả là mỗi lô mất một ô cuốc được (29 thay vì 30) — đáng, vì đổi lại ranh giới đọc ra ngay.
+* **Biển KHÔNG ĐẶC và KHÔNG ĐỔI NỀN dưới chân.** Không đặc, vì vài tấm vẫn đứng sát lối đi.
+  Không đổi nền, vì đó chính là cái bẫy đã làm hỏng lần sửa trước: legend chỉ có MỘT ký tự biển
+  và nó ghi cứng `ground: "path"`, nên đặt biển ở đâu là lát một mảng lối đi ở đó — cắm vào lô
+  thì thủng một lỗ đường giữa ruộng. Nay có ba ký tự, mỗi ký tự cho một mặt nền: `N` cỏ, `n` bê
+  tông, `J` lối đi. Bộ sinh bản đồ chọn ký tự theo nền ĐANG CÓ và `assert` rằng nền không đổi.
+* **`validatePack` chặn cả ba chiều**: chữ mà dưới chân không có cọc (dòng chữ lơ lửng trên bãi
+  cỏ trông như lỗi vẽ), cọc mà không tấm nào ghi chữ, và biển trùng tên một khu mà lại cắm
+  ngoài khu đó. Ao cá là ngoại lệ duy nhất, vì lý do vật lý: ruột nó là nước, không cắm cọc
+  xuống được — biển của ao đứng sát bờ.
 
 Bản đồ được sinh bằng script rồi mới ghi ra `farm.ascii` — trong đó có một bước **vá liên
 thông**: flood-fill từ ô spawn, ô nào đi được mà lạc khỏi khối chính thì đục thông. Rừng rải
