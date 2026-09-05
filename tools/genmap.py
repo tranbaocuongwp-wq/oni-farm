@@ -184,27 +184,27 @@ g[SPAWN[1]][SPAWN[0]] = ":"
 # ăn mất một ô của chính nó thì vô lý. Biển KHÔNG ĐẶC nên cắm giữa ngõ rộng một
 # ô vẫn đi qua được.
 BIEN = []
-def cam(x, y, chu):
+def cam(x, y, chu, side="e"):
     assert g[y][x] not in SOLID and g[y][x] != "~", f"cắm biển vào ô đặc ({x},{y})={g[y][x]}"
     # Ô mang biển có nền `path`. Cắm lên asphalt là đục thủng mặt đường thành
     # một ô lối mòn — và cái cọc thì đứng giữa lòng đường.
     assert g[y][x] != "=", f"cắm biển ra giữa đường nhựa ({x},{y})"
     g[y][x] = "N"
-    BIEN.append((x, y, chu))
+    BIEN.append((x, y, chu, side))
 
 for ri, (ly0, ly1) in enumerate(LOT_ROWS):
     for ci, (lx0, lx1) in enumerate(LOT_COLS):
         cam(lx0 - 1, ly0, f"Lô {'ABCD'[ri]}{ci + 1}")
 cam(DOOR[0] - 3, DOOR[1] + 1, "Nhà")
 cam(SHOP[0] - 1, SHOP[1] + 1, "Chợ")
-cam(WELL[0], WELL[1] + 1, "Giếng")
+cam(WELL[0], WELL[1] + 1, "Giếng", "w")
 cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
 # Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
-cam(PARKING[2][0] + 2, 5, "Bãi đậu xe")
+cam(PARKING[2][0] + 2, 5, "Bãi đậu xe", "w")  # bãi đậu nằm bên trái-dưới
 cam(YARD[0] - 1, YARD[1] + 1, "Sân sau")
 for (_id, nm, fy0, fy1, gates) in PENS:
     cam(PEN_X0 - 1, gates[0], nm)
-cam(POND[2] + 1, PIER_Y - 1, "Hồ cá")
+cam(POND[2] + 1, PIER_Y - 1, "Hồ cá", "w")   # hồ nằm bên TRÁI ô biển
 # Biển RỪNG cắm ở đầu NGÕ xuyên rừng, không cắm ra giữa đường trục: ô mang
 # biển có nền `path`, nên cắm lên mặt đường là đục thủng một lỗ lối mòn giữa
 # đường nhựa — nhìn thấy ngay mà chẳng ai ngờ tới lúc đặt.
@@ -308,8 +308,8 @@ zones.append(collections.OrderedDict([
     ("id","woods"),("name","Rừng"),("kind","forest"),("map","farm"),
     ("x",1),("y",FOREST_Y0),("w",W-2),("h",FOREST_Y1-FOREST_Y0+1)]))
 d["zones"] = zones
-d["signs"] = [collections.OrderedDict([("map","farm"),("x",x),("y",y),("text",t)])
-              for (x, y, t) in BIEN]
+d["signs"] = [collections.OrderedDict([("map","farm"),("x",x),("y",y),("text",t),("side",sd)])
+              for (x, y, t, sd) in BIEN]
 io.open(p,"w",encoding="utf8").write(json.dumps(d,ensure_ascii=False,indent=2)+"\n")
 
 # ------------------------------------------------------- 10. cửa ra nhà → sân

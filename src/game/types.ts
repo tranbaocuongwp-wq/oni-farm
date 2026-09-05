@@ -603,6 +603,16 @@ export interface SignDef {
   y: number;
   /** Chữ in trên biển. Ngắn thôi — nó nằm đè lên mặt ruộng. */
   text: string;
+  /**
+   * GÓC của ô mà tấm biển nép vào, và hướng mà chữ trải ra.
+   *
+   * Ô mang biển luôn là một ô LỐI ĐI rộng đúng một ô. Vẽ tấm biển giữa ô thì
+   * nó thành "cái biển cắm giữa đường"; nép vào góc phía khu mà nó gọi tên thì
+   * nó thành "cái biển đánh dấu góc lô", và mặt lối đi vẫn hiện ra.
+   *
+   * `e` = nép sang phải (khu nằm bên phải), `w` = sang trái. Vắng = `e`.
+   */
+  side?: "e" | "w";
 }
 
 /**

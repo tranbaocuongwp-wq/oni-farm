@@ -867,6 +867,7 @@ export function validateTiles(raw: unknown): string[] {
         const t = k.str(v, "text");
         if (t !== null && t.length > 18)
           k.fail("text", `dài ${t.length} ký tự — biển cắm chỉ chứa được 18`);
+        if (v["side"] !== undefined) k.enumStr(v, "side", ["e", "w"] as const);
         c.merge(k);
       });
   }

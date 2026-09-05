@@ -212,10 +212,17 @@ export function validatePack(raw: RawPack): string[] {
     const key = `${sg.map}:${sg.x},${sg.y}`;
     if (oCoBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
     oCoBien.add(key);
-    if (tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."]?.prop !== "sign")
+    const oBien = tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."];
+    if (oBien?.prop !== "sign")
       errors.push(
         `tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) không có vật thể 'sign' — chữ sẽ lơ lửng giữa không trung`,
       );
+    /* KHÔNG cắm biển ra giữa lòng đường. Hai lý do, cái nào cũng đủ:
+       ô mang biển có nền `path`, nên cắm lên asphalt là đục thủng mặt đường
+       thành một lỗ lối mòn; và một tấm biển đứng giữa đường thì nhìn ra là vật
+       cản chứ không ra vật chỉ đường. */
+    if (oBien?.ground === "asphalt")
+      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
   }
   for (const [id, m] of Object.entries(maps ?? {}))
     for (let y = 0; y < m.h; y++)
@@ -373,10 +380,17 @@ export function validatePack(raw: RawPack): string[] {
     const key = `${sg.map}:${sg.x},${sg.y}`;
     if (coBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
     coBien.add(key);
-    if (tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."]?.prop !== "sign")
+    const oBien = tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."];
+    if (oBien?.prop !== "sign")
       errors.push(
         `tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) không có vật thể 'sign' — chữ sẽ lơ lửng giữa không trung`,
       );
+    /* KHÔNG cắm biển ra giữa lòng đường. Hai lý do, cái nào cũng đủ:
+       ô mang biển có nền `path`, nên cắm lên asphalt là đục thủng mặt đường
+       thành một lỗ lối mòn; và một tấm biển đứng giữa đường thì nhìn ra là vật
+       cản chứ không ra vật chỉ đường. */
+    if (oBien?.ground === "asphalt")
+      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
   }
   for (const [id, m] of Object.entries(maps ?? {}))
     for (let y = 0; y < m.h; y++)

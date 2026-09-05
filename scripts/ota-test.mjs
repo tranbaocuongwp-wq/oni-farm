@@ -204,6 +204,11 @@ reject("chữ trên biển dài quá tấm ván", (p) => {
   p.tiles.signs[0].text = "Lô A1 khu đông bắc gần bờ ao";
 });
 reject("biển trỏ vào bản đồ không có", (p) => (p.tiles.signs[0].map = "hamMo"));
+reject("biển cắm ra giữa lòng đường nhựa", (p) => {
+  // đổi ô của tấm biển đầu tiên thành asphalt (vẫn giữ cái cọc)
+  p.tiles.legend["N"] = { ground: "asphalt", prop: "sign" };
+});
+reject("side của biển không phải e/w", (p) => (p.tiles.signs[0].side = "bac"));
 
 reject("khu dưới nước lại đặt máng", (p) => {
   const pen = p.tiles.pens.find((q) => q.swim);

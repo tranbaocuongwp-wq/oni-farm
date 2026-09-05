@@ -636,13 +636,19 @@ function makePier(art: PropArt): HTMLCanvasElement {
  */
 function makeSign(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
-  s.shadow(8, 14, 6, 1.5);
-  s.rect(7, 9, 2, 5, art.dark);          // cọc
-  s.px(7, 9, art.accent);
-  s.rect(3, 3, 10, 7, art.dark);         // viền tấm ván
-  s.rect(4, 4, 8, 5, art.body);
-  s.hline(4, 4, 8, art.accent);          // mặt trên ăn nắng
-  s.hline(4, 8, 8, art.dark);
+  /* NẰM SÁT GÓC TRÊN-TRÁI của ô, không đứng giữa.
+     Ô mang biển là một ô LỐI ĐI, và lối đi ở đây rộng đúng một ô — một tấm
+     biển to đùng giữa ô thì nhìn ra là "cái biển cắm giữa đường" chứ không ra
+     "cái biển đánh dấu góc lô". Nên cả cái cọc lẫn tấm ván gói trong 9×9 pixel
+     ở góc, chừa hẳn phần dưới-phải của ô cho mặt lối đi hiện ra. `draw.ts` lật
+     nó sang góc khác theo `side` của từng tấm biển. */
+  s.shadow(4, 10, 5, 1.2);
+  s.rect(3, 6, 2, 4, art.dark);          // cọc, ngắn
+  s.px(3, 6, art.accent);
+  s.rect(0, 1, 9, 6, art.dark);          // viền tấm ván
+  s.rect(1, 2, 7, 4, art.body);
+  s.hline(1, 2, 7, art.accent);          // mặt trên ăn nắng
+  s.hline(1, 5, 7, art.dark);
   return outline(s).c;
 }
 

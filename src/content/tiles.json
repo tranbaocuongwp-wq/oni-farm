@@ -370,139 +370,162 @@
       "map": "farm",
       "x": 1,
       "y": 9,
-      "text": "Lô A1"
+      "text": "Lô A1",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 8,
       "y": 9,
-      "text": "Lô A2"
+      "text": "Lô A2",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 15,
       "y": 9,
-      "text": "Lô A3"
+      "text": "Lô A3",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 22,
       "y": 9,
-      "text": "Lô A4"
+      "text": "Lô A4",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 1,
       "y": 15,
-      "text": "Lô B1"
+      "text": "Lô B1",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 8,
       "y": 15,
-      "text": "Lô B2"
+      "text": "Lô B2",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 15,
       "y": 15,
-      "text": "Lô B3"
+      "text": "Lô B3",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 22,
       "y": 15,
-      "text": "Lô B4"
+      "text": "Lô B4",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 1,
       "y": 21,
-      "text": "Lô C1"
+      "text": "Lô C1",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 8,
       "y": 21,
-      "text": "Lô C2"
+      "text": "Lô C2",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 15,
       "y": 21,
-      "text": "Lô C3"
+      "text": "Lô C3",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 22,
       "y": 21,
-      "text": "Lô C4"
+      "text": "Lô C4",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 15,
       "y": 4,
-      "text": "Nhà"
+      "text": "Nhà",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 25,
       "y": 4,
-      "text": "Chợ"
+      "text": "Chợ",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 13,
       "y": 4,
-      "text": "Giếng"
+      "text": "Giếng",
+      "side": "w"
     },
     {
       "map": "farm",
       "x": 39,
       "y": 5,
-      "text": "Kho"
+      "text": "Kho",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 44,
       "y": 5,
-      "text": "Bãi đậu xe"
+      "text": "Bãi đậu xe",
+      "side": "w"
     },
     {
       "map": "farm",
       "x": 30,
       "y": 2,
-      "text": "Sân sau"
+      "text": "Sân sau",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 31,
       "y": 11,
-      "text": "Khu gia súc"
+      "text": "Khu gia súc",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 31,
       "y": 17,
-      "text": "Khu heo"
+      "text": "Khu heo",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 31,
       "y": 23,
-      "text": "Khu gia cầm"
+      "text": "Khu gia cầm",
+      "side": "e"
     },
     {
       "map": "farm",
       "x": 12,
       "y": 3,
-      "text": "Hồ cá"
+      "text": "Hồ cá",
+      "side": "w"
     },
     {
       "map": "farm",
       "x": 16,
       "y": 27,
-      "text": "Rừng"
+      "text": "Rừng",
+      "side": "e"
     }
   ]
 }

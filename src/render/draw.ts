@@ -426,6 +426,11 @@ export function createRenderer(
           const img = atlas.props[t.prop];
           if (img) {
             const oy = def?.tall ? py - TILE : py;
+            /* BIỂN nép vào GÓC. Sprite vẽ sẵn ở góc trên-TRÁI; tấm nào gọi tên
+               khu bên phải thì lật ngang để nó nép sang góc trên-PHẢI, tức là
+               nép về phía cái khu nó đang chỉ. Lật bằng phép vẽ chứ không thêm
+               một sprite thứ hai. */
+            const bienE = t.prop === "sign" && signSide(content, x, y) === "e";
             /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
                mép dưới.
                Vì sao: người chơi ĐỨNG ĐƯỢC lên chính cái ô đó — cầu gỗ, bụi cỏ,
@@ -437,7 +442,20 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
+            items.push({
+              base: lopVat,
+              run: () => {
+                if (!bienE) {
+                  g.drawImage(img, px, oy);
+                  return;
+                }
+                g.save();
+                g.translate(px + TILE, oy);
+                g.scale(-1, 1);
+                g.drawImage(img, 0, 0);
+                g.restore();
+              },
+            });
             const full = def?.hits ?? 0;
             if (full > 1 && t.hp > 0 && t.hp < full) {
               const hp = t.hp;
@@ -777,6 +795,12 @@ export function createRenderer(
     }
   }
 
+  /** Góc mà tấm biển ở ô này nép vào. Vắng khai thì nép sang phải. */
+  function signSide(content: Content, x: number, y: number): "e" | "w" {
+    for (const b of content.tiles.signs ?? []) if (b.x === x && b.y === y) return b.side ?? "e";
+    return "e";
+  }
+
   /**
    * Chữ trên các tấm BIỂN CẮM.
    *
@@ -820,24 +844,33 @@ export function createRenderer(
     const co = 5 * scale; // 5 world px — vừa dưới nửa chiều cao tấm ván
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.font = `${co}px ui-sans-serif, system-ui, sans-serif`;
-    g.textAlign = "center";
     g.textBaseline = "alphabetic";
     for (const b of bien) {
       if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
       const d = Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py);
       if (d > XA) continue;
       const mo = d <= GAN ? 1 : 1 - (d - GAN) / (XA - GAN);
-      const cx = (b.x * TILE + TILE / 2 - camera.rx) * scale + tx;
-      // Chân chữ ở đáy tấm ván (world y = 9 trong ô) → cả mảng chữ nằm TRONG ô.
-      const cy = (b.y * TILE + 9 - camera.ry) * scale + ty;
-      const w = g.measureText(b.text).width + co * 0.8;
+      /* Chữ NEO VÀO GÓC mà tấm biển nép vào, và trải về phía KHU nó gọi tên —
+         không trải đều hai bên. Trải đều thì một nửa dòng chữ nằm trên lối đi
+         phía bên kia, đúng cái làm nó trông như dán bừa lên mặt đường. */
+      const e = (b.side ?? "e") === "e";
+      const x0px = (b.x * TILE + (e ? TILE - 1 : 1) - camera.rx) * scale + tx;
+      // Chân chữ ở đáy tấm ván (world y = 7 trong ô) → cả mảng chữ nằm TRONG ô.
+      const cy = (b.y * TILE + 7 - camera.ry) * scale + ty;
+      const w = g.measureText(b.text).width + co * 0.7;
       g.globalAlpha = mo;
       /* Nền đục sau chữ: biển đứng trên cỏ, trên lối mòn và trên đất cày —
          chữ trắng trơn thì có nền nó chìm nghỉm. */
       g.fillStyle = "rgba(24,18,10,0.78)";
-      g.fillRect(Math.round(cx - w / 2), Math.round(cy - co * 1.05), Math.round(w), Math.round(co * 1.35));
+      g.fillRect(
+        Math.round(e ? x0px : x0px - w),
+        Math.round(cy - co * 1.05),
+        Math.round(w),
+        Math.round(co * 1.35),
+      );
       g.fillStyle = "#f3e2be";
-      g.fillText(b.text, Math.round(cx), Math.round(cy));
+      g.textAlign = e ? "left" : "right";
+      g.fillText(b.text, Math.round(e ? x0px + co * 0.35 : x0px - co * 0.35), Math.round(cy));
       g.globalAlpha = 1;
     }
     g.textAlign = "left";
