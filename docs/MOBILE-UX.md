@@ -36,7 +36,7 @@ trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
 ## 2. Bố cục HUD
 
 ```
-┌ [tiền] [ngày] [giờ] [năng lượng ▬▬] [nước] [điện] ─────── [☰] ┐  .hud-top / .stat-bar
+┌ [tiền] [ngày] [giờ] [năng lượng ▬▬] [nước] ────────────── [☰] ┐  .hud-top / .stat-bar
 │ (🏳 mục tiêu — chip, bấm để thu gọn)                            │  .goal-chip
 │ (toast, toast…)                                                 │  #toasts
 │                                                                 │
@@ -90,6 +90,81 @@ cần action riêng): âm thanh 8-bit + hạt tại ô (`renderer.burst`) + rung
 
 ---
 
+## 3b. Tay cầm chơi game (`src/core/gamepad.ts`)
+
+Tay cầm là **đường vào thứ tư**, đổ chung vào `axis()` và `drain()` của
+`core/input.ts` — không có nhánh logic riêng nào trong game. Nhưng nó là hệ
+**HỎI VÒNG**, không phát sự kiện: `input.poll(performance.now())` phải chạy
+đúng một lần mỗi khung, TRƯỚC khi ai hỏi `axis()` hay `drain()`.
+
+Vì sao poll chứ không nghe `gamepadconnected`: Chrome và Safari chỉ bắn sự kiện
+đó SAU khi người chơi bấm một nút (chống fingerprinting). Cắm rồi ngồi im thì
+không có sự kiện nào.
+
+| Nút | Ngoài ruộng | Trong menu |
+|---|---|---|
+| A (0) | dùng — cày/gieo/tưới/thu; giữ để làm tiếp ô kế bên | chọn |
+| B (1) | tương tác — cửa hàng, giường, giếng, kho, con vật | thoát |
+| X (2) | bật/tắt tự động làm | — |
+| Y (3) | balo | — |
+| LB/RB (4,5) | đổi ô hotbar (giữ LT: nhảy 5 ô) | đổi tab |
+| LT (6) | **chạy** | — |
+| RT (7) | dùng | — |
+| Back (8) | bản đồ nhỏ — bật con trỏ ô, gạt để rê, A để đi | — |
+| Start (9) | menu tạm dừng | thoát |
+| L3 (10) | chế độ xây dựng | — |
+| R3 (11) | mở lại sơ đồ nút | — |
+| Cần trái / D-pad | đi (analog, độ dài vector có nghĩa) | chuyển tiêu điểm |
+| Cần phải | đổi ô hotbar | cuộn thân menu |
+
+**Bảy luật không được phá:**
+
+1. **Chỉ bắt SƯỜN LÊN.** `getGamepads()` trả "đang giữ", game cần "vừa bấm".
+   Không so với khung trước thì giữ A một giây là sáu mươi lệnh.
+2. **KHÔNG giữ tham chiếu `Gamepad`.** Chrome trả ảnh chụp mới mỗi lần gọi;
+   giữ cái cũ thì `buttons` đóng băng vĩnh viễn. Bẫy kinh điển và im lặng.
+3. **Vùng chết HÌNH TRÒN**, không cắt theo trục — cắt theo trục thì đẩy chéo
+   nhẹ ra một hướng thẳng và nhân vật đi giật tám hướng. Chỉnh được trong Cài
+   đặt (`padDead`), vì đây là con số hỏng theo PHẦN CỨNG: cần gạt mòn nghỉ lệch
+   tâm thì nhân vật tự đi mãi.
+4. **`mapping !== "standard"` thì CHỈ gán cần gạt + hai nút mặt đầu tiên**, và
+   nói thẳng trong sơ đồ nút. Chỉ số nút của tay cầm lạ là thứ tự thô của phần
+   cứng. Lúc đó `body[data-input]` là `"pad"` chứ không phải `"pad-std"`, và
+   CSS **không** được giấu nút chạm đi — giấu là bịt nốt đường vào cuối cùng.
+5. **Sơ đồ nút chỉ bày nút THẬT SỰ có** (`i < info.buttons`). Quảng cáo "L3 mở
+   chế độ xây" trên tay cầm mười nút là chỉ người chơi đi bấm cái không tồn tại.
+6. **Mọi thứ sơ đồ nút hứa thì phải làm được thật.** Đây từng là chỗ hỏng:
+   `running` được tính đúng trong `gamepad.ts` rồi bị `input.ts` quên đọc, nên
+   người chơi tay cầm đi bộ suốt ván trong khi màn sơ đồ vẫn quảng cáo hai cách
+   chạy. Kịch bản 72 giờ là dây bẫy cho đúng việc đó.
+7. **Rung đi chung công tắc với rung điện thoại.** `buzz()` gọi cả hai qua
+   `setPadRumble`; `setHaptics(false)` tắt cả hai. Trước đây tắt "Rung" trong
+   Cài đặt không tắt rung tay cầm.
+
+**Điều hướng menu** tập trung hết ở `main.ts`, KHÔNG rải vào từng màn:
+`focusRoot()` (hỏi từng lớp theo thứ tự ưu tiên, không dùng selector gộp — vì
+`querySelector` trả phần tử đầu theo DOM chứ không theo thứ tự viết), `ungVien`,
+`moveFocus` (chọn theo HÌNH HỌC), `focusIn`, `cycleTab`. Màn mới chỉ cần dùng
+`shell()` và `role="button"` là tự chạy được.
+
+**Giữ chỗ ngồi khi menu vẽ lại** (`src/ui/focus.ts`): mỗi cú bấm gọi lại
+`open*()`, mà `shell()` xoá sạch `root` — nên tiêu điểm, chỗ cuộn và hoạt cảnh
+mở sheet đều bị dựng mới. Nhận lại bằng **chỗ ngồi** (toạ độ bố cục + loại điều
+khiển), không bằng định danh: menu không có id ổn định nhưng nó dựng lại đúng
+bố cục cũ. Dùng `offsetLeft/offsetTop` chứ KHÔNG `getBoundingClientRect` — ở
+đúng khung hình cần đo thì hoạt cảnh đang làm lệch toạ độ màn hình tới 40px.
+Vế "loại điều khiển" chặn một tai nạn thật: bấm `+` tới số tối đa làm `+` bị vô
+hiệu, và nếu chỉ so khoảng cách thì vòng vàng rơi xuống nút BÁN ngay dưới nó.
+
+**Hộp xác nhận phải là modal của game**, không được dùng `confirm()` gốc —
+`confirm()` chặn cả vòng lặp JS nên `poll()` ngừng chạy và tay cầm chết cứng.
+Dùng `askConfirm()` trong `menus.ts`.
+
+**Ô bấm được phải nghe `click`**, không chỉ chuỗi pointer: tay cầm chọn bằng
+`el.click()`, mà `click` do script tạo ra không kèm `pointerdown` nào.
+
+---
+
 ## 4. Nút hành động theo ngữ cảnh (`src/game/hint.ts`)
 
 Hàm thuần `hintAt(state, content, x, y)` → `{ kind, label, ready, why }`.
@@ -136,7 +211,7 @@ Thêm một loại hành động mới = thêm một dòng vào `LABEL`, kèm te
 | Nhân vật | 4 hướng × 7 khung: 0 đứng, 1–4 đi (8 khung/giây), 5 chạm (`PLAYER_ACT_FRAME`), 6 giơ (`PLAYER_RAISE_FRAME`). Pha vung = `1 − busy/actionSeconds`; trước `actionImpact` là giơ, sau là chạm. Công cụ trong tay: `atlas.held(kind, steel)` 8×8, đặt theo hướng và pha. |
 | Cây trồng | vẽ theo tham số `crops.json > art`, viền, quả chỉ khi chín. Renderer thêm sao lấp lánh (`atlas.sparkle`) lệch pha theo toạ độ. |
 | Autotile ở lớp vẽ | `atlas.shore[side][frame]` cho nước giáp đất; `atlas.soilEdge[side]` cho đất cày giáp ô chưa cày; `atlas.voidOut/voidIn` ngoài biên. State không lưu gì. |
-| Icon HUD | `atlas.ui(name)` 12×12: coin, day, sun, moon, energy, water, power, goal. |
+| Icon HUD | `atlas.ui(name)` 12×12: coin, day, sun, moon, energy, water, goal. |
 | Con trỏ & dấu đích | `cursorOk/cursorNo` (ô ngắm) khác `navMark[3]` (đích đang đi) để phân biệt "sẽ làm ở đó" và "sẽ tới đó". |
 
 Bảng màu `P` là chỗ duy nhất đổi tông. Màu của vật thể/cây/công trình vẫn lấy từ
@@ -154,7 +229,7 @@ tất định theo chỉ số hạt, trần 240 hạt, tự tắt khi `reduceMot
 
 - Desktop: hộp giữa màn. Màn dọc ≤ 640px: **bottom sheet** (CSS `@media`, menu
   không biết). Có tay cầm, nút ✕ tròn 44px, footer chừa `safe-area-inset-bottom`.
-- Cửa hàng: tab Hạt giống / Công trình (nhớ tab đang chọn).
+- Cửa hàng: 5 tab Hạt / Thức ăn / Xây / Vật nuôi / Thợ (nhớ tab đang chọn).
 - Quầy bán: stepper ± theo từng mặt hàng, "Bán tất cả · tổng".
 - Chế tạo: nguyên liệu dạng chip có icon, đỏ khi thiếu.
 - Tạm dừng: lưu/tải/xuất/nhập, Cài đặt, Hướng dẫn, **Cài về màn hình chính** (chỉ
@@ -175,7 +250,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 40 kịch bản sim (37 hint · 38 settings · 17 hiệu lực trễ · 39 SWAP · 40 nearestTarget) + OTA
+npm run test:all       # typecheck + 73 kịch bản sim (37 hint · 38 settings · 17 hiệu lực trễ · 39 SWAP · 40 nearestTarget · 72 tay cầm · 73 chỗ ngồi) + OTA
 npm run build
 ```
 
@@ -191,6 +266,11 @@ Những thứ phải đúng ở mọi khổ:
 - [ ] hotbar không đè lên cụm nút; ngang thì hotbar không chui dưới nút
 - [ ] modal cuộn được, nút Đóng trong tầm ngón cái, không bị safe-area cắt
 - [ ] tay trái lật đủ: nút, ☰, bản đồ nhỏ, joystick
+- [ ] **tay cầm**: cắm vào → `data-input` đổi; LT làm nhân vật CHẠY; A chọn được
+      ô balo; bấm nút trong menu không làm mất chỗ đang đứng; hộp xác nhận điều
+      hướng được; rút ra → nút chạm sống lại. Dùng tay cầm GIẢ: ghi đè
+      `navigator.getGamepads` bằng `page.addInitScript` là script hoá được hết.
+- [ ] **tay cầm lạ** (`mapping: ""`): nút XÂY chạm vẫn hiện, cụm nút vẫn bấm được
 - [ ] không có `pageerror` trong console
 - [ ] `ms/khung` (logic + vẽ) dưới 10ms trên viewport điện thoại, kể cả với GPU phần mềm (đo được 7,6–9,1ms)
 

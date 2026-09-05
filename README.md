@@ -6,6 +6,10 @@ nhà kính, chăn nuôi và người làm thuê.
 
 **Chơi ngay: https://oni-farm.pages.dev/farm/** — điện thoại, tablet hay máy tính.
 
+**Chơi được bằng TAY CẦM** từ đầu tới cuối — Xbox, PlayStation, Nintendo, hoặc bất
+kỳ tay cầm USB/Bluetooth nào trình duyệt nhận ra. Cắm vào là game tự nhận và hiện
+sơ đồ nút đúng tên nút của hãng đó.
+
 **Thiết kế cho ngón tay cái:** chạm để đi, nút hành động tự biết việc (CÀY / GIEO /
 TƯỚI / THU / MUA…), nhân vật luôn ở tâm, menu kiểu bottom-sheet, tay thuận trái/phải,
 cỡ chữ, khung nhìn, rung, giảm chuyển động. Chi tiết ở [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
@@ -405,6 +409,54 @@ và `bankRim` (gờ đất ở mép ô ĐẤT giáp nước). Chỉ có nửa d�
 vẫn chạy phẳng lì tới sát mép và cái hồ trông như dán lên đồng cỏ — tôi đã làm
 đúng lỗi đó một lần, và phải tô cái gờ thành màu đỏ chói mới nhận ra nó vẫn
 đang được vẽ, chỉ là nhạt tới mức mắt gộp luôn vào vệt bọt nước.
+
+### Tay cầm chơi được toàn bộ game (core 1.13)
+
+Cắm tay cầm vào là chơi được từ đầu tới cuối, không phải chạm màn hình lần nào.
+`src/core/gamepad.ts` là đường vào thứ tư, đổ chung vào `axis()` và `drain()` của
+`core/input.ts` — không có nhánh logic riêng nào trong game.
+
+Bốn quyết định đáng ghi:
+
+* **Poll mỗi khung, không nghe `gamepadconnected`.** Chrome và Safari chỉ bắn sự
+  kiện đó SAU khi người chơi bấm một nút (chống fingerprinting), nên cắm rồi ngồi
+  im là không có sự kiện nào.
+* **Tên nút theo HÃNG.** Cùng chỉ số 0, Xbox gọi là "A", PlayStation là "✕", còn
+  Nintendo thì ĐẢO: nút mặt dưới là "B". Đoán sai thì chữ sai chứ hành vi không
+  đổi, nên đây là chỗ được phép đoán.
+* **`mapping !== "standard"` thì chỉ gán cần gạt + hai nút mặt đầu tiên**, và nói
+  thẳng trong sơ đồ nút. Quan trọng: lúc đó CSS **không** được giấu nút chạm đi —
+  giấu nút XÂY trong khi L3 cũng bị chặn là bịt nốt đường vào cuối cùng của cả
+  một tính năng. Nên `body[data-input]` có hai giá trị, `pad` và `pad-std`.
+* **Điều hướng menu tập trung ở `main.ts`**, không rải vào từng màn: chọn phần tử
+  kế tiếp theo HÌNH HỌC chứ không theo thứ tự DOM (menu xếp lưới hai cột, đi theo
+  DOM thì gạt sang phải lại nhảy xuống hàng dưới). Màn mới chỉ cần dùng `shell()`
+  là tự chạy được.
+
+**Bài học đắt nhất ở đây là một biến bị quên đọc.** `running` được tính đúng
+trong `gamepad.ts`, được nhận đúng vào `padState` ở `input.ts`, rồi hàm
+`running()` ngay bên dưới lại quên hỏi nó — trong khi `useHeld()` ở đúng dòng kế
+tiếp thì nhớ. Không crash, không cảnh báo: người chơi tay cầm chỉ đi bộ suốt ván,
+trong khi màn sơ đồ nút vẫn quảng cáo cả LT lẫn "đẩy mạnh là chạy". Sáu commit
+trôi qua mà không ai thấy, vì phần này **không có một dòng test nào**.
+
+Giờ có: `createGamepad()` chỉ chạm `navigator.getGamepads?.()` ở đúng một dòng và
+`poll(nowMs)` nhận thời gian làm THAM SỐ chứ không tự gọi `performance.now()` —
+cố ý, để tua được. Cắm một `navigator` giả là kiểm được toàn bộ logic khó trong
+Node thuần: sườn lên, vùng chết tròn, trễ ngưỡng, nhịp chờ-rồi-mới-lặp
+(kịch bản 72). Với trình duyệt thì ghi đè `navigator.getGamepads` bằng
+`page.addInitScript` là script hoá được cả đường đi thật.
+
+**Giữ chỗ ngồi khi menu vẽ lại** (`src/ui/focus.ts`) là mảnh cuối, và nó sửa một
+lỗi ăn cả chuột lẫn ngón tay chứ không riêng tay cầm: mỗi cú bấm trong menu gọi
+lại `open*()`, mà `shell()` xoá sạch `root` — nên tiêu điểm, chỗ cuộn và hoạt
+cảnh mở sheet đều bị dựng mới. Mua một thẻ ở cuối lưới bốn mươi thẻ là bị kéo về
+đầu lưới. Nhận lại bằng CHỖ NGỒI (toạ độ bố cục + loại điều khiển) chứ không bằng
+định danh: menu không có id ổn định, nhưng nó dựng lại đúng bố cục cũ. Vế "loại
+điều khiển" chặn một tai nạn thật — bấm `+` tới số tối đa làm `+` bị vô hiệu, và
+nếu chỉ so khoảng cách thì vòng vàng rơi xuống nút BÁN nằm ngay dưới nó.
+
+Chi tiết ở [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md) mục 3b.
 
 ### Quy hoạch lại cả nông trại: bàn cờ, đường sá, biển cắm (core 1.12)
 

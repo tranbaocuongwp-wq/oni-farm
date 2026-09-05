@@ -25,6 +25,8 @@ import * as actionsApi from "../src/game/actions.ts";
 import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
+import { createGamepad, PAD, padButtonName, setPadDead } from "../src/core/gamepad.ts";
+import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -33,7 +35,14 @@ let failures = 0;
 
 function test(name, fn) {
   try {
-    fn();
+    /* Kịch bản phải ĐỒNG BỘ. Một hàm `async` lọt vào đây thì `fn()` trả về
+       promise ngay lập tức, khung này ghi ✓, rồi mọi assertion bên trong chạy
+       ở microtask sau đó — hỏng cũng chỉ thành một unhandled rejection mà
+       không ai đọc. Tôi vừa dính đúng cái bẫy này: hai kịch bản tay cầm báo
+       xanh trong khi một assertion cố tình sai vẫn lọt. */
+    const r = fn();
+    if (r && typeof r.then === "function")
+      throw new Error("kịch bản phải đồng bộ — hàm async làm mọi assertion bên trong bị nuốt");
     results.push(`\x1b[32m✓\x1b[0m ${name}`);
   } catch (err) {
     failures++;
@@ -4560,6 +4569,179 @@ test("72. quy hoạch lại bản đồ: save cũ không mọc nhà/kho/giếng 
   );
 
   deepEq(checkInvariants(sau, content), [], "bất biến sau khi nạp save của bản đồ đời trước");
+});
+
+/* ========================================================================== */
+/* 72. TAY CẦM — đọc phần cứng                                                */
+/* ========================================================================== */
+
+/* `createGamepad()` chỉ chạm `navigator.getGamepads?.()` ở đúng một dòng, và
+   `poll(nowMs)` nhận thời gian làm THAM SỐ chứ không tự gọi `performance.now()`
+   — cố ý, để tua được. Nên cắm một `navigator` giả là kiểm được toàn bộ logic
+   khó mà không cần trình duyệt: sườn lên, vùng chết tròn, trễ ngưỡng, nhịp
+   chờ-rồi-mới-lặp. Trước đây phần này không có một dòng test nào, và đó chính
+   là lý do nút CHẠY chết âm thầm suốt sáu commit. */
+function fakePad(o = {}) {
+  const n = o.buttons ?? 16;
+  return {
+    index: 0,
+    connected: true,
+    id: o.id ?? "Xbox Wireless Controller (STANDARD GAMEPAD)",
+    mapping: o.mapping ?? "standard",
+    buttons: Array.from({ length: n }, (_, i) => ({
+      pressed: (o.held ?? []).includes(i),
+      value: (o.held ?? []).includes(i) ? 1 : 0,
+    })),
+    axes: o.axes ?? [0, 0, 0, 0],
+  };
+}
+
+let padHienTai = null;
+Object.defineProperty(globalThis, "navigator", {
+  value: { getGamepads: () => (padHienTai ? [padHienTai] : []) },
+  configurable: true,
+  writable: true,
+});
+
+test("72. tay cầm: sườn lên, vùng chết tròn, chạy, nhịp lặp, sơ đồ chuẩn", () => {
+  setPadDead("normal");
+  const g = createGamepad();
+
+  // --- không có tay cầm ---
+  padHienTai = null;
+  eq(g.poll(0).connected, false, "không cắm gì thì connected = false");
+  eq(g.info().connected, false, "info cũng vậy");
+
+  // --- CHỈ BẮT SƯỜN LÊN: giữ nút một giây phải ra ĐÚNG MỘT lệnh ---
+  padHienTai = fakePad({ held: [PAD.A] });
+  eq(g.poll(0).pressed.has(PAD.A), true, "khung đầu: A vừa bấm");
+  let dem = 0;
+  for (let i = 1; i <= 60; i++) if (g.poll(i * 16).pressed.has(PAD.A)) dem++;
+  eq(dem, 0, "giữ A một giây nữa: KHÔNG thêm lệnh nào");
+  ok(g.poll(1000).held.has(PAD.A), "…nhưng vẫn báo là đang giữ");
+  padHienTai = fakePad({ held: [] });
+  g.poll(1100);
+  padHienTai = fakePad({ held: [PAD.A] });
+  eq(g.poll(1200).pressed.has(PAD.A), true, "nhả rồi bấm lại thì ra lệnh mới");
+
+  // --- VÙNG CHẾT HÌNH TRÒN, không cắt theo trục ---
+  padHienTai = fakePad({ axes: [0.19, 0.19, 0, 0] });
+  const nghieng = g.poll(2000);
+  eq(nghieng.axis.x, 0, "0,19/0,19 (dài 0,269) nằm trong vùng chết 0,28 → đứng yên");
+  padHienTai = fakePad({ axes: [0.26, 0, 0, 0] });
+  eq(g.poll(2050).axis.x, 0, "0,26 trên MỘT trục cũng vẫn trong vùng chết");
+  padHienTai = fakePad({ axes: [0.3, 0.3, 0, 0] });
+  const cheo = g.poll(2100);
+  ok(cheo.axis.x > 0 && cheo.axis.y > 0, "0,3/0,3 thì đi CHÉO thật, không bị nắn về một trục");
+  padHienTai = fakePad({ axes: [1, 1, 0, 0] });
+  const het = g.poll(2200);
+  ok(Math.abs(Math.hypot(het.axis.x, het.axis.y) - 1) < 1e-9, "đẩy hết cỡ chéo vẫn chuẩn hoá về 1");
+
+  // --- D-PAD gộp vào cần gạt ---
+  padHienTai = fakePad({ axes: [0, 0, 0, 0], held: [PAD.RIGHT] });
+  eq(g.poll(2300).axis.x, 1, "D-pad phải = đẩy hết cỡ sang phải");
+
+  /* --- CHẠY. Đây là DÂY BẪY: `running` từng được tính đúng ở đây rồi bị
+     `input.ts` quên đọc, nên người chơi tay cầm đi bộ suốt ván trong khi sơ đồ
+     nút vẫn quảng cáo cả hai cách chạy. --- */
+  padHienTai = fakePad({ axes: [0.5, 0, 0, 0] });
+  eq(g.poll(2400).running, false, "đẩy nửa cần thì chưa chạy");
+  padHienTai = fakePad({ axes: [0.95, 0, 0, 0] });
+  eq(g.poll(2500).running, true, "đẩy gần hết cỡ là CHẠY");
+  padHienTai = fakePad({ axes: [0, 0, 0, 0], held: [PAD.LT] });
+  eq(g.poll(2600).running, true, "giữ cò trái là CHẠY");
+
+  // --- CHỜ RỒI MỚI LẶP: bấm một cái đi đúng MỘT ô ---
+  padHienTai = fakePad({ axes: [0, 0, 0, 0] });
+  g.poll(3000);
+  padHienTai = fakePad({ axes: [0, 1, 0, 0] });
+  ok(g.poll(3100).navDir, "gạt xuống: bước đầu tiên ngay lập tức");
+  eq(g.poll(3200).navDir, null, "…giữ 100ms sau vẫn CHƯA lặp");
+  eq(g.poll(3450).navDir, null, "…350ms vẫn chưa (ngưỡng chờ là 420ms)");
+  ok(g.poll(3600).navDir, "…qua 420ms thì bắt đầu lặp");
+  eq(g.poll(3680).navDir, null, "…rồi giãn theo nhịp nhanh 150ms");
+  ok(g.poll(3800).navDir, "…nhịp tiếp theo");
+
+  // --- TRỄ NGƯỠNG: để hờ quanh ngưỡng không được rung ---
+  padHienTai = fakePad({ axes: [0, 0, 0, 0] });
+  g.poll(4000);
+  padHienTai = fakePad({ axes: [0, 0.65, 0, 0] });
+  ok(g.poll(4100).navDir, "vượt 0,6 thì bật");
+  padHienTai = fakePad({ axes: [0, 0.45, 0, 0] });
+  eq(g.poll(4200).navDir, null, "tụt về 0,45 — trên ngưỡng nhả 0,35 nên KHÔNG bật lại");
+
+  /* --- KHÔNG STANDARD: cần phải bị bỏ qua. Trục 2 của một tay cầm lạ có thể
+     là CÒ, mà cò nghỉ ở −1 — đọc nó là hotbar tự chạy mãi. --- */
+  padHienTai = fakePad({ mapping: "", axes: [0, 0, -1, 0] });
+  g.poll(5000);
+  eq(g.poll(5100).aimDir, null, "không standard thì không đọc cần phải");
+  eq(g.info().standard, false, "…và info nói thẳng ra điều đó");
+
+  // --- chỉ đọc nút THẬT SỰ có ---
+  padHienTai = fakePad({ buttons: 10, held: [] });
+  eq(g.info().buttons, 10, "tay cầm mười nút thì báo mười");
+
+  // --- tên nút theo HÃNG: cùng chỉ số, khác chữ ---
+  const px = { connected: true, id: "", brand: "xbox", standard: true, buttons: 16, axes: 4 };
+  eq(padButtonName(px, 0), "A", "Xbox: nút mặt dưới là A");
+  eq(padButtonName({ ...px, brand: "playstation" }, 0), "✕", "PlayStation: ✕");
+  eq(padButtonName({ ...px, brand: "nintendo" }, 0), "B", "Nintendo ĐẢO: nút mặt dưới là B");
+  eq(padButtonName({ ...px, brand: "nintendo" }, 1), "A", "…và nút phải là A");
+
+  // --- vùng chết CHỈNH ĐƯỢC (tay cầm mòn thì nới rộng) ---
+  setPadDead("rong");
+  padHienTai = fakePad({ axes: [0.35, 0, 0, 0] });
+  eq(g.poll(6000).axis.x, 0, "vùng chết rộng: 0,35 vẫn coi như không đẩy");
+  setPadDead("normal");
+  eq(g.poll(6100).axis.x > 0, true, "về mức vừa thì 0,35 lại đi được");
+
+  // --- RÚT DÂY: cái vỏ rỗng không được tính là đang cắm ---
+  padHienTai = { index: 0, connected: true, id: "", mapping: "", buttons: [], axes: [] };
+  eq(g.poll(7000).connected, false, "tay cầm không nút nào = đã rút, không phải đang cắm");
+  padHienTai = null;
+});
+
+/* ========================================================================== */
+/* 73. Giữ chỗ ngồi khi menu dựng lại                                         */
+/* ========================================================================== */
+
+test("73. chỗ ngồi: vẽ lại menu không được ném tiêu điểm đi chỗ khác", () => {
+  /* Một hàng ở quầy thu mua. `.row .right` xếp DỌC nên nút BÁN nằm ngay dưới
+     nút "+" chừng 38px, còn "−" thì cách 84px sang ngang. */
+  const HANG = [
+    { x: 300, y: 100, kind: "BUTTON.stepper" }, // −
+    { x: 384, y: 100, kind: "BUTTON.stepper" }, // +
+    { x: 384, y: 138, kind: "BUTTON.right" }, //   Bán
+  ];
+
+  eq(timChoNgoi(HANG, HANG[1]), 1, "vẽ lại y hệt thì nhận lại đúng nút +");
+
+  /* Bấm "+" tới số tối đa làm chính nút "+" bị vô hiệu và biến khỏi danh sách.
+     Chỉ so khoảng cách thì vòng vàng rơi xuống nút BÁN cách 38px, và cú bấm
+     tiếp theo — vẫn là cái nút vừa dùng để tăng số — BÁN MẤT HÀNG. */
+  eq(timChoNgoi([HANG[0], HANG[2]], HANG[1]), 0, "+ bị vô hiệu thì lùi sang −, KHÔNG rơi xuống Bán");
+
+  // Bán hết một mặt hàng: các hàng dưới trượt lên, bám hàng chiếm chỗ cũ.
+  eq(
+    timChoNgoi([{ x: 384, y: 138, kind: "BUTTON.right" }], { x: 384, y: 190, kind: "BUTTON.right" }),
+    0,
+    "hàng biến mất thì bám hàng kế tiếp",
+  );
+
+  // Cùng loại ở RẤT xa thì vẫn phải thua khác loại ở ngay cạnh.
+  eq(
+    timChoNgoi(
+      [
+        { x: 384, y: 700, kind: "BUTTON.stepper" },
+        { x: 386, y: 100, kind: "BUTTON.right" },
+      ],
+      HANG[1],
+    ),
+    1,
+    `600px là quá xa để bám cùng loại (phạt = ${PHAT_KHAC_LOAI})`,
+  );
+
+  eq(timChoNgoi([], HANG[0]), -1, "danh sách rỗng thì trả -1 chứ không nổ");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -16,6 +16,8 @@
    giá trị mặc định, chỉ là không nhớ được giữa các phiên.
 ============================================================================ */
 
+import { setPadDead } from "./gamepad.ts";
+
 const KEY = "oni-farm:settings";
 
 /** Tăng khi đổi NGHĨA của một khoá (không phải khi thêm khoá mới — thêm khoá
@@ -55,6 +57,17 @@ export interface Settings {
   tutorialSeen: boolean;
   /** Hiện nút hành động theo ngữ cảnh (CÀY / GIEO / TƯỚI…) thay vì nút DÙNG cố định. */
   contextButton: boolean;
+  /**
+   * VÙNG CHẾT của cần gạt tay cầm.
+   *
+   * Đây là thứ duy nhất trong cả bộ điều khiển hỏng theo PHẦN CỨNG chứ không
+   * theo sở thích: cần gạt mòn thì nghỉ ở một chỗ lệch tâm, và nếu độ lệch đó
+   * vượt ngưỡng thì nhân vật tự đi mãi về một phía mà người chơi không đụng
+   * vào gì. Không chỉnh được nghĩa là cái tay cầm đó không chơi được, chấm hết.
+   *
+   * `normal` = 0,28 (mặc định cũ). `rong` cho tay cầm đã trôi nhiều.
+   */
+  padDead: "hep" | "normal" | "rong";
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
@@ -67,6 +80,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   reduceMotion: false,
   tutorialSeen: false,
   contextButton: true,
+  padDead: "normal",
 });
 
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
@@ -90,6 +104,7 @@ export function parseSettings(raw: unknown): Settings {
     uiScale: oneOf(v["uiScale"], ["auto", "small", "large"] as const, d.uiScale),
     zoom: oneOf(v["zoom"], ["near", "normal", "far"] as const, d.zoom),
     haptics: bool(v["haptics"], d.haptics),
+    padDead: oneOf(v["padDead"], ["hep", "normal", "rong"] as const, d.padDead),
     reduceMotion: bool(v["reduceMotion"], d.reduceMotion),
     tutorialSeen: bool(v["tutorialSeen"], d.tutorialSeen),
     contextButton: bool(v["contextButton"], d.contextButton),
@@ -133,6 +148,9 @@ export function applySettings(s: Settings): void {
     typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   b["motion"] = s.reduceMotion || prefersReduce ? "reduce" : "full";
   b["ctx"] = s.contextButton ? "on" : "off";
+  /* Vùng chết KHÔNG đi qua data-attribute: nó là con số cho vòng lặp đọc tay
+     cầm, không phải một luật CSS. Đẩy thẳng vào `gamepad.ts`. */
+  setPadDead(s.padDead);
 }
 
 /** @deprecated giữ cho tương thích — dùng applySettings. */

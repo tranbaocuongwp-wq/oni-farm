@@ -174,10 +174,56 @@ export function createMenus(
     foot: HTMLElement;
   }
 
+  /**
+   * Hộp XÁC NHẬN của game, thay cho `confirm()` của trình duyệt.
+   *
+   * `confirm()` chặn cả vòng lặp JS trong lúc nó mở. Với chuột thì không sao,
+   * nhưng tay cầm là hệ HỎI VÒNG: `input.poll()` ngừng chạy nghĩa là không nút
+   * nào được đọc nữa, và người chơi ngồi nhìn một hộp thoại mà tay cầm không
+   * bấm được. Ba việc không quay lui được — bỏ hẳn một món, xoá cache, chơi
+   * ván mới — vì thế đều là ngõ cụt.
+   *
+   * Dựng bằng chính `shell()` thì nó tự thừa hưởng hạ tầng tiêu điểm: D-pad đi
+   * lại được, nút ✕ đeo tên nút huỷ, B đóng.
+   *
+   * `quayLai` là màn phải vẽ lại sau khi chọn xong — hộp xác nhận đứng ĐÈ lên
+   * một menu đang mở, mà `shell()` thì xoá sạch `root`, nên phải tự dựng lại.
+   */
+  function askConfirm(
+    title: string,
+    text: string,
+    onYes: () => void,
+    quayLai: (() => void) | null = current,
+  ): void {
+    const { body, foot } = shell(title, "", "sheet ask");
+    body.appendChild(note(text));
+    const g = document.createElement("div");
+    g.className = "grid2";
+    g.appendChild(
+      mkBtn("Thôi", () => {
+        if (quayLai) quayLai();
+        else close();
+      }, "dim"),
+    );
+    g.appendChild(
+      mkBtn("Đồng ý", () => {
+        onYes();
+      }, "primary"),
+    );
+    foot.appendChild(g);
+    /* Tiêu điểm rơi vào nút "Thôi" trước — nút đầu tiên trong khung. Với một
+       câu hỏi không quay lui được thì mặc định an toàn phải là KHÔNG. */
+  }
+
   function shell(title: string, sub: string, cls = ""): Shell {
     root.innerHTML = "";
     const modal = document.createElement("div");
     modal.className = `modal ${cls}`;
+    /* KHOÁ MÀN. `title` là thứ duy nhất mọi màn đều có và không đổi giữa hai
+       lần vẽ lại của CÙNG một màn — nên nó đủ để trả lời câu hỏi mà main.ts
+       cần: "tấm sheet vừa xuất hiện là màn cũ vẽ lại, hay là một màn khác?".
+       Cũ thì tìm lại đúng nút người chơi đang đứng; khác thì về nút đầu. */
+    modal.dataset["menu"] = title;
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
     modal.innerHTML = `
@@ -838,6 +884,19 @@ export function createMenus(
   /* --------------------------------------------------------------- BALO */
   /** Ô đang được nhấc lên (chạm-để-chọn rồi chạm ô đích), -1 = không. */
   let picked = -1;
+  /**
+   * Bỏ cú `click` đi kèm sau một lần KÉO THẢ, bằng một cửa sổ thời gian ngắn.
+   *
+   * Phải sống ngoài `openBag`: chính lần dựng lại bảng sau khi kéo đã xoá mọi
+   * biến bên trong hàm đó.
+   *
+   * Và phải là MỐC THỜI GIAN chứ không phải một cờ bật/tắt. Cú `click` sau khi
+   * nhả chuột KHÔNG chắc chắn xảy ra — bảng vừa được dựng lại nên trình duyệt
+   * có thể đổi đích hoặc bỏ hẳn nó. Cờ bật lên mà không ai tắt thì nó nằm lại
+   * và nuốt đúng cú chạm hợp lệ TIẾP THEO: kéo một món xong là cú chạm sau đó
+   * không ăn, mà chẳng có dấu hiệu gì. Mốc thời gian thì tự hết hạn.
+   */
+  let boQuaClickToi = 0;
 
   function openBag() {
     current = openBag;
@@ -924,10 +983,9 @@ export function createMenus(
       const el = (e.target as HTMLElement).closest<HTMLElement>(".bslot");
       if (!el?.dataset["slot"]) return;
       const i = +el.dataset["slot"];
-      if (!s.inv[i] || i < 2) {
-        tapSlot(i);
-        return;
-      }
+      // Ô trống / công cụ cố định: không nhấc được, nên không mở phiên kéo.
+      // Việc chạm-chọn để `click` lo — xem chú thích ở chỗ gắn sự kiện.
+      if (!s.inv[i] || i < 2) return;
       const ghost = el.cloneNode(true) as HTMLElement;
       ghost.classList.add("ghost");
       // cloneNode KHÔNG sao chép pixel của canvas — vẽ lại icon vào bản sao
@@ -954,22 +1012,49 @@ export function createMenus(
       const d = drag;
       drag = null;
       d.ghost.remove();
-      if (!d.moved) {
-        tapSlot(d.from);
-        return;
-      }
+      // Chạm rồi nhả mà KHÔNG kéo: để `click` lo, đừng làm gì ở đây.
+      if (!d.moved) return;
       const to = slotAt(e.clientX, e.clientY);
       if (to >= 0 && to !== d.from) {
         picked = -1;
         h.swap(d.from, to);
       }
+      /* Vừa KÉO xong nên menu sắp được dựng lại — bỏ cú `click` đi kèm. Không
+         bỏ thì nó rơi vào ô nằm ở đúng toạ độ đó TRONG BẢNG MỚI (một ô khác
+         hẳn) và nhấc nhầm món. */
+      boQuaClickToi = performance.now() + 350;
       openBag();
+    };
+    /* PHÂN VAI DỨT KHOÁT giữa hai đường vào:
+         · chuỗi POINTER chỉ lo việc KÉO THẢ;
+         · `click` lo việc CHẠM-CHỌN — và chỉ mình nó.
+
+       Vì sao không để `pointerup` lo chạm-chọn như trước: tay cầm bấm nút A
+       bằng `el.click()`, mà một `click` do script tạo ra không kèm
+       `pointerdown`/`pointerup` nào — nên cả màn Balo là màn chết với tay cầm.
+       Nhưng thêm `click` bên cạnh `pointerup` thì hỏng đường chạm: `pointerup`
+       vẽ lại bảng ngay lập tức, rồi cú `click` đi sau rơi vào ô nằm ở ĐÚNG
+       TOẠ ĐỘ ĐÓ trong bảng MỚI — một ô khác hẳn — và món bị đổi chỗ thay vì
+       được nhấc. Tôi đã đo đúng cảnh đó: chạm ô 2, click rơi vào ô 13.
+
+       Giao hẳn cho `click` thì cả hai đường đi chung một cửa, và cú chạm thật
+       không còn vẽ lại gì trước khi `click` kịp bắn. Chỉ đường KÉO mới phải
+       chặn cú click đi kèm — xem `boQuaClickToi`. */
+    const onClick = (e: MouseEvent) => {
+      if (performance.now() < boQuaClickToi) {
+        boQuaClickToi = 0;
+        return;
+      }
+      const el = (e.target as HTMLElement).closest<HTMLElement>(".bslot");
+      if (!el?.dataset["slot"]) return;
+      tapSlot(+el.dataset["slot"]);
     };
     for (const g of [gHot, gBag]) {
       g.addEventListener("pointerdown", onDown);
       g.addEventListener("pointermove", onMove);
       g.addEventListener("pointerup", onUp);
       g.addEventListener("pointercancel", onUp);
+      g.addEventListener("click", onClick);
     }
 
     foot.appendChild(
@@ -990,12 +1075,13 @@ export function createMenus(
     if (chon && picked >= 2) {
       g2.appendChild(
         mkBtn(`Bỏ ${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}`, () => {
-          if (!confirm(`Bỏ hẳn ${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}? Không lấy lại được.`))
-            return;
-          const i = picked;
-          picked = -1;
-          h.drop(i);
-          openBag();
+          const ten = `${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}`;
+          askConfirm(`Bỏ hẳn ${ten}?`, "Món này biến mất khỏi túi và không lấy lại được.", () => {
+            const i = picked;
+            picked = -1;
+            h.drop(i);
+            openBag();
+          }, openBag);
         }, "dim"),
       );
     }
@@ -1058,15 +1144,17 @@ export function createMenus(
     map.push([ten(1), "Tương tác — cửa hàng, giường, giếng, kho, con vật."]);
     if (co(2)) map.push([ten(2), "Bật/tắt tự động làm."]);
     if (co(3)) map.push([ten(3), "Mở balo."]);
-    if (co(5)) map.push([`${ten(4)} / ${ten(5)}`, "Đổi ô hotbar."]);
+    if (co(5)) map.push([`${ten(4)} / ${ten(5)}`, "Đổi ô hotbar. Giữ thêm cò trái để nhảy năm ô."]);
     if (co(6)) map.push([ten(6), "Chạy."]);
     if (co(7)) map.push([ten(7), `Dùng (thay cho ${ten(0)}).`]);
-    if (co(8)) map.push([ten(8), "Bản đồ nhỏ."]);
-    if (co(9)) map.push([ten(9), "Menu tạm dừng."]);
+    if (co(8)) map.push([ten(8), `Bản đồ nhỏ — bật con trỏ, cần gạt rê, ${ten(0)} để đi tới đó.`]);
+    if (info.connected) map.push([ten(9), "Menu tạm dừng."]);
     if (co(10)) map.push([ten(10), "Chế độ xây dựng."]);
     if (co(11)) map.push([ten(11), "Mở lại bảng này."]);
-    map.push(["Trong menu", `Cần gạt chuyển ô, ${ten(0)} chọn, ${ten(1)} thoát.`]);
+    map.push(["Trong menu", `Cần gạt chuyển ô, ${ten(0)} chọn, ${ten(1)} thoát. Cần phải cuộn.`]);
+    if (co(5)) map.push(["Trong menu", `${ten(4)} / ${ten(5)} đổi tab.`]);
     map.push(["Khi xây dựng", `Cần gạt rê ô, ${ten(0)} đặt mốc rồi ${ten(0)} lần nữa để xây, ${ten(1)} huỷ.`]);
+    if (co(5)) map.push(["Khi xây dựng", `${ten(4)} / ${ten(5)} đổi công trình.`]);
 
     const grid = document.createElement("div");
     grid.className = "pad-map";
@@ -1129,9 +1217,11 @@ export function createMenus(
       iconBtn("install", "Cập nhật ngay", () => {
         // Xoá sạch cache rồi tải lại — phải hỏi, và phải nói rõ save không mất
         // (save nằm ở IndexedDB, không nằm trong cache).
-        if (!confirm("Xoá bộ nhớ đệm và tải lại bản mới nhất?\nTiến trình đã lưu KHÔNG mất."))
-          return;
-        void h.forceUpdate();
+        askConfirm(
+          "Xoá bộ nhớ đệm và tải lại?",
+          "Tải về bản mới nhất. Tiến trình đã lưu KHÔNG mất — save nằm ở chỗ khác, không nằm trong bộ nhớ đệm.",
+          () => void h.forceUpdate(),
+        );
       }, "primary"),
     );
     body.appendChild(row);
@@ -1200,10 +1290,10 @@ export function createMenus(
       mkBtn(
         c.strings.ui["newGame"] ?? "Chơi mới",
         () => {
-          if (confirm("Bắt đầu nông trại mới? Tiến trình chưa lưu sẽ mất.")) {
+          askConfirm("Bắt đầu nông trại mới?", "Tiến trình chưa lưu sẽ mất.", () => {
             h.newGame();
             close();
-          }
+          });
         },
         "danger",
       ),
@@ -1292,12 +1382,28 @@ export function createMenus(
       { v: "normal", label: "Vừa" },
       { v: "far", label: "Xa" },
     ]);
+    /* Chỉ hiện khi ĐANG CẮM tay cầm. Bày một mục "vùng chết cần gạt" cho người
+       chơi bằng chuột là bắt họ đọc một câu chẳng nói gì về máy của họ. */
+    if (h.padInfo().connected)
+      seg(
+        "Vùng chết cần gạt",
+        "Cần gạt mòn thì nghỉ lệch tâm và nhân vật tự đi mãi. Nới rộng nếu máy bạn bị vậy.",
+        "padDead",
+        [
+          { v: "hep", label: "Hẹp" },
+          { v: "normal", label: "Vừa" },
+          { v: "rong", label: "Rộng" },
+        ],
+      );
     toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… thay vì chữ DÙNG cố định.",
       () => h.settings().contextButton, (v) => h.setSetting("contextButton", v));
     toggle("Âm thanh", "Tiếng 8-bit tổng hợp, không có file nhạc.",
       () => !h.isMuted(), () => h.toggleMute());
-    if (touch)
-      toggle("Rung khi thao tác", "Rung nhẹ khi cày/gieo/tưới thành công (Android).",
+    /* Một công tắc cho CẢ HAI đường rung. Trước đây nó chỉ tắt rung điện
+       thoại, tay cầm vẫn rung — và mục này còn bị giấu khi chơi bằng tay cầm
+       trên máy tính, tức là không có cách nào tắt. */
+    if (touch || h.padInfo().connected)
+      toggle("Rung khi thao tác", "Rung nhẹ khi cày/gieo/tưới thành công — cả điện thoại lẫn tay cầm.",
         () => h.settings().haptics, (v) => h.setSetting("haptics", v));
     toggle("Giảm chuyển động", "Tắt nhấp nháy, lấp lánh và hạt hiệu ứng.",
       () => h.settings().reduceMotion, (v) => h.setSetting("reduceMotion", v));

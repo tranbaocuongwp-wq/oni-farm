@@ -39,6 +39,8 @@ export interface BuildMode {
   toggle(): void;
   /** Gọi mỗi khung hình khi đang mở — vẽ lại bảng chọn nếu túi đổi. */
   update(s: GameState, content: Content): void;
+  /** Sang công trình kế tiếp (+1) hay trước đó (−1). Cho nút vai của tay cầm. */
+  cycle(d: number): void;
 }
 
 export interface BuildHandlers {
@@ -58,6 +60,9 @@ export function createBuildMode(
   let sel: string | null = null;
   /** Dấu vân tay của bảng chọn lần vẽ trước — chỉ dựng lại DOM khi thật sự đổi. */
   let last = "";
+  /** Thứ tự công trình của lần vẽ gần nhất — `cycle()` đi theo đúng thứ tự MẮT
+   *  ĐANG THẤY trên bảng, không phải theo `content.buildingOrder`. */
+  let thuTu: string[] = [];
 
   host.innerHTML = `
     <div class="bm-bar">
@@ -72,6 +77,19 @@ export function createBuildMode(
   const api: BuildMode = {
     picked: () => sel,
     isOpen: () => open,
+    /* Nút vai đổi công trình. Thanh gợi ý nút đã hứa "LB/RB — Đổi công trình"
+       từ trước, nhưng không có mã nào làm: `selectDelta` rơi xuống nhánh cuối
+       và đổi ô HOTBAR, nên vào chế độ xây bằng tay cầm là kẹt vĩnh viễn với
+       công trình đầu danh sách. */
+    cycle(d) {
+      if (!open || thuTu.length === 0) return;
+      const i = sel ? thuTu.indexOf(sel) : -1;
+      const n = thuTu.length;
+      const j = i < 0 ? 0 : (i + (d > 0 ? 1 : -1) + n) % n;
+      sel = thuTu[j]!;
+      h.select(sel);
+      last = ""; // ép vẽ lại để ô mới sáng lên ngay khung này
+    },
     open() {
       open = true;
       host.hidden = false;
@@ -113,6 +131,7 @@ export function createBuildMode(
       }
       if (sel && !items.some((it) => it.id === sel)) sel = null;
       if (!sel) sel = items[0]!.id;
+      thuTu = items.map((it) => it.id);
 
       for (const it of items) {
         const b = document.createElement("button");

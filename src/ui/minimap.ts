@@ -44,6 +44,8 @@ const C = {
   player: "#ffffff",
   playerRing: "#14100c",
   view: "rgba(255,255,255,0.85)",
+  /** Con trỏ ô của tay cầm. Vàng, không trùng với trắng của nhân vật. */
+  cursor: "#f5c542",
 } as const;
 
 export interface Minimap {
@@ -55,6 +57,17 @@ export interface Minimap {
   isVisible(): boolean;
   /** khung nhìn hiện tại, để vẽ ô chữ nhật cho biết đang xem chỗ nào */
   setView(x: number, y: number, w: number, h: number): void;
+  /**
+   * CON TRỎ Ô cho tay cầm — `null` để tắt.
+   *
+   * Vì sao phải có: bấm-để-đi là cách đi xa duy nhất trong game, mà bản đồ nhỏ
+   * trước đây chỉ nghe `pointerdown`. Tay cầm không có con trỏ chuột nên nút
+   * Back chỉ bật/tắt được cái bản đồ chứ không đi tới đâu — nó thành tranh
+   * trang trí, và người chơi phải giữ cần gạt suốt chiều dài nông trại 48×37.
+   */
+  setCursor(c: { x: number; y: number } | null): void;
+  /** Ô con trỏ đang chỉ, `null` khi không bật. */
+  cursor(): { x: number; y: number } | null;
 }
 
 export function createMinimap(host: HTMLElement): Minimap {
@@ -69,6 +82,7 @@ export function createMinimap(host: HTMLElement): Minimap {
   let pick: (tx: number, ty: number) => void = () => {};
   let view = { x: 0, y: 0, w: 0, h: 0 };
   let visible = true;
+  let cur: { x: number; y: number } | null = null;
 
   function ensureSize(s: GameState) {
     if (canvas.width === s.w && canvas.height === s.h) return;
@@ -155,10 +169,28 @@ export function createMinimap(host: HTMLElement): Minimap {
       g.fillRect(px - 1, py - 1, 3, 3);
       g.fillStyle = C.player;
       g.fillRect(px, py, 1, 1);
+
+      /* Con trỏ tay cầm: chữ thập, KHÔNG phải chấm đặc. Trên lưới 1 pixel = 1
+         ô thì một chấm đặc lẫn ngay vào chấm nhân vật và vào ô cây chín; chữ
+         thập thì vẫn thấy được cái ô nó đang chỉ nằm dưới. */
+      if (cur) {
+        const cx = Math.max(0, Math.min(s.w - 1, cur.x));
+        const cy = Math.max(0, Math.min(s.h - 1, cur.y));
+        g.fillStyle = C.playerRing;
+        g.fillRect(cx - 2, cy, 5, 1);
+        g.fillRect(cx, cy - 2, 1, 5);
+        g.fillStyle = C.cursor;
+        g.fillRect(cx - 1, cy, 3, 1);
+        g.fillRect(cx, cy - 1, 1, 3);
+      }
     },
     onPick(fn) {
       pick = fn;
     },
+    setCursor(c) {
+      cur = c;
+    },
+    cursor: () => cur,
     toggle() {
       visible = !visible;
       host.classList.toggle("hidden", !visible);

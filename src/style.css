@@ -1525,7 +1525,7 @@ body[data-hand="left"] #abtn .btns {
 }
 
 /* ---- CHỈ KHI CÓ TAY CẦM: xếp hình thoi y như mặt tay cầm ---- */
-body[data-input="pad"] #abtn .btns {
+body[data-input^="pad"] #abtn .btns {
   display: grid;
   grid-template-columns: repeat(3, auto);
   grid-template-rows: repeat(3, auto);
@@ -1533,25 +1533,25 @@ body[data-input="pad"] #abtn .btns {
   justify-items: center;
   gap: 5px;
 }
-body[data-input="pad"] #abtn .btns .y {
+body[data-input^="pad"] #abtn .btns .y {
   display: grid;
   grid-area: 1 / 2;
 }
-body[data-input="pad"] #abtn .btns .auto {
+body[data-input^="pad"] #abtn .btns .auto {
   grid-area: 2 / 1;
 }
-body[data-input="pad"] #abtn .btns .b {
+body[data-input^="pad"] #abtn .btns .b {
   grid-area: 2 / 3;
 }
-body[data-input="pad"] #abtn .btns .a {
+body[data-input^="pad"] #abtn .btns .a {
   grid-area: 3 / 2;
 }
 /* Tay trái: lật NGANG cụm, giữ nguyên trên–dưới. Nút chính vẫn ở dưới vì đó
    là chỗ ngón cái nghỉ, dù cầm máy tay nào. */
-body[data-hand="left"][data-input="pad"] #abtn .btns .auto {
+body[data-hand="left"][data-input^="pad"] #abtn .btns .auto {
   grid-area: 2 / 3;
 }
-body[data-hand="left"][data-input="pad"] #abtn .btns .b {
+body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   grid-area: 2 / 1;
 }
 #abtn button {
@@ -2130,7 +2130,14 @@ button.ico-btn .bi {
 .modal [role="button"]:focus,
 .modal input:focus,
 .tut-card button:focus,
-#devpanel button:focus {
+#devpanel button:focus,
+/* Ba bảng NỔI ngoài modal. Chúng cũng nhận tiêu điểm bằng D-pad (xem
+   `focusRoot` trong main.ts), nên cũng phải thấy được mình đang ở đâu —
+   tới được mà không thấy thì cũng như không tới được. */
+.bm-pal button:focus,
+.bm-pal [role="option"]:focus,
+#update-bar button:focus,
+.animal-card button:focus {
   outline: 3px solid var(--gold);
   outline-offset: -3px;
 }
@@ -2138,7 +2145,11 @@ button.ico-btn .bi {
    lại đó trông như bị kẹt. Chỉ giữ vòng khi tiêu điểm đến từ bàn phím/tay cầm. */
 body.pointer-focus .modal button:focus:not(:focus-visible),
 body.pointer-focus .modal [role="button"]:focus:not(:focus-visible),
-body.pointer-focus #devpanel button:focus:not(:focus-visible) {
+body.pointer-focus #devpanel button:focus:not(:focus-visible),
+body.pointer-focus .bm-pal button:focus:not(:focus-visible),
+body.pointer-focus .bm-pal [role="option"]:focus:not(:focus-visible),
+body.pointer-focus #update-bar button:focus:not(:focus-visible),
+body.pointer-focus .animal-card button:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -2195,7 +2206,7 @@ body.pointer-focus #devpanel button:focus:not(:focus-visible) {
 }
 
 /* ==========================================================================
-   CHẾ ĐỘ TAY CẦM — `body[data-input="pad"]`.
+   CHẾ ĐỘ TAY CẦM — `body[data-input^="pad"]`.
 
    Cầm tay cầm rồi thì joystick ảo và ba nút tròn góc dưới chỉ còn là thứ che
    mất nông trại. Giấu chúng đi trả lại gần một phần tư màn hình trên máy dọc.
@@ -2203,20 +2214,25 @@ body.pointer-focus #devpanel button:focus:not(:focus-visible) {
 /* Joystick ảo thì giấu — tay cầm có cần gạt thật rồi. Nhưng CỤM NÚT thì GIỮ
    LẠI: bốn nút xếp hình thoi chính là bản đồ nút của tay cầm, và bỏ nó đi là
    bỏ đúng thứ dạy người chơi bấm cái gì. Chỉ tắt nhận chạm và đeo tên nút
-   thật lên từng cái. */
-body[data-input="pad"] #stick,
-body[data-input="pad"] #linebtn {
+   thật lên từng cái.
+
+   CHỈ khi `pad-std`. Trình duyệt không nhận ra sơ đồ chuẩn thì game cố ý chỉ
+   gán hai nút mặt đầu tiên (xem `input.ts`), nên người chơi KHÔNG có nút nào
+   mở chế độ xây. Giấu nút XÂY và tắt luôn nhận chạm của cụm nút lúc đó là bịt
+   nốt đường vào cuối cùng — cắm một tay cầm lạ vào là mất hẳn một tính năng. */
+body[data-input="pad-std"] #stick,
+body[data-input="pad-std"] #linebtn {
   display: none;
 }
-body[data-input="pad"] #abtn {
+body[data-input="pad-std"] #abtn {
   pointer-events: none;
 }
-body[data-input="pad"] #abtn .btns button {
+body[data-input^="pad"] #abtn .btns button {
   position: relative;
   overflow: visible;
 }
 /* Tên nút THẬT của tay cầm đang cắm, dán lên góc mỗi nút tròn. */
-body[data-input="pad"] #abtn .btns button[data-pad]::after {
+body[data-input^="pad"] #abtn .btns button[data-pad]::after {
   content: attr(data-pad);
   position: absolute;
   top: -3px;
@@ -2235,8 +2251,13 @@ body[data-input="pad"] #abtn .btns button[data-pad]::after {
   line-height: 1;
   letter-spacing: 0;
 }
-/* Dải chữ ở góc thành thừa khi đã có cụm nút — nhãn nằm ngay trên nút chính. */
-body[data-input="pad"] .padctx {
+/* Cùng một câu KHÔNG được nói ba lần. Nhãn trên nút chính, dòng `.why` trong
+   cụm nút, và dải `.padctx` ở góc đều in ra đúng một thứ: việc sắp làm và lý
+   do không làm được. Ở chế độ tay cầm thì `.padctx` là dải đọc được nhất — nó
+   nằm cùng phía nút hành động và có cả icon vật đang cầm — nên giấu `.why` đi.
+   (Trước đây chỗ này giấu `.padctx`, nhưng một luật cùng độ đặc hiệu ở dưới
+   bật lại `display: flex`, nên nó là mã chết và cả ba vẫn hiện cùng lúc.) */
+body[data-input^="pad"] #abtn .why {
   display: none;
 }
 
@@ -2256,7 +2277,7 @@ body[data-input="pad"] .padctx {
    và một dải chữ đứng ngay đó che mất đúng thứ người chơi cần thấy. Góc dưới —
    cùng phía với nút hành động khi chơi cảm ứng — thì liếc một cái là đọc được
    mà không rời mắt khỏi ruộng. Đổi bên theo tay thuận, y như nút hành động. */
-body[data-input="pad"] .padctx {
+body[data-input^="pad"] .padctx {
   position: absolute;
   right: calc(12px + var(--sa-r));
   bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + 34px);
@@ -2273,11 +2294,11 @@ body[data-input="pad"] .padctx {
   font-size: var(--fs-sm);
   pointer-events: none;
 }
-body[data-hand="left"][data-input="pad"] .padctx {
+body[data-hand="left"][data-input^="pad"] .padctx {
   right: auto;
   left: calc(12px + var(--sa-l));
 }
-body[data-input="pad"] .padctx.off {
+body[data-input^="pad"] .padctx.off {
   opacity: 0.45;
 }
 /* Thứ đang cầm, ngay trước nhãn: cùng chữ "DÙNG" mà cầm cuốc là cày, cầm hạt
@@ -2391,14 +2412,14 @@ body[data-input="pad"] .padctx.off {
   color: var(--ink-dim);
 }
 /* Thanh này ngồi ngay dưới hotbar, nên hotbar phải nhích lên khi nó hiện. */
-body[data-input="pad"] .hud-bottom {
+body[data-input^="pad"] .hud-bottom {
   padding-bottom: 26px;
 }
 
 /* Nút ✕ của popup đeo TÊN NÚT HUỶ của tay cầm đang cắm. Không có nó thì người
    chơi phải gạt cần lên tận tiêu đề để đóng một tấm sheet — trong khi nút huỷ
    trên tay cầm làm việc đó ngay. */
-body[data-input="pad"] .modal [data-x][data-pad]::after {
+body[data-input^="pad"] .modal [data-x][data-pad]::after {
   content: attr(data-pad);
   position: absolute;
   top: -6px;
@@ -2416,7 +2437,7 @@ body[data-input="pad"] .modal [data-x][data-pad]::after {
   font-size: 10px;
   line-height: 1;
 }
-body[data-input="pad"] .modal [data-x] {
+body[data-input^="pad"] .modal [data-x] {
   position: relative;
   overflow: visible;
 }

@@ -22,7 +22,7 @@ import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
 import { alignedTo, createNavigator } from "./core/navigate.ts";
 import { applySettings, loadSettings, saveSettings, type Settings } from "./core/settings.ts";
-import { buzz, setHaptics } from "./core/haptics.ts";
+import { buzz, setHaptics, setPadRumble } from "./core/haptics.ts";
 import { createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
@@ -48,6 +48,7 @@ import { createToasts } from "./ui/toast.ts";
 import { createMinimap } from "./ui/minimap.ts";
 import { createDevPanel } from "./ui/devpanel.ts";
 import { padButtonName } from "./core/gamepad.ts";
+import { timChoNgoi, type Seat } from "./ui/focus.ts";
 import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, Stats } from "./game/types.ts";
@@ -156,6 +157,24 @@ async function boot() {
    *  màn đầu tiên rồi thôi — và mọi màn con đều mở ra với tiêu điểm nằm trên
    *  `<body>`, tức là D-pad phải bấm một cái vô ích mới bắt đầu chạy. */
   let focusedRootEl: HTMLElement | null = null;
+  /**
+   * Dấu vết của khung hình TRƯỚC, để nhận lại sau khi menu tự dựng lại.
+   *
+   * Ghi mỗi khung hình, nên nó luôn là ảnh chụp ngay trước cú bấm đã gây ra
+   * lần dựng lại đó. Ba thứ cùng chết khi `shell()` xoá `root`: phần tử đang
+   * đeo vòng vàng, chỗ cuộn của danh sách, và cả hoạt cảnh mở sheet.
+   */
+  interface FocusMemo {
+    /** định danh MÀN HÌNH (tiêu đề), không phải phần tử */
+    screen: string;
+    /** tab đang bật — đổi tab là đổi hẳn nội dung, không khôi phục chỗ ngồi */
+    tab: string;
+    scroll: number;
+    /** chỗ ngồi của phần tử đang có tiêu điểm; null khi không có gì đeo tiêu
+     *  điểm (chạm trên iOS không tạo tiêu điểm — lúc đó vẫn khôi phục chỗ cuộn) */
+    at: Seat | null;
+  }
+  let focusMemo: FocusMemo | null = null;
   /** Đã xem sơ đồ nút tay cầm trên máy này chưa. */
   const PAD_SEEN = "oni-farm:pad-help-seen";
 
@@ -447,6 +466,13 @@ async function boot() {
         }
       : {}),
   });
+
+  /* Nối đường rung TAY CẦM vào cùng cái công tắc với rung điện thoại.
+     `gamepad.ts` có sẵn `rumble()` đầy đủ — dual-rumble, có `.catch()`, có
+     kiểm tra kiểu động cho Firefox/Safari — nhưng trước đây nó chỉ được gọi
+     ĐÚNG MỘT LẦN trong cả game, lúc vừa nhận tay cầm. Cày, tưới, thu hoạch,
+     chặt cây, thao tác hụt: không cú nào tới tay. */
+  setPadRumble((ms, strong) => input.rumble(ms, strong));
 
   {
     // Lối vào CHẾ ĐỘ XÂY DỰNG ngay cạnh nút hành động. Chôn nó trong menu Tạm
@@ -1011,6 +1037,8 @@ async function boot() {
     } else if (inMenu) {
       hints.push(["✛", "Chuyển"], [b(0), "Chọn"], [b(1), "Đóng"]);
       if (std && document.querySelector(".modal .tabs button")) hints.push([`${b(4)}/${b(5)}`, "Đổi tab"]);
+    } else if (minimap.cursor()) {
+      hints.push(["✛", "Rê"], [b(0), "Đi tới đó"], [b(8), "Thôi"]);
     } else if (inBuild) {
       hints.push(["✛", "Rê ô"], [b(0), lineFrom ? "Xây" : "Đặt mốc"], [b(1), lineFrom ? "Huỷ" : "Thoát"]);
       if (std) hints.push([`${b(4)}/${b(5)}`, "Đổi công trình"]);
@@ -1057,27 +1085,108 @@ async function boot() {
    * bốn để một nút thẳng hàng ở xa vẫn thắng một nút lệch hàng ở gần; không có
    * hệ số đó thì gạt xuống trong lưới hai cột hay nhảy chéo sang cột kia.
    */
-  /** Khung đang nhận tiêu điểm: tấm sheet của menu, hoặc thẻ hướng dẫn. */
+  /**
+   * Khung đang nhận tiêu điểm, theo đúng thứ tự LỚP TRÊN CÙNG.
+   *
+   * Hỏi từng lớp một chứ KHÔNG dùng một selector gộp: `querySelector` với danh
+   * sách chọn trả về phần tử đầu tiên theo THỨ TỰ DOM, không theo thứ tự viết
+   * trong selector. Mà trong `farm/index.html` thì `#devpanel` (dòng 32) nằm
+   * TRƯỚC `#modal-root` (dòng 43) — nên mở bảng gỡ lỗi rồi mở menu Tạm dừng
+   * thì D-pad vẫn lái cái bảng gỡ lỗi, còn menu vừa mở thì đứng im.
+   *
+   * Ba lớp cuối là các bảng nổi ngoài modal: chúng có nút thật mà trước đây
+   * nằm ngoài tầm với của tay cầm — thanh báo bản mới là chỗ đáng tiếc nhất,
+   * vì nút duy nhất trên đó là nút CẬP NHẬT.
+   */
   function focusRoot(): HTMLElement | null {
-    return document.querySelector<HTMLElement>(".modal, .tut-card, #devpanel:not([hidden])");
+    const q = (sel: string) => document.querySelector<HTMLElement>(sel);
+    return (
+      q(".tut-card") ??
+      q(".modal") ??
+      q("#devpanel:not([hidden])") ??
+      q("#buildmode:not([hidden]) .bm-pal") ??
+      q("#update-bar:not([hidden])") ??
+      q("#animal-card:not([hidden])")
+    );
+  }
+
+  /**
+   * Mọi thứ tay cầm bấm được trong khung này.
+   *
+   * KHÔNG chỉ `<button>`. Ô balo, ô kho, dòng quầy thu mua đều là
+   * `<div role="button">` — trình duyệt không cho chúng nhận tiêu điểm, nên
+   * D-pad đi qua chúng như thể chúng không tồn tại. Đó là lý do balo, cửa
+   * hàng, kho và cài đặt "không bấm được bằng tay cầm" dù menu tạm dừng thì
+   * được: menu tạm dừng toàn nút thật.
+   *
+   * Sửa ở ĐÂY chứ không sửa từng màn hình: mỗi màn mới viết sau này sẽ tự
+   * chạy được, không phải nhớ thêm một luật. Tách khỏi `moveFocus` vì cả điều
+   * hướng lẫn khôi phục đều phải hỏi đúng một câu hỏi này.
+   */
+  function ungVien(root: HTMLElement): HTMLElement[] {
+    return [
+      ...root.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), [role='button'], [role='option'], input:not([disabled]), select:not([disabled]), [tabindex]",
+      ),
+    ].filter((el) => el.offsetParent !== null && !el.hasAttribute("disabled"));
+  }
+
+  /**
+   * Tâm phần tử trong hệ toạ độ BỐ CỤC của tấm menu.
+   *
+   * Vì sao KHÔNG dùng `getBoundingClientRect`: đúng ở cái khung hình cần đo,
+   * tấm menu vừa dựng lại đang chạy hoạt cảnh `modal-in` / `sheet-in` nên toạ
+   * độ màn hình của nó lệch tới 40px, mà thân menu thì vừa bị trả về đầu danh
+   * sách. Hai thứ đó cộng lại quá đủ để nhận nhầm sang hàng bên cạnh (hàng cao
+   * 52px). `offsetTop` là vị trí BỐ CỤC: không biết tới transform, không biết
+   * tới cuộn — đúng hai thứ đang gây nhiễu.
+   */
+  function choNgoi(el: HTMLElement, root: HTMLElement): Seat {
+    let x = 0;
+    let y = 0;
+    let n: HTMLElement | null = el;
+    while (n && n !== root) {
+      x += n.offsetLeft;
+      y += n.offsetTop;
+      n = n.offsetParent as HTMLElement | null;
+    }
+    return {
+      x: x + el.offsetWidth / 2,
+      y: y + el.offsetHeight / 2,
+      kind: `${el.tagName}.${(el.parentElement?.className ?? "").trim()}`,
+    };
+  }
+
+  /**
+   * Định danh MÀN HÌNH. `shell()` dựng `.modal` mới mỗi lần vẽ nên không so
+   * được bằng tham chiếu; `data-menu` là tiêu đề màn, một chuỗi HẰNG trong
+   * từng `open*()` và khác nhau giữa các màn.
+   */
+  function khoaManHinh(root: HTMLElement): { screen: string; tab: string } {
+    return {
+      screen: `${root.id || root.classList[0] || root.tagName}|${root.dataset["menu"] ?? ""}`,
+      tab: root.querySelector(".tabs button.on")?.textContent ?? "",
+    };
+  }
+
+  /** Ghi lại chỗ ngồi hiện tại. Gọi ở CUỐI mỗi khung hình — tức là ngay trước
+   *  cú bấm sẽ dựng lại menu. */
+  function nhoTieuDiem(root: HTMLElement): void {
+    const el = document.activeElement as HTMLElement | null;
+    const trong = !!el && el !== root && root.contains(el);
+    const k = khoaManHinh(root);
+    focusMemo = {
+      screen: k.screen,
+      tab: k.tab,
+      scroll: root.querySelector<HTMLElement>(".body")?.scrollTop ?? 0,
+      at: trong ? choNgoi(el, root) : null,
+    };
   }
 
   function moveFocus(dx: number, dy: number): void {
     const root = focusRoot();
     if (!root) return;
-    /* KHÔNG chỉ `<button>`. Ô balo, ô kho, dòng quầy thu mua đều là
-       `<div role="button">` — trình duyệt không cho chúng nhận tiêu điểm, nên
-       D-pad đi qua chúng như thể chúng không tồn tại. Đó là lý do balo, cửa
-       hàng, kho và cài đặt "không bấm được bằng tay cầm" dù menu tạm dừng thì
-       được: menu tạm dừng toàn nút thật.
-
-       Sửa ở ĐÂY chứ không sửa từng màn hình: mỗi màn mới viết sau này sẽ tự
-       chạy được, không phải nhớ thêm một luật. */
-    const all = [
-      ...root.querySelectorAll<HTMLElement>(
-        "button:not([disabled]), [role='button'], [role='option'], input:not([disabled]), select:not([disabled]), [tabindex]",
-      ),
-    ].filter((el) => el.offsetParent !== null && !el.hasAttribute("disabled"));
+    const all = ungVien(root);
     if (!all.length) return;
 
     const cur = document.activeElement as HTMLElement | null;
@@ -1134,14 +1243,16 @@ async function boot() {
   /** Đặt tiêu điểm VÀ kéo nó vào tầm nhìn. Cửa hàng có bốn mươi thẻ hạt cuộn
    *  dọc; chuyển tiêu điểm xuống thẻ thứ ba mươi mà không cuộn theo thì màn
    *  hình đứng yên và người chơi tưởng cần gạt hỏng. */
-  function focusIn(el: HTMLElement): void {
+  function focusIn(el: HTMLElement, giuCuon = false): void {
     /* `tabIndex = -1` cho phép GỌI `.focus()` mà không nhét phần tử vào thứ tự
        phím Tab — đúng thứ cần cho `div role="button"`: tay cầm tới được, còn
        người dùng bàn phím vẫn Tab qua đúng các nút thật. */
     if (!el.hasAttribute("tabindex") && el.tagName !== "BUTTON" && el.tagName !== "INPUT")
       el.tabIndex = -1;
-    el.focus();
-    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    /* Trên nhánh KHÔI PHỤC thì chỗ cuộn vừa được trả về đúng chỗ cũ rồi — cuộn
+       thêm lần nữa chỉ để nó nhích vài pixel dưới ngón tay người chơi. */
+    el.focus({ preventScroll: giuCuon });
+    if (!giuCuon) el.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   /**
@@ -1189,7 +1300,12 @@ async function boot() {
     const coPad = input.padConnected();
     if (coPad !== padOn) {
       padOn = coPad;
-      document.body.dataset["input"] = coPad ? "pad" : "";
+      /* Hai giá trị, không phải một: `pad-std` khi trình duyệt xác nhận sơ đồ
+         chuẩn, `pad` khi không. CSS dùng nó để quyết định có được giấu nút
+         chạm đi hay không — với tay cầm không-standard thì người chơi chỉ có
+         cần gạt cộng hai nút mặt, nên giấu nút XÂY và tắt cụm nút chạm là bịt
+         nốt đường vào cuối cùng của chế độ xây dựng. */
+      document.body.dataset["input"] = coPad ? (input.padInfo().standard ? "pad-std" : "pad") : "";
       if (coPad) {
         const pi = input.padInfo();
         hud.setPadKey(padButtonName(pi, 0));
@@ -1212,8 +1328,9 @@ async function boot() {
         }
         const mo = pi.standard ? padButtonName(pi, 11) : padButtonName(pi, 0);
         toasts.say(`Đã nhận tay cầm — bấm ${mo} để xem sơ đồ nút.`, "good");
-        buzz("success");
-        input.rumble(180);
+        // `buzz` giờ rung CẢ tay cầm (xem `setPadRumble`), nên không gọi
+        // `input.rumble` riêng nữa — gọi riêng là đi vòng qua công tắc Rung.
+        buzz("heavy");
         // Bảng nút chỉ tự mở LẦN ĐẦU trên máy này. Mở lại mỗi lần cắm là phiền,
         // mà không mở lần nào thì người chơi không bao giờ biết Y mở cửa hàng.
         try {
@@ -1239,8 +1356,13 @@ async function boot() {
       if (autoWork) setAuto(false);
     }
 
+    /* Đang RÊ CON TRỎ Ô (chế độ xây, hoặc con trỏ bản đồ nhỏ) thì cần gạt lái
+       CON TRỎ, không lái nhân vật. Trước đây một cú đẩy làm cả hai cùng lúc —
+       nhân vật trôi liên tục còn con trỏ nhảy theo nhịp lặp — hai tốc độ khác
+       nhau dưới cùng một ngón cái, và không cách nào ngắm cho đứng. */
+    const reOChuot = padOn && (building || !!minimap.cursor());
     if (!modal) {
-      const ax = input.axis();
+      const ax = reOChuot ? { x: 0, y: 0 } : input.axis();
       if (ax.x !== 0 || ax.y !== 0) {
         // Người chơi tự cầm lái thì nhường ngay — cùng luật với `nav.cancel()`:
         // nhập tay luôn thắng thứ đang chạy tự động.
@@ -1329,9 +1451,13 @@ async function boot() {
     for (const it of input.drain()) {
       const s = store.getState();
       switch (it.t) {
+        /* Escape / Start là nút LÙI MỘT LỚP, nên nó phải gỡ đúng lớp trên
+           cùng. Thiếu `devPanel` ở đây thì mở bảng gỡ lỗi rồi bấm Escape lại
+           bật thêm menu Tạm dừng chồng lên nó — lùi mà lại tiến. */
         case "menu":
           if (tutorial.isOpen()) tutorial.close();
           else if (menus.isOpen()) menus.close();
+          else if (devPanel.isOpen()) devPanel.close();
           else menus.openPause();
           break;
         case "shop":
@@ -1341,8 +1467,24 @@ async function boot() {
           if (!modal) menus.openBag();
           else if (menus.isOpen()) menus.close();
           break;
+        /* Bản đồ nhỏ. Với chuột/ngón tay thì nút này chỉ bật/tắt hiện — bấm
+           thẳng vào bản đồ là đi. Tay cầm không có con trỏ, nên nó bật thêm
+           một CON TRỎ Ô: gạt để rê, A để đi. Không có đường này thì bấm-để-đi
+           (cách đi xa duy nhất) hoàn toàn ngoài tầm tay cầm, và người chơi
+           phải giữ cần gạt suốt chiều dài nông trại. */
         case "map":
-          minimap.toggle();
+          if (padOn && !modal) {
+            if (minimap.cursor()) {
+              minimap.setCursor(null);
+              if (!minimap.isVisible()) minimap.toggle();
+            } else {
+              if (!minimap.isVisible()) minimap.toggle();
+              minimap.setCursor({
+                x: Math.floor(s.player.x / TILE),
+                y: Math.floor(s.player.y / TILE),
+              });
+            }
+          } else minimap.toggle();
           break;
         case "debug":
           devPanel.toggle();
@@ -1360,6 +1502,14 @@ async function boot() {
              bắt đi tới tận nơi rồi bấm lại từng con là việc của người, không
              phải của một cái bảng tra cứu. */
           if (!modal && cardAnimal !== null && cycleAnimal(s, it.d)) break;
+          /* Đang XÂY thì vai đổi CÔNG TRÌNH. Thanh gợi ý nút đã in dòng này từ
+             trước (xem `drawPadBar`) mà không có nhánh nào thực hiện — nên nó
+             rơi xuống tận nhánh cuối và đổi ô hotbar, tức là chỉ dẫn trên màn
+             hình nói một đằng, máy làm một nẻo. */
+          if (!modal && building) {
+            buildUI.cycle(it.d);
+            break;
+          }
           // Đang mở menu thì vai là nút ĐỔI TAB, không phải đổi ô hotbar.
           if (modal) {
             if (!cycleTab(it.d)) focusRoot()?.querySelector(".body")?.scrollBy({ top: it.d * 120 });
@@ -1370,6 +1520,15 @@ async function boot() {
           break;
         }
         case "use": {
+          /* Con trỏ BẢN ĐỒ NHỎ đang bật: A là "đi tới đó", đúng như một cú
+             chạm vào bản đồ. Xong thì tắt con trỏ — nó là một cử chỉ nhắm rồi
+             bắn, không phải một chế độ phải nhớ tắt. */
+          const mc0 = minimap.cursor();
+          if (mc0 && !building) {
+            minimap.setCursor(null);
+            nav.goTo(s, content, mc0.x, mc0.y, { act: false });
+            break;
+          }
           /* Trong CHẾ ĐỘ XÂY DỰNG bằng tay cầm, A là "đặt mốc / chốt đoạn" —
              hai lần bấm thay cho một cú ấn-rê-nhả của ngón tay. */
           if (building && input.padConnected()) {
@@ -1531,6 +1690,16 @@ async function boot() {
         /* Rê con trỏ ô bằng cần gạt. Chỉ có nghĩa trong chế độ xây dựng —
            ngoài đó thì cần gạt là để ĐI, và ngắm bám theo hướng mặt. */
         case "padAim": {
+          /* Con trỏ BẢN ĐỒ NHỎ được ưu tiên: nó chỉ bật khi người chơi vừa
+             chủ động bấm Back, nên lúc đó đó chắc chắn là thứ họ đang lái. */
+          const mc = minimap.cursor();
+          if (mc) {
+            minimap.setCursor({
+              x: Math.max(0, Math.min(s.w - 1, mc.x + it.dx)),
+              y: Math.max(0, Math.min(s.h - 1, mc.y + it.dy)),
+            });
+            break;
+          }
           if (!building) break;
           const p0 = padCursor ?? {
             x: Math.floor(s.player.x / TILE),
@@ -1702,26 +1871,79 @@ async function boot() {
       shown ? (shown.kind === "worker" ? workerCard(shown, content) : animalStats(shown, content)) : null,
     );
     drawPadBar(menus.isOpen() || devPanel.isOpen(), buildUI.isOpen(), tutorial.isOpen());
-    /* Menu vừa mở bằng tay cầm mà không có gì đeo vòng vàng thì người chơi gạt
-       cần một cái mới thấy nó "bật lên" — nửa giây tưởng máy treo. Đặt tiêu
-       điểm ngay vào nút đầu tiên. */
+    /* ---- GIỮ TIÊU ĐIỂM & CHỖ CUỘN QUA MỖI LẦN VẼ LẠI --------------------
+       Mỗi cú bấm trong menu gọi lại `open*()`, mà `shell()` mở đầu bằng
+       `root.innerHTML = ""` — nên phần tử đang đeo vòng vàng, chỗ cuộn của
+       danh sách, VÀ hoạt cảnh mở sheet đều bị dựng mới. Ba thứ, không phải một:
+
+         · tiêu điểm — bấm "+" ở quầy bán một cái là bị ném về đầu danh sách;
+         · chỗ cuộn — mua một thẻ ở cuối lưới bốn mươi thẻ là bị kéo về đầu
+           lưới, và cái này ăn cả CHUỘT lẫn NGÓN TAY chứ không riêng tay cầm;
+         · hoạt cảnh — cả tấm menu nảy lên mỗi lần bấm, và trong lúc nảy thì
+           mọi phép đo toạ độ màn hình đều sai.
+
+       Nhận lại bằng CHỖ NGỒI chứ không bằng định danh: menu này không có id
+       ổn định, nhưng nó dựng lại đúng cái bố cục cũ. Xem `src/ui/focus.ts`.
+
+       KHÔNG rào sau `padOn`: chỗ cuộn là lỗi của mọi người dùng, và khôi phục
+       tiêu điểm còn chữa luôn việc bấm một nút xong thứ tự phím Tab quay về
+       đầu tài liệu. Chỉ nhánh "đặt tiêu điểm ban đầu" mới cần tay cầm — không
+       có tay cầm mà tự dưng focus một cái nút là hành vi lạ. */
     const r0 = focusRoot();
-    if (padOn && r0 && r0 !== focusedRootEl) {
+    if (r0 && r0 !== focusedRootEl) {
       focusedRootEl = r0;
-      const r = r0;
-      /* Đặt tiêu điểm vào nút đầu tiên TRONG THÂN, không phải nút ✕ ở tiêu đề.
-         Nút đầu tiên theo DOM chính là ✕ — mở menu ra mà vòng vàng nằm trên nút
-         đóng thì bấm "chọn" theo phản xạ là đóng luôn cái vừa mở. */
-      const first =
-        r?.querySelector<HTMLElement>(
-          ".body button:not([disabled]), .body [role='button'], .dev-grid button:not([disabled])",
-        ) ?? r?.querySelector<HTMLElement>("button:not([disabled])");
-      if (first) focusIn(first);
+      const k = khoaManHinh(r0);
+      const memo = focusMemo;
+      const cungSheet = !!memo && memo.screen === k.screen;
+      const veLai = !!memo && cungSheet && memo.tab === k.tab;
+
+      const bodyEl = r0.querySelector<HTMLElement>(".body");
+      if (veLai && bodyEl && memo.scroll > 0) bodyEl.scrollTop = memo.scroll;
+
+      /* Cùng một màn vẽ lại thì đừng diễn lại hoạt cảnh MỞ. Đặt được ở đây vì
+         khối này chạy trong cùng khung hình với lần dựng lại — trình duyệt
+         chưa kịp vẽ khung nào. */
+      if (veLai && r0.classList.contains("modal")) r0.style.animation = "none";
+
+      let dich: HTMLElement | null = null;
+      if (veLai && memo.at) {
+        const dsach = ungVien(r0);
+        const i = timChoNgoi(
+          dsach.map((el) => choNgoi(el, r0)),
+          memo.at,
+        );
+        dich = i >= 0 ? dsach[i]! : null;
+      } else if (cungSheet) {
+        /* Chỉ đổi TAB: danh sách mới hoàn toàn, giữ chỗ ngồi cũ chỉ là ném
+           vòng vàng vào giữa một danh sách chẳng liên quan. Đặt lên chính cái
+           tab vừa chọn để bấm vai tiếp là đi tiếp được ngay. Cách này đúng cho
+           cả khi người chơi BẤM CHUỘT vào tab, nên không cần cờ riêng. */
+        dich = r0.querySelector<HTMLElement>(".tabs button.on");
+      }
+
+      if (dich) focusIn(dich, true);
+      else if (padOn) {
+        /* Menu vừa MỞ bằng tay cầm mà không có gì đeo vòng vàng thì người chơi
+           gạt cần một cái mới thấy nó "bật lên" — nửa giây tưởng máy treo.
+           Đặt tiêu điểm vào nút đầu tiên TRONG THÂN, không phải nút ✕ ở tiêu
+           đề: nút đầu tiên theo DOM chính là ✕, mà mở menu ra thấy vòng vàng
+           nằm trên nút đóng thì bấm "chọn" theo phản xạ là đóng luôn cái vừa mở. */
+        const first =
+          r0.querySelector<HTMLElement>(
+            ".body button:not([disabled]), .body [role='button'], .dev-grid button:not([disabled])",
+          ) ?? r0.querySelector<HTMLElement>("button:not([disabled])");
+        if (first) focusIn(first);
+      }
+
       // Nút ✕ đeo tên nút HUỶ của tay cầm: người chơi thấy ngay là bấm nút đó
       // cũng đóng được, khỏi phải gạt cần lên tận tiêu đề.
-      const x = r.querySelector<HTMLElement>("[data-x]");
-      if (x) x.dataset["pad"] = padButtonName(input.padInfo(), 1);
-    } else if (!r0) focusedRootEl = null;
+      const x = r0.querySelector<HTMLElement>("[data-x]");
+      if (x && padOn) x.dataset["pad"] = padButtonName(input.padInfo(), 1);
+    } else if (!r0) {
+      focusedRootEl = null;
+      focusMemo = null;
+    }
+    if (r0) nhoTieuDiem(r0);
 
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);

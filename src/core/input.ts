@@ -160,6 +160,16 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       e.preventDefault();
       return;
     }
+    /* F2 đi qua hàng rào `modal` — vì BẢNG GỠ LỖI tự nó được tính là modal
+       (`main.ts` isModalOpen), nên phím mở nó cũng là phím duy nhất đóng được
+       nó, mà nếu chặn ở đây thì nó chỉ mở được chứ không tắt được. Escape cũng
+       không cứu: `case "menu"` thấy không có menu nào mở nên bật menu Tạm dừng
+       đè lên. Còn lại đúng một cái nút ✕ hai chục pixel. */
+    if (e.code === "F2") {
+      push({ t: "debug" });
+      e.preventDefault();
+      return;
+    }
     if (modal) return;
 
     if (MOVE_KEYS[e.code] || RUN_KEYS.has(e.code)) {
@@ -188,10 +198,6 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         break;
       case "KeyF":
         push({ t: "auto" });
-        break;
-      case "F2":
-        push({ t: "debug" });
-        e.preventDefault();
         break;
       case "Tab":
         push({ t: "selectDelta", d: e.shiftKey ? -1 : 1 });
@@ -408,13 +414,24 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       const std = pad.info().standard;
       if (st.pressed.has(PAD.A) || (std && st.pressed.has(PAD.RT))) push({ t: "use" });
       if (st.pressed.has(PAD.B)) push({ t: "interact" });
+      /* START đứng NGOÀI hàng rào `std`, cùng lý do với nhánh trong menu ở
+         trên: nút "start/options" nằm ở chỉ số 9 trên gần như mọi tay cầm, kể
+         cả loại trình duyệt không nhận ra sơ đồ. Và nếu đoán sai thì cái giá
+         chỉ là mở nhầm một cái menu đóng lại được — rẻ hơn nhiều so với việc
+         người chơi KHÔNG CÓ đường nào mở menu, tức là không vào được Cài đặt,
+         không lưu, không thoát, và không cả tới được chế độ xây dựng. Trước
+         đây Start đóng được menu (nhánh modal) mà không mở được — một chiều. */
+      if (st.pressed.has(PAD.START)) push({ t: "menu" });
       if (std) {
         if (st.pressed.has(PAD.X)) push({ t: "auto" });
         if (st.pressed.has(PAD.Y)) push({ t: "inventory" });
-        if (st.pressed.has(PAD.LB)) push({ t: "selectDelta", d: -1 });
-        if (st.pressed.has(PAD.RB)) push({ t: "selectDelta", d: 1 });
+        /* Giữ CÒ TRÁI thì vai nhảy NĂM ô một nhịp. Hotbar có mười ô mà vai chỉ
+           đi từng ô: muốn tới ô tám phải bấm bảy lần, trong khi bàn phím chỉ
+           cần một phím số. Năm ô là nửa hotbar — hai nhịp là tới bất cứ đâu. */
+        const buoc = st.held.has(PAD.LT) ? 5 : 1;
+        if (st.pressed.has(PAD.LB)) push({ t: "selectDelta", d: -buoc });
+        if (st.pressed.has(PAD.RB)) push({ t: "selectDelta", d: buoc });
         if (st.pressed.has(PAD.BACK)) push({ t: "map" });
-        if (st.pressed.has(PAD.START)) push({ t: "menu" });
         if (st.pressed.has(PAD.L3)) push({ t: "build" });
         if (st.pressed.has(PAD.R3)) push({ t: "padHelp" });
       }
@@ -464,7 +481,13 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     },
     pointer: () => (ptr && performance.now() - ptrAt < POINTER_STALE_MS ? ptr : null),
     stickActive: () => stickId !== null,
+    /* Ba đường vào đều nói được câu "đang chạy", và cả ba phải được hỏi.
+       Dòng này từng quên mất tay cầm trong khi `useHeld` ngay dưới thì nhớ —
+       một sự bất đối xứng không ai nhìn ra khi đọc, vì nó không crash, không
+       cảnh báo, chỉ làm người cầm tay cầm đi bộ suốt ván mà không hiểu vì sao.
+       Tệ hơn: sơ đồ nút vẫn quảng cáo cả LT lẫn "đẩy mạnh là chạy". */
     running: () =>
+      padState.running ||
       held.has("ShiftLeft") ||
       held.has("ShiftRight") ||
       Math.hypot(stick.x, stick.y) >= STICK_RUN,

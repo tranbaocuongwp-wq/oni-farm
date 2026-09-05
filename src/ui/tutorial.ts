@@ -129,7 +129,12 @@ export function createTutorial(root: HTMLElement, onDone: () => void): Tutorial 
 
   const onKey = (e: KeyboardEvent) => {
     if (!open) return;
-    if (e.code === "Escape") close();
+    /* Escape KHÔNG xử lý ở đây, dù nó là phím đóng đúng nghĩa.
+       Lý do là thứ tự đăng ký: `createTutorial` chạy trước `createInput`, nên
+       handler này bắt Escape trước. Đóng ở đây rồi thì tới lượt `input.ts`
+       phát ý định "menu", và `main.ts` nhìn lại thấy tutorial ĐÃ đóng — nên nó
+       bật menu Tạm dừng. Bấm một phím ra hai việc. Để `main.ts` lo, nó đã hỏi
+       `tutorial.isOpen()` trước tiên rồi. */
     if (e.code === "Enter" || e.code === "Space") {
       i++;
       render();

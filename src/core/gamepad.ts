@@ -28,8 +28,18 @@
 ============================================================================ */
 
 /** Ngưỡng dưới mức này coi như không đẩy. Cần đủ lớn: tay cầm cũ luôn trôi
- *  một chút quanh tâm, và trôi 0,1 là nhân vật tự đi mãi về một phía. */
-const DEAD = 0.28;
+ *  một chút quanh tâm, và trôi 0,1 là nhân vật tự đi mãi về một phía.
+ *
+ *  Chỉnh được từ Cài đặt, vì đây là con số hỏng theo PHẦN CỨNG chứ không theo
+ *  sở thích: một cần gạt mòn quá ngưỡng này thì nhân vật tự đi mãi và người
+ *  chơi không có cách nào chữa. */
+export const DEAD_MUC = { hep: 0.16, normal: 0.28, rong: 0.42 } as const;
+let DEAD: number = DEAD_MUC.normal;
+
+/** Đặt vùng chết. Gọi từ `applySettings`. */
+export function setPadDead(muc: keyof typeof DEAD_MUC): void {
+  DEAD = DEAD_MUC[muc] ?? DEAD_MUC.normal;
+}
 
 /** Đẩy quá mức này là CHẠY — cùng luật analog với joystick cảm ứng, nên người
  *  chơi không phải học thêm nút nào. */
@@ -174,17 +184,26 @@ export function createGamepad(): Gamepad2 {
   let padIndex: number | null = null;
 
   /** Tay cầm ĐANG dùng. Ưu tiên cái vừa có tín hiệu, để cắm hai cái không loạn. */
+  /* Một tay cầm THẬT phải có nút. Sau khi rút dây, vài trình duyệt còn để lại
+     cái vỏ rỗng `{connected:true, buttons:[]}` trong danh sách; nhận cái vỏ đó
+     là game tưởng vẫn đang cắm tay cầm, mà `body[data-input="pad-std"]` thì
+     giấu joystick ảo và tắt `pointer-events` của cụm nút — người chơi mất luôn
+     đường nhập cuối cùng và chỉ còn cách tải lại trang. Hỏi ở MỘT chỗ, dùng
+     cho cả ba nhánh dưới. */
+  const thuc = (p: Gamepad | null | undefined): p is Gamepad =>
+    !!p && p.connected && p.buttons.length > 0;
+
   const readPad = (): Gamepad | null => {
     const pads = navigator.getGamepads?.() ?? [];
     // Giữ nguyên cái đang dùng nếu nó còn đó — đổi qua đổi lại giữa hai tay cầm
     // mỗi khung hình thì `prev` vô nghĩa và nút nào cũng thành bấm liên tục.
     if (padIndex !== null) {
       const cur = pads[padIndex];
-      if (cur?.connected) return cur;
+      if (thuc(cur)) return cur;
       padIndex = null;
     }
     for (const p of pads) {
-      if (!p?.connected) continue;
+      if (!thuc(p)) continue;
       const dung =
         p.buttons.some((b) => b.pressed || b.value > PRESS) ||
         p.axes.some((v) => Math.abs(v) > DEAD);
@@ -193,8 +212,13 @@ export function createGamepad(): Gamepad2 {
         return p;
       }
     }
-    // Không cái nào có tín hiệu: vẫn nhận cái đầu tiên để `connected` đúng.
-    for (const p of pads) if (p?.connected) return p;
+    /* Không cái nào có tín hiệu: vẫn nhận cái đầu tiên để `connected` đúng —
+       nhưng phải là một tay cầm THẬT, có nút và có trục. Sau khi rút dây, một
+       số trình duyệt còn để lại cái vỏ rỗng trong danh sách; nhận cái vỏ đó là
+       game tưởng vẫn đang cắm tay cầm, mà `body[data-input="pad"]` thì giấu
+       joystick ảo và tắt `pointer-events` của cụm nút — người chơi mất luôn
+       đường nhập cuối cùng và chỉ còn cách tải lại trang. */
+    for (const p of pads) if (thuc(p)) return p;
     return null;
   };
 
