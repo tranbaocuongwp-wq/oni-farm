@@ -848,6 +848,11 @@ async function boot() {
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
+    /* Ở chế độ tay cầm nút này bị giấu (một nút, một thanh) — mà "tự động đang
+       bật" là trạng thái người chơi PHẢI thấy, nếu không thì nhân vật tự đi làm
+       mà không rõ vì sao. Đẩy lên <body> để thanh gợi ý dưới hotbar đeo nó. */
+    if (on) document.body.dataset["auto"] = "1";
+    else delete document.body.dataset["auto"];
   };
 
   function tryUse(s: GameState, tx: number, ty: number): boolean {
@@ -1079,11 +1084,21 @@ async function boot() {
       hints.push([b(1), "Đóng bảng"], [b(0), "Thu / cho ăn"]);
       if (std) hints.push([`${b(4)}/${b(5)}`, "Đổi con"]);
     } else {
-      /* Ngoài ruộng thì CỤM NÚT HÌNH THOI đã nói hết bốn nút mặt rồi — nhắc
-         lại ở đây là chiếm chỗ để nói một thứ đang hiện ngay trên màn hình.
-         Thanh này chỉ còn giữ những nút KHÔNG có mặt trong cụm. */
+      /* Ngoài ruộng, cụm nút chạm giờ chỉ còn ĐÚNG MỘT nút — nút A, thứ duy
+         nhất đổi nhãn theo ngữ cảnh (xem style.css, "MỘT NÚT, MỘT THANH").
+         Nên ba nút mặt kia không còn hiện ở đâu nữa, và thanh này phải gánh.
+
+         Bỏ "Ngắm ô", "Phóng", "Xây dựng" khỏi đây: chúng KHÔNG đổi bao giờ và
+         sơ đồ nút đầy đủ (cần phải bấm xuống) đã in ra hết. Thanh dưới đáy phải
+         đủ ngắn để liếc một cái là đọc xong, không phải đọc từng chữ. */
       if (std)
-        hints.push(["Cần phải", "Ngắm ô"], [b(6), "Chạy"], [b(7), "Phóng"], [b(10), "Xây dựng"], [b(9), "Tạm dừng"]);
+        hints.push(
+          [b(1), "Tương tác"],
+          [b(2), "Tự động"],
+          [b(3), "Balo"],
+          [b(6), "Chạy"],
+          [b(9), "Tạm dừng"],
+        );
       else hints.push([b(0), "Dùng"], [b(1), "Tương tác"]);
     }
 
@@ -1350,7 +1365,6 @@ async function boot() {
       document.body.dataset["input"] = coPad ? (input.padInfo().standard ? "pad-std" : "pad") : "";
       if (coPad) {
         const pi = input.padInfo();
-        hud.setPadKey(padButtonName(pi, 0));
         /* Dán TÊN NÚT THẬT lên từng nút tròn. Cụm hình thoi trên màn hình xếp
            đúng như mặt tay cầm, nên gắn tên vào là nó thành bản đồ nút: nhìn
            một cái là biết ngón cái phải bấm chỗ nào, khỏi phải nhớ. */

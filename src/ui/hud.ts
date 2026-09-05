@@ -25,6 +25,7 @@
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
+import { itemName } from "../game/items.ts";
 import { currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
@@ -40,7 +41,6 @@ export interface Hud {
     iHint: { label: string } | null,
   ): void;
   /** Tên nút "dùng" của tay cầm đang cắm (A / ✕ / B…). Rỗng = không có tay cầm. */
-  setPadKey(name: string): void;
   /** hotbar bấm được bằng chuột/chạm */
   onSelect(fn: (slot: number) => void): void;
   /** nút balo cạnh hotbar */
@@ -158,8 +158,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <div id="hotbar" class="hotbar" role="toolbar" aria-label="Hotbar"></div>
         <button type="button" id="bag-btn" class="bag-btn" aria-label="Mở balo"><i class="ic" data-ic="bag"></i><span class="n" id="bag-count"></span></button>
       </div>
+      <!-- Thanh gợi ý của CHẾ ĐỘ TAY CẦM. Nằm ngay DƯỚI hotbar, trong luồng,
+           không trôi nổi trên mặt ruộng: bản cũ để nó ở góc dưới-phải, đúng chỗ
+           cụm nút đang đứng, nên hai thứ đè lên nhau và cùng in ra chữ "DÙNG". -->
+      <div id="padctx" class="padctx"></div>
     </div>
-    <div id="padctx" class="padctx"></div>
     <div id="tip" class="tip" hidden></div>
     <div id="day-banner" class="day-banner" hidden><b></b><span></span></div>`;
 
@@ -358,10 +361,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
      cập nhật mỗi khung hình, mà đặt lại `innerHTML` mỗi khung hình thì con trỏ
      chuột nhấp nháy và trình duyệt dựng lại DOM 60 lần một giây cho một thứ
      đứng yên. */
-  /** Tên nút "dùng" hiện trên dải ngữ cảnh. Đọc từ tay cầm thật, không đoán:
-   *  PlayStation là ✕, Nintendo là B, Xbox là A — cùng một chỉ số 0. */
-  let padKey = "A";
-
   const elAnimal = root.querySelector<HTMLElement>("#animal-card")!;
   let animalKey = "";
   let onClose: () => void = () => {};
@@ -377,15 +376,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   };
 
   return {
-    setPadKey(name) {
-      if (name && name !== padKey) {
-        padKey = name;
-        // Giá trị KHÔNG THỂ trùng với khoá thật. Đặt "" thì lúc đang mở menu
-        // (hint = null → khoá cũng là "") nó bằng nhau và dải không vẽ lại,
-        // nên đóng menu ra vẫn thấy tên nút của tay cầm cũ.
-        prev.hint = "\u0000";
-      }
-    },
     onAnimalClose(fn) {
       onClose = fn;
     },
@@ -673,20 +663,21 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
           bb.classList.toggle("ready", !!iHint);
           bb.setAttribute("aria-label", iHint?.label ?? "Tương tác");
         }
-        /* Dải ngữ cảnh cho TAY CẦM.
+        /* Thanh gợi ý cho TAY CẦM — nói ĐÚNG NHỮNG GÌ CÁI NÚT KHÔNG NÓI ĐƯỢC.
 
-           Ở chế độ tay cầm, ba nút tròn bị giấu đi — mà chúng chính là chỗ duy
-           nhất nói "bấm cái này thì chuyện gì xảy ra" và "vì sao chưa làm
-           được". Giấu chúng mà không thay bằng gì thì người chơi mất đúng thứ
-           quan trọng nhất của giao diện này. Dải chữ nhỏ vừa nói được cả hai,
-           vừa không chiếm chỗ như nút. */
+           Cái nút đã in ra việc sắp làm ("DÙNG", "CÀY", "THU", "ĐỔ MÁNG"). Nếu
+           thanh này in lại đúng chữ đó thì người chơi đọc một câu hai lần —
+           và ở bản cũ nó còn nằm chồng lên chính cái nút, nên hai chữ "DÙNG"
+           đè lên nhau. Nó ở đây để nói hai thứ khác:
+
+             · ĐANG CẦM GÌ — cùng chữ "DÙNG" mà cầm cuốc là cày, cầm hạt là
+               gieo. Chơi tay cầm thì mắt đang ở nhân vật, không ở dải hotbar.
+             · VÌ SAO CHƯA LÀM ĐƯỢC — "xa quá", "chưa cày", "hết nước".
+
+           Không có gì để nói thì thanh biến mất hẳn, không để lại một dải rỗng. */
         const pc = document.querySelector<HTMLElement>("#padctx");
         if (pc) {
           pc.innerHTML = "";
-          /* THỨ ĐANG CẦM đứng đầu dải. Nhãn "DÙNG" một mình không đủ: cùng
-             chữ đó, cầm cuốc là cày còn cầm hạt là gieo. Người chơi tay cầm
-             không thấy ô hotbar nào sáng lên trong tầm mắt lúc đang nhìn nhân
-             vật, nên phải mang thứ đang cầm tới ngay cạnh cái nhãn. */
           const heldId = s.inv[s.sel]?.id;
           const src = heldId ? atlas.icon(heldId) : null;
           if (src) {
@@ -697,17 +688,17 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
             c.className = "it";
             pc.appendChild(c);
           }
-          const k = document.createElement("b");
-          k.textContent = padKey;
-          const t = document.createElement("span");
-          t.textContent = hint?.label ?? "DÙNG";
-          pc.append(k, t);
+          if (heldId) {
+            const t = document.createElement("span");
+            t.textContent = itemName(heldId, content);
+            pc.appendChild(t);
+          }
           if (hint?.why) {
             const w = document.createElement("i");
             w.textContent = hint.why;
             pc.appendChild(w);
           }
-          pc.classList.toggle("off", !hint || hint.kind === null);
+          pc.hidden = !heldId && !hint?.why;
         }
       }
     },

@@ -2081,6 +2081,18 @@ body[data-orientation="landscape"] #toasts {
   width: max-content;
   max-width: 70vw;
 }
+/* Thanh gợi ý của tay cầm nằm DƯỚI hotbar, nên nó đẩy cả cột đáy lên chừng
+   31px. Toast neo theo đáy màn hình thì phải nhích theo đúng khoảng đó, nếu
+   không nó rơi thẳng xuống đè lên hotbar. */
+body[data-input^="pad"][data-orientation="landscape"] #toasts {
+  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + var(--slot) + 58px);
+}
+/* Và nhãn "vừa cầm lên" TẮT HẲN ở chế độ tay cầm: thanh gợi ý dưới hotbar đã
+   in tên thứ đang cầm, LIÊN TỤC chứ không loé một nhịp rồi mờ. Giữ cả hai là
+   nói một câu hai lần, và hai thứ ấy còn đè lên nhau ngay trên đầu hotbar. */
+body[data-input^="pad"] .selname {
+  display: none;
+}
 
 /* ---- thời tiết trên thanh trạng thái (core 1.3) ---- */
 .stat.weather .ic.next { opacity: 0.55; margin-left: 2px; }
@@ -2346,13 +2358,23 @@ body[data-input^="pad"] #abtn .btns button[data-pad]::after {
   line-height: 1;
   letter-spacing: 0;
 }
-/* Cùng một câu KHÔNG được nói ba lần. Nhãn trên nút chính, dòng `.why` trong
-   cụm nút, và dải `.padctx` ở góc đều in ra đúng một thứ: việc sắp làm và lý
-   do không làm được. Ở chế độ tay cầm thì `.padctx` là dải đọc được nhất — nó
-   nằm cùng phía nút hành động và có cả icon vật đang cầm — nên giấu `.why` đi.
-   (Trước đây chỗ này giấu `.padctx`, nhưng một luật cùng độ đặc hiệu ở dưới
-   bật lại `display: flex`, nên nó là mã chết và cả ba vẫn hiện cùng lúc.) */
-body[data-input^="pad"] #abtn .why {
+/* CHẾ ĐỘ TAY CẦM: MỘT NÚT, MỘT THANH. Không hơn.
+
+   Tay cầm có nút thật rồi, nên bốn nút chạm trên màn hình là bốn cái bóng
+   không bấm được (`pointer-events: none` ở trên). Giữ chúng lại chỉ để dán tên
+   nút thì đổi lại là một cụm bốn vòng tròn đè lên mặt ruộng — và cụm ấy còn
+   nằm chồng lên dải ngữ cảnh, nên hai chữ "DÙNG" in đè lên nhau. Cường chụp
+   ảnh chỉ đúng chỗ đó.
+
+   Giữ lại đúng nút A: nó là thứ duy nhất đổi nhãn theo ngữ cảnh, và người chơi
+   cần biết bấm A bây giờ thì làm gì. Ba nút kia mang việc CỐ ĐỊNH — sơ đồ nút
+   (nút cần phải) đã nói hết và không bao giờ đổi.
+
+   Dòng `.why` cũng tắt: nó nói lại đúng câu mà thanh gợi ý dưới hotbar đã nói. */
+body[data-input^="pad"] #abtn .why,
+body[data-input^="pad"] #abtn .btns .b,
+body[data-input^="pad"] #abtn .btns .auto,
+body[data-input^="pad"] #abtn .btns .y {
   display: none;
 }
 
@@ -2363,38 +2385,51 @@ body[data-input^="pad"] #abtn .why {
   padding-left: 8px;
 }
 
-/* Dải ngữ cảnh của CHẾ ĐỘ TAY CẦM: thay cho ba nút tròn bị giấu đi. Nó phải
-   nói đủ hai điều mà nút vẫn nói — bấm A thì làm gì, và vì sao chưa làm được. */
+/* THANH GỢI Ý của chế độ tay cầm.
+
+   NGAY DƯỚI HOTBAR, trong luồng của `.hud-bottom` (một cột căn giữa) — không
+   trôi nổi ở góc dưới-phải như bản cũ. Góc dưới-phải là đúng chỗ cụm nút đang
+   đứng, nên hai thứ đè lên nhau; mà cả hai lại in ra cùng một chữ.
+
+   Dưới hotbar thì nó nằm ngay cạnh dải ô đang chọn, tức là đúng chỗ mắt đã
+   nhìn khi muốn biết mình đang cầm gì. */
 .padctx {
   display: none;
 }
-/* GÓC màn hình, không phải giữa: giữa màn hình là chỗ mắt đang nhìn nhân vật,
-   và một dải chữ đứng ngay đó che mất đúng thứ người chơi cần thấy. Góc dưới —
-   cùng phía với nút hành động khi chơi cảm ứng — thì liếc một cái là đọc được
-   mà không rời mắt khỏi ruộng. Đổi bên theo tay thuận, y như nút hành động. */
 body[data-input^="pad"] .padctx {
-  position: absolute;
-  right: calc(12px + var(--sa-r));
-  bottom: calc(var(--hud-gap) + var(--sa-b) + var(--pad-bottom) + 34px);
-  z-index: 20;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  margin-top: 5px;
   max-width: min(92vw, 460px);
-  padding: 5px 12px 5px 6px;
+  padding: 3px 12px 3px 6px;
   background: var(--glass);
-  border: 2px solid var(--edge);
+  border: 1px solid var(--edge-hi);
   border-radius: 999px;
   box-shadow: var(--shadow);
   font-size: var(--fs-sm);
   pointer-events: none;
 }
-body[data-hand="left"][data-input^="pad"] .padctx {
-  right: auto;
-  left: calc(12px + var(--sa-l));
+.padctx[hidden] {
+  display: none !important;
 }
-body[data-input^="pad"] .padctx.off {
-  opacity: 0.45;
+/* TỰ ĐỘNG ĐANG BẬT. Nút `.auto` bị giấu ở chế độ tay cầm, nên trạng thái này
+   phải hiện ở đây — và thanh phải bật lên kể cả khi không có gì khác để nói,
+   vì "nhân vật đang tự làm" là thứ quan trọng hơn cả cái nhãn trên nút. */
+body[data-input^="pad"][data-auto="1"] .padctx {
+  display: flex !important;
+}
+body[data-input^="pad"][data-auto="1"] .padctx::after {
+  content: "TỰ ĐỘNG";
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--green-dark);
+  border: 1px solid #5c9b40;
+  color: #fff;
+  font-size: 0.85em;
+  font-weight: 800;
+  letter-spacing: 0.5px;
 }
 /* Thanh nút của LỚP PHỦ đang chiếm chỗ (menu, hướng dẫn, bản đồ nhỏ, chế độ
    xây): dải góc tắt hẳn. Hai dải cùng hiện là hai chỉ dẫn khác nhau cho cùng
@@ -2410,19 +2445,6 @@ body[data-input^="pad"][data-padbar="1"] .padctx {
   width: 18px;
   height: auto;
   flex: none;
-}
-.padctx b {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--green-dark);
-  border: 1px solid #5c9b40;
-  color: #fff;
-  font-family: var(--mono);
-  font-size: 0.9em;
 }
 .padctx span {
   color: var(--ink);
