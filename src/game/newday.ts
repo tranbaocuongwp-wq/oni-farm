@@ -22,7 +22,7 @@
    đồ ĐANG chơi. Bản đồ đã cất chỉ được quét đúng một lần mỗi đêm.
 ============================================================================ */
 
-import type { Content } from "./types.ts";
+import type { Content, PropDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import {
   activeView,
@@ -35,7 +35,18 @@ import {
   touch,
 } from "./state.ts";
 import { harvestTileIn } from "./actions.ts";
-import { TILE, blockedAtBox, idx, playerOverlapsTile, propDef, weedProp, youngGrassProp } from "./world.ts";
+import {
+  TILE,
+  anyEntityOverlapsTile,
+  blockedAtBox,
+  idx,
+  inZone,
+  playerOverlapsTile,
+  propDef,
+  saplingProp,
+  weedProp,
+  youngGrassProp,
+} from "./world.ts";
 import type { NightWeather } from "./weather.ts";
 import { autoWetSet, isOutdoor, nightWeatherOf, rollWeather, stormNight, weatherDef } from "./weather.ts";
 import { diseaseNight } from "./disease.ts";
@@ -127,6 +138,10 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
   const weed = weedProp(content);
   // Luống hoang mọc CỎ NON, không mọc bụi rậm — xem `youngGrassProp`.
   const coNon = youngGrassProp(content);
+  /* Cây con để rừng mọc lại. Suy từ content (`saplingProp`) chứ không chép id:
+     đổi bộ cây trong content pack thì rừng vẫn mọc đúng thứ có ở đó. */
+  const cayCon = saplingProp(content);
+  const regrow = Number.isFinite(bal.forestRegrowChance) ? (bal.forestRegrowChance as number) : 0;
   const w = v.w;
   const h = v.h;
   const gm = Math.max(0, growMul);
@@ -178,7 +193,7 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
     const j = idx(w, nx, ny);
     const tt = v.tiles[j];
     if (!tt || tt.g !== "grass" || tt.prop !== null || tt.b !== null || tt.crop !== null || tt.tilled) continue;
-    if (v.active && playerOverlapsTile(d.s, nx, ny)) continue;
+    if (!mocDuocO(d, content, into, v.active, nx, ny)) continue;
     const m = v.edit(j);
     if (m) {
       m.prop = into.id;
@@ -225,7 +240,7 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
         // …và MỌC CỎ. Không có bước này thì luống chỉ "phẳng lại" — người chơi
         // đi qua không nhận ra mình vừa mất gì, mà mất mát không nhìn thấy thì
         // không dạy được ai điều gì.
-        if (coNon && t.g === "grass" && t.prop === null && !(v.active && playerOverlapsTile(d.s, x, y))) {
+        if (coNon && t.g === "grass" && t.prop === null && mocDuocO(d, content, coNon, v.active, x, y)) {
           m.prop = coNon.id;
           m.hp = Math.max(0, Math.floor(coNon.hits ?? 0));
         }
@@ -240,6 +255,37 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
       if (m) delete m.idle;
     }
 
+    /* RỪNG MỌC LẠI: ô cỏ trống trong vùng `forest` có xác suất mọc cây con,
+       rồi cây con tự lớn thành cây gỗ theo `grow`. Không có bước này thì rừng
+       là một mỏ gỗ dùng một lần — chặt hết là hết, và cái tên "rừng" chỉ còn
+       là trang trí trên bản đồ.
+
+       Chỉ mọc ở ô TRỐNG HẲN: không cướp chỗ của cỏ đang có (con vật ăn cỏ đó),
+       không mọc lên luống, và không mọc dưới chân ai. */
+    if (
+      cayCon &&
+      regrow > 0 &&
+      v.active &&
+      t.g === "grass" &&
+      t.prop === null &&
+      t.b === null &&
+      t.crop === null &&
+      !t.tilled &&
+      inZone(d.s, content, "forest", x, y) &&
+      mocDuocO(d, content, cayCon, v.active, x, y)
+    ) {
+      const r = nextRandom(d.s.seed);
+      touch(d).seed = r.seed;
+      if (r.v < regrow) {
+        const m = v.edit(i);
+        if (m) {
+          m.prop = cayCon.id;
+          m.hp = Math.max(0, Math.floor(cayCon.hits ?? 0));
+        }
+        continue;
+      }
+    }
+
     // cỏ dại lan sang ô cỏ trống bên cạnh
     if (
       weed &&
@@ -249,7 +295,7 @@ function nightGround(d: Draft, content: Content, v: MapView, growMul: number): v
       t.b === null &&
       t.crop === null &&
       !t.tilled &&
-      !(v.active && playerOverlapsTile(d.s, x, y)) &&
+      mocDuocO(d, content, weed, v.active, x, y) &&
       hasTuftNeighbour(x, y)
     ) {
       const r = nextRandom(d.s.seed);
@@ -505,6 +551,22 @@ function spawnPests(d: Draft, content: Content): void {
       y: cy,
     });
   }
+}
+
+/**
+ * Đêm nay có được MỌC một vật thể lên ô này không.
+ *
+ * Vật thể ĐẶC (bụi cây) mọc lên ngay dưới chân ai đó là nhốt người đó lại —
+ * cùng lớp lỗi với việc đặt hòn đá xuống chân mình, chỉ khác là ban đêm và
+ * không ai bấm nút nào cả. Người chơi đã được chặn từ trước; con vật thì
+ * không, và một cái rừng dày bụi cây làm chuyện đó xảy ra thật.
+ *
+ * Vật thể KHÔNG đặc (cỏ) thì mọc thoải mái: đứng trên bãi cỏ không kẹt ai.
+ */
+function mocDuocO(d: Draft, content: Content, def: PropDef | null, active: boolean, x: number, y: number): boolean {
+  if (!def?.solid) return true;
+  if (!active) return true; // bản đồ đang cất: không ai đứng trên đó cả
+  return !playerOverlapsTile(d.s, x, y) && !anyEntityOverlapsTile(d.s, content, x, y);
 }
 
 export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {

@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — mọi vật thể đứng trên ô. Trước đây tính đặc/tương tác nằm rải trong tiles.json và code; giờ gom hết về đây. Thêm một loại địa hình mới = thêm một object, không sửa code (miễn là art/atlas.ts biết vẽ id đó, không thì nó vẽ hình mặc định).\n\nhits/tool/drops = khai thác được. becomes = sau khi phá thì để lại gì (cây lớn để lại gốc). interact = tương tác bằng phím E. portal = cửa dịch chuyển.\n\ngrow = sau `days` ngày lớn (nhân growMul của thời tiết) thì biến thành `to` — tiến độ ở Tile.age. spread = mỗi đêm có chance mọc thêm `into` lên ô cỏ trống kề bên. stormFell = đêm bão có chance bị quật thành `to`. Cỏ non/cỏ dày không đặc, tay không cũng cắt được, cho cỏ khô (item:fodder).",
+  "$comment": "LÀN NHANH — mọi vật thể đứng trên ô. Trước đây tính đặc/tương tác nằm rải trong tiles.json và code; giờ gom hết về đây. Thêm một loại địa hình mới = thêm một object, không sửa code (miễn là art/atlas.ts biết vẽ id đó, không thì nó vẽ hình mặc định).\n\nhits/tool/drops = khai thác được. becomes = sau khi phá thì để lại gì (cây lớn để lại gốc). interact = tương tác bằng phím E. portal = cửa dịch chuyển.\n\ngrow = sau `days` ngày lớn (nhân growMul của thời tiết) thì biến thành `to` — tiến độ ở Tile.age. spread = mỗi đêm có chance mọc thêm `into` lên ô cỏ trống kề bên. stormFell = đêm bão có chance bị quật thành `to`. Cỏ non/cỏ dày không đặc, tay không cũng cắt được, cho cỏ khô (item:fodder).\n\nbridge: vật thể BẮC QUA ô không đi được (cầu gỗ trên mặt nước). Ô có nó thì người và vật nuôi đi qua được bất kể NỀN bên dưới là gì, còn loài BƠI vẫn bơi được ngay dưới chân cầu — cây cầu nằm TRÊN mặt nước chứ không thay thế mặt nước.",
   "props": [
     {
       "id": "tree",
@@ -373,6 +373,17 @@
         "body": "#a97d4e",
         "dark": "#6b4a2c",
         "accent": "#d8c08a"
+      }
+    },
+    {
+      "id": "pier",
+      "name": "Cầu gỗ",
+      "solid": false,
+      "bridge": true,
+      "art": {
+        "body": "#a97d4e",
+        "dark": "#6b4a2c",
+        "accent": "#c49a68"
       }
     }
   ]

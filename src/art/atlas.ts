@@ -340,6 +340,62 @@ function makeWater(frame: number): HTMLCanvasElement {
 
 /** Bọt ở bờ: dải sáng 2px ở cạnh nước giáp đất. Có nó thì ao đọc ra là AO
  *  chứ không phải một mảng xanh dán lên cỏ. 2 khung để bọt nhấp nhô. */
+/**
+ * BÓNG SÂU ở mép nước — dải tối bên TRONG mặt nước, sát bờ.
+ *
+ * Đây là thứ làm cái hồ TRŨNG XUỐNG thay vì nằm phẳng lì cùng mặt cỏ: trong
+ * tranh nhìn từ trên, chiều sâu đọc ra từ cái bóng mà bờ cao đổ xuống mặt
+ * nước. Không có nó thì hồ chỉ là một vũng màu xanh dán lên đồng cỏ.
+ *
+ * Vẽ ĐẬM dần vào trong rồi nhạt đi — bờ dốc, không phải một bậc thang.
+ */
+function makeBankShadow(side: "n" | "s" | "w" | "e"): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const lop = ["rgba(6,22,44,0.55)", "rgba(6,22,44,0.40)", "rgba(6,22,44,0.24)", "rgba(6,22,44,0.10)"];
+  for (let d = 0; d < lop.length; d++) {
+    const c = lop[d]!;
+    for (let i = 0; i < TILE; i++) {
+      if (side === "n") s.px(i, d, c);
+      else if (side === "s") s.px(i, TILE - 1 - d, c);
+      else if (side === "w") s.px(d, i, c);
+      else s.px(TILE - 1 - d, i, c);
+    }
+  }
+  return s.c;
+}
+
+/**
+ * GỜ ĐẤT phía BỜ — dải đất lộ ra ở mép ô ĐẤT giáp nước, kèm một vệt tối.
+ *
+ * Đi cùng `makeBankShadow` (bóng phía dưới nước) thành một BẬC: nhìn từ trên
+ * xuống, một bậc đọc ra là "chỗ này thấp hơn". Chỉ có bóng dưới nước thôi thì
+ * mặt cỏ vẫn chạy phẳng lì tới sát mép, và cái hồ trông như dán lên.
+ */
+function makeBankRim(side: "n" | "s" | "w" | "e"): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  /* Bốn lớp, đọc từ mép nước vào trong bờ:
+       0  mặt đứng của bờ, tối nhất — đây là cái làm ra BẬC
+       1  đất ẩm sát mép
+       2  đất khô
+       3  vài hạt đất lẻ tãi vào cỏ, để mép không thành một đường kẻ thẳng
+     Từng lớp đủ ĐẬM để nhìn ra ở cỡ 16px: một dải nâu nhạt 1px thì mắt gộp
+     luôn vào vệt bọt nước và cái bờ coi như không có. */
+  const mat = ["rgba(38,26,14,0.62)", "#7a6038", "#9a7c4c"];
+  const put = (d: number, i: number, c: string) => {
+    if (side === "n") s.px(i, d, c);
+    else if (side === "s") s.px(i, TILE - 1 - d, c);
+    else if (side === "w") s.px(d, i, c);
+    else s.px(TILE - 1 - d, i, c);
+  };
+  for (let i = 0; i < TILE; i++) {
+    put(0, i, mat[0]!);
+    put(1, i, mat[1]!);
+    put(2, i, mat[2]!);
+    if ((i * 7) % 5 === 0) put(3, i, mat[2]!);   // hạt đất lẻ, mép lượn
+  }
+  return s.c;
+}
+
 function makeShore(side: "n" | "s" | "w" | "e", frame: number): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const foam = P.waterFoam;
@@ -522,6 +578,24 @@ function makeBed(art: PropArt): HTMLCanvasElement {
  * theo mức thì mỗi lần con vật ăn một miếng là cả ô nhấp nháy, mà người chơi
  * cần biết mức thì đứng vào là nút đã nói.
  */
+/**
+ * CẦU GỖ trên mặt nước — ván ngang, hai thanh dọc, đầu ván hở ra mép ô.
+ *
+ * Vẽ CHỪA hai mép trên/dưới một chút để mặt nước còn lộ ra hai bên: người chơi
+ * phải thấy mình đang đi TRÊN nước, chứ không phải trên một dải sàn gỗ.
+ */
+function makePier(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.rect(0, 3, TILE, 10, art.dark);
+  s.rect(0, 4, TILE, 8, art.body);
+  for (let x = 1; x < TILE; x += 5) s.vline(x, 4, 8, art.dark);   // khe giữa các tấm ván
+  s.hline(0, 4, TILE, art.accent);
+  s.hline(0, 11, TILE, art.dark);
+  s.px(2, 13, art.dark);                                          // chân cọc
+  s.px(11, 13, art.dark);
+  return s.c;
+}
+
 function makeTrough(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 13, 11, 2);
@@ -810,6 +884,7 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "bed": return makeBed(art);
     case "bench": return makeBench(art);
     case "trough": return makeTrough(art);
+    case "pier": return makePier(art);
     case "wall": return makeWall(art);
     case "door_in": return makeDoorIn(art);
     case "shop": return makeShop();
@@ -1905,6 +1980,10 @@ export interface Atlas {
   water: HTMLCanvasElement[];
   /** [side][frame] bọt bờ nước, phủ lên ô nước giáp đất. */
   shore: Record<Side, HTMLCanvasElement[]>;
+  /** Bóng của bờ đổ xuống mặt nước — thứ làm cái hồ trũng xuống. */
+  bank: Record<Side, HTMLCanvasElement>;
+  /** Gờ đất ở mép ô ĐẤT giáp nước. Đi cùng `bank` thành một bậc. */
+  bankRim: Record<Side, HTMLCanvasElement>;
   wood: HTMLCanvasElement[];
   tuft: HTMLCanvasElement;
   /** Ô ngoài biên bản đồ: [ngoài trời (rừng)] và [trong nhà (tối)]. */
@@ -2487,10 +2566,14 @@ export function buildAtlas(content: Content): Atlas {
   const water = [0, 1, 2, 3].map(makeWater);
   const sides: Side[] = ["n", "s", "w", "e"];
   const soilEdge = {} as Record<Side, HTMLCanvasElement>;
+  const bank = {} as Record<Side, HTMLCanvasElement>;
+  const bankRim = {} as Record<Side, HTMLCanvasElement>;
   const shore = {} as Record<Side, HTMLCanvasElement[]>;
   for (const sd of sides) {
     soilEdge[sd] = makeSoilEdge(sd);
     shore[sd] = [0, 1].map((f) => makeShore(sd, f));
+    bank[sd] = makeBankShadow(sd);
+    bankRim[sd] = makeBankRim(sd);
   }
 
   const house = new Map<string, HTMLCanvasElement>();
@@ -2645,7 +2728,7 @@ export function buildAtlas(content: Content): Atlas {
   };
 
   return {
-    grass, path, asphalt, soil, soilWet, soilEdge, water, shore, wood,
+    grass, path, asphalt, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
     autotiles,
     animal: animalOf,
     emote: emoteOf,

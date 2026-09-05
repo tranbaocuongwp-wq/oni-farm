@@ -350,6 +350,15 @@ export interface PropDef {
    */
   portable?: boolean;
   /**
+   * BẮC QUA ô không đi được (cầu gỗ trên mặt nước).
+   *
+   * Ô có vật thể này thì người và vật nuôi đi qua được BẤT KỂ nền bên dưới —
+   * và loài BƠI vẫn bơi được ngay dưới chân cầu. Cây cầu nằm TRÊN mặt nước
+   * chứ không thay thế mặt nước: đổi nền thành gỗ thì con cá không bơi qua
+   * được nữa, mà cái ao thì thủng một đường ngay giữa.
+   */
+  bridge?: boolean;
+  /**
    * Vật thể LỚN theo ngày: sau `days` ngày (nhân với `growMul` của thời tiết)
    * thì biến thành `to`. Cây con → cây lớn, cỏ non → cỏ dày, bụi nhỏ → bụi lớn.
    * Tiến độ nằm ở `Tile.age`.
@@ -446,6 +455,16 @@ export interface Balance {
    * máng: đổ đầy rồi đi vắng được mấy ngày, hay phải chạy về đổ mỗi sáng.
    */
   troughMax?: number;
+
+  /* ---- vùng đất (core 1.9; thiếu thì loader điền mặc định) ---- */
+  /**
+   * Mỗi đêm, một ô cỏ trống TRONG RỪNG có ngần này xác suất mọc lên cây con.
+   *
+   * Đây là thứ làm cho gỗ TÁI TẠO được: chặt trụi một vạt thì vài đêm sau nó
+   * mọc lại, nên rừng là chỗ để quay lại chứ không phải một mỏ dùng một lần.
+   * 0 = tắt hẳn, chặt xong là hết.
+   */
+  forestRegrowChance?: number;
 }
 
 export type GroundKind = "grass" | "path" | "water" | "wood" | "asphalt";
@@ -463,6 +482,27 @@ export interface TileLegendEntry {
    * không xây được nó — `buildable: false` trong buildings.json.
    */
   build?: string;
+}
+
+/** Vùng đất có luật riêng. 'farm' = cuốc được; 'forest' = đêm mọc lại cây con. */
+export type ZoneKind = "farm" | "forest";
+
+/**
+ * VÙNG ĐẤT có luật riêng — khác `PenDef` ở chỗ nó nói về ĐẤT, không về con vật.
+ *
+ * Có mặt vì hai câu hỏi mà bản đồ không tự trả lời được: "cuốc được ở đâu" và
+ * "rừng là chỗ nào". Không có `zones` thì cái cuốc ăn khắp bản đồ, và người
+ * chơi băm nát địa hình thành luống trước khi kịp nhận ra mình đang làm gì.
+ */
+export interface ZoneDef {
+  id: string;
+  name: string;
+  kind: ZoneKind;
+  map: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 /**
@@ -536,6 +576,9 @@ export interface TilesDef {
   indoorMaps?: string[];
   /** Các KHU CHUỒNG dựng sẵn. Vắng = nông trại không chia lô. */
   pens?: PenDef[];
+  /** Các VÙNG ĐẤT có luật riêng (ruộng, rừng). Vắng = không vùng nào, cuốc
+   *  được khắp nơi — đúng hành vi cũ, nên pack cũ không đổi gì. */
+  zones?: ZoneDef[];
 }
 
 /**

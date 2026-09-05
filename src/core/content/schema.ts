@@ -721,6 +721,7 @@ export function validateBalance(raw: unknown): string[] {
     // 0 = tắt hẳn (luống không bao giờ mọc cỏ lại)
     ["tilledIdleDays", 0, 999],
     ["troughMax", 1, 999],
+    ["forestRegrowChance", 0, 1],
   ] as [string, number, number][])
     if (raw[k] !== undefined) c.num(raw, k, min, max);
 
@@ -744,6 +745,7 @@ export function validateBalance(raw: unknown): string[] {
 }
 
 const GROUNDS = ["grass", "path", "water", "wood", "asphalt"] as const;
+const ZONE_KINDS = ["farm", "forest"] as const;
 
 export function validateTiles(raw: unknown): string[] {
   const c = new Check("tiles.json");
@@ -813,6 +815,34 @@ export function validateTiles(raw: unknown): string[] {
         }
         if (v["swim"] !== undefined && typeof v["swim"] !== "boolean")
           k.fail("swim", "phải là boolean (true = khu dưới nước, ruột là ô nước)");
+        c.merge(k);
+      });
+    }
+  }
+
+  const zones = raw["zones"];
+  if (zones !== undefined) {
+    if (!Array.isArray(zones)) c.fail("zones", "phải là mảng các vùng đất");
+    else {
+      const seenZone = new Set<string>();
+      zones.forEach((v, i) => {
+        const k = new Check(`zones[${i}]`);
+        if (!isObj(v)) {
+          c.fail(`zones[${i}]`, "phải là object");
+          return;
+        }
+        const id = k.str(v, "id");
+        if (id) {
+          if (seenZone.has(id)) k.fail("id", `trùng id '${id}'`);
+          seenZone.add(id);
+        }
+        k.str(v, "name");
+        k.enumStr(v, "kind", ZONE_KINDS);
+        k.str(v, "map");
+        k.num(v, "x", 0, 1000);
+        k.num(v, "y", 0, 1000);
+        k.num(v, "w", 1, 1000);
+        k.num(v, "h", 1, 1000);
         c.merge(k);
       });
     }

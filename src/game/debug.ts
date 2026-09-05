@@ -19,6 +19,7 @@ import {
   TILE,
   blockedAtBox,
   idx,
+  inZone,
   isTillableTile,
   playerOverlapsTile,
   playerTile,
@@ -160,10 +161,13 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
 
     case "plantAround": {
       const cropId = seedToPlant(d, content);
-      around(d, AROUND, (i) => {
+      around(d, AROUND, (i, x, y) => {
         const cur = d.s.tiles[i];
         if (!cur) return;
         if (cur.prop !== null || cur.b !== null) return;
+        // Bảng gỡ lỗi cũng theo LUẬT khu ruộng: cày ra một luống mà chính người
+        // chơi không cày lại được là dựng ra một trạng thái không có thật.
+        if (!inZone(d.s, content, "farm", x, y)) return;
         if (!cur.tilled && !isTillableTile(cur, content)) return;
         const m = dTile(d, i);
         if (!m) return;
@@ -270,10 +274,11 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
 
     case "tillMap": {
       let n2 = 0;
-      everyTile(d, (i) => {
+      everyTile(d, (i, x, y) => {
         const cur = d.s.tiles[i];
         if (!cur || cur.tilled) return;
         if (cur.prop !== null || cur.b !== null || cur.crop !== null) return;
+        if (!inZone(d.s, content, "farm", x, y)) return;
         if (!isTillableTile(cur, content)) return;
         const m = dTile(d, i);
         if (!m) return;

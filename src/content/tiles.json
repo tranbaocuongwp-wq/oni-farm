@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feeds` liệt kê MỌI thứ đổ được vào máng khu này — loài nào ăn một trong số đó thì dùng CHUNG cái máng, nên bò/dê/cừu chia nhau một máng. Khu DƯỚI NƯỚC (`swim`) cũng có `feeds` nhưng KHÔNG có máng: đứng bờ ao bấm CHO CÁ ĂN, chứ không đặt được cái máng giữa hồ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.",
+  "$comment": "LÀN NHANH — chú giải bản đồ ASCII. Legend chỉ nói ô đó là NỀN gì và có VẬT THỂ gì; tính đặc/tương tác của vật thể nằm trong props.json, của nền nằm ở mục grounds.\n\nspawn.map chỉ ra bản đồ bắt đầu. Mỗi bản đồ là một lưới RIÊNG — phòng ngủ 14×8 không còn bị nhét vào cùng lưới với nông trại 40×30, nên không còn ô 'hư vô' nào phải nạp và vẽ.\n\nindoorMaps: bản đồ trong nhà — mưa không tưới, bão không quật, sương không phủ.\n\nasphalt (ký tự '='): đường nhựa. speedMul làm nhân vật đi nhanh hơn, VÀ làm A* tự vòng qua đường vì chi phí mỗi bước được chia cho con số này — không cần luật 'ưu tiên đường' riêng.\n\nparking: bãi đậu trước kho. Xe thu mua dừng ở đây, hết chỗ thì xe sau đứng chờ ngoài đường. Ô cố định để người chơi nhìn mặt đường là biết xe sẽ đậu đâu.\n\npens: các KHU CHUỒNG dựng sẵn. Mỗi khu là hình chữ nhật RUỘT (phần đi được bên trong hàng rào, rào nằm ngoài viền này và đã vẽ thẳng trong farm.ascii). `feeds` liệt kê MỌI thứ đổ được vào máng khu này — loài nào ăn một trong số đó thì dùng CHUNG cái máng, nên bò/dê/cừu chia nhau một máng. Khu DƯỚI NƯỚC (`swim`) cũng có `feeds` nhưng KHÔNG có máng: đứng bờ ao bấm CHO CÁ ĂN, chứ không đặt được cái máng giữa hồ. Con vật thuộc khu nào là do `pen` trong actors.json nói, không phải suy từ toạ độ.\n\nzones: các VÙNG có luật riêng, khác `pens` ở chỗ vùng nói về ĐẤT chứ không về con vật.\n  · kind 'farm'   — CHỈ trong đây mới cuốc được. Ngoài vùng thì cái cuốc không ăn, nên người chơi không thể vô tình băm nát địa hình cả bản đồ thành luống.\n  · kind 'forest' — mỗi đêm có xác suất mọc thêm cây con lên ô cỏ trống. Rừng chặt xong mà không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ 'rừng' chỉ là trang trí.\nNhiều vùng cùng `kind` thì luật áp cho HỢP của chúng — vùng không nhất thiết phải là một hình chữ nhật.",
   "grounds": {
     "water": {
       "solid": true,
@@ -120,6 +120,10 @@
     "M": {
       "ground": "grass",
       "prop": "trough"
+    },
+    "P": {
+      "ground": "water",
+      "prop": "pier"
     }
   },
   "spawn": {
@@ -213,6 +217,28 @@
         "item:fishfeed",
         "item:fodder"
       ]
+    }
+  ],
+  "zones": [
+    {
+      "id": "field",
+      "name": "Khu ruộng",
+      "kind": "farm",
+      "map": "farm",
+      "x": 2,
+      "y": 7,
+      "w": 21,
+      "h": 12
+    },
+    {
+      "id": "woods",
+      "name": "Rừng",
+      "kind": "forest",
+      "map": "farm",
+      "x": 2,
+      "y": 20,
+      "w": 23,
+      "h": 9
     }
   ]
 }

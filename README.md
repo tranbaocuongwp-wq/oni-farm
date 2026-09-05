@@ -340,6 +340,34 @@ bờ mới là ô cấm. Nên mỗi lần nạp save, con cá bị "cứu" từ 
 rồi chính `checkInvariants` tố cáo cái state mà hàm đó vừa dựng. Giờ cả phép
 kiểm lẫn phép nhích đều hỏi theo đúng loài (`blockedForActor`/`nudgeForActor`).
 
+### Chia vùng đất: ruộng, rừng, và cái hồ (core 1.9)
+
+`tiles.json:zones[]` khai những VÙNG có luật riêng — khác `pens` ở chỗ nó nói về
+ĐẤT, không về con vật:
+
+| kind | Luật | Vì sao |
+|---|---|---|
+| `farm` | CHỈ trong đây mới cuốc được | ngoài vùng cái cuốc không ăn, nên không ai vô tình băm cả bản đồ thành luống — mà luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại, tức là gần như không hoàn tác được |
+| `forest` | mỗi đêm ô cỏ trống có `balance.forestRegrowChance` mọc lên cây con | rừng chặt xong không mọc lại thì nó là một mỏ gỗ dùng một lần, và chữ "rừng" chỉ là trang trí |
+
+Vắng `zones` = không giới hạn, đúng hành vi trước core 1.9, nên pack cũ không
+đổi gì. `validatePack` chặn vùng tràn ra ngoài bản đồ, vùng trỏ vào bản đồ
+không có, và **khu ruộng không có lấy một ô cuốc được** — cái cuối là thứ biến
+cây cuốc thành đồ trang trí ngay từ phút đầu mà nhìn content không thấy.
+
+**CẦU GỖ** (`PropDef.bridge`) là vật thể BẮC QUA một ô không đi được. Ô có nó
+thì người và vật nuôi qua được bất kể NỀN bên dưới, còn loài BƠI vẫn bơi được
+ngay dưới chân cầu — cây cầu nằm TRÊN mặt nước chứ không thay thế mặt nước. Đổi
+nền thành gỗ thì rẻ hơn nhiều, nhưng con cá không bơi qua được nữa và cái ao
+thủng một đường ngay giữa.
+
+**Cái hồ phải TRŨNG XUỐNG.** Trong tranh nhìn từ trên, chiều sâu đọc ra từ một
+BẬC, và một bậc cần hai nửa: `bank` (bóng bờ đổ xuống mặt nước, vẽ trên ô NƯỚC)
+và `bankRim` (gờ đất ở mép ô ĐẤT giáp nước). Chỉ có nửa dưới nước thì mặt cỏ
+vẫn chạy phẳng lì tới sát mép và cái hồ trông như dán lên đồng cỏ — tôi đã làm
+đúng lỗi đó một lần, và phải tô cái gờ thành màu đỏ chói mới nhận ra nó vẫn
+đang được vẽ, chỉ là nhạt tới mức mắt gộp luôn vào vệt bọt nước.
+
 ### Khu chuồng dựng sẵn (core 1.8)
 
 Trước 1.8, "chuồng" chỉ là chữ `housing: "pen"` trong `AnimalDef` — không có gì trong game ứng

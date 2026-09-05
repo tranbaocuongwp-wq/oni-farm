@@ -19,6 +19,7 @@ import type {
   InteractKind,
   PenDef,
   PropDef,
+  ZoneKind,
   StoredMap,
   Tile,
 } from "./types.ts";
@@ -300,17 +301,55 @@ export function isSolidTile(t: Tile, content: Content): boolean {
     // Vật thể lạ (content mới thêm, core chưa biết) → coi như đặc cho an toàn.
     if (!def) return true;
     if (def.solid) return true;
+    // CẦU: đi qua được bất kể nền bên dưới. Phải trả lời TRƯỚC câu hỏi về nền,
+    // nếu không thì mặt nước (nền đặc) vẫn chặn, và cây cầu chỉ là hình vẽ.
+    if (def.bridge) return false;
   }
   return groundDef(content, t.g)?.solid === true;
 }
 
-/** Có cày được không (chưa xét năng lượng / tầm với). */
+/* --------------------------------------------------------------- vùng đất */
+
+/** Ô (x,y) có nằm trong một vùng `kind` nào không. Không khai vùng nào thuộc
+ *  loại đó = không giới hạn, đúng hành vi trước khi có `zones`. */
+export function inZone(
+  state: GameState,
+  content: Content,
+  kind: ZoneKind,
+  x: number,
+  y: number,
+): boolean {
+  const list = (content.tiles.zones ?? []).filter((z) => z.kind === kind && z.map === state.mapId);
+  if (!list.length) return true;
+  return list.some((z) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+}
+
+/** Vùng `kind` đầu tiên chứa ô này, để UI gọi đúng tên nó. */
+export function zoneAt(state: GameState, content: Content, x: number, y: number) {
+  return (
+    (content.tiles.zones ?? []).find(
+      (z) => z.map === state.mapId && x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h,
+    ) ?? null
+  );
+}
+
+/**
+ * Có cày được không (chưa xét năng lượng / tầm với).
+ *
+ * Hai điều kiện tách bạch: ĐẤT có cày được không (`isTillableTile`) và Ô NÀY có
+ * nằm trong khu ruộng không. Trước đây chỉ có vế đầu, nên cái cuốc ăn khắp bản
+ * đồ — vài phút là nông trại thành một tấm chăn vá luống, và không hoàn tác
+ * được: luống bỏ hoang phải mất `tilledIdleDays` đêm mới mọc cỏ lại.
+ */
 export function isTillable(state: GameState, content: Content, x: number, y: number): boolean {
   const t = tileAt(state, x, y);
   if (!t) return false;
+  if (!inZone(state, content, "farm", x, y)) return false;
   return isTillableTile(t, content);
 }
 
+/** Riêng phần thuộc về Ô ĐẤT. Không xét vùng — nơi gọi phải tự hỏi `isTillable`
+ *  nếu muốn cả hai vế. */
 export function isTillableTile(t: Tile, _content: Content): boolean {
   return t.g === "grass" && t.prop === null && t.b === null && !t.tilled && t.crop === null;
 }
@@ -484,7 +523,10 @@ export function blockedAt(state: GameState, content: Content, cx: number, cy: nu
 export function tileOkFor(t: Tile | null, content: Content, swims: boolean): boolean {
   if (!t) return false;
   if (!swims) return !isSolidTile(t, content);
-  if (t.prop || t.b) return false;
+  // Loài bơi: CẦU không chắn nó — cây cầu bắc TRÊN mặt nước, con cá bơi ngay
+  // dưới chân người đang đứng câu. Mọi vật thể khác thì vẫn chắn như cũ.
+  if (t.prop && !content.props[t.prop]?.bridge) return false;
+  if (t.b) return false;
   return t.g === "water";
 }
 

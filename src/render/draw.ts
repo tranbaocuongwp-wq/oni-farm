@@ -321,6 +321,10 @@ export function createRenderer(
             ["w", at(s, x - 1, y)],
             ["e", at(s, x + 1, y)],
           ];
+          // BÓNG bờ trước, BỌT sau: bọt nằm ngay mép nước nên phải ở trên cùng,
+          // còn cái bóng thì chìm xuống dưới nó.
+          for (const [sd, nb] of sides)
+            if (nb && nb.g !== "water") g.drawImage(atlas.bank[sd], px, py);
           for (const [sd, nb] of sides)
             if (nb && nb.g !== "water") g.drawImage(atlas.shore[sd][shoreFrame]!, px, py);
           continue;
@@ -334,6 +338,18 @@ export function createRenderer(
                 ? atlas.asphalt
                 : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
+
+        /* GỜ ĐẤT ở mép giáp nước. Vẽ ngay sau nền và TRƯỚC mọi thứ đặt lên ô,
+           để luống cày / sàn nhà kính vẫn đè lên được như thường. Bốn phép tra
+           mảng cho mỗi ô đất nhìn thấy — rẻ hơn hẳn một lần `blockedAt`, và
+           đây là thứ duy nhất làm cái hồ đọc ra là TRŨNG chứ không phải một
+           vũng màu dán lên đồng cỏ. */
+        if (t.g !== "wood" && t.g !== "asphalt") {
+          if (at(s, x, y - 1)?.g === "water") g.drawImage(atlas.bankRim.n, px, py);
+          if (at(s, x, y + 1)?.g === "water") g.drawImage(atlas.bankRim.s, px, py);
+          if (at(s, x - 1, y)?.g === "water") g.drawImage(atlas.bankRim.w, px, py);
+          if (at(s, x + 1, y)?.g === "water") g.drawImage(atlas.bankRim.e, px, py);
+        }
 
         if (t.b) {
           const def = content.buildings[t.b];

@@ -274,6 +274,34 @@ ${nuoi.map(animalCard).join("\n")}
     </section>
     <section>
       <div class="wrap">
+        <h2>Nông trại chia lô</h2>
+        <p class="lead">Bản đồ chia sẵn thành từng vùng, mỗi vùng một việc — bạn không phải quy hoạch gì cả.</p>
+        <div class="ents">
+${(content.tiles.zones ?? [])
+  .map((z) => `        <article class="ent sm">
+          <div class="ent-main">
+            <h3>${esc(z.name)}</h3>
+            <p class="ent-sub">${z.w}×${z.h} ô</p>
+            <p>${
+              z.kind === "farm"
+                ? "Chỗ DUY NHẤT cuốc được. Ra ngoài vùng này cuốc không ăn, nên bạn không thể lỡ tay băm nát địa hình thành luống — mà luống bỏ hoang thì phải mấy đêm mới mọc cỏ lại."
+                : `Chỗ đốn gỗ. Mỗi đêm ô cỏ trống trong rừng có ${Math.round((content.balance.forestRegrowChance ?? 0) * 100)}% mọc lên cây con, cây con lớn dần thành cây gỗ — nên chặt trụi một vạt thì vài đêm sau nó về.`
+            }</p>
+          </div>
+        </article>`)
+  .join("\n")}
+        <article class="ent sm">
+          <div class="ent-main">
+            <h3>Hồ nước</h3>
+            <p class="ent-sub">có cầu gỗ ra giữa hồ</p>
+            <p>Hồ trũng hẳn xuống so với đồng cỏ, vành đá quanh bờ. Cầu gỗ bắc TRÊN mặt nước — bạn đi ra tới giữa hồ, còn cá vẫn bơi ngay dưới chân. Đứng bờ hoặc đứng cầu, cầm cám cá rồi bấm CHO CÁ ĂN.</p>
+          </div>
+        </article>
+        </div>
+      </div>
+    </section>
+    <section>
+      <div class="wrap">
         <h2>Khu chuồng</h2>
         <p class="lead">Nông trại chia lô sẵn: rào đã đóng, máng đã đặt, cổng để mở. Bạn không phải xây gì cả — mua con vật là nó tự đi về khu của mình. Loài nào ăn cùng một thứ thì ở chung khu và chung một cái máng.</p>
         <div class="ents">
@@ -369,8 +397,8 @@ const HANH_DONG = [
     nut: "CÀY",
     ten: "Cày đất",
     can: "tool:hoe",
-    y: "Biến một ô cỏ thành luống đất gieo được. Chỉ cày được trên cỏ hoặc lối mòn — không cày được trên đá, nước hay chỗ đã có cây.",
-    meo: "Đất đã cày mà bỏ không vài ngày sẽ tự mọc cỏ lại. Cày tới đâu gieo tới đó.",
+    y: "Biến một ô cỏ thành luống đất gieo được. Chỉ ăn TRONG KHU RUỘNG — nông trại chia lô sẵn, ra ngoài vùng đó thì cuốc không ăn.",
+    meo: "Nhờ thế bạn không thể vô tình băm cả bản đồ thành luống: rừng vẫn là rừng, sân vẫn là sân. Đất đã cày mà bỏ không vài ngày sẽ tự mọc cỏ lại.",
   },
   {
     nut: "GIEO",

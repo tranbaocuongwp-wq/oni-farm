@@ -15,6 +15,7 @@ import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal } from "../src/game/world.ts";
 import { troughStock, troughMax, penGoal, eatFromTrough, canFeedPond, pondAt } from "../src/game/pen.ts";
 import { grazeableAt } from "../src/game/graze.ts";
+import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
 import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { hintAt, interactHint, facingTile, nearestTarget, autoJob, AUTO_ORDER } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
@@ -1250,7 +1251,35 @@ test("23. hết nước không tưới được; múc đầy ở giếng và ở
   setState(store, (s) => {
     s.water = 3;
   });
-  walkTo(store, 3, 7); // ô cỏ ngay dưới mặt nước
+  /* TÌM ô bờ, không chép cứng toạ độ: cái hồ là thứ người thiết kế màn còn
+     nắn lại, và một con số chép cứng ở đây sẽ đỏ vì lý do chẳng liên quan gì
+     tới chuyện múc nước. */
+  const bo = (() => {
+    const st = store.getState();
+    const px = st.player.x / TILE;
+    const py = st.player.y / TILE;
+    let best = null;
+    for (let y = 1; y < st.h - 1; y++)
+      for (let x = 1; x < st.w - 1; x++) {
+        const t = tile(store, x, y);
+        if (!t || t.g === "water" || isSolid(st, content, x, y)) continue;
+        const canNuoc = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(
+          ([dx, dy]) => tile(store, x + dx, y + dy)?.g === "water",
+        );
+        if (!canNuoc) continue;
+        const d = Math.hypot(x - px, y - py);
+        if (!best || d < best.d) best = { x, y, d };
+      }
+    if (!best) throw new Error("bản đồ không có ô bờ nào cạnh mặt nước");
+    return best;
+  })();
+  /* Đặt thẳng vị trí chứ không `walkTo`: cái giếng và vành đá quanh hồ chắn
+     mất đường đi thẳng theo trục mà `walkTo` biết đi, mà thứ đang kiểm ở đây
+     là LUẬT MÚC NƯỚC chứ không phải khả năng tìm đường. */
+  setState(store, (s) => {
+    s.player.x = bo.x * TILE + TILE / 2;
+    s.player.y = bo.y * TILE + TILE / 2;
+  });
   store.dispatch({ t: "REFILL" });
   eq(store.getState().water, content.tools.can.capacity, "múc ở bờ ao cũng đầy bình");
 
@@ -3886,8 +3915,11 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
   setState(store, (s) => {
     s.tiles[idx(s.w, m.x, m.y)].trough = 0;
     s.entities[0].animal.fed = 0;
-    s.entities[0].x = 6 * TILE + 8;
-    s.entities[0].y = 20 * TILE + 8;
+    // ĐỨNG XA khu, ở một ô trống có thật — không chép cứng một toạ độ mà đợt
+    // vẽ lại bản đồ sau có thể biến thành gốc cây.
+    const xa = findOpenBlock(store.getState(), 1, 1);
+    s.entities[0].x = xa.x * TILE + 8;
+    s.entities[0].y = xa.y * TILE + 8;
   });
   eq(
     penGoal(store.getState(), content, store.getState().entities[0], true),
@@ -4138,6 +4170,146 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
     !grazeableAt(st3.getState(), content, content.animals.cow, o.x, o.y),
     "…còn con bò thì không: nó cần BỤI cỏ, không mổ sâu được",
   );
+});
+
+test("70. chia vùng: chỉ cuốc được trong khu ruộng, rừng mọc lại, cầu đi ra giữa hồ", () => {
+  const content = loadContent();
+  const store = mkStore(1701);
+
+  /* ---- (a) VÙNG phải có thật và không chồng lấn kiểu vô lý ------------ */
+  const zones = content.tiles.zones ?? [];
+  const ruong = zones.filter((z) => z.kind === "farm");
+  const rung = zones.filter((z) => z.kind === "forest");
+  ok(ruong.length >= 1, "content khai ít nhất một khu ruộng");
+  ok(rung.length >= 1, "…và ít nhất một khu rừng");
+  for (const z of zones) {
+    ok(z.x >= 0 && z.y >= 0, `vùng '${z.id}' không có toạ độ âm`);
+    ok(z.x + z.w <= store.getState().w && z.y + z.h <= store.getState().h, `vùng '${z.id}' nằm trong bản đồ`);
+  }
+  // ruộng và rừng KHÔNG được chồng lên nhau: một ô vừa cày được vừa mọc cây
+  // đêm nào cũng nuốt mất luống là một cái bẫy không giải thích được.
+  for (const a of ruong)
+    for (const b of rung)
+      ok(
+        a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y,
+        `khu ruộng '${a.id}' và rừng '${b.id}' không được chồng lên nhau`,
+      );
+
+  /* ---- (b) CUỐC chỉ ăn trong khu ruộng -------------------------------- */
+  const s0 = store.getState();
+  const trongRuong = { x: ruong[0].x + 3, y: ruong[0].y + 3 };
+  ok(inZone(s0, content, "farm", trongRuong.x, trongRuong.y), "ô thử nằm trong khu ruộng");
+  // tìm một ô cỏ trống NGOÀI khu ruộng để đối chứng
+  let ngoai = null;
+  for (let y = 1; y < s0.h - 1 && !ngoai; y++)
+    for (let x = 1; x < s0.w - 1; x++) {
+      const t = tile(store, x, y);
+      if (!t || t.g !== "grass" || t.prop || t.b || t.tilled) continue;
+      if (inZone(s0, content, "farm", x, y)) continue;
+      // cần một ô ĐỨNG ĐƯỢC ngay bên dưới để đặt người chơi vào cho đúng tầm với
+      if (isSolid(s0, content, x, y + 1)) continue;
+      ngoai = { x, y };
+      break;
+    }
+  ok(!!ngoai, "bản đồ có ô cỏ trống nằm ngoài khu ruộng");
+
+  setState(store, (s) => {
+    for (const o of [trongRuong, ngoai]) {
+      const t = s.tiles[idx(s.w, o.x, o.y)];
+      t.g = "grass"; t.prop = null; t.b = null; t.crop = null; t.tilled = false;
+    }
+    s.energy = 100;
+  });
+  eq(isTillable(store.getState(), content, trongRuong.x, trongRuong.y), true, "trong ruộng: cuốc được");
+  eq(isTillable(store.getState(), content, ngoai.x, ngoai.y), false, "ngoài ruộng: KHÔNG cuốc được");
+
+  // …và nút DÙNG nói đúng như thế, không mời bấm rồi im lặng
+  selectItem(store, "tool:hoe");
+  setState(store, (s) => {
+    s.player.x = ngoai.x * TILE + TILE / 2;
+    s.player.y = (ngoai.y + 1) * TILE + TILE / 2;
+  });
+  eq(canUseAt(store.getState(), content, ngoai.x, ngoai.y), null, "ngoài ruộng thì nút không mời CÀY");
+  eq(
+    hintAt(store.getState(), content, ngoai.x, ngoai.y).why,
+    "Ngoài khu ruộng",
+    "…và nói ĐÚNG lý do, không phải câu chung chung",
+  );
+  const nl0 = store.getState().energy;
+  use(store, ngoai.x, ngoai.y);
+  eq(tile(store, ngoai.x, ngoai.y).tilled, false, "bấm thẳng vào cũng không cày ra luống");
+  eq(store.getState().energy, nl0, "…và không mất sức cho một nhát cuốc hụt");
+
+  // trong ruộng thì cày được thật
+  setState(store, (s) => {
+    s.player.x = trongRuong.x * TILE + TILE / 2;
+    s.player.y = (trongRuong.y + 1) * TILE + TILE / 2;
+  });
+  eq(canUseAt(store.getState(), content, trongRuong.x, trongRuong.y), "till", "trong ruộng: nút CÀY");
+  use(store, trongRuong.x, trongRuong.y);
+  eq(tile(store, trongRuong.x, trongRuong.y).tilled, true, "…và cày ra luống thật");
+
+  /* ---- (c) RỪNG mọc lại cây con ---------------------------------------- */
+  ok((content.balance.forestRegrowChance ?? 0) > 0, "content bật mọc lại rừng");
+  const st2 = mkStore(1702);
+  const r0 = rung[0];
+  const demCay = (st) => {
+    const s = st.getState();
+    let n = 0;
+    for (let y = r0.y; y < r0.y + r0.h; y++)
+      for (let x = r0.x; x < r0.x + r0.w; x++)
+        if (s.tiles[idx(s.w, x, y)]?.prop) n++;
+    return n;
+  };
+  // chặt trụi cả khu rừng
+  setState(st2, (s) => {
+    for (let y = r0.y; y < r0.y + r0.h; y++)
+      for (let x = r0.x; x < r0.x + r0.w; x++) {
+        const t = s.tiles[idx(s.w, x, y)];
+        if (t.g === "grass") { t.prop = null; t.hp = 0; }
+      }
+  });
+  eq(demCay(st2), 0, "đã chặt trụi khu rừng");
+  for (let i = 0; i < 12; i++) sleep(st2);
+  ok(demCay(st2) > 0, `rừng mọc lại sau vài đêm: ${demCay(st2)} ô có vật thể`);
+
+  // …còn ngoài rừng thì KHÔNG tự mọc cây con lên
+  const cayCon = content.propOrder.find((id) => content.props[id]?.tool === "CHOP" && !content.props[id]?.tall);
+  const s2 = st2.getState();
+  let laC = 0;
+  for (let y = 0; y < s2.h; y++)
+    for (let x = 0; x < s2.w; x++) {
+      if (inZone(s2, content, "forest", x, y)) continue;
+      if (!inZone(s2, content, "farm", x, y)) continue;   // chỉ soi khu ruộng
+      if (s2.tiles[idx(s2.w, x, y)]?.prop === cayCon) laC++;
+    }
+  eq(laC, 0, "khu ruộng không tự mọc cây con — không thì ruộng thành rừng sau một tuần");
+
+  /* ---- (d) CẦU: người đi được TRÊN, cá bơi được DƯỚI ------------------- */
+  const s3 = store.getState();
+  let cau = null;
+  for (let y = 0; y < s3.h && !cau; y++)
+    for (let x = 0; x < s3.w; x++)
+      if (s3.tiles[idx(s3.w, x, y)]?.prop === "pier") { cau = { x, y }; break; }
+  ok(!!cau, "bản đồ có cây cầu");
+  eq(tile(store, cau.x, cau.y).g, "water", "cầu bắc TRÊN mặt nước, không thay thế mặt nước");
+  eq(
+    isSolid(s3, content, cau.x, cau.y),
+    false,
+    "người đi qua được cầu — nếu không thì cây cầu chỉ là hình vẽ",
+  );
+  eq(
+    tileOkFor(tile(store, cau.x, cau.y), content, true),
+    true,
+    "con cá vẫn bơi được ngay dưới chân cầu",
+  );
+  // đứng giữa cầu thì với tới được ô nước quanh đó
+  const nuocQuanh = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dx, dy]) => ({ x: cau.x + dx, y: cau.y + dy }))
+    .filter((o) => tile(store, o.x, o.y)?.g === "water");
+  ok(nuocQuanh.length > 0, "cầu nằm giữa mặt nước, không phải nằm sát bờ");
+
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi dùng vùng đất và cầu");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -37,5 +37,6 @@
   "diseaseNeighbourMul": 3,
   "sickYieldMul": 0.5,
   "noonDryMinutes": 780,
-  "troughMax": 12
+  "troughMax": 12,
+  "forestRegrowChance": 0.06
 }

@@ -341,6 +341,35 @@ export function validatePack(raw: RawPack): string[] {
           : `tiles.pens '${pen.id}': ${solid} ô đặc nằm trong ruột khu — dọn hoặc thu nhỏ khu lại`,
       );
   }
+  /* ---- VÙNG ĐẤT ------------------------------------------------------
+     Một vùng trỏ sai chỗ là thứ nhìn content không thấy mà hỏng hẳn lối chơi:
+     khu ruộng nằm ngoài bản đồ thì KHÔNG Ô NÀO cuốc được, và người chơi không
+     có cách nào biết vì sao cái cuốc của mình vô dụng. */
+  for (const z of tilesDef.zones ?? []) {
+    const zm = maps?.[z.map];
+    if (!zm) {
+      errors.push(`tiles.zones '${z.id}': bản đồ '${z.map}' không tồn tại`);
+      continue;
+    }
+    if (z.x < 0 || z.y < 0 || z.x + z.w > zm.w || z.y + z.h > zm.h)
+      errors.push(`tiles.zones '${z.id}': vùng tràn ra ngoài bản đồ '${z.map}'`);
+  }
+  /* Khu ruộng mà không có lấy một ô cuốc được thì cái cuốc thành đồ trang trí
+     ngay từ phút đầu — chặn ở đây, không để người chơi tự phát hiện. */
+  const vungRuong = (tilesDef.zones ?? []).filter((z) => z.kind === "farm");
+  for (const z of vungRuong) {
+    const zm = maps?.[z.map];
+    if (!zm) continue;
+    let cayDuoc = 0;
+    for (let y = z.y; y < z.y + z.h && y < zm.h; y++)
+      for (let x = z.x; x < z.x + z.w && x < zm.w; x++) {
+        const e = tilesDef.legend[zm.rows[y]?.[x] ?? "."];
+        if ((e?.ground ?? "grass") === "grass" && !e?.prop && !e?.build) cayDuoc++;
+      }
+    if (cayDuoc === 0)
+      errors.push(`tiles.zones '${z.id}': khu ruộng không có ô nào cuốc được`);
+  }
+
   if (raw.actors !== undefined) {
     const ar2 = raw.actors as { animals?: AnimalDef[] } | null;
     for (const a of ar2?.animals ?? [])
@@ -398,6 +427,8 @@ const BALANCE_DEFAULTS = {
   tilledIdleDays: 3,
   // core 1.8 — máng ăn trong khu chuồng dựng sẵn
   troughMax: 12,
+  // core 1.9 — rừng mọc lại cây con
+  forestRegrowChance: 0.06,
 } as const;
 
 /** Kiểm tra rồi chuẩn hoá thành `Content`. Ném ContentError nếu pack hỏng. */

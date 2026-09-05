@@ -17,7 +17,7 @@ import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
-import { inReach, interactAt, isRipe, tileAt, propDef } from "./world.ts";
+import { inReach, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
@@ -141,6 +141,7 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
     if (tool.action === "TILL") {
       if (t.crop) return growing ? "Cây chưa chín" : "Đã có cây";
       if (t.tilled) return "Đã cày rồi";
+      if (!inZone(state, content, "farm", x, y)) return "Ngoài khu ruộng";
       return t.g === "water" ? "Không cày nước được" : "Không cày được ở đây";
     }
     if (tool.action === "WATER") {

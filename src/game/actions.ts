@@ -32,6 +32,8 @@ import {
   hasNearbyInteract,
   inReach,
   isRipe,
+  inZone,
+  isTillable,
   isTillableTile,
   playerOverlapsTile,
   propDef,
@@ -205,7 +207,14 @@ function spend(d: Draft, cost: number): void {
   s.energy = Math.max(0, s.energy - cost);
 }
 
-function till(d: Draft, content: Content, i: number, cur: Tile): void {
+function till(d: Draft, content: Content, i: number, cur: Tile, x: number, y: number): void {
+  /* NGOÀI khu ruộng thì nói RÕ là ngoài khu, đừng dùng chung câu "không cày
+     được ở đây": hai lý do khác nhau dẫn tới hai việc khác nhau — một cái là
+     dọn ô, cái kia là đi chỗ khác. */
+  if (!inZone(d.s, content, "farm", x, y)) {
+    toastText(d, "Ngoài khu ruộng — cuốc không ăn ở đây.", "bad");
+    return;
+  }
   if (!isTillableTile(cur, content)) {
     toastKey(d, content, "cannotTill", "bad");
     return;
@@ -559,7 +568,7 @@ export function canUseAt(
   if (it.kind === "tool") {
     const tool = content.tools[it.ref];
     if (!tool) return null;
-    if (tool.action === "TILL") return isTillableTile(cur, content) ? "till" : null;
+    if (tool.action === "TILL") return isTillable(state, content, x, y) ? "till" : null;
     if (tool.action === "WATER") return cur.tilled && !cur.wet && state.water > 0 ? "water" : null;
     return null;
   }
@@ -700,7 +709,7 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
     case "tool": {
       const tool = content.tools[it.ref];
       if (!tool) return;
-      if (tool.action === "TILL") till(d, content, i, cur);
+      if (tool.action === "TILL") till(d, content, i, cur, x, y);
       else if (tool.action === "WATER") water(d, content, i, cur);
       return;
     }

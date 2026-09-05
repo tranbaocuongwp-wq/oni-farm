@@ -187,6 +187,19 @@ reject("khu đổ được một thứ không tồn tại", (p) => (p.tiles.pens
 reject("thức ăn bày bán nhưng không mốc nào mở khoá", (p) => {
   p.items.materials.push({ id: "camMaQuai", name: "Cám ma quái", sellPrice: 3, buyPrice: 9 });
 });
+reject("vùng đất tràn ra ngoài bản đồ", (p) => (p.tiles.zones[0].x = 9000));
+reject("vùng đất trỏ vào bản đồ không có", (p) => (p.tiles.zones[0].map = "hamMo"));
+reject("kind vùng lạ", (p) => (p.tiles.zones[0].kind = "bai_bien"));
+reject("khu ruộng không có ô nào cuốc được", (p) => {
+  const z = p.tiles.zones.find((q) => q.kind === "farm");
+  for (let y = z.y; y < z.y + z.h; y++) {
+    const r = p.maps.farm.rows[y].split("");
+    for (let x = z.x; x < z.x + z.w; x++) if (r[x] !== ":") r[x] = "T";
+    p.maps.farm.rows[y] = r.join("");
+  }
+});
+reject("legend bắc cầu bằng một vật thể không có thật", (p) => (p.tiles.legend.P.prop = "cauMaQuai"));
+reject("balance.forestRegrowChance > 1", (p) => (p.balance.forestRegrowChance = 3));
 reject("tên công thức tự chép số lượng vào (\"Đường nhựa ×4\" → in ra ×4 ×4)", (p) => {
   const r = p.recipes.recipes.find((q) => q.out.n > 1);
   r.name = `${r.name} ×${r.out.n}`;
@@ -243,6 +256,9 @@ accept("đổi bản đồ sang một map khác cùng legend", (p) => {
   // luôn cả khu lẫn ô `pen` của từng loài, đúng việc một bản OTA thật phải làm.
   delete p.tiles.pens;
   for (const a of p.actors.animals) delete a.pen;
+  // …và VÙNG ĐẤT: khu ruộng cũ nằm ngoài cái bản đồ 5×3 này. Bỏ hẳn `zones`
+  // nghĩa là "không giới hạn" — cuốc lại ăn khắp nơi, đúng hành vi pack cũ.
+  delete p.tiles.zones;
 });
 accept("thêm một kiểu thời tiết mới", (p) => {
   p.weather.weathers.push({ id: "tuyet", name: "Tuyết", weight: 3, wet: false, growMul: 0.3, wind: 0.2 });
@@ -262,6 +278,10 @@ accept("pack CŨ khai feed là một chuỗi (trước khi mỗi loài có nhi�
   for (const pen of p.tiles.pens) delete pen.feeds;
   for (let y = 0; y < p.maps.farm.rows.length; y++)
     p.maps.farm.rows[y] = p.maps.farm.rows[y].replaceAll("M", ".");
+});
+accept("tắt hẳn mọc lại rừng (forestRegrowChance = 0)", (p) => (p.balance.forestRegrowChance = 0));
+accept("pack CŨ không khai zones — cuốc lại ăn khắp nơi như trước", (p) => {
+  delete p.tiles.zones;
 });
 accept("THÊM hẳn một bản đồ mới", (p) => {
   p.maps.hangDong = { w: 6, h: 4, rows: ["oooooo", "o::::o", "o::::o", "oooooo"] };
