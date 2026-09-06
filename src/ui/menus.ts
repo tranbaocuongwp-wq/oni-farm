@@ -105,6 +105,8 @@ export interface MenuHandlers {
   replayTutorial(): void;
   /** Thiết bị đang dùng cảm ứng — để ẩn phần bàn phím trong Hướng dẫn. */
   isTouch(): boolean;
+  /** Chế độ điều khiển ĐANG hiển thị — bảng Hướng dẫn in đúng bảng phím. */
+  inputMode(): "touch" | "pad" | "kbm";
 }
 
 export interface Menus {
@@ -1650,6 +1652,15 @@ export function createMenus(
       toggle("Đảo trục Y cần ngắm", "Gạt cần phải lên thì con trỏ đi xuống. Chỉ đụng cần NGẮM, không đụng cần đi.",
         () => h.settings().padInvertY, (v) => h.setSetting("padInvertY", v));
     }
+    /* KHÔNG gate theo `isTouch()` như các mục trên: máy lai (laptop cảm ứng,
+       tablet có bàn phím, điện thoại cắm tay cầm) mới chính là nơi cần khoá
+       cứng, mà tự nhận thì đúng phần lớn thời gian chứ không phải luôn luôn. */
+    seg("Chế độ điều khiển", "Tự nhận theo thiết bị vừa dùng, hoặc khoá cứng một kiểu.", "inputMode", [
+      { v: "auto", label: "Tự nhận" },
+      { v: "touch", label: "Cảm ứng" },
+      { v: "pad", label: "Tay cầm" },
+      { v: "kbm", label: "Phím + chuột" },
+    ]);
     toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… và bấm một lần là làm hết việc của món đang cầm. Tắt thì chỉ làm đúng ô đang ngắm.",
       () => h.settings().contextButton, (v) => h.setSetting("contextButton", v));
     toggle("Âm thanh", "Tiếng 8-bit tổng hợp, không có file nhạc.",
@@ -1757,6 +1768,12 @@ export function createMenus(
 
   function openHelp() {
     current = openHelp;
+    /* Đang cầm TAY CẦM thì cả hai bảng dưới đây đều nói sai: một bảng bảo "chạm
+       vào ô", bảng kia bảo "bấm chuột". Đưa thẳng sang bảng sơ đồ nút. */
+    if (h.inputMode() === "pad") {
+      openPadHelp();
+      return;
+    }
     const touch = h.isTouch();
     const { body, foot } = shell("Hướng dẫn", "Vòng lặp nông trại trong một màn hình", "sheet");
     const keys = touch

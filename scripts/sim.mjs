@@ -37,6 +37,7 @@ import { createLoop, MAX_CONSECUTIVE_ERRORS } from "../src/core/loop.ts";
 import { adoptState } from "../src/game/adopt.ts";
 import { bestGoal } from "../src/game/progression.ts";
 import { runFor, areasFor, nextRunTarget } from "../src/game/run.ts";
+import { createInputMode, hienGi, AXIS_HOLD_MS } from "../src/core/inputmode.ts";
 import { interactAt } from "../src/game/world.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
@@ -7713,6 +7714,343 @@ test("122. rìu chỉ chặt trong RỪNG: cây ngoài sân gần hơn không ba
   ok(n >= 2, `chuyến rừng có việc thật (${n} cây)`);
   ok(tile(store, px + 1, py).prop === "tree", "cây ngoài sân vẫn còn nguyên");
   eq(store.getState().sel, store.getState().sel, "sel không đổi");
+});
+
+/* ------------------------------------------------ Đợt 11: ngủ dậy là làm việc */
+
+test("123. NGỦ DẬY LÀ ĂN: đồng hồ AI về sáng theo đồng hồ ngày, không kẹt cả ngày", () => {
+  const store = mkStore();
+  khoaNac(store);
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  let m = null;
+  outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+    for (let x = pen.x; x < pen.x + pen.w; x++)
+      if (tile(store, x, y).prop === "trough") { m = { x, y }; break outer; }
+  ok(m, "khu gia súc phải có máng");
+  const ids = [];
+  setState(store, (s) => {
+    setTile(s, m.x, m.y, { trough: 12, troughId: "item:hay" });
+    for (let i = 0; i < 3; i++) {
+      const id = ++s.entSeq;
+      ids.push(id);
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: (pen.x + 5 + i) * TILE + 8, y: (pen.y + 1) * TILE + 8,
+        dir: "down", anim: 0, seed: 31 + i,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 300, hungryDays: 0, prod: [0] },
+      });
+    }
+    s.player.x = 20 * TILE;
+    s.player.y = 5 * TILE;
+    s.minutes = 1500;
+  });
+  // Chạy tới sát giờ ngủ để mỗi con KỊP nghĩ một lần, ghi `planAt` của HÔM QUA.
+  for (let i = 0; i < 60 * 20; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  const truoc = store.getState().entities.filter((e) => ids.includes(e.id));
+  ok(truoc.every((e) => e.ai.planAt > 1000), `mọi con phải có planAt của hôm qua (${truoc.map((e) => e.ai.planAt.toFixed(0))})`);
+
+  store.dispatch({ t: "SLEEP" });
+  const st1 = store.getState();
+  eq(st1.minutes, BAL.dayStartMinutes, "ngủ dậy là sáng sớm");
+  ok(
+    st1.entities.every((e) => e.ai.planAt <= st1.minutes && e.ai.until === 0 && e.ai.path.length === 0),
+    "newDay phải xoá kế hoạch hôm qua của MỌI thực thể",
+  );
+
+  // Sáng ra cho đói hết, rồi đếm bao lâu thì cả ba ăn được.
+  setState(store, (s) => {
+    for (const e of s.entities) if (e.kind === "animal") e.animal.fed = 0;
+  });
+  const viTri0 = store.getState().entities.filter((e) => ids.includes(e.id)).map((e) => `${e.x},${e.y}`);
+  let an = 0;
+  let khi = -1;
+  for (let i = 1; i <= 60 * 60 && an < 3; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    an = store.getState().entities.filter((e) => ids.includes(e.id) && e.animal.fed > 0).length;
+    if (an === 3) khi = i;
+  }
+  eq(an, 3, "cả ba con phải ăn được trong vòng 60 giây thật sau khi ngủ dậy");
+  ok(khi < 60 * 30, `và phải nhanh, không phải chờ hết ngày (mất ${(khi / 60).toFixed(1)}s)`);
+  eq(troughStock(store.getState(), m.x, m.y), 9, "mỗi con ăn đúng một phần");
+  const viTri1 = store.getState().entities.filter((e) => ids.includes(e.id)).map((e) => `${e.x},${e.y}`);
+  ok(viTri1.some((v, i) => v !== viTri0[i]), "và chúng có DI CHUYỂN, không đứng chết một chỗ");
+
+  // NGƯỜI LÀM dính cùng một phép so — sáng ra họ cũng phải làm việc.
+  const st2 = mkStore();
+  khoaNac(st2);
+  unlockAll(st2);
+  st2.dispatch({ t: "HIRE", job: "crops" });
+  setState(st2, (s) => {
+    for (const z of content.tiles.zones.filter((z) => z.kind === "farm"))
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: true, wet: true, crop: { id: "lettuce", stage: 3, grow: 0, wilt: 0 } });
+    s.minutes = 1500;
+  });
+  for (let i = 0; i < 60 * 20; i++) st2.dispatch({ t: "TICK", dt: 1 / 60 });
+  const nguoi = () => st2.getState().entities.find((e) => e.kind === "worker");
+  /* Đếm bằng TAY NGƯỜI LÀM chứ không phải `stats.harvested`: bộ đếm thống kê
+     chỉ ghi nhát của người chơi, còn rau người làm hái đi thẳng vào tay họ rồi
+     vào kho. Khẳng định nhầm chỗ thì test đỏ trong khi máy chạy đúng. */
+  const om = () => (nguoi()?.worker.carry ?? []).reduce((n, v) => n + (v?.n ?? 0), 0);
+  ok(nguoi(), "phải thuê được người làm");
+  ok(nguoi().ai.planAt > 1000, `người làm cũng phải có planAt của hôm qua (${nguoi().ai.planAt})`);
+  st2.dispatch({ t: "SLEEP" });
+  eq(nguoi().ai.planAt, -999, "…và ngủ dậy thì nó cũng được xoá");
+  const om0 = om();
+  // Cửa sổ NGẮN: lỗi cũ giam họ tới khi hôm nay trôi qua mốc của hôm qua, tức
+  // gần trọn ngày — nên 20 giây thật là đủ để phân biệt đúng với sai.
+  for (let i = 0; i < 60 * 20; i++) st2.dispatch({ t: "TICK", dt: 1 / 60 });
+  ok(om() > om0, `người làm phải làm việc ngay sáng hôm sau (ôm ${om0} → ${om()})`);
+});
+
+test("124. ô ĐỨNG CẠNH MÁNG phải đứng được: công trình dưới máng không làm cả chuồng chết đói", () => {
+  const store = mkStore();
+  khoaNac(store);
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  let m = null;
+  outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+    for (let x = pen.x; x < pen.x + pen.w; x++)
+      if (tile(store, x, y).prop === "trough") { m = { x, y }; break outer; }
+  const KE = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+
+  const dung = (chan) => {
+    const st = mkStore();
+    khoaNac(st);
+    let id = 0;
+    setState(st, (s) => {
+      setTile(s, m.x, m.y, { trough: 12, troughId: "item:hay" });
+      chan(s);
+      id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: (pen.x + 7) * TILE + 8, y: (pen.y + 1) * TILE + 8,
+        dir: "down", anim: 0, seed: 9,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+      s.player.x = 20 * TILE;
+      s.player.y = 5 * TILE;
+    });
+    const v0 = (() => { const e = st.getState().entities.find((x) => x.id === id); return `${e.x},${e.y}`; })();
+    let an = false;
+    for (let i = 0; i < 60 * 60 && !an; i++) {
+      st.dispatch({ t: "TICK", dt: 1 / 60 });
+      an = st.getState().entities.find((x) => x.id === id).animal.fed > 0;
+    }
+    const e = st.getState().entities.find((x) => x.id === id);
+    return { an, diChuyen: `${e.x},${e.y}` !== v0 };
+  };
+
+  /* Hỏi THẲNG `penGoal` trước, và dựng cảnh sao cho MỖI luật bị phá là thấy
+     ngay. Chỉ nhìn "cuối cùng con bò có ăn không" thì không đủ: lưới lang thang
+     có thể cứu nó bằng may mắn, và test hoá ra xanh vì một lý do khác hẳn lý do
+     nó được viết ra. */
+  const dich = (bo, chan) => {
+    const st = mkStore();
+    khoaNac(st);
+    let id = 0;
+    setState(st, (s) => {
+      setTile(s, m.x, m.y, { trough: 12, troughId: "item:hay" });
+      chan(s);
+      id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: bo.x * TILE + 8, y: bo.y * TILE + 8,
+        dir: "down", anim: 0, seed: 9,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+    });
+    const s0 = st.getState();
+    return { s0, g: penGoal(s0, content, s0.entities.find((e) => e.id === id), true) };
+  };
+  const hop = content.animals.cow.box;
+
+  /* Ca A — Ô ĐỨNG ĐƯỢC. Con bò đứng THẲNG DƯỚI máng, nên ô kề gần nó nhất đúng
+     là ô (máng.x, máng.y+1). Xây vòi tưới lên chính ô ấy: phép thử cũ chỉ hỏi
+     `prop === null`, mà công trình nằm ở `t.b` chứ không phải `t.prop`, nên nó
+     nhận một ô đặc làm đích và cả chuồng chết đói cạnh máng đầy. */
+  {
+    const { s0, g } = dich({ x: m.x, y: m.y + 3 }, (s) => setTile(s, m.x, m.y + 1, { b: "sprinkler" }));
+    ok(g, "đói mà máng còn đồ thì phải có đích");
+    ok(!(g.x === m.x && g.y === m.y + 1), `đích không được là ô có vòi tưới (được (${g.x},${g.y}))`);
+    ok(
+      !blockedForActor(s0, content, (g.x + 0.5) * TILE, (g.y + 0.5) * TILE, hop.w, hop.h, false),
+      `đích (${g.x},${g.y}) phải ĐỨNG ĐƯỢC với hộp của con bò`,
+    );
+    eq(Math.max(Math.abs(g.x - m.x), Math.abs(g.y - m.y)), 1, "…và vẫn kề máng");
+  }
+
+  /* Ca B — GẦN CON VẬT NHẤT. Con bò đứng ngay trên một ô kề trống; vòng cũ trả
+     về ô ĐẦU TIÊN của một danh sách cố định (luôn là ô dưới máng), tức bắt nó
+     đi vòng qua bên kia cái máng dù đang đứng đúng chỗ ăn được. */
+  {
+    const { g } = dich({ x: m.x + 1, y: m.y - 1 }, () => {});
+    eq(`${g.x},${g.y}`, `${m.x + 1},${m.y - 1}`, "đứng sẵn ở một ô kề trống thì đích là CHÍNH ô đó");
+  }
+
+  // Ô NGAY DƯỚI máng là ô đầu tiên của danh sách cũ — chặn nó là chặn tất cả.
+  const duoi = dung((s) => setTile(s, m.x, m.y + 1, { b: "sprinkler" }));
+  ok(duoi.an, "xây vòi tưới ngay dưới máng thì con vật vẫn phải ăn được (qua ô kề khác)");
+
+  // Chặn KÍN cả 8 ô kề: không ăn được là đúng vật lý, nhưng KHÔNG được đứng chết.
+  const kin = dung((s) => {
+    for (const [dx, dy] of KE) {
+      const t = s.tiles[idx(s.w, m.x + dx, m.y + dy)];
+      if (t) setTile(s, m.x + dx, m.y + dy, { b: "sprinkler" });
+    }
+  });
+  eq(kin.an, false, "rào kín cả 8 ô kề thì không với tới máng — đúng");
+  ok(kin.diChuyen, "…nhưng con vật vẫn phải đi lại, không lặp mãi một đích chết");
+});
+
+test("125. ĐÓI THÌ ĂN ngay bước kế: bốn cổng canh chi phí tìm đường không được chặn bữa ăn", () => {
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  let m = null;
+  {
+    const s0 = mkStore().getState();
+    outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++)
+        if (tileAt(s0, x, y).prop === "trough") { m = { x, y }; break outer; }
+  }
+  const store = mkStore();
+  khoaNac(store);
+  let id = 0;
+  setState(store, (s) => {
+    setTile(s, m.x, m.y, { trough: 12, troughId: "item:hay" });
+    /* Một ĐÀN ĐÔNG đứng trước trong danh sách: ngân sách A* (2 lượt mỗi bước,
+       xoay vòng theo `planCursor`) cạn sạch trước khi tới lượt con bò. */
+    for (let i = 0; i < 20; i++) {
+      const n = ++s.entSeq;
+      s.entities.push({
+        id: n, kind: "animal", def: "chicken", map: "farm",
+        x: (3 + (i % 10)) * TILE + 8, y: (10 + Math.floor(i / 10)) * TILE + 8,
+        dir: "down", anim: 0, seed: 100 + n,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+    }
+    id = ++s.entSeq;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: "farm",
+      x: m.x * TILE + 8, y: (m.y + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 3,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+    });
+    s.player.x = 20 * TILE;
+    s.player.y = 5 * TILE;
+  });
+
+  /* Cho đồng hồ BƯỚC QUYẾT ĐỊNH đồng bộ trước khi đo. Cú TICK đầu tiên của một
+     ván chạy bù tám bước một lúc (`minutes` đã là 360 mà `actStep` còn 0), và
+     tám bước thì con nào cũng tới lượt — đo ở đó là đo nhầm, mọi thứ đều xanh. */
+  for (let i = 0; i < 60 * 3; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+
+  /* Dựng lại đúng cảnh cần đo: con bò ĐANG ĐỨNG SÁT máng đầy, vừa đói, và đang
+     trong một giấc nghỉ dở (`until = 3`) — cái cổng ngoài cùng trong bốn cổng. */
+  setState(store, (s) => {
+    for (const e of s.entities) if (e.kind === "animal") e.animal.fed = 0;
+    setTile(s, m.x, m.y, { trough: 12, troughId: "item:hay" });
+    const c = s.entities.find((e) => e.id === id);
+    c.x = m.x * TILE + 8;
+    c.y = (m.y + 1) * TILE + 8;
+    c.ai = { phase: "idle", until: 3, tx: -1, ty: -1, path: [], planAt: s.minutes };
+  });
+
+  let khi = -1;
+  for (let i = 1; i <= 60 * 20 && khi < 0; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (store.getState().entities.find((x) => x.id === id).animal.fed > 0) khi = i;
+  }
+  ok(khi > 0, "con đứng sát máng phải ăn được, dù đàn đông và đang nghỉ dở");
+  /* Một bước quyết định = 0,5 phút game = 15 khung ở nhịp mặc định. Đo được:
+     hỏi bữa TRƯỚC bốn cổng thì đúng 15 khung — bước kế tiếp là ăn. Hỏi SAU thì
+     90 khung, tức sáu bước, vì phải chờ hết giấc nghỉ rồi còn bốc thăm và chờ
+     tới lượt ngân sách. Ngưỡng 30 nằm gọn giữa hai con số. */
+  ok(khi <= 30, `và ăn ngay ở bước quyết định kế tiếp, không phải chờ (mất ${khi} khung)`);
+});
+
+test("126. một lúc CHỈ MỘT chế độ điều khiển, và nó theo thiết bị VỪA DÙNG", () => {
+  const mk = (o = {}) =>
+    createInputMode({ initial: "touch", san: { touch: true, pad: true, kbm: true }, ...o });
+
+  // Bấm là đổi NGAY.
+  {
+    const c = mk();
+    eq(c.mode(), "touch", "mặc định theo khả năng của máy");
+    eq(c.note("kbm", "press", 0), true, "gõ phím → đổi ngay");
+    eq(c.mode(), "kbm", "…và chế độ là kbm");
+    eq(c.note("kbm", "press", 10), false, "cùng chế độ thì không báo đổi nữa");
+  }
+
+  // TRỤC phải giữ đủ lâu — cần gạt mòn không được lật cả HUD.
+  {
+    const c = mk();
+    eq(c.note("pad", "axis", 0), false, "chạm trục lần đầu: chưa đổi");
+    eq(c.note("pad", "axis", AXIS_HOLD_MS - 1), false, `giữ ${AXIS_HOLD_MS - 1}ms: vẫn chưa đổi`);
+    eq(c.mode(), "touch", "…chế độ chưa nhúc nhích");
+    eq(c.note("pad", "axis", AXIS_HOLD_MS), true, `giữ đủ ${AXIS_HOLD_MS}ms: đổi`);
+    eq(c.mode(), "pad", "…sang tay cầm");
+  }
+  // Trục nhảy qua nhảy lại thì đồng hồ giữ phải RESET, không cộng dồn.
+  {
+    const c = mk();
+    c.note("pad", "axis", 0);
+    c.note("kbm", "axis", 100);
+    eq(c.note("pad", "axis", 140), false, "đổi nguồn giữa chừng thì đếm lại từ đầu");
+    eq(c.mode(), "touch", "…nên chưa ai thắng");
+  }
+
+  // TAY CẦM MA: cắm mà không có nút thì không bao giờ thắng.
+  {
+    const c = mk({ san: { touch: true, pad: false, kbm: true } });
+    eq(c.note("pad", "press", 0), false, "tay cầm không có thật thì tín hiệu bị bỏ");
+    eq(c.note("pad", "axis", 999), false, "…kể cả tín hiệu trục");
+    eq(c.mode(), "touch", "…và chế độ vẫn là cảm ứng — người chơi không mất đường vào");
+  }
+
+  // KHOÁ CỨNG ghim bất chấp hoạt động…
+  {
+    const c = mk({ override: "kbm" });
+    eq(c.mode(), "kbm", "khoá cứng có hiệu lực ngay");
+    c.note("touch", "press", 0);
+    c.note("pad", "press", 1);
+    eq(c.mode(), "kbm", "…và mọi tín hiệu không lay chuyển được nó");
+    c.setOverride(null);
+    eq(c.mode(), "pad", "bỏ khoá thì hiện ra chế độ tự nhận đã chạy ngầm bên dưới");
+  }
+  // …trừ khi khoá vào thiết bị KHÔNG CÓ THẬT.
+  {
+    const c = mk({ override: "pad", san: { touch: true, pad: false, kbm: true } });
+    eq(c.mode(), "touch", "khoá vào tay cầm mà không có tay cầm → rơi về chế độ dùng được");
+  }
+  // Rút tay cầm GIỮA CHỪNG thì không kẹt lại ở `pad`.
+  {
+    const c = mk();
+    c.note("pad", "press", 0);
+    eq(c.mode(), "pad", "đang chơi tay cầm");
+    c.setSan("pad", false);
+    eq(c.mode(), "touch", "rút ra thì về cảm ứng, không đứng ở một chế độ không còn thiết bị");
+  }
+
+  // BẢNG LOẠI TRỪ: mỗi chế độ bật ĐÚNG MỘT lớp giao diện.
+  for (const m of ["touch", "pad", "kbm"]) {
+    const g = hienGi(m);
+    const bat = [g.chamHien, g.padHien, g.phimHien].filter(Boolean).length;
+    eq(bat, 1, `chế độ ${m}: đúng một lớp giao diện được bật (${JSON.stringify(g)})`);
+  }
+  eq(hienGi("touch").chamHien, true, "cảm ứng → lớp nút chạm");
+  eq(hienGi("pad").padHien, true, "tay cầm → dải gợi ý nút");
+  eq(hienGi("kbm").phimHien, true, "phím+chuột → số phím trên hotbar");
+
+  // Cài đặt phải NHẬN được cả bốn giá trị, và chối giá trị lạ.
+  eq(parseSettings({ inputMode: "pad" }).inputMode, "pad", "cài đặt nhận 'pad'");
+  eq(parseSettings({ inputMode: "auto" }).inputMode, "auto", "cài đặt nhận 'auto'");
+  eq(parseSettings({ inputMode: "gamepad" }).inputMode, "auto", "giá trị lạ rơi về 'auto'");
+  eq(DEFAULT_SETTINGS.inputMode, "auto", "mặc định là tự nhận");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

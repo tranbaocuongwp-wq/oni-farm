@@ -215,11 +215,13 @@ canvas#game {
   min-width: 0;
 }
 
-/* Trên cảm ứng, nút ☰ nằm đè góc phải-trên: chừa chỗ. */
-body.touch .hud-top {
+/* Có cụm nút trên màn (cảm ứng hoặc tay cầm): nút ☰ đè góc phải-trên, chừa chỗ.
+   Theo CHẾ ĐỘ ĐANG CHƠI, không theo "máy có màn cảm ứng hay không" — laptop cảm
+   ứng đang gõ bàn phím thì không có cụm nút nào để né. */
+body:not([data-input="kbm"]) .hud-top {
   padding-right: calc(var(--tap) + 8px);
 }
-body.touch[data-hand="left"] .hud-top {
+body:not([data-input="kbm"])[data-hand="left"] .hud-top {
   padding-right: 0;
   padding-left: calc(var(--tap) + 8px);
 }
@@ -868,7 +870,10 @@ body[data-hand="left"] .hotbar-wrap {
   font-size: 0.68em;
   color: var(--ink-mute);
 }
-body.touch .slot .k {
+/* Số phím trên ô hotbar chỉ có nghĩa khi ĐANG chơi bằng bàn phím. Trước đây ẩn
+   theo `body.touch`, tức là laptop có màn cảm ứng không bao giờ thấy số phím dù
+   người ta đang gõ phím. */
+body:not([data-input="kbm"]) .slot .k {
   display: none;
 }
 
@@ -1518,8 +1523,19 @@ kbd {
   pointer-events: none;
   z-index: 20;
 }
-body.touch #touch {
+/* LỚP CHẠM hiện theo CHẾ ĐỘ. Chơi tay cầm thì vẫn giữ lớp này (nút A đeo tên
+   nút thật, xem `[data-input^="pad"]` bên dưới); chơi phím+chuột thì chỉ giữ
+   nút ☰ — nó là đường vào menu bằng CHUỘT, mà bỏ đi thì người dùng chuột không
+   còn cách nào mở Tạm dừng ngoài phím Escape. */
+body[data-input="touch"] #touch,
+body[data-input="pad"] #touch,
+body[data-input="pad-std"] #touch,
+body[data-input="kbm"] #touch {
   display: block;
+}
+body[data-input="kbm"] #stick,
+body[data-input="kbm"] #abtn {
+  display: none;
 }
 
 /* Joystick — MẶC ĐỊNH TẮT (xem core/settings.ts). */
@@ -1811,7 +1827,7 @@ body[data-orientation="portrait"] #stick {
   height: 30%;
 }
 /* Dọc: cụm nút nằm dưới, hotbar phải né lên trên. */
-body.touch[data-orientation="portrait"] {
+body:not([data-input="kbm"])[data-orientation="portrait"] {
   /* HOTBAR NẰM SÁT ĐÁY — chỗ ngón cái với tới dễ nhất trên máy dọc, và là dải
      bấm nhiều nhất trong game. Nên nó KHÔNG né ai cả: `--pad-bottom` = 0, và
      chính CỤM NÚT phải leo lên trên nó (xem `--abtn-bottom`).
@@ -1824,16 +1840,16 @@ body.touch[data-orientation="portrait"] {
      và đệm của dải. */
   --abtn-bottom: calc(var(--hud-gap) + var(--slot) + 16px);
 }
-body.touch[data-orientation="landscape"] {
+body:not([data-input="kbm"])[data-orientation="landscape"] {
   --pad-bottom: 6px;
 }
 /* Ngang: hotbar vẫn cố định ở GIỮA đáy; cỡ ô trừ đi hai bên cụm nút (tính cả
    hai bên như nhau để tay trái/phải cho cùng một bố cục). */
-body.touch[data-orientation="landscape"] {
+body:not([data-input="kbm"])[data-orientation="landscape"] {
   --slot: clamp(26px, calc((100vw - 2 * (var(--btn-a) + var(--btn-b) + 44px) - 20px - var(--tap) - var(--hotbar-slots) * var(--slot-gap)) / var(--hotbar-slots)), 48px);
 }
 /* Ngang: bản đồ nhỏ nằm góc dưới cạnh hotbar sẽ chạm nút — đẩy lên trên. */
-body.touch[data-orientation="landscape"] .hud-mid {
+body:not([data-input="kbm"])[data-orientation="landscape"] .hud-mid {
   align-items: flex-start;
 }
 

@@ -22,7 +22,7 @@ import type { Draft } from "./state.ts";
 import { dEntity, dTile, randInt, touch } from "./state.ts";
 import { idx, TILE, tileIndexAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
-import { LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, REPLAN_COOLDOWN } from "./entities.ts";
+import { LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, dangNghi } from "./entities.ts";
 import {
   atTile,
   carried,
@@ -145,7 +145,7 @@ export function workerStep(
 
      Nhánh vật nuôi (`entities.ts`) vẫn luôn kiểm cả hai TRƯỚC khi chốt gì cả —
      đây chỉ là chép lại đúng thứ tự ấy. */
-  if (!takeBudget() || d.s.minutes - e.ai.planAt < REPLAN_COOLDOWN) {
+  if (!takeBudget() || dangNghi(d.s.minutes, e.ai.planAt)) {
     // Không đụng `tx/ty`, không đổi `phase`: lượt sau hỏi lại từ đầu.
     e.ai.phase = "idle";
     e.ai.until = 0.5;

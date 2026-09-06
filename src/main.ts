@@ -53,7 +53,7 @@ import { createDevPanel } from "./ui/devpanel.ts";
 import { padButtonName } from "./core/gamepad.ts";
 import { timChoNgoi, type Seat } from "./ui/focus.ts";
 import { createBuildMode } from "./ui/buildmode.ts";
-import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
+import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
@@ -223,10 +223,14 @@ async function boot() {
   root.dataset["contentSource"] = contentSource;
   root.dataset["core"] = CORE_VERSION;
 
-  // Cảm ứng: bật lớp điều khiển ảo. Chuột/bàn phím vẫn chạy song song — máy lai
-  // (laptop cảm ứng, tablet có bàn phím) dùng được cả hai mà không phải chọn.
-  const isTouch = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
-  if (isTouch) document.body.classList.add("touch");
+  /* `coCham` là KHẢ NĂNG của máy, không phải chế độ đang chơi.
+     Trước đây cùng một cái cờ làm cả hai việc, và đó là lỗi: laptop có màn cảm
+     ứng bị coi là điện thoại vĩnh viễn — giấu số phím hotbar, in bảng hướng dẫn
+     kiểu chạm — dù người ta đang gõ bàn phím. Giờ khả năng nằm ở
+     `body.touch`, còn thứ đang hiển thị nằm ở `body[data-input]`, và cái sau
+     đổi theo thiết bị vừa dùng. */
+  const coCham = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  if (coCham) document.body.classList.add("touch");
 
   // Settings là sở thích của MÁY, không thuộc ván chơi — localStorage riêng,
   // không đi vào save. Nạp SỚM vì menu và camera tham chiếu tới nó lúc dựng.
@@ -344,6 +348,10 @@ async function boot() {
     applySettings(settings);
     setHaptics(settings.haptics);
     setMuted(!settings.sound);
+    /* Chế độ điều khiển sống trong `input.ts` (nó là chỗ duy nhất thấy tín hiệu
+       thô), nên `applySettings` không với tới — đẩy tay. */
+    if (key === "inputMode")
+      input.setInputMode(settings.inputMode === "auto" ? null : settings.inputMode);
     if (key === "zoom" && camera.setZoom(settings.zoom)) {
       renderer.applyViewport();
       const p = store.getState().player;
@@ -468,8 +476,9 @@ async function boot() {
       const r = await p.userChoice;
       if (r.outcome === "accepted") toasts.say("Đã cài OniFarm về máy.", "good");
     },
-    replayTutorial: () => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS),
-    isTouch: () => isTouch,
+    replayTutorial: () => tutorial.start(buocHuongDan()),
+    isTouch: () => input.mode() === "touch",
+    inputMode: () => input.mode(),
   });
 
   /**
@@ -553,6 +562,9 @@ async function boot() {
        Không có dòng này thì bảng gỡ lỗi là thứ duy nhất trong game không bấm
        được bằng tay cầm. */
     isModalOpen: () => menus.isOpen() || tutorial.isOpen() || devPanel.isOpen(),
+    coCham,
+    initialMode: coCham ? "touch" : "kbm",
+    inputMode: settings.inputMode === "auto" ? null : settings.inputMode,
     ...(stickZone
       ? {
           joystick: {
@@ -563,6 +575,28 @@ async function boot() {
         }
       : {}),
   });
+
+  /** Bảng hướng dẫn theo ĐÚNG thứ người chơi đang cầm. */
+  const buocHuongDan = () => {
+    const m = input.mode();
+    return m === "pad" ? PAD_STEPS : m === "touch" ? TOUCH_STEPS : DESKTOP_STEPS;
+  };
+
+  /* MỘT giá trị `data-input` cho cả giao diện: `touch` | `pad` | `pad-std` |
+     `kbm`. Trước đây `body.touch` (chốt lúc boot) và `data-input` (chỉ nói "có
+     tay cầm cắm") là hai cờ độc lập, nên điện thoại cắm tay cầm hiện cùng lúc
+     cụm nút chạm lẫn hai dải gợi ý tay cầm. Giờ đúng một cờ, và nó theo THIẾT
+     BỊ VỪA DÙNG.
+
+     Vẫn tách `pad` với `pad-std`: tay cầm không theo sơ đồ chuẩn chỉ có cần gạt
+     và hai nút mặt, nên phải để cụm nút chạm bấm được, nếu không là bịt nốt
+     đường vào cuối cùng của chế độ xây dựng. */
+  const veCheDo = () => {
+    const m = input.mode();
+    document.body.dataset["input"] = m === "pad" ? (input.padInfo().standard ? "pad-std" : "pad") : m;
+  };
+  veCheDo();
+  input.onModeChange(veCheDo);
 
   /* Nối đường rung TAY CẦM vào cùng cái công tắc với rung điện thoại.
      `gamepad.ts` có sẵn `rumble()` đầy đủ — dual-rumble, có `.catch()`, có
@@ -1550,15 +1584,18 @@ async function boot() {
        chống nhận diện, Chrome và Safari chỉ báo sự kiện đó SAU khi người chơi
        bấm một nút. Cắm tay cầm rồi ngồi im thì không có sự kiện nào cả — nhưng
        `poll()` mỗi khung hình thì thấy ngay lúc nút đầu tiên được bấm. */
-    const coPad = input.padConnected();
+    /* `padOn` = ĐANG CHƠI bằng tay cầm, không phải "có tay cầm cắm". Dải gợi ý
+       nút và con trỏ ô của chế độ xây đều đọc nó, và cả hai chỉ đúng khi người
+       chơi thật sự cầm tay cầm — cắm vào để đó mà đã đổi cả HUD là thứ Cường
+       gặp phải. */
+    const coPad = input.mode() === "pad";
     if (coPad !== padOn) {
       padOn = coPad;
-      /* Hai giá trị, không phải một: `pad-std` khi trình duyệt xác nhận sơ đồ
-         chuẩn, `pad` khi không. CSS dùng nó để quyết định có được giấu nút
-         chạm đi hay không — với tay cầm không-standard thì người chơi chỉ có
-         cần gạt cộng hai nút mặt, nên giấu nút XÂY và tắt cụm nút chạm là bịt
-         nốt đường vào cuối cùng của chế độ xây dựng. */
-      document.body.dataset["input"] = coPad ? (input.padInfo().standard ? "pad-std" : "pad") : "";
+      /* KHÔNG ghi `data-input` ở đây nữa: cắm tay cầm vào không có nghĩa là
+         đang dùng nó. `veCheDo` mới là nơi ghi, và nó chạy khi chế độ thật sự
+         đổi. Khối này chỉ còn lo phần "chào tay cầm": dán tên nút thật, một
+         câu toast, và bảng sơ đồ nút lần đầu. */
+      veCheDo();
       if (coPad) {
         const pi = input.padInfo();
         /* Dán TÊN NÚT THẬT lên từng nút tròn. Cụm hình thoi trên màn hình xếp
@@ -1820,7 +1857,7 @@ async function boot() {
           }
           /* Trong CHẾ ĐỘ XÂY DỰNG bằng tay cầm, A là "đặt mốc / chốt đoạn" —
              hai lần bấm thay cho một cú ấn-rê-nhả của ngón tay. */
-          if (building && input.padConnected()) {
+          if (building && padOn) {
             const cur = padCursor ?? {
               x: Math.floor(s.player.x / TILE),
               y: Math.floor(s.player.y / TILE),
@@ -2372,7 +2409,7 @@ async function boot() {
 
   // Hướng dẫn lần đầu: chỉ khi chưa xem và đang là ván mới (save cũ = đã biết chơi).
   if (!settings.tutorialSeen && !tiepTucSave) {
-    window.setTimeout(() => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS), 500);
+    window.setTimeout(() => tutorial.start(buocHuongDan()), 500);
   } else if (!settings.tutorialSeen) setSetting("tutorialSeen", true);
 
   if (import.meta.env.DEV) {

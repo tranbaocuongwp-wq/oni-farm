@@ -66,6 +66,26 @@ export const DESKTOP_STEPS: TutorialStep[] = [
   },
 ];
 
+/* Chơi TAY CẦM thì cả hai bảng trên đều nói sai: một bảng bảo "chạm vào ô",
+   bảng kia bảo "bấm chuột". Người cầm tay cầm không có cả hai. */
+export const PAD_STEPS: TutorialStep[] = [
+  {
+    title: "Cần trái để đi",
+    text: "Đẩy cần trái để đi, đẩy hết cỡ là chạy. Ô đang ngắm nằm ngay trước mặt nhân vật.",
+    target: null,
+  },
+  {
+    title: "A để làm",
+    text: "Nút A làm việc ghi trên nút: CÀY, GIEO, TƯỚI, THU… Bấm một lần là làm hết việc của món đang cầm; bấm lại thì dừng.",
+    target: "#abtn .a",
+  },
+  {
+    title: "Vai để đổi món",
+    text: "Hai nút vai đổi ô hotbar. Nút Start mở Tạm dừng; ở đó có ô Sơ đồ nút cho cả bản đồ nút tay cầm.",
+    target: "#hotbar",
+  },
+];
+
 export function createTutorial(root: HTMLElement, onDone: () => void): Tutorial {
   let steps: TutorialStep[] = [];
   let i = 0;

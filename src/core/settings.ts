@@ -64,6 +64,18 @@ export interface Settings {
   /** Hiện nút hành động theo ngữ cảnh (CÀY / GIEO / TƯỚI…) thay vì nút DÙNG cố định. */
   contextButton: boolean;
   /**
+   * CHẾ ĐỘ ĐIỀU KHIỂN — một lúc chỉ một lớp giao diện.
+   *
+   * `auto` (mặc định) đi theo thiết bị VỪA DÙNG: chạm màn thì hiện nút chạm, gõ
+   * phím thì hiện số phím hotbar, bấm tay cầm thì hiện dải gợi ý nút. Ba giá trị
+   * còn lại khoá cứng — cho máy lai, nơi tự nhận có thể đoán sai ý người chơi.
+   *
+   * Tên `control` đã bị chiếm bởi một thứ khác hẳn (chạm-để-đi vs joystick ảo),
+   * nên phải là tên mới. Khoá vào thiết bị không có thật thì bị bỏ qua — xem
+   * `core/inputmode.ts`.
+   */
+  inputMode: "auto" | "touch" | "pad" | "kbm";
+  /**
    * VÙNG CHẾT của cần gạt tay cầm.
    *
    * Đây là thứ duy nhất trong cả bộ điều khiển hỏng theo PHẦN CỨNG chứ không
@@ -101,6 +113,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   reduceMotion: false,
   tutorialSeen: false,
   contextButton: true,
+  inputMode: "auto",
   padDead: "normal",
   padInvertY: false,
   padSwapAB: false,
@@ -136,6 +149,7 @@ export function parseSettings(raw: unknown): Settings {
     reduceMotion: bool(v["reduceMotion"], d.reduceMotion),
     tutorialSeen: bool(v["tutorialSeen"], d.tutorialSeen),
     contextButton: bool(v["contextButton"], d.contextButton),
+    inputMode: oneOf(v["inputMode"], ["auto", "touch", "pad", "kbm"] as const, d.inputMode),
   };
 }
 

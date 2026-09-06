@@ -986,6 +986,59 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 11: con vật đói cả ngày, và một lúc chỉ một chế độ điều khiển (core 1.36 → 1.37)
+
+Cường chơi bản 1.36 rồi báo: *"mặc dù là máng có thức ăn, nhưng mấy con vật đói nó không có ăn
+mà nó cứ chấm than miết"*, và *"cho phép mấy con động vật ở trong chuồng di chuyển xuyên qua
+nhau"*. Hoá ra là **một lỗi duy nhất**, và nó cũng giải thích luôn chuyện thứ hai.
+
+**Đồng hồ trong ngày LÙI mỗi sáng, còn kế hoạch của con vật thì không.** `entities.ts` hỏi "con
+này vừa nghĩ xong chưa" bằng `minutes - planAt < REPLAN_COOLDOWN`. `planAt` là mốc trên đồng hồ
+trong ngày; `newDay` kéo `minutes` từ 1560 về 360 mà không đụng tới `planAt`. Con nào nghĩ lúc
+1535 hôm qua thì sáng nay phép trừ ra −1175, nhỏ hơn 2, nên nó bị bắt "nghỉ" cho tới khi hôm nay
+trôi qua đúng cái mốc của hôm qua — **gần trọn một ngày**. Dòng ấy đứng trước cả nhánh "đói thì
+ăn", nên con vật không ăn, và trước cả nhánh lang thang, nên nó **đứng chết một chỗ**. Đo được:
+bò đứng cạnh máng 12 phần cỏ khô, `fed = 0`, chấm than trên đầu, từ 6 giờ sáng tới tối. Cả đàn
+đứng im cùng lúc — đọc ra thành "tụi nó kẹt nhau". **Người làm thuê dính cùng một phép so**, nên
+sáng ra họ cũng đứng. Lỗi có từ commit thêm `REPLAN_COOLDOWN`, không phải hồi quy gần đây.
+
+* `newDay` xoá kế hoạch hôm qua của **mọi** thực thể: `planAt`, `until`, và cả đường đang đi dở.
+* Phép so mới `dangNghi()` coi một mốc ở "tương lai" là đã hết hạn — lưới thứ hai, để save cũ
+  đang kẹt cũng tự lành ở khung hình đầu tiên.
+* **Đói thì hỏi bữa ăn TRƯỚC bốn cái cổng** (đồng hồ nghỉ, xúc xắc nghỉ 45 %, ngân sách A*, đồng
+  hồ nguội). Bốn cổng ấy dựng lên để canh chi phí TÌM ĐƯỜNG, mà ăn thì không tốn một nút A* nào.
+  Đo được: đứng sát máng, hỏi trước thì ăn ở bước quyết định kế tiếp (15 khung); hỏi sau thì 90.
+* `penGoal` chọn ô đứng cạnh máng phải **đứng được** (hỏi `blockedForActor`, không chỉ hỏi
+  `prop === null` — công trình nằm ở `t.b`) và phải là ô **gần con vật nhất**, không phải ô đầu
+  tiên của một danh sách cố định. Xây một cái vòi tưới ngay dưới máng là đủ để cả chuồng chết đói
+  cạnh máng đầy, và bảy ô trống còn lại không bao giờ được xét.
+* Đích kiếm ăn mà không có đường thì rơi xuống lang thang trong khu, thay vì đứng nghỉ rồi thử
+  lại **đúng cái đích chết ấy** mãi mãi.
+
+**Con vật đã đi xuyên qua nhau từ đầu** — `blockedForActor` chỉ đọc ô đất, không đọc danh sách
+thực thể, và người chơi cũng đi xuyên con vật. Không sửa gì; cái nhìn thấy là hệ quả của lỗi trên.
+
+**Một lúc chỉ một chế độ điều khiển.** `body.touch` chốt một lần lúc khởi động và không bao giờ
+gỡ; `data-input` chỉ nói "có tay cầm cắm", không nói "đang dùng tay cầm". Hai cờ độc lập, nên
+điện thoại cắm tay cầm hiện **cùng lúc** cụm nút chạm lẫn hai dải gợi ý tay cầm, còn laptop có
+màn cảm ứng bị coi là điện thoại vĩnh viễn (giấu số phím hotbar, in bảng hướng dẫn kiểu chạm).
+
+`core/inputmode.ts` (thuần, test được trong Node) trả lời **một** câu hỏi: thiết bị nào vừa được
+dùng? Nút thì đổi ngay; cần gạt phải giữ 150 ms (cần mòn nghỉ lệch tâm không được lật cả HUD).
+**Tay cầm ma** — cái bóng `connected: true, buttons: []` Chrome để lại sau khi rút — không gửi
+tín hiệu nào nên không bao giờ thắng; trước đây nó đủ sức bật `pad-std`, mà `pad-std` thì ẩn
+joystick lẫn tắt cụm nút chạm, tức bịt sạch đường vào. Khoá cứng được trong Cài đặt (Tự nhận /
+Cảm ứng / Tay cầm / Phím + chuột), nhưng khoá vào thiết bị không có thật thì bị bỏ qua.
+
+`body[data-input]` giờ mang **một** giá trị và là nguồn duy nhất cho CSS; `body.touch` tụt xuống
+thành cờ *khả năng*. Chơi phím + chuột thì ẩn cần gạt và cụm nút hành động nhưng **giữ nút ☰** —
+nó là đường vào menu bằng chuột. Hướng dẫn lần đầu có thêm bảng riêng cho tay cầm.
+
+Kịch bản 123–126, mỗi cái cấy lại lỗi và thấy đúng nó đỏ: ngủ dậy là cả đàn lẫn người làm đều
+làm việc ngay · ô đứng cạnh máng phải đứng được và phải gần nhất · đói thì ăn ở bước kế · và
+bảng loại trừ chế độ (mỗi chế độ bật đúng một lớp giao diện). Trình duyệt thật ở 430×932 và
+1000×700: bốn chuyển đổi chế độ, tay cầm ma không thắng, khoá cứng có hiệu lực.
+
 ### Đợt 10: camera bám lại nhân vật, và nút chính thành CHUYẾN của món đang cầm (core 1.36)
 
 Cường chơi bản 1.35 và báo hai chuyện: **camera không đi theo nhân vật — ngay từ lúc mở game**,

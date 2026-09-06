@@ -20,6 +20,7 @@
 ============================================================================ */
 
 import { PAD, createGamepad, type PadInfo } from "./gamepad.ts";
+import { createInputMode, type InputMode } from "./inputmode.ts";
 
 /* ---------------------------------------------------------------------------
    SƠ ĐỒ NÚT TAY CẦM — bảng DUY NHẤT.
@@ -197,6 +198,13 @@ export interface Input {
   poll(nowMs: number): void;
   /** Có tay cầm đang cắm không — HUD dùng để đổi gợi ý phím. */
   padConnected(): boolean;
+  /** Thiết bị VỪA ĐƯỢC DÙNG. Khác `padConnected()`: cắm tay cầm để đó thì vẫn
+   *  là `touch`/`kbm` cho tới khi thật sự bấm vào nó. */
+  mode(): InputMode;
+  /** Khoá cứng chế độ (từ Cài đặt), `null` = tự nhận. */
+  setInputMode(m: InputMode | null): void;
+  /** Gọi khi chế độ hiển thị đổi. */
+  onModeChange(fn: (m: InputMode) => void): void;
   /** Tay cầm nào đang cắm và nó có gì — để hiện ĐÚNG tên nút, và để biết có
    *  được phép gán các nút phụ hay không. */
   padInfo(): PadInfo;
@@ -232,10 +240,26 @@ export interface InputOptions {
   /** true khi đang mở modal — chặn di chuyển nhưng vẫn cho Esc */
   isModalOpen(): boolean;
   joystick?: JoystickRefs;
+  /** Máy này CÓ màn cảm ứng không — khả năng, không phải chế độ. */
+  coCham?: boolean;
+  /** Chế độ lúc chưa ai bấm gì. */
+  initialMode?: InputMode;
+  /** Khoá cứng từ Cài đặt; `null`/bỏ trống = tự nhận. */
+  inputMode?: InputMode | null;
 }
 
 export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const pad = createGamepad();
+  /* MỘT LÚC MỘT CHẾ ĐỘ. `input.ts` là nơi duy nhất thấy được mọi tín hiệu thô,
+     nên nó là nơi duy nhất trả lời được "thiết bị nào vừa dùng". Cố ý KHÔNG
+     chặn `axis()`/`useHeld()`/`drain()` theo chế độ: mọi thiết bị vẫn được
+     nghe, chế độ chỉ quyết định HIỂN THỊ. Chặn thì đổi thiết bị sẽ cần một cú
+     bấm mà cú bấm ấy lại đang bị chặn. */
+  const che = createInputMode({
+    initial: opts.initialMode ?? "kbm",
+    override: opts.inputMode ?? null,
+    san: { touch: opts.coCham ?? false, pad: false, kbm: true },
+  });
   /** Trạng thái tay cầm của khung hình HIỆN TẠI. */
   let padState = { connected: false, axis: { x: 0, y: 0 }, running: false, useHeld: false };
   const held = new Set<string>();
@@ -264,6 +288,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   /* ------------------------------------------------------------ bàn phím */
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat) return;
+    che.note("kbm", "press", performance.now());
     const modal = opts.isModalOpen();
 
     if (e.code === "Escape") {
@@ -345,8 +370,11 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     // không cho chạm cập nhật vị trí ngắm — nếu không, ô đang nhắm sẽ dính lại
     // ở chỗ vừa chạm.
     if (e.pointerType === "touch") return;
+    const now = performance.now();
+    // Rê chuột là tín hiệu TRỤC: lướt ngang qua màn hình không được lật cả HUD.
+    che.note("kbm", "axis", now);
     ptr = opts.toWorld(e.clientX, e.clientY);
-    ptrAt = performance.now();
+    ptrAt = now;
   };
 
   const onUp = (e: PointerEvent) => {
@@ -359,6 +387,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
     const p = opts.toWorld(e.clientX, e.clientY);
     if (!p) return;
     const now = performance.now();
+    che.note(e.pointerType === "touch" ? "touch" : "kbm", "press", now);
     if (e.pointerType !== "touch") {
       ptr = p;
       ptrAt = now;
@@ -400,6 +429,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   };
 
   const onWheel = (e: WheelEvent) => {
+    che.note("kbm", "press", performance.now());
     if (opts.isModalOpen()) return;
     push({ t: "selectDelta", d: e.deltaY > 0 ? 1 : -1 });
     e.preventDefault();
@@ -435,6 +465,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   };
 
   const stickDown = (e: PointerEvent) => {
+    che.note("touch", "press", performance.now());
     if (stickId !== null || opts.isModalOpen()) return;
     stickId = e.pointerId;
     js!.zone.setPointerCapture(e.pointerId);
@@ -514,7 +545,17 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         // Giữ nút DÙNG, nên "giữ để làm tiếp ô kế bên" chạy y hệt như giữ Space.
         useHeld: padUseHeld(st.held),
       };
+      /* Tay cầm CÓ THẬT hay không quyết định nó có được phép thắng chế độ.
+         Cái bóng `connected: true, buttons: []` sau khi rút đã bị `gamepad.ts`
+         lọc, nên tới đây `connected` là thật. */
+      che.setSan("pad", st.connected);
       if (!st.connected) return;
+
+      /* Chế độ đổi theo HOẠT ĐỘNG: bấm nút là đổi ngay, đẩy cần thì phải giữ.
+         Cắm tay cầm rồi để đó không đổi gì cả — đúng thứ Cường muốn. */
+      if (st.pressed.size > 0) che.note("pad", "press", nowMs);
+      else if (st.axis.x !== 0 || st.axis.y !== 0 || st.navDir || st.aimDir)
+        che.note("pad", "axis", nowMs);
 
       const modal = opts.isModalOpen();
 
@@ -575,6 +616,9 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       if (re) push({ t: "padAim", dx: re.x, dy: re.y });
     },
     padConnected: () => padState.connected,
+    mode: () => che.mode(),
+    setInputMode: (m) => che.setOverride(m),
+    onModeChange: (fn) => che.onChange(fn),
     padInfo: () => pad.info(),
     rumble: (ms, strong) => pad.rumble(ms, strong),
 

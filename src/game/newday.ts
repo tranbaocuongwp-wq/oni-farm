@@ -25,6 +25,7 @@ import type { Draft, MapView } from "./state.ts";
 import {
   activeView,
   applyProgression,
+  dEntity,
   dStoredMap,
   mapViews,
   nextRandom,
@@ -515,6 +516,28 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   // Ngủ dậy là hết bận — không mang thao tác dở dang sang ngày mới.
   s0.busy = 0;
   s0.pending = null;
+
+  /* ĐỒNG HỒ CỦA MỌI CÁI ĐẦU CŨNG VỀ SÁNG.
+
+     `minutes` vừa LÙI từ 1560 về 360, mà `ai.planAt` của từng con vẫn giữ mốc
+     hôm qua. Phép so "vừa nghĩ xong" (`minutes - planAt < REPLAN_COOLDOWN`) khi
+     ấy ra một số âm rất lớn, tức là ĐÚNG, nên cả đàn bị bắt nghỉ cho tới khi
+     hôm nay trôi qua đúng cái mốc của hôm qua — gần trọn một ngày.
+
+     Đo được: bò đứng cạnh máng 12 phần cỏ khô, `fed = 0`, dấu chấm than trên
+     đầu, `phase = idle`, không ăn không đi, từ 6 giờ sáng tới tối. Người làm
+     thuê dính cùng một phép so, nên sáng ra họ cũng đứng im.
+
+     Ngày mới là bắt đầu lại: quên kế hoạch hôm qua, quên cả quãng đường đang đi
+     dở — nhân vật đã ngủ một đêm, con bò không còn lý do gì để đi nốt về chỗ nó
+     định tới lúc chạng vạng. */
+  for (let i = 0; i < d.s.entities.length; i++) {
+    const e = dEntity(d, i);
+    if (!e) continue;
+    e.ai.planAt = -999;
+    e.ai.until = 0;
+    e.ai.path = [];
+  }
 
   // ---- 1b. thời tiết hôm nay ---------------------------------------------
   rollWeather(d, content);

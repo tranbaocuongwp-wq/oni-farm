@@ -78,6 +78,25 @@ export const LEASH_TILES = 20;
 /** Nguội giữa hai lần tính đường của CÙNG một con, tính bằng phút game. */
 export const REPLAN_COOLDOWN = 2;
 
+/**
+ * Con này còn trong thời gian nguội không — tức là VỪA tính đường xong.
+ *
+ * Vì sao không viết thẳng `minutes - planAt < REPLAN_COOLDOWN`: `planAt` là một
+ * mốc trên ĐỒNG HỒ TRONG NGÀY, mà đồng hồ ấy LÙI mỗi sáng (1560 → 360). Con nào
+ * nghĩ lúc 1535 hôm qua thì sáng nay `360 - 1535 = -1175`, nhỏ hơn 2, nên phép
+ * so cũ nói "vừa nghĩ xong" và bắt nó nghỉ — suốt tới khi hôm nay trôi qua phút
+ * 1537, tức gần trọn một ngày. Đo được đúng cái ấy: bò đứng cạnh máng đầy, dấu
+ * chấm than trên đầu, không ăn không đi, từ sáng tới tối.
+ *
+ * `newDay` đã đặt lại `planAt` (xem newday.ts), nhưng save cũ vẫn mang mốc hôm
+ * qua vào ván mới — nên đây là lưới thứ hai: mốc ở "tương lai" thì coi như đã
+ * hết hạn, và con vật được nghĩ ngay ở khung hình đầu tiên.
+ */
+export function dangNghi(minutes: number, planAt: number): boolean {
+  const qua = minutes - planAt;
+  return qua >= 0 && qua < REPLAN_COOLDOWN;
+}
+
 export function animalDef(content: Content, id: string): AnimalDef | null {
   return content.animals[id] ?? null;
 }
@@ -400,6 +419,30 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
     const e = dEntity(d, i);
     if (!e) continue;
 
+    /* ĐÓI THÌ ĂN, TRƯỚC MỌI CỔNG.
+
+       Ăn không tốn một nút A* nào: nó chỉ hỏi "sát bên có máng còn đồ không",
+       "dưới chân có cỏ không". Vậy mà trước đây nó nằm sau BỐN cái cổng — đồng
+       hồ nghỉ, xúc xắc nghỉ 45 %, ngân sách A*, đồng hồ nguội — tất cả dựng lên
+       để chặn CHI PHÍ TÌM ĐƯỜNG, và chặn nhầm cả bữa ăn. Con vật đứng sát máng
+       đầy vẫn phải ngủ cho hết giấc rồi bốc thăm mới được ăn.
+
+       Đo được: cùng một con bò đứng cạnh máng, đói. Hỏi bữa trước thì nó ăn ở
+       bước quyết định kế tiếp; hỏi sau bốn cổng thì mất sáu giây thật, và trong
+       một đàn đông thì lâu hơn nữa.
+
+       Bốn cổng kia vẫn nguyên vẹn cho phần TÌM ĐƯỜNG bên dưới — thứ chúng sinh
+       ra để canh. */
+    const dinhDuong = cur.kind === "animal" ? animalDef(content, cur.def) : null;
+    const doi = !!dinhDuong && dinhDuong.job !== "pest" && isHungry(cur);
+    if (doi) {
+      // Đứng sát MÁNG mà máng còn thức ăn thì ăn ngay — bữa chắc chắn, và no
+      // HẲN. Xét trước cỏ: con vật đứng cạnh máng đầy mà vẫn cúi gặm cỏ là thứ
+      // nhìn vào thấy sai ngay, và làm cái máng thành vô nghĩa.
+      if (eatFromTrough(d, content, i)) continue;
+      if (grazeHere(d, content, activeView(d), i)) continue;
+    }
+
     // Đồng hồ giai đoạn: đứng nhai cỏ / ngủ thì đếm ngược ở đây.
     if (e.ai.until > 0) {
       e.ai.until = Math.max(0, e.ai.until - ACTOR_STEP_MINUTES);
@@ -410,7 +453,7 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
        hay gặm cỏ. Người chơi vừa cày ngay dưới chân nó, và một con bò đứng ì
        giữa luống mới cày là thứ nhìn thấy ngay và thấy là khó chịu. */
     if (cur.kind === "animal" && onFarmTile(s, cur)) {
-      if (budget > 0 && s.minutes - e.ai.planAt >= REPLAN_COOLDOWN) {
+      if (budget > 0 && !dangNghi(s.minutes, e.ai.planAt)) {
         const shape = actorShape(content, cur);
         const ra = shape ? offFarmGoal(s, content, cur, shape.box) : null;
         if (ra) {
@@ -445,22 +488,10 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
     }
 
     if (budget <= 0) continue;
-    if (s.minutes - e.ai.planAt < REPLAN_COOLDOWN) continue;
+    if (dangNghi(s.minutes, e.ai.planAt)) continue;
 
     // Vật nuôi tránh ruộng; sâu bọ thì KHÔNG — phá cây là việc của chúng.
     const neRuong = cur.kind === "animal";
-
-    /* ĐÓI thì đi kiếm ăn, và đó là ưu tiên cao hơn mọi thứ khác.
-       Đang đứng trên bãi cỏ rồi thì ăn luôn, khỏi lập đường. */
-    const dinhDuong = cur.kind === "animal" ? animalDef(content, cur.def) : null;
-    const doi = !!dinhDuong && dinhDuong.job !== "pest" && isHungry(cur);
-    if (doi) {
-      // Đứng sát MÁNG mà máng còn thức ăn thì ăn ngay — bữa chắc chắn, và no
-      // HẲN. Xét trước cỏ: con vật đứng cạnh máng đầy mà vẫn cúi gặm cỏ là thứ
-      // nhìn vào thấy sai ngay, và làm cái máng thành vô nghĩa.
-      if (eatFromTrough(d, content, i)) continue;
-      if (grazeHere(d, content, activeView(d), i)) continue;
-    }
 
     /* Con chó ĐI TUẦN chứ không lang thang: nó nhắm thẳng vào con sâu bọ gần
        nhất. Không có cái này thì nó đi ngẫu nhiên trên bản đồ 48×37 và gần như
@@ -542,8 +573,29 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
       e.ai.path = path.slice(0, MAX_PATH);
       e.ai.phase = "wander";
     } else {
-      e.ai.phase = "idle";
-      e.ai.until = 1 + roll(e) * 2;
+      /* Không có đường tới đích. Với đích KIẾM ĂN thì "đứng nghỉ rồi thử lại"
+         là một cái bẫy: bước sau `penGoal` trả về ĐÚNG cái đích chết ấy, và nó
+         lặp mãi — con vật đứng nguyên một chỗ tới lúc chết đói cạnh máng đầy.
+         Thử một đích lang thang trong khu ngay trong bước này; đi được vài ô là
+         khoảng cách đổi, và đích kế tiếp có thể tới được. */
+      let cuu: { x: number; y: number } | null = null;
+      if (doi && khu) cuu = penWander(s, cur, khu);
+      const p2 = cuu
+        ? findPath(s, content, cx, cy, new Set([idx(s.w, cuu.x, cuu.y)]), {
+            maxNodes: MAX_NODES_ACTOR,
+            box: def.box,
+            swims: def.swims,
+            avoidFarm: neRuong,
+            leash: { x: cx, y: cy, r: LEASH_TILES },
+          })
+        : null;
+      if (p2 && p2.length) {
+        e.ai.path = p2.slice(0, MAX_PATH);
+        e.ai.phase = "wander";
+      } else {
+        e.ai.phase = "idle";
+        e.ai.until = 1 + roll(e) * 2;
+      }
     }
   }
 

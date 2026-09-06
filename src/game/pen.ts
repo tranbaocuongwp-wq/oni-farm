@@ -27,7 +27,8 @@ import type { Draft, MapView } from "./state.ts";
 import { dEntity, dTile, setInv, toastText } from "./state.ts";
 import { countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
-import { TILE, penOfAnimal, tileAt, tileIndexAt } from "./world.ts";
+import { TILE, blockedForActor, penOfAnimal, tileAt, tileIndexAt } from "./world.ts";
+import { actorShape } from "./entities.ts";
 
 /** Trần sức chứa của máng, lấy từ content. */
 export function troughMax(content: Content): number {
@@ -353,15 +354,35 @@ export function penGoal(
 
   if (cho) {
     /* Hồ cá: bơi ĐÚNG LÊN mẻ cám. Khu cạn: cái máng là ô đặc nên phải đứng KỀ
-       bên, và phải là ô trong ruột khu — đứng ngoài rào thì với không tới. */
+       bên, và phải là ô trong ruột khu — đứng ngoài rào thì với không tới.
+
+       Hai chuyện phải đúng ở đây, và trước đây sai cả hai:
+
+       · Ô ấy phải ĐỨNG ĐƯỢC. Phép thử cũ chỉ hỏi `prop === null`, mà một CÔNG
+         TRÌNH nằm ở `t.b` chứ không phải `t.prop` — vòi tưới thì `solid`. Người
+         chơi xây một cái vòi ngay dưới máng là đích trở thành ô đặc, `findPath`
+         trả null, và cả chuồng đứng chết đói cạnh máng đầy. Hỏi
+         `blockedForActor` với đúng hộp của loài này thì mọi thứ đặc đều bị loại,
+         hôm nay và cả về sau.
+       · Phải lấy ô GẦN CON VẬT NHẤT. Vòng cũ trả về ô ĐẦU TIÊN của một danh
+         sách cố định — luôn là ô ngay dưới máng. Ô đó hỏng thì bảy ô còn lại
+         không bao giờ được xét, dù chúng trống trơn. */
     if (pen.swim) return cho;
+    const shape = actorShape(content, e);
+    const box = shape?.box ?? { w: 12, h: 9 };
+    let best: { x: number; y: number; d: number } | null = null;
     for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
       const x = cho.x + (dx as number);
       const y = cho.y + (dy as number);
       if (x < pen.x || y < pen.y || x >= pen.x + pen.w || y >= pen.y + pen.h) continue;
       const t = tileAt(state, x, y);
-      if (t && t.prop === null && !t.tilled) return { x, y };
+      if (!t || t.tilled) continue;
+      if (blockedForActor(state, content, (x + 0.5) * TILE, (y + 0.5) * TILE, box.w, box.h, !!shape?.swims))
+        continue;
+      const d2 = Math.hypot(x - cx, y - cy);
+      if (!best || d2 < best.d) best = { x, y, d: d2 };
     }
+    if (best) return { x: best.x, y: best.y };
   }
   if (inside) return null;
 
