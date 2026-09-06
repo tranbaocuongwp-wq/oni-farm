@@ -366,6 +366,16 @@
       }
     },
     {
+      "id": "kennel",
+      "name": "Nhà chó",
+      "solid": true,
+      "art": {
+        "body": "#a9713f",
+        "dark": "#6b4526",
+        "accent": "#e0b06a"
+      }
+    },
+    {
       "id": "trough",
       "name": "Máng thức ăn",
       "solid": true,

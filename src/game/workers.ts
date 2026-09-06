@@ -26,6 +26,7 @@ import { MAX_ENTITIES, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt, idx } from "./world.ts";
 import { animalDef, entityAt } from "./entities.ts";
 import { readyProduct } from "./animals.ts";
+import { pourSpotIn, troughItem, troughMax, troughStock } from "./pen.ts";
 
 /** Tên gọi cho vui — không ảnh hưởng luật chơi, chỉ để người chơi phân biệt. */
 const NAMES = ["Tư", "Bảy", "Hùng", "Lan", "Sáu", "Mai", "Dũng", "Hạnh", "Tí", "Nga"];
@@ -243,7 +244,7 @@ export function restWorkers(d: Draft, content: Content): void {
 
 /* ------------------------------------------------------------- chọn việc */
 
-export type TaskKind = "use" | "gather" | "feed" | "dump";
+export type TaskKind = "use" | "gather" | "pour" | "dump";
 
 export interface Task {
   kind: TaskKind;
@@ -310,8 +311,16 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
      trong lúc họ đang có việc. */
   const RX = Math.max(s.w, s.h);
 
-  if (w.job === "livestock") {
-    // 1) con vật tới lứa → thu; 2) con vật đói → cho ăn
+  /* CHĂN NUÔI KHÔNG CÒN LÀ MỘT VAI RIÊNG.
+
+     Vai "chăm cây" / "chăn nuôi" vốn đã mỏng hơn vẻ ngoài: nhánh chăn nuôi bị
+     khoá sau `job === "livestock"`, còn nhánh cây trồng chạy cho CẢ HAI vai —
+     nên người "chăn nuôi" xưa nay vẫn đi làm ruộng. Bỏ cái khoá đi là mọi
+     người làm cùng một thang ưu tiên, và người chơi thôi phải đoán xem nên
+     thuê ai làm gì.
+
+     Thang: thu sản phẩm → đổ máng → việc trên ruộng → về kho. */
+  {
     let best: Task | null = null;
     let bestD = Infinity;
     for (const a of s.entities) {
@@ -323,8 +332,7 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
       const dist = Math.abs(ax - cx) + Math.abs(ay - cy);
       if (dist > RX) continue;
       const pi = readyProduct(a, content);
-      const kind: TaskKind | null =
-        pi >= 0 ? "gather" : def.feed && a.animal.fed <= 0 ? "feed" : null;
+      const kind: TaskKind | null = pi >= 0 ? "gather" : null;
       if (!kind) continue;
       if (xau(ax, ay)) continue;
       /* Không đủ chỗ cho MỨC SẢN LƯỢNG CAO NHẤT thì đừng nhận việc thu.
@@ -333,12 +341,46 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
          thu một luống cho 3 quả là 2 quả bốc hơi. Đọc `p.max` từ content nên
          không phải rút hạt ngẫu nhiên chỉ để rồi bỏ. */
       if (kind === "gather" && cho < (def.products[pi]?.max ?? 1)) continue;
-      // thu luôn thắng cho ăn: sản phẩm để lâu không mất, nhưng tay đang rảnh
-      // thì nên nhặt trước
-      const score = (kind === "gather" ? 0 : 1000) + dist;
-      if (score < bestD) {
-        bestD = score;
+      if (dist < bestD) {
+        bestD = dist;
         best = { kind, tx: ax, ty: ay, ent: a.id };
+      }
+    }
+    if (best) return best;
+  }
+
+  /* ĐỔ MÁNG — việc người làm CHƯA TỪNG làm được, mà lẽ ra phải là việc đầu tiên
+     của họ: nó là thứ duy nhất giữ cả đàn sống qua đêm.
+
+     Chọn khu nào có con ĐANG ĐÓI (hoặc sắp đói) và máng đang vơi, gần nhất
+     trước. Cám lấy từ KHO — người làm không có túi riêng để đi chợ; hết cám
+     trong kho thì không nhận việc, chứ không đứng đó tay không. */
+  {
+    let best: Task | null = null;
+    let bestD = Infinity;
+    for (const pen of content.tiles.pens ?? []) {
+      if (pen.map !== s.mapId) continue;
+      const spot = pourSpotIn(s, content, pen);
+      if (!spot) continue;
+      if (troughStock(s, spot.x, spot.y) >= troughMax(content)) continue;
+      if (xau(spot.x, spot.y)) continue;
+      // Kho có món nào khu này nhận không (và đúng món đang nằm trong máng).
+      const dang = troughItem(s, spot.x, spot.y);
+      const muon = dang !== null ? [dang] : (pen.feeds ?? []);
+      if (!s.store.some((v) => v && muon.includes(v.id))) continue;
+      // Khu này có con nào cần ăn không — máng vơi mà chuồng trống thì kệ nó.
+      const can = s.entities.some(
+        (a) =>
+          a.kind === "animal" &&
+          a.map === s.mapId &&
+          animalDef(content, a.def)?.pen === pen.id &&
+          a.animal.fed < (animalDef(content, a.def)?.fedMinutes ?? 0) * 0.5,
+      );
+      if (!can) continue;
+      const dist = Math.abs(spot.x - cx) + Math.abs(spot.y - cy);
+      if (dist < bestD) {
+        bestD = dist;
+        best = { kind: "pour", tx: spot.x, ty: spot.y };
       }
     }
     if (best) return best;

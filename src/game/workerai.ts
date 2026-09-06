@@ -33,6 +33,7 @@ import {
   tileTakenBy,
 } from "./workers.ts";
 import { animalNear, readyProduct } from "./animals.ts";
+import { canPourFromStore, pourFromStore } from "./pen.ts";
 
 /** Mỗi việc làm xong tốn ngần này PHÚT GAME — người làm không phải cái máy. */
 const WORK_MINUTES = 1.5;
@@ -283,26 +284,18 @@ function doWork(d: Draft, content: Content, index: number): void {
       tieuSuc();
       return;
     }
-    if (def?.feed.length && an.animal.fed <= 0) {
-      /* Cho ăn bằng đồ trong KHO — người làm không có túi riêng để đi mua.
-         Lấy MÓN NÀO CÓ: từ khi mỗi loài ăn được vài món, khoá cứng vào một
-         món nghĩa là kho đầy cám mà người làm vẫn đứng nhìn con bò nhịn. */
-      const có = d.s.store.findIndex((v) => v && def.feed.includes(v.id));
-      if (có >= 0) {
-        const store = d.s.store.slice();
-        const cur = store[có]!;
-        store[có] = cur.n > 1 ? { id: cur.id, n: cur.n - 1 } : null;
-        touch(d).store = store;
-        const ai = d.s.entities.indexOf(an);
-        const m = dEntity(d, ai);
-        if (m) {
-          m.animal.fed = def.fedMinutes;
-          m.animal.hungryDays = 0;
-        }
-        tieuSuc();
-      }
-      return;
-    }
+    /* CHO ĂN TRỰC TIẾP: đã bỏ (core 1.38). Người làm giờ đi ĐỔ MÁNG như người
+       chơi — xem nhánh `pour` bên dưới. Bơm thẳng `fed` vào con vật là một
+       đường tắt đi vòng qua cả hệ thống máng, và nó làm hai cách cho ăn kể hai
+       câu chuyện khác nhau về cùng một đàn. */
+    return;
+  }
+
+  /* ---- ĐỔ MÁNG ----------------------------------------------------------
+     Xúc cám từ kho đổ vào máng, rồi con vật tự tới ăn. Đây là việc giữ cả đàn
+     sống qua đêm, và cho tới nay người làm chưa từng làm được nó. */
+  if (canPourFromStore(d.s, content, tx, ty)) {
+    if (pourFromStore(d, content, tx, ty) > 0) tieuSuc();
     return;
   }
 

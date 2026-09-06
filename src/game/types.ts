@@ -1206,7 +1206,6 @@ export type Action =
   /** Mua và thả một con vật xuống (x,y) của bản đồ đang chơi. */
   | { t: "BUY_ANIMAL"; def: string }
   /** Cho con vật gần ô (x,y) ăn. */
-  | { t: "FEED"; x: number; y: number }
   /** Thu sữa/trứng/lông của con vật gần ô (x,y). */
   | { t: "GATHER"; x: number; y: number }
   /** Bán con vật gần ô (x,y) lấy thịt. */

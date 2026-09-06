@@ -51,6 +51,19 @@ PARKING = [(42, 5), (43, 5), (44, 5)]
 # thì cả nông trại không còn một mảnh đất trống nào để đặt vòi tưới hay nhà
 # kính mà không phải hy sinh một ô ruộng.
 YARD = (31, 1, 38, 5)
+# NHÀ CHÓ — một khu nhỏ nằm ở góc đông sân sau, sát cái kho.
+# Con chó khai `housing: "free"` nên nó vẫn đi tuần khắp nông trại; khu này là
+# CHỖ ĂN và chỗ về của nó, đúng vai của ba khu chăn nuôi kia. Đặt cạnh kho vì
+# đó là chỗ người làm qua lại nhiều nhất — đổ máng cho chó nằm trên đường đi
+# của họ, không phải một chuyến riêng.
+# CHỈ CHIẾM HAI HÀNG TRÊN của sân sau. Sân sau là khoảnh đất trống DUY NHẤT đủ
+# rộng để người chơi bày vòi tưới hay nhà kính thành một mảng — lấn xuống hàng
+# thứ ba là cắt mất nó, và cả nông trại không còn chỗ nào khác.
+DOG_YARD = (35, 1, 38, 2)        # cả khoảnh lát bê tông
+DOG_KENNEL = (35, 1)             # cái nhà chó — NGOÀI ruột khu, vì nó là ô đặc
+DOGPEN = (36, 1, 38, 2)          # ruột khu: phần con chó đứng được
+DOG_TROUGH = (37, 2)             # máng
+DOG_FEEDS = ["item:feedmix", "item:fodder"]
 # Điểm giao nằm ngay trước CỬA KHO: hàng và vật nuôi về tới nông trại thì về
 # tới kho, chứ không bỏ xuống giữa trục đường rồi tự đi tiếp.
 DROPOFF = (41, 5)
@@ -60,8 +73,8 @@ FOREST_Y0, FOREST_Y1 = 27, 35
 FOREST_LANE_X = [8, 16, 23, 38]
 FOREST_LANE_Y = [30, 33]
 
-SOLID = set("TtsobGHDSBWCdgUuLKkM".replace("g", ""))  # 'g' cỏ non KHÔNG đặc
-SOLID = set("TtsobGHDSBWCdUuLKkM")
+SOLID = set("TtsobGHDSBWCdgUuLKkMn".replace("g", ""))  # 'g' cỏ non KHÔNG đặc
+SOLID = set("TtsobGHDSBWCdUuLKkMn")
 WALK_GROUND = set(".,:=gwPN#m")  # ký tự đi được (P cầu, N biển, # bê tông, m máng)
 
 g = [["." for _ in range(W)] for _ in range(H)]
@@ -134,6 +147,12 @@ for (_id, _nm, fy0, fy1, gates) in PENS:
     rect(PEN_X0, fy0, PEN_X1, fy1, "F")
     for gy in gates: g[gy][PEN_X0] = ":"
     g[(fy0 + fy1) // 2][36] = "m"
+
+# NHÀ CHÓ: lát bê tông như ruột ba chuồng kia, nhưng KHÔNG rào — con chó đi
+# tuần cả nông trại, rào lại là chặn đúng việc của nó.
+box(DOG_YARD[0], DOG_YARD[1], DOG_YARD[2], DOG_YARD[3], "#")
+g[DOG_KENNEL[1]][DOG_KENNEL[0]] = "n"
+g[DOG_TROUGH[1]][DOG_TROUGH[0]] = "m"
 
 
 # ----------------------------------------------------------------- 6. rừng
@@ -226,6 +245,7 @@ cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
 # Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
 cam(PARKING[2][0] + 1, 5, "Bãi giao nhận", "w")  # bãi nằm bên TRÁI tấm biển
 cam(YARD[0], YARD[1], "Sân sau")
+cam(DOG_KENNEL[0] + 1, DOG_KENNEL[1], "Nhà chó")
 for (_id, nm, fy0, fy1, gates) in PENS:
     cam(PEN_X0 + 1, fy0 + 1, nm)   # trong ruột chuồng, góc trên-trái
 cam(POND[2] + 1, PIER_Y - 1, "Hồ cá", "w")   # hồ nằm bên TRÁI ô biển
@@ -286,6 +306,9 @@ for (_id, _nm, fy0, fy1, _gt) in PENS:
     for y in range(fy0+1, fy1):
         for x in range(PEN_X0+1, PEN_X1):
             assert g[y][x] in "#m", f"ruột chuồng bẩn ở ({x},{y}) = {g[y][x]}"
+for y in range(DOGPEN[1], DOGPEN[3] + 1):
+    for x in range(DOGPEN[0], DOGPEN[2] + 1):
+        assert g[y][x] in "#mn", f"khu chó bẩn ở ({x},{y}) = {g[y][x]}"
 for (lx0, lx1) in LOT_COLS:
     for (ly0, ly1) in LOT_ROWS:
         for y in range(ly0, ly1+1):
@@ -315,6 +338,11 @@ for (pid, nm, fy0, fy1, _gt) in PENS:
         ("id",pid),("name",nm),("map","farm"),
         ("x",PEN_X0+1),("y",fy0+1),("w",PEN_X1-PEN_X0-1),("h",fy1-fy0-1),
         ("feeds",feeds[pid])]))
+pens.append(collections.OrderedDict([
+    ("id","doghouse"),("name","Nhà chó"),("map","farm"),
+    ("x",DOGPEN[0]),("y",DOGPEN[1]),
+    ("w",DOGPEN[2]-DOGPEN[0]+1),("h",DOGPEN[3]-DOGPEN[1]+1),
+    ("feeds",DOG_FEEDS)]))
 pens.append(collections.OrderedDict([
     ("id","pond"),("name","Hồ cá"),("map","farm"),
     ("x",POND[0]),("y",POND[1]),("w",POND[2]-POND[0]+1),("h",POND[3]-POND[1]+1),
@@ -354,7 +382,7 @@ lw = LOT_COLS[0][1] - LOT_COLS[0][0] + 1
 lh = LOT_ROWS[0][1] - LOT_ROWS[0][0] + 1
 print(f"ruộng   : {len(LOT_COLS)}×{len(LOT_ROWS)} = {len(LOT_COLS)*len(LOT_ROWS)} lô, "
       f"mỗi lô {lw}×{lh} → {til} ô cuốc được")
-print(f"chuồng  : {len(PENS)} khu trên cạn + 1 ao cá")
+print(f"chuồng  : {len(PENS)} khu trên cạn + nhà chó + 1 ao cá")
 print(f"rừng    : {W-2}×{FOREST_Y1-FOREST_Y0+1}")
 print(f"biển cắm: {len(BIEN)} tấm")
 print(f"sân sau : {YARD[2]-YARD[0]+1}×{YARD[3]-YARD[1]+1} ô trống")

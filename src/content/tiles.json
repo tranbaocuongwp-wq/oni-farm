@@ -134,6 +134,10 @@
     "m": {
       "ground": "concrete",
       "prop": "trough"
+    },
+    "n": {
+      "ground": "concrete",
+      "prop": "kennel"
     }
   },
   "spawn": {
@@ -218,6 +222,19 @@
         "crop:wheat",
         "crop:barley",
         "crop:soybean"
+      ]
+    },
+    {
+      "id": "doghouse",
+      "name": "Nhà chó",
+      "map": "farm",
+      "x": 36,
+      "y": 1,
+      "w": 3,
+      "h": 2,
+      "feeds": [
+        "item:feedmix",
+        "item:fodder"
       ]
     },
     {
@@ -493,6 +510,13 @@
       "x": 31,
       "y": 1,
       "text": "Sân sau",
+      "side": "e"
+    },
+    {
+      "map": "farm",
+      "x": 36,
+      "y": 1,
+      "text": "Nhà chó",
       "side": "e"
     },
     {

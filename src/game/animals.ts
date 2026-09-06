@@ -18,7 +18,7 @@
 import type { Content, Entity, GameState, PenDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
-import { addItem, canAdd, countItem, removeItem, selectedItemId } from "./inventory.ts";
+import { addItem, canAdd } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
@@ -212,53 +212,24 @@ export function animalMood(
 
 /* ------------------------------------------------------------------ cho ăn */
 
-/**
- * Cho con vật ở gần (x,y) ăn, tiêu một `feed` trong túi.
- *
- * Loài `feed: null` (gà, vịt) tự kiếm ăn quanh sân nên không cho ăn tay được —
- * báo rõ chứ không im lặng nuốt thao tác.
- */
-export function feedAnimal(d: Draft, content: Content, x: number, y: number): boolean {
-  const e = animalNear(d.s, x, y);
-  if (!e) return false;
-  const def = animalDef(content, e.def);
-  if (!def) return false;
-  if (!def.feed.length) {
-    toastText(d, `${def.name} tự kiếm ăn quanh sân, không cần cho ăn.`, "info");
-    return false;
-  }
-  if (e.animal.fed > def.fedMinutes * 0.6) {
-    toastText(d, `${def.name} còn no.`, "info");
-    return false;
-  }
-  /* Ưu tiên món ĐANG CẦM, nếu không thì lấy món đầu tiên trong túi mà nó ăn
-     được. Không ưu tiên món đang cầm thì cầm bó rơm bấm cho ăn lại thấy game
-     lẳng lặng tiêu mất cân cám đắt hơn trong balo. */
-  const cam = selectedItemId(d.s.inv, d.s.sel);
-  const mon =
-    cam && def.feed.includes(cam) && countItem(d.s.inv, cam) > 0
-      ? cam
-      : def.feed.find((f) => countItem(d.s.inv, f) > 0);
-  if (!mon) {
-    toastText(
-      d,
-      `Không có gì cho ${def.name} ăn — nó ăn ${def.feed.map((f) => itemName(f, content)).join(", ")}.`,
-      "bad",
-    );
-    return false;
-  }
-  const left = removeItem(d.s.inv, mon, 1);
-  if (!left) return false;
-  setInv(d, left);
+/* CHO ĂN TRỰC TIẾP: ĐÃ BỎ (core 1.38).
 
-  const i = d.s.entities.indexOf(e);
-  const m = dEntity(d, i);
-  if (!m) return false;
-  m.animal.fed = def.fedMinutes;
-  m.animal.hungryDays = 0;
-  toastText(d, `Đã cho ${def.name} ăn ${itemName(mon, content)}.`, "good");
-  return true;
-}
+   Luật Cường đặt: "cho động vật ăn là chỉ cho vào máng, hoặc là rải xuống hồ;
+   còn lại các con vật sẽ dựa vào dữ liệu đó chúng nó tự ăn — không được bơm
+   thức ăn trực tiếp."
+
+   Nó đúng, và không chỉ vì thẩm mỹ. `feedAnimal` là một đường tắt bơm thẳng
+   `fed = fedMinutes` vào một con vật, đi vòng qua toàn bộ hệ thống máng: cái
+   máng có bao nhiêu phần, loài này ăn được món nào, con vật có tới được chỗ ăn
+   không. Hai đường song song cùng làm một việc thì sớm muộn cũng lệch nhau —
+   và đã lệch: đường máng hỏi `def.feed` chứa món ĐANG NẰM TRONG máng, đường
+   trực tiếp thì lục cả túi tìm bất cứ món nào. Người chơi cho ăn kiểu này thì
+   cái máng thành đồ trang trí.
+
+   Giờ chỉ còn HAI cửa, và cả hai đều đổ vào cùng một chỗ dữ liệu:
+     · `pourIntoTrough` — đổ vào máng khu cạn;
+     · `feedPond`       — rắc xuống mặt nước hồ cá.
+   Con vật đọc từ đó mà tự ăn (`eatFromTrough`, `eatFromTroughNight`). */
 
 /* ------------------------------------------------------------- thu sản phẩm */
 

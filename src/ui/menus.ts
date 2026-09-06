@@ -589,7 +589,7 @@ export function createMenus(
       foot.appendChild(
         note(
           coMon
-            ? "Thức ăn: đổ vào MÁNG trong khu chuồng hoặc đứng cạnh con vật bấm CHO ĂN. Ống nước, tấm kính: mang về bàn chế tạo để làm vòi tưới, sàn nhà kính."
+            ? "Thức ăn: đổ vào MÁNG trong khu chuồng, hoặc rắc xuống mặt hồ cho cá — con vật tự tới ăn. Ống nước, tấm kính: mang về bàn chế tạo để làm vòi tưới, sàn nhà kính."
             : "Chưa có vật tư nào bày bán.",
         ),
       );

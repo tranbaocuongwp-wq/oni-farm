@@ -28,7 +28,6 @@ export type HintKind =
   | "craft"
   | "store"
   | "gather"
-  | "feed"
   | "sleep"
   | "refill"
   | "enter"
@@ -63,7 +62,6 @@ export const LABEL: Record<Exclude<HintKind, null>, string> = {
   enter: "VÀO",
   store: "KHO",
   gather: "THU",
-  feed: "CHO ĂN",
   lift: "NHẤC",
   putdown: "ĐẶT XUỐNG",
   pour: "ĐỔ MÁNG",
@@ -219,8 +217,9 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
     if (def) {
       if (readyProduct(an, content) >= 0)
         return { kind: "gather", label: LABEL.gather, ready: inReach(state, x, y), why: null };
-      if (def.feed && an.animal.fed <= 0)
-        return { kind: "feed", label: LABEL.feed, ready: inReach(state, x, y), why: null };
+      /* Con vật ĐÓI thì nút KHÔNG mời cho ăn nữa: thức ăn chỉ vào bằng máng
+         (hoặc rắc xuống hồ), rồi con vật tự tới ăn. Nhãn cũ mời một thao tác
+         không còn tồn tại. */
     }
   }
 
@@ -404,7 +403,7 @@ export function contextAction(
     best = { kind, label: LABEL[kind], at };
   };
 
-  // 1. CON VẬT quanh mình — vắt sữa, hoặc cho ăn nếu đang cầm đúng món.
+  // 1. CON VẬT quanh mình — vắt sữa. (Cho ăn đi đường MÁNG ở bước 2.)
   for (const [ax, ay] of [
     [x, y],
     [px, py],
@@ -415,7 +414,6 @@ export function contextAction(
     if (!def) continue;
     const at = { x: Math.floor(an.x / TILE), y: Math.floor(an.y / TILE) };
     if (readyProduct(an, content) >= 0) xet("gather", at);
-    if (def.feed && an.animal.fed <= 0) xet("feed", at);
   }
 
   // 2. Việc của cả KHU (đổ máng, rắc hồ, thu cả đàn) — lề rộng, xem `penAction`.
@@ -527,7 +525,6 @@ export function nhoMonDangCam(kind: Exclude<HintKind, null>): boolean {
   switch (kind) {
     case "pour":
     case "feedpond":
-    case "feed":
     case "plant":
     case "water":
     case "till":

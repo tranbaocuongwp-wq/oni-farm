@@ -4092,8 +4092,15 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
         if (pen.swim) eq(t.g, "water", `khu bơi '${pen.id}': ruột phải là nước ở (${x},${y})`);
         else ok(!isSolid(s0, content, x, y), `khu '${pen.id}': ruột phải đi được ở (${x},${y})`);
       }
-    // ao cá không có rào — bờ ao đã là rào. Các khu trên cạn thì phải có.
+    /* Rào là để GIỮ con vật trong khu — nên chỉ khu nào NHỐT mới cần rào.
+       Ao cá: bờ nước đã là rào. Nhà chó: con chó khai `housing: "free"`, việc
+       của nó là đi tuần cả nông trại — rào lại là chặn đúng cái việc ấy, và
+       cái khu ấy chỉ còn là chỗ ăn với chỗ về. */
     if (pen.swim) continue;
+    const nhot = Object.values(content.animals).some(
+      (d) => d.pen === pen.id && d.housing === "pen",
+    );
+    if (!nhot) continue;
     let rao = 0;
     for (let x = pen.x - 1; x <= pen.x + pen.w; x++)
       for (const y of [pen.y - 1, pen.y + pen.h])
@@ -4373,32 +4380,47 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
   eq(countInv(store, mon), co0 + 2, "mua được thức ăn ở cửa hàng");
   eq(store.getState().money, gia, "trừ đúng tiền");
 
-  /* ---- (d) cho ăn tay nhận BẤT KỲ món nào loài đó ăn ------------------- */
-  walkTo(store, HOME.x, HOME.y);
-  const p = store.getState().player;
-  const px = Math.floor(p.x / TILE), py = Math.floor(p.y / TILE);
-  const monSau = content.animals.cow.feed[content.animals.cow.feed.length - 1];
-  ok(monSau !== content.animals.cow.feed[0], "bò có ít nhất hai món để thử");
-  setState(store, (s) => {
-    for (const v of s.inv) if (v && content.animals.cow.feed.includes(v.id)) v.n = 0;
-    s.inv = s.inv.map((v) => (v && v.n === 0 ? null : v));
-    s.entSeq = 1;
-    s.entities = [{
-      id: 1, kind: "animal", def: "cow", map: "farm",
-      x: (px + 1) * TILE + 8, y: py * TILE + 8,
-      dir: "down", anim: 0, seed: 3,
-      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
-      animal: { age: 9, fed: 0, hungryDays: 2, prod: [0] },
-    }];
-  });
-  giveItem(store, monSau, 2);                 // CHỈ có món CUỐI trong danh sách
-  store.dispatch({ t: "FEED", x: px + 1, y: py });
-  eq(
-    store.getState().entities[0].animal.fed,
-    content.animals.cow.fedMinutes,
-    "cho ăn được bằng món khác, không phải chỉ món đầu danh sách",
-  );
-  eq(countInv(store, monSau), 1, "trừ đúng một phần");
+  /* ---- (d) CHỈ CÓ HAI CỬA cho thức ăn: máng và mặt hồ ------------------ */
+  /* Từ core 1.38 không còn đường "đứng cạnh con vật, bấm cho ăn". Luật Cường
+     đặt: thức ăn chỉ vào bằng máng hoặc rắc xuống hồ, rồi con vật tự đọc từ đó
+     mà ăn. Khẳng định cái ĐÃ BỎ, để không ai lặng lẽ nối lại đường tắt ấy. */
+  {
+    const st = mkStore();
+    khoaNac(st);
+    const bo0 = st.getState();
+    // Không còn nhãn CHO ĂN ở bất cứ đâu trong bộ nhãn nút.
+    const nhan = JSON.stringify(hintAt(bo0, content, PLOTS[0].x, PLOTS[0].y) ?? {});
+    ok(!nhan.includes("CHO ĂN"), "bộ nhãn nút không còn 'CHO ĂN'");
+    // Con vật đói đứng ngay cạnh: nút KHÔNG mời cho ăn nữa.
+    let id = 0;
+    setState(st, (s) => {
+      s.player.x = 20 * TILE + 8;
+      s.player.y = 6 * TILE + 8;
+      id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: 21 * TILE + 8, y: 6 * TILE + 8, dir: "down", anim: 0, seed: 3,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 2, prod: [0] },
+      });
+    });
+    giveItem(st, content.animals.cow.feed[0], 4);
+    selectItem(st, content.animals.cow.feed[0]);
+    const s1 = st.getState();
+    /* Kiểm cả LOẠI lẫn NHÃN. Chỉ kiểm loại thì ai đó nối lại đường cũ dưới một
+       cái tên khác là test vẫn xanh — thử rồi: đổi `kind` thành "gather" mà
+       giữ nhãn "CHO ĂN", không kịch bản nào đỏ. */
+    const noiVeChoAn = (h) => !!h && (h.kind === "feed" || String(h.label).includes("CHO ĂN"));
+    for (const [ax, ay] of [[21, 6], [20, 6], [22, 6]]) {
+      ok(!noiVeChoAn(hintAt(s1, content, ax, ay)), `nút chính ở (${ax},${ay}) không được mời cho ăn: ${JSON.stringify(hintAt(s1, content, ax, ay))}`);
+      ok(!noiVeChoAn(interactHint(s1, content, ax, ay)), `nút phụ ở (${ax},${ay}) không được mời cho ăn`);
+      ok(!noiVeChoAn(contextAction(s1, content, ax, ay)), `nút ngữ cảnh ở (${ax},${ay}) không được mời cho ăn`);
+    }
+    // Và bảng nhãn của cả game không còn chữ ấy.
+    ok(!AUTO_ORDER.includes("feed"), "thứ tự tự động không còn việc 'feed'");
+    // Và con bò vẫn đói: không có đường tắt nào bơm thức ăn vào nó.
+    eq(st.getState().entities.find((e) => e.id === id).animal.fed, 0, "con bò vẫn đói");
+  }
 
   /* ---- (e) CHO CÁ ĂN từ bờ ao ----------------------------------------- */
   const ao = content.tiles.pens.find((q) => q.swim);
@@ -8051,6 +8073,170 @@ test("126. một lúc CHỈ MỘT chế độ điều khiển, và nó theo thi�
   eq(parseSettings({ inputMode: "auto" }).inputMode, "auto", "cài đặt nhận 'auto'");
   eq(parseSettings({ inputMode: "gamepad" }).inputMode, "auto", "giá trị lạ rơi về 'auto'");
   eq(DEFAULT_SETTINGS.inputMode, "auto", "mặc định là tự nhận");
+});
+
+/* ------------------------------------- Đợt 12: máng là cửa duy nhất, và nhà chó */
+
+test("127. NHÀ CHÓ là một khu thật: có máng, có biển, con chó về đó ăn — và không bị rào", () => {
+  const store = mkStore();
+  const khu = (content.tiles.pens ?? []).find((p) => p.id === "doghouse");
+  ok(khu, "content phải khai khu 'doghouse'");
+  eq(content.animals.dog.pen, "doghouse", "con chó thuộc khu của chính nó, không ở ké chuồng bò");
+  const s0 = store.getState();
+
+  // Ruột khu đi được, và có đúng một cái máng trong đó.
+  let mang = null;
+  for (let y = khu.y; y < khu.y + khu.h; y++)
+    for (let x = khu.x; x < khu.x + khu.w; x++) {
+      const t = tileAt(s0, x, y);
+      ok(!!t, `ô (${x},${y}) phải có thật`);
+      if (t.prop === "trough") { mang = { x, y }; continue; }
+      ok(!isSolid(s0, content, x, y), `ruột nhà chó phải đi được ở (${x},${y})`);
+    }
+  ok(mang, "nhà chó phải có máng");
+  // Máng nhận đúng những món con chó ăn được.
+  for (const f of khu.feeds ?? []) ok(content.animals.dog.feed.includes(f), `máng nhận '${f}' thì chó phải ăn được`);
+  ok((khu.feeds ?? []).length > 0, "máng phải nhận ít nhất một món");
+
+  // Có cái nhà chó đứng cạnh, và nó nằm NGOÀI ruột khu (nó là ô đặc).
+  let nha = null;
+  for (let y = khu.y - 1; y <= khu.y + khu.h && !nha; y++)
+    for (let x = khu.x - 1; x <= khu.x + khu.w; x++)
+      if (tileAt(s0, x, y)?.prop === "kennel") { nha = { x, y }; break; }
+  ok(nha, "phải có cái nhà chó cạnh khu");
+  ok(
+    nha.x < khu.x || nha.x >= khu.x + khu.w || nha.y < khu.y || nha.y >= khu.y + khu.h,
+    `nhà chó (${nha.x},${nha.y}) phải nằm ngoài ruột khu — nó đặc`,
+  );
+  ok((content.tiles.signs ?? []).some((b) => b.text === "Nhà chó"), "phải có biển 'Nhà chó'");
+
+  // KHÔNG rào: con chó đi tuần cả nông trại.
+  let rao = 0;
+  for (let x = khu.x - 1; x <= khu.x + khu.w; x++)
+    for (const y of [khu.y - 1, khu.y + khu.h]) if (tileAt(s0, x, y)?.b === "fence") rao++;
+  eq(rao, 0, "nhà chó không rào — rào lại là chặn đúng việc đi tuần của nó");
+  eq(content.animals.dog.housing, "free", "…và loài chó khai thả rông");
+
+  // SÂN SAU vẫn còn một khoảnh trống đủ rộng để bày công trình.
+  ok(!!findOpenBlock(s0, 8, 3), "sân sau vẫn còn khoảnh 8×3 đất trống");
+
+  // Con chó ĐÓI về đúng máng của nó mà ăn.
+  let id = 0;
+  setState(store, (s) => {
+    setTile(s, mang.x, mang.y, { trough: 6, troughId: khu.feeds[0] });
+    id = ++s.entSeq;
+    s.entities.push({
+      id, kind: "animal", def: "dog", map: "farm",
+      x: (khu.x + khu.w - 1) * TILE + 8, y: (khu.y + khu.h - 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 17,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [] },
+    });
+    s.player.x = 20 * TILE;
+    s.player.y = 20 * TILE;
+  });
+  let khi = -1;
+  for (let i = 1; i <= 60 * 60 && khi < 0; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (store.getState().entities.find((e) => e.id === id).animal.fed > 0) khi = i;
+  }
+  ok(khi > 0, "con chó đói phải về máng nhà nó mà ăn");
+  eq(troughStock(store.getState(), mang.x, mang.y), 5, "và ăn đúng một phần");
+});
+
+test("128. NGƯỜI LÀM đi ĐỔ MÁNG lấy cám từ kho — không bơm thức ăn thẳng vào con vật", () => {
+  const store = mkStore();
+  khoaNac(store);
+  unlockAll(store);
+  store.dispatch({ t: "HIRE", job: "crops" });
+  ok(store.getState().entities.some((e) => e.kind === "worker"), "thuê được người làm");
+
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  let m = null;
+  {
+    const s0 = store.getState();
+    outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++)
+        if (tileAt(s0, x, y).prop === "trough") { m = { x, y }; break outer; }
+  }
+  const cam = pen.feeds[0];
+  const ids = [];
+  setState(store, (s) => {
+    // Máng RỖNG, kho có cám, và ba con bò đang đói.
+    setTile(s, m.x, m.y, { trough: 0, troughId: null });
+    delete s.tiles[idx(s.w, m.x, m.y)].trough;
+    delete s.tiles[idx(s.w, m.x, m.y)].troughId;
+    s.store = s.store.slice();
+    s.store[0] = { id: cam, n: 20 };
+    for (let i = 0; i < 3; i++) {
+      const id = ++s.entSeq;
+      ids.push(id);
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: (pen.x + 6 + i) * TILE + 8, y: (pen.y + 1) * TILE + 8,
+        dir: "down", anim: 0, seed: 61 + i,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+    }
+    // Ruộng sạch trơn để người làm không có việc nào khác hấp dẫn hơn.
+    for (const z of content.tiles.zones.filter((z) => z.kind === "farm"))
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: true, wet: true, crop: null, b: null });
+  });
+  const khoCon = () => store.getState().store.reduce((n, v) => n + (v && v.id === cam ? v.n : 0), 0);
+  const kho0 = khoCon();
+  eq(troughStock(store.getState(), m.x, m.y), 0, "máng bắt đầu rỗng");
+
+  let khi = -1;
+  for (let i = 1; i <= 60 * 120 && khi < 0; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (troughStock(store.getState(), m.x, m.y) > 0) khi = i;
+  }
+  ok(khi > 0, "người làm phải tự đi đổ máng");
+  ok(khoCon() < kho0, `cám phải lấy TỪ KHO (${kho0} → ${khoCon()})`);
+  eq(troughItem(store.getState(), m.x, m.y), cam, "…và đúng món kho đang có");
+  // Rồi bò tự tới ăn từ máng ấy — không ai bơm thẳng vào chúng.
+  let an = 0;
+  for (let i = 1; i <= 60 * 60 && an < 3; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    an = store.getState().entities.filter((e) => ids.includes(e.id) && e.animal.fed > 0).length;
+  }
+  eq(an, 3, "cả ba con bò tự tới máng ăn");
+  ok(troughStock(store.getState(), m.x, m.y) < 12, "máng phải vơi đi — chúng ăn từ ĐÓ");
+
+  // KHO RỖNG thì không nhận việc, chứ không đứng đổ máng bằng tay không.
+  const st2 = mkStore();
+  khoaNac(st2);
+  unlockAll(st2);
+  st2.dispatch({ t: "HIRE", job: "crops" });
+  setState(st2, (s) => {
+    s.store = s.store.map(() => null);
+    const t = s.tiles[idx(s.w, m.x, m.y)];
+    delete t.trough;
+    delete t.troughId;
+    const id = ++s.entSeq;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: "farm",
+      x: (pen.x + 6) * TILE + 8, y: (pen.y + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 5,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+    });
+  });
+  for (let i = 0; i < 60 * 30; i++) st2.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(troughStock(st2.getState(), m.x, m.y), 0, "kho rỗng thì máng vẫn rỗng — không đổ ra từ hư không");
+  eq(st2.getState().store.filter(Boolean).length, 0, "…và kho vẫn rỗng");
+  /* Con bò thì có thể tự no: đói mà máng rỗng thì nó ra khỏi chuồng gặm cỏ —
+     đúng thiết kế, và là một cửa KHÁC (`grazeHere`), không phải ai bơm cho nó.
+     Cỏ chỉ làm no 70 %, máng làm no HẲN; nên phép thử ở đây là "không con nào
+     no hẳn", tức không có đường tắt nào chạm tới `fedMinutes`. */
+  const bo = st2.getState().entities.find((e) => e.kind === "animal");
+  ok(
+    bo.animal.fed < content.animals.cow.fedMinutes,
+    `không ai bơm thức ăn: con bò không được no HẲN (fed = ${bo.animal.fed.toFixed(0)}/${content.animals.cow.fedMinutes})`,
+  );
 });
 
 /* ------------------------------------------------------------------ tổng kết */

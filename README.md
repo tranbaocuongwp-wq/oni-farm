@@ -986,6 +986,44 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 12: máng là cửa duy nhất, và con chó có nhà (core 1.38 · content 1.41)
+
+Ba yêu cầu của Cường, và chúng hoá ra là **một** luật.
+
+**"Cho động vật ăn là chỉ cho vào máng, hoặc rải xuống hồ; còn lại chúng tự ăn — không được bơm
+thức ăn trực tiếp."** Trước đây có hai đường song song cùng làm một việc: đổ máng, và đứng cạnh
+con vật bấm CHO ĂN. Đường thứ hai bơm thẳng `fed = fedMinutes` vào con vật, đi vòng qua cả hệ
+thống máng — máng còn bao nhiêu phần, loài này ăn được món nào, con vật có tới được chỗ ăn không.
+Hai đường thì sớm muộn cũng lệch, và đã lệch: đường máng hỏi món ĐANG NẰM trong máng, đường trực
+tiếp lục cả túi tìm bất cứ món nào. Người chơi cho ăn kiểu ấy thì cái máng thành đồ trang trí.
+Giờ chỉ còn hai cửa — `pourIntoTrough` và `feedPond` — và cả hai đổ vào **cùng một chỗ dữ liệu**
+mà con vật đọc để tự ăn. Gỡ hẳn `FEED`, `feedAnimal`, nhãn `CHO ĂN`, và loại việc `feed`.
+
+**Người làm cũng đi qua cửa ấy.** Họ từng bơm thẳng `fed` vào con vật y như đường tắt vừa bỏ —
+nên người chơi đổ máng thì máng vơi, người làm cho ăn thì máng không nhúc nhích, và hai cách kể
+hai câu chuyện khác nhau về cùng một đàn. Giờ họ **xúc cám từ kho đổ vào máng** (`pourFromStore`),
+đúng việc người chơi làm. Kho rỗng thì không nhận việc, chứ không đứng đổ bằng tay không.
+
+Và **vai "chăm cây" / "chăn nuôi" biến mất**. Nó vốn đã mỏng hơn vẻ ngoài: nhánh chăn nuôi bị
+khoá sau `job === "livestock"`, còn nhánh cây trồng chạy cho cả hai — người "chăn nuôi" xưa nay
+vẫn đi làm ruộng. Bỏ cái khoá là mọi người làm cùng một thang: thu sản phẩm → đổ máng → việc
+trên ruộng → về kho.
+
+**Nhà chó.** Con chó khai `housing: "free"` nhưng lại ăn ké máng chuồng bò — mà chuồng bò nhận cỏ
+khô, thứ chó không ăn, nên nó thường xuyên nhịn cạnh một cái máng đầy. Giờ nó có khu riêng
+`doghouse` ở góc đông sân sau, sát cái kho: một cái nhà chó, một cái máng nhận đúng hai món nó
+ăn, một tấm biển. **Không rào** — rào lại là chặn đúng việc đi tuần của nó; và kịch bản 67 đổi
+theo cho đúng luật: rào là để GIỮ, nên chỉ khu nào nhốt (`housing: "pen"`) mới cần rào.
+
+Khu chó chỉ chiếm **hai hàng trên** của sân sau. Sân sau là khoảnh đất trống duy nhất đủ rộng để
+bày một mảng vòi tưới hay nhà kính; lấn xuống hàng thứ ba là cắt mất nó, và cả nông trại không
+còn chỗ nào khác — kịch bản 51 bắt được đúng chuyện đó ngay lần đầu thử.
+
+Kịch bản 127–128 và phần (d) của 69 viết lại. Đột biến: bỏ việc đổ máng · đổ máng không trừ kho ·
+nối lại nhãn CHO ĂN dưới một loại việc khác — cả ba đều đỏ. Trình duyệt thật: đứng cạnh bò đói
+với cỏ khô trong tay, bấm cả nút chính lẫn nút phụ, bò vẫn đói và cỏ khô không mất một bó nào;
+con chó đói tự về máng nhà nó ăn.
+
 ### Đợt 11: con vật đói cả ngày, và một lúc chỉ một chế độ điều khiển (core 1.36 → 1.37)
 
 Cường chơi bản 1.36 rồi báo: *"mặc dù là máng có thức ăn, nhưng mấy con vật đói nó không có ăn

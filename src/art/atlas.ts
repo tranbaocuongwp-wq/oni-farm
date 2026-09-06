@@ -1184,9 +1184,33 @@ function makeStoreDoor(art: PropArt): HTMLCanvasElement {
   return s.c;
 }
 
+/** NHÀ CHÓ — mái dốc, cửa vòm tối, một tấm ván tên treo dưới mái.
+ *  Nhỏ hơn nhà người rõ rệt: chừa hai cột trống hai bên để đọc ra là "cái
+ *  chuồng đặt trong sân", không phải một căn nhà tí hon. */
+function makeKennel(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 15, 5, 1.6);
+  // thân
+  s.rect(2, 7, 12, 8, art.body);
+  s.hline(2, 14, 12, art.dark);
+  // mái dốc: hai bậc mỗi bên, đỉnh ở giữa
+  s.rect(1, 5, 14, 2, art.dark);
+  s.rect(3, 3, 10, 2, art.dark);
+  s.rect(5, 2, 6, 1, art.accent);
+  // cửa vòm
+  s.rect(6, 9, 4, 6, "#1c1410");
+  s.rect(6, 8, 4, 1, "#1c1410");
+  s.px(5, 10, "#1c1410");
+  s.px(10, 10, "#1c1410");
+  // ván tên
+  s.rect(11, 8, 3, 2, art.accent);
+  return outline(s).c;
+}
+
 function makeProp(id: string, art: PropArt): HTMLCanvasElement {
   switch (id) {
     case "warehouse": return makeWarehouse(art);
+    case "kennel": return makeKennel(art);
     case "store_door": return makeStoreDoor(art);
     case "tree": return makeTree(art);
     case "sapling": return makeSapling(art);

@@ -1117,7 +1117,7 @@ async function boot() {
   }
 
   /**
-   * Con vật ở ô này: tới lứa thì THU, đói thì CHO ĂN.
+   * Con vật ở ô này: tới lứa thì THU. (Cho ăn đi đường máng, không đi đường này.)
    *
    * Đứng trước cả `tryInteract` và `tryUse` — người chơi nhìn thấy con bò chứ
    * không nhìn thấy nền đất dưới chân nó, nên cú bấm phải nói về con bò.
@@ -1135,11 +1135,8 @@ async function boot() {
       store.dispatch({ t: "GATHER", x: tx, y: ty });
       return true;
     }
-    if (def.feed && e.animal.fed <= 0) {
-      lastUse = { x: tx, y: ty };
-      store.dispatch({ t: "FEED", x: tx, y: ty });
-      return true;
-    }
+    /* ĐÓI thì KHÔNG cho ăn ở đây nữa (core 1.38): thức ăn chỉ vào bằng máng
+       hoặc rắc xuống hồ, rồi con vật tự tới ăn. Xem `game/animals.ts`. */
     return false;
   }
 

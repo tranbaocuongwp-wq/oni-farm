@@ -24,7 +24,7 @@
 
 import type { Content, Entity, GameState, PenDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
-import { dEntity, dTile, setInv, toastText } from "./state.ts";
+import { dEntity, dTile, setInv, toastText, touch } from "./state.ts";
 import { countItem, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { TILE, blockedForActor, penOfAnimal, tileAt, tileIndexAt } from "./world.ts";
@@ -134,6 +134,51 @@ export function pourIntoTrough(d: Draft, content: Content, x: number, y: number)
   t.trough = troughStock(d.s, x, y) + n;
   t.troughId = feed;
   toastText(d, `Đổ ${n} ${itemName(feed, content)} vào máng.`, "good");
+  return n;
+}
+
+/**
+ * ĐỔ VÀO MÁNG TỪ KHO — đường của NGƯỜI LÀM.
+ *
+ * Người làm không có túi riêng để đi chợ, họ lấy từ kho tập trung. Trước đây
+ * họ đi thẳng tới con vật và bơm `fed = fedMinutes` vào nó, bỏ qua cái máng
+ * hoàn toàn: người chơi đổ máng thì máng vơi, người làm cho ăn thì máng không
+ * nhúc nhích, và hai cách cho ăn kể hai câu chuyện khác nhau về cùng một đàn.
+ *
+ * Giờ họ làm ĐÚNG việc người chơi làm: xúc cám từ kho, đổ vào máng, rồi con vật
+ * tự tới ăn. Trả về số phần đã đổ.
+ */
+export function canPourFromStore(state: GameState, content: Content, x: number, y: number): boolean {
+  const feeds = troughFeedsAt(state, content, x, y);
+  if (!feeds.length) return false;
+  if (troughStock(state, x, y) >= troughMax(content)) return false;
+  const dang = troughItem(state, x, y);
+  const muon = dang !== null ? [dang] : feeds;
+  return state.store.some((v) => v && muon.includes(v.id));
+}
+
+export function pourFromStore(d: Draft, content: Content, x: number, y: number): number {
+  const feeds = troughFeedsAt(d.s, content, x, y);
+  if (!feeds.length) return 0;
+  const dang = troughItem(d.s, x, y);
+  const cho = troughMax(content) - troughStock(d.s, x, y);
+  if (cho <= 0) return 0;
+  /* Máng đang có món gì thì đổ THÊM đúng món đó — máng chỉ chứa một món một
+     lúc. Máng rỗng thì lấy món nào kho đang có. */
+  const muon = dang !== null ? [dang] : feeds;
+  const at = d.s.store.findIndex((v) => v && muon.includes(v.id));
+  if (at < 0) return 0;
+  const o = d.s.store[at]!;
+  const n = Math.min(cho, o.n);
+  const i = tileIndexAt(d.s, x, y);
+  if (i < 0) return 0;
+  const t = dTile(d, i);
+  if (!t) return 0;
+  const kho = d.s.store.slice();
+  kho[at] = o.n > n ? { id: o.id, n: o.n - n } : null;
+  touch(d).store = kho;
+  t.trough = troughStock(d.s, x, y) + n;
+  t.troughId = o.id;
   return n;
 }
 

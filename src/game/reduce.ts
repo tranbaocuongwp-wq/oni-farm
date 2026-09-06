@@ -20,7 +20,7 @@ import { weatherTick } from "./weather.ts";
 import { applyDebug } from "./debug.ts";
 import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.ts";
 import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
-import { feedAnimal, gatherFrom, gatherPen, penNear, slaughter } from "./animals.ts";
+import { gatherFrom, gatherPen, penNear, slaughter } from "./animals.ts";
 import { assignJob, fireWorker, hireWorker } from "./workers.ts";
 import { sendVehicle } from "./vehicles.ts";
 import { buy, sell, sellAll } from "./economy.ts";
@@ -388,12 +388,6 @@ export function reduce(state: GameState, action: Action, content: Content): Game
         "good",
       );
       applyProgression(d, content);
-      return commit(d);
-    }
-
-    case "FEED": {
-      if (state.busy > 0) return state;
-      feedAnimal(d, content, action.x | 0, action.y | 0);
       return commit(d);
     }
 
