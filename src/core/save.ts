@@ -22,6 +22,12 @@ const STORE_CONTENT = "content";
 const LS_KEY = "oni-farm:save";
 const LS_KEY_CONTENT = "oni-farm:content";
 export const SLOT_MAIN = "main";
+/**
+ * Ô SAO LƯU. Trước khi ghi đè lên một save mà game KHÔNG ĐỌC ĐƯỢC (hỏng, hoặc
+ * của bản mới hơn), nguyên blob đó được chép sang đây — để một lần nạp lỗi
+ * không xoá sổ vĩnh viễn cả tháng chơi. Xem `backupSave`.
+ */
+export const SLOT_BACKUP = "main:backup";
 
 /* ---------------------------------------------------------------------------
    IndexedDB — bọc trong Promise, mọi lỗi đều nuốt và trả null để tầng trên
@@ -109,15 +115,44 @@ export function isSaveData(v: unknown): v is SaveData {
   );
 }
 
-/** Nâng cấp save cũ lên định dạng hiện tại.
- *  Mỗi lần tăng SAVE_VERSION thì thêm một bước ở đây. Trả null nếu quá cũ
- *  để không cố cứu một file không cứu được. */
-export function migrateSave(data: SaveData): GameState | null {
-  const v = data.state.save;
-  if (v > SAVE_VERSION) return null; // save từ bản MỚI hơn — không đọc ngược được
-  if (v === SAVE_VERSION) return data.state;
+/**
+ * Kết quả của `migrateSaveEx` — nói RÕ vì sao không nâng cấp được.
+ *
+ *   · `newer`  — save ghi bởi một bản game MỚI HƠN bản đang chạy. Đây KHÔNG
+ *                phải save hỏng: nó chỉ đang chờ đúng phiên bản. Tuyệt đối
+ *                không được ghi đè.
+ *   · `tooOld` — cũ hơn mọi bậc nâng cấp còn giữ, không cứu được.
+ *   · `broken` — số phiên bản không phải số nguyên hợp lệ.
+ *
+ * Trước đây cả ba trả về cùng một `null`, và chỗ gọi xử lý cả ba y hệt nhau:
+ * bắt đầu nông trại mới rồi autosave đè lên. Với `newer` thì đó là xoá sổ một
+ * save còn nguyên vẹn trong vòng 30 giây — và tới được thật, vì người chơi PWA
+ * có thể ngồi trên service worker cũ trong khi IndexedDB đã giữ save mới.
+ */
+export type MigrateOutcome =
+  | { ok: true; state: GameState }
+  | { ok: false; why: "newer" | "tooOld" | "broken" };
 
-  let s = data.state;
+export function migrateSaveEx(data: SaveData): MigrateOutcome {
+  const v = data.state.save;
+  if (!Number.isInteger(v) || v < 0) return { ok: false, why: "broken" };
+  if (v > SAVE_VERSION) return { ok: false, why: "newer" };
+  const s = nangCap(data.state);
+  return s ? { ok: true, state: s } : { ok: false, why: "tooOld" };
+}
+
+/** Nâng cấp save cũ lên định dạng hiện tại. Trả null nếu không nâng được —
+ *  muốn biết VÌ SAO thì hỏi `migrateSaveEx`. */
+export function migrateSave(data: SaveData): GameState | null {
+  const r = migrateSaveEx(data);
+  return r.ok ? r.state : null;
+}
+
+/** Chuỗi nâng cấp từng bậc. Mỗi lần tăng SAVE_VERSION thì thêm một bước ở đây. */
+function nangCap(state: GameState): GameState | null {
+  if (state.save === SAVE_VERSION) return state;
+
+  let s = state;
 
   // v1 → v2: thêm `busy` (đồng hồ khoá thao tác). Save cũ không có trường này;
   // để nguyên thì mọi phép tính với nó ra NaN và bất biến vỡ ngay.
@@ -246,20 +281,73 @@ export async function saveGame(data: SaveData, slot = SLOT_MAIN): Promise<SaveRe
   }
 }
 
-export async function loadGame(slot = SLOT_MAIN): Promise<SaveData | null> {
+/**
+ * Kết quả đọc một ô save — phân biệt "KHÔNG CÓ gì" với "CÓ mà đọc không được".
+ *
+ * Hai ca đó từng cùng trả về `null`, nên chỗ nạp không biết mình đang đứng
+ * trước một người chơi mới hay một người chơi vừa mất save: nó im lặng dựng
+ * nông trại ngày 1 cho cả hai, rồi autosave đè lên cái blob hỏng. `raw` được
+ * giữ lại để chép sang ô sao lưu trước khi chuyện đó xảy ra.
+ */
+export type LoadResult =
+  | { kind: "empty" }
+  | { kind: "corrupt"; raw: unknown }
+  | { kind: "ok"; data: SaveData };
+
+export async function loadSlot(slot = SLOT_MAIN): Promise<LoadResult> {
   const db = await openDb();
   if (db) {
     const v = await idbGet<unknown>(db, slot);
     db.close();
-    if (isSaveData(v)) return v;
+    if (isSaveData(v)) return { kind: "ok", data: v };
+    if (v !== null && v !== undefined) return { kind: "corrupt", raw: v };
+  }
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(`${LS_KEY}:${slot}`);
+  } catch {
+    return { kind: "empty" };
+  }
+  if (!raw) return { kind: "empty" };
+  try {
+    const v: unknown = JSON.parse(raw);
+    return isSaveData(v) ? { kind: "ok", data: v } : { kind: "corrupt", raw: v };
+  } catch {
+    return { kind: "corrupt", raw };
+  }
+}
+
+export async function loadGame(slot = SLOT_MAIN): Promise<SaveData | null> {
+  const r = await loadSlot(slot);
+  return r.kind === "ok" ? r.data : null;
+}
+
+/**
+ * Chép NGUYÊN blob đang nằm ở `slot` sang ô sao lưu — kể cả khi blob đó không
+ * phải save hợp lệ. Gọi TRƯỚC bất kỳ lần ghi đè nào lên một save mà game
+ * không đọc được, để cái blob đó còn đường quay lại (bản game mới hơn, hoặc
+ * người chơi xuất ra file gửi cho tôi xem).
+ *
+ * Trả về `true` nếu có gì đó đã được chép. Không có gì ở `slot` thì không làm
+ * gì — không tạo một ô sao lưu rỗng đè lên bản sao lưu cũ còn tốt.
+ */
+export async function backupSave(slot = SLOT_MAIN, to = SLOT_BACKUP): Promise<boolean> {
+  const db = await openDb();
+  if (db) {
+    const v = await idbGet<unknown>(db, slot);
+    if (v !== null && v !== undefined) {
+      const ok = await idbPut(db, to, v);
+      db.close();
+      if (ok) return true;
+    } else db.close();
   }
   try {
     const raw = localStorage.getItem(`${LS_KEY}:${slot}`);
-    if (!raw) return null;
-    const v: unknown = JSON.parse(raw);
-    return isSaveData(v) ? v : null;
+    if (!raw) return false;
+    localStorage.setItem(`${LS_KEY}:${to}`, raw);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -294,21 +382,45 @@ export function exportToFile(data: SaveData, name?: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/**
+ * Mở hộp chọn file và đọc save từ đó. `null` = không có file hợp lệ, HOẶC người
+ * chơi bấm Huỷ.
+ *
+ * Vế "bấm Huỷ" từng bị bỏ quên: `onchange` không nổ khi huỷ, nên promise treo
+ * vĩnh viễn và `importSave` bên trên chờ mãi — bấm "Nhập từ file" lần nữa cũng
+ * không ăn vì lần trước chưa xong. Bắt bằng hai lưới: sự kiện `cancel` (trình
+ * duyệt mới), và cửa sổ lấy lại tiêu điểm mà không có file nào (trình duyệt
+ * cũ) — chờ một nhịp ngắn sau focus vì `change` tới SAU `focus` trên vài máy.
+ */
 export function importFromFile(): Promise<SaveData | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "application/json,.json";
+    let xong = false;
+    const tra = (v: SaveData | null) => {
+      if (xong) return;
+      xong = true;
+      window.removeEventListener("focus", khiFocus);
+      resolve(v);
+    };
+    const khiFocus = () => {
+      window.setTimeout(() => {
+        if (!xong && !input.files?.length) tra(null);
+      }, 1500);
+    };
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file) return resolve(null);
+      if (!file) return tra(null);
       try {
         const v: unknown = JSON.parse(await file.text());
-        resolve(isSaveData(v) ? v : null);
+        tra(isSaveData(v) ? v : null);
       } catch {
-        resolve(null);
+        tra(null);
       }
     };
+    input.addEventListener("cancel", () => tra(null));
+    window.addEventListener("focus", khiFocus);
     input.click();
   });
 }

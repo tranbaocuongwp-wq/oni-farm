@@ -33,6 +33,8 @@ import * as seasonApi from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
 import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
+import { createLoop, MAX_CONSECUTIVE_ERRORS } from "../src/core/loop.ts";
+import { adoptState } from "../src/game/adopt.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
 import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
@@ -59,6 +61,31 @@ function test(name, fn) {
     failures++;
     results.push(`\x1b[31m✗\x1b[0m ${name}\n    ${String(err && err.message ? err.message : err)}`);
   }
+}
+
+/**
+ * Kịch bản BẤT ĐỒNG BỘ — cho tầng save, vốn trả Promise (IndexedDB).
+ *
+ * Khác `test` ở đúng một chỗ: chỗ ngồi trong `results` được GIỮ TRƯỚC, và tổng
+ * kết ở cuối file `await` hết mọi kịch bản kiểu này trước khi in — nên một
+ * assertion sai bên trong vẫn làm ván đỏ, không thành unhandled rejection
+ * trôi qua như cái bẫy mà `test` chặn.
+ */
+const choDoi = [];
+function testAsync(name, fn) {
+  const cho = results.length;
+  results.push(`\x1b[33m…\x1b[0m ${name}`);
+  choDoi.push(
+    (async () => {
+      try {
+        await fn();
+        results[cho] = `\x1b[32m✓\x1b[0m ${name}`;
+      } catch (err) {
+        failures++;
+        results[cho] = `\x1b[31m✗\x1b[0m ${name}\n    ${String(err && err.message ? err.message : err)}`;
+      }
+    })(),
+  );
 }
 
 function ok(cond, msg) {
@@ -6807,8 +6834,200 @@ test("102. nút ngữ cảnh PHỤ chỉ tra cứu, không bao giờ đổi stat
   ok(!!tt && /còn \d+ ngày/.test(tt), `thẻ ô nói còn mấy ngày nữa chín (đang là "${tt}")`);
 });
 
+
+/* ========================================================================== */
+/* 103–105. Đợt 6 · An toàn: lỗi một khung, save mới hơn, cửa nạp             */
+/* ========================================================================== */
+
+test("103. một khung hình ném lỗi KHÔNG làm vòng lặp chết; lỗi liên tục mới dừng", () => {
+  /* Trước đây `step(dt)` đứng trần trong `frame`: ném là dòng
+     `requestAnimationFrame(frame)` ngay sau không bao giờ chạy, `running` vẫn
+     `true` nên `start()` thoát sớm — không gì khởi động lại được, và autosave
+     (chỉ nổ trong `step`) chết theo. Người chơi nhìn canvas đứng hình rồi F5
+     mất ba mươi giây chơi. */
+
+  // rAF giả: xếp hàng, chạy tay từng khung.
+  const hang = [];
+  const g = globalThis;
+  const cu = { raf: g.requestAnimationFrame, caf: g.cancelAnimationFrame, perf: g.performance };
+  g.requestAnimationFrame = (fn) => (hang.push(fn), hang.length);
+  g.cancelAnimationFrame = () => {};
+  if (!g.performance) g.performance = { now: () => 0 };
+  let t = 0;
+  const chayKhung = () => {
+    const fn = hang.shift();
+    ok(!!fn, "phải còn một khung đang chờ");
+    t += 16;
+    fn(t);
+  };
+  try {
+    /* (a) lỗi LẺ: một khung ném, khung sau lành → vòng lặp vẫn sống, `onError`
+       nhận đúng số lỗi liên tiếp, và số đó về 0 sau khung tốt. */
+    let dem = 0;
+    const loiO = new Set([2, 3]); // khung thứ 2 và 3 ném
+    const goi = [];
+    const loop = createLoop(
+      () => {
+        dem++;
+        if (loiO.has(dem)) throw new Error("khung " + dem + " hỏng");
+      },
+      { onError: (e, n) => (goi.push([String(e.message), n]), true) },
+    );
+    loop.start();
+    for (let i = 0; i < 6; i++) chayKhung();
+    eq(dem, 6, "sáu khung đều được gọi — kể cả ba khung SAU hai khung lỗi");
+    ok(loop.running, "vòng lặp vẫn chạy sau lỗi lẻ");
+    deepEq(goi.map(([, n]) => n), [1, 2], "hai lỗi LIÊN TIẾP đếm 1, 2");
+    ok(hang.length === 1, "và vẫn còn một khung đang chờ — rAF được đặt lại sau lỗi");
+    loop.stop();
+    hang.length = 0;
+
+    /* (b) lỗi LIÊN TỤC, không có onError: chạy tiếp tới ngưỡng rồi DỪNG HẲN —
+       chạy tiếp mãi trên một state hỏng chỉ là quay tròn và ghi đè save. */
+    let dem2 = 0;
+    const loop2 = createLoop(() => {
+      dem2++;
+      throw new Error("hỏng vĩnh viễn");
+    });
+    loop2.start();
+    for (let i = 0; i < MAX_CONSECUTIVE_ERRORS + 5 && hang.length; i++) chayKhung();
+    eq(dem2, MAX_CONSECUTIVE_ERRORS, `dừng đúng sau ${MAX_CONSECUTIVE_ERRORS} khung lỗi liên tiếp`);
+    ok(!loop2.running, "…và `running` về false để `start()` mở lại được");
+    eq(hang.length, 0, "không đặt thêm khung nào sau khi dừng");
+
+    /* (c) `onError` trả false = dừng NGAY, dù mới lỗi một lần. */
+    const loop3 = createLoop(
+      () => {
+        throw new Error("x");
+      },
+      { onError: () => false },
+    );
+    loop3.start();
+    chayKhung();
+    ok(!loop3.running, "onError trả false → dừng ngay");
+
+    /* (d) `step` gọi TAY (test, mô phỏng) KHÔNG nuốt lỗi — test muốn thấy lỗi. */
+    let nem = false;
+    try {
+      loop3.step(1 / 60);
+    } catch {
+      nem = true;
+    }
+    ok(nem, "step() thủ công vẫn ném ra tận nơi");
+  } finally {
+    g.requestAnimationFrame = cu.raf;
+    g.cancelAnimationFrame = cu.caf;
+    if (cu.perf === undefined) delete g.performance;
+  }
+});
+
+testAsync("104. tầng save nói RÕ vì sao không đọc được, và sao lưu trước khi ghi đè", async () => {
+  const { loadSlot, migrateSaveEx, backupSave, SLOT_MAIN, SLOT_BACKUP } = migrateApi;
+
+  /* --- migrateSaveEx: ba lý do khác nhau, không còn một `null` chung -------
+     Cái giá của `null` chung: save của bản MỚI HƠN bị xử y như save hỏng —
+     bắt đầu ván mới rồi autosave đè lên trong 30 giây. */
+  const store = mkStore(1501);
+  const snap = store.snapshot();
+  const voi = (save) => ({ magic: "oni-farm", savedAt: 0, state: { ...clone(snap.state), save } });
+  const moi = migrateSaveEx(voi(SAVE_VERSION + 1));
+  ok(!moi.ok && moi.why === "newer", `save v${SAVE_VERSION + 1} → 'newer' (nhận ${JSON.stringify(moi.why ?? "ok")})`);
+  const cu = migrateSaveEx(voi(0));
+  ok(!cu.ok && cu.why === "tooOld", `save v0 → 'tooOld' (nhận ${JSON.stringify(cu.why ?? "ok")})`);
+  const hong = migrateSaveEx(voi(2.5));
+  ok(!hong.ok && hong.why === "broken", "save v2.5 → 'broken'");
+  const dung = migrateSaveEx(voi(SAVE_VERSION));
+  ok(dung.ok && dung.state.save === SAVE_VERSION, "save hiện hành → ok");
+
+  /* --- loadSlot: KHÔNG CÓ ≠ CÓ MÀ ĐỌC KHÔNG ĐƯỢC ---------------------------
+     Node không có IndexedDB → tầng 1 tự tụt; giả localStorage để đi tầng 2. */
+  const kho = new Map();
+  const g = globalThis;
+  const lsCu = g.localStorage;
+  g.localStorage = {
+    getItem: (k) => (kho.has(k) ? kho.get(k) : null),
+    setItem: (k, v) => void kho.set(k, String(v)),
+    removeItem: (k) => void kho.delete(k),
+  };
+  try {
+    const KEY = "oni-farm:save:" + SLOT_MAIN;
+    const KEY_BK = "oni-farm:save:" + SLOT_BACKUP;
+    eq((await loadSlot()).kind, "empty", "không có gì → 'empty'");
+    ok(!(await backupSave()), "không có gì thì KHÔNG sao lưu (không đè bản sao lưu cũ bằng ô rỗng)");
+
+    kho.set(KEY, "{rác không phải JSON");
+    let r = await loadSlot();
+    eq(r.kind, "corrupt", "JSON hỏng → 'corrupt'");
+    eq(r.raw, "{rác không phải JSON", "…và giữ nguyên blob thô để sao lưu");
+
+    kho.set(KEY, JSON.stringify({ magic: "oni-farm", state: { day: 3 } }));
+    r = await loadSlot();
+    eq(r.kind, "corrupt", "JSON hợp lệ nhưng không phải save → 'corrupt'");
+
+    /* Sao lưu chép NGUYÊN blob, kể cả blob hỏng. */
+    ok(await backupSave(), "có gì đó ở ô chính → sao lưu được");
+    eq(kho.get(KEY_BK), kho.get(KEY), "ô sao lưu là bản sao y nguyên của ô chính");
+
+    kho.set(KEY, JSON.stringify(snap));
+    r = await loadSlot();
+    eq(r.kind, "ok", "save thật → 'ok'");
+    eq(r.data.state.day, snap.state.day, "…và đọc đúng nội dung");
+    /* Ô sao lưu đọc được qua cùng một cửa. */
+    ok(await backupSave(), "sao lưu bản tốt");
+    eq((await loadSlot(SLOT_BACKUP)).kind, "ok", "ô sao lưu nạp lại được như ô chính");
+  } finally {
+    if (lsCu === undefined) delete g.localStorage;
+    else g.localStorage = lsCu;
+  }
+});
+
+test("105. cửa nạp chung: Boot / Nạp / Nhập cùng một luật, state hỏng bị từ chối", () => {
+  /* Trước đây chỉ Boot kiểm bất biến sau migrate. Nạp và Nhập đi thẳng
+     `store.replace(migrateForContent(st).state)` — mà `migrateForContent` nuốt
+     lỗi của chính nó rồi trả về state CHƯA migrate, còn `store.replace` ở bản
+     phát hành không kiểm gì. Nhập một file cụt là cài thẳng state hỏng, rồi nó
+     nổ ở TICK kế tiếp — tức rơi vào đúng cái lỗi kịch bản 103 vừa chặn. */
+  const store = mkStore(1502);
+  const tot = clone(store.getState());
+
+  const r0 = adoptState(tot, content, "load");
+  ok(r0.ok, "state tốt → nhận");
+  deepEq(checkInvariants(r0.state, content), [], "…và state nhận về sạch bất biến");
+
+  /* `migrateForContent` SỬA được khá nhiều thứ (tiền NaN, năng lượng âm, lưới
+     lệch cỡ) — đó là việc của nó và không phải lỗi. Cái nó KHÔNG sửa được là
+     state thiếu hẳn một mảng cốt lõi: `inv: null` làm chính `migrateForContent`
+     ném (nó nuốt rồi trả state cũ), và `checkInvariants` ném tiếp ở dòng đầu.
+     Đây là hình dạng của một file JSON bị cắt cụt. */
+  const cut = clone(tot);
+  cut.inv = null;
+  for (const nguon of ["boot", "load", "import"]) {
+    const r = adoptState(cut, content, nguon);
+    ok(!r.ok, `nguồn '${nguon}': state cụt phải bị TỪ CHỐI, không ném`);
+    ok(typeof r.why === "string" && r.why.length > 0, "…kèm lý do đọc được");
+  }
+  ok(
+    adoptState(cut, content, "import").why.startsWith("File save không hợp lệ"),
+    "lý do gọi đúng tên nguồn: nhập file",
+  );
+
+  /* Vế còn lại của "một luật": state vỡ bất biến mà `migrateForContent` SỬA
+     ĐƯỢC thì Nạp/Nhập cũng phải nhận về bản ĐÃ SỬA — trước đây hai đường này
+     bỏ qua kiểm nên chẳng ai biết bản nhận về có sạch hay không. Bản đồ đang
+     chơi lại có mặt trong `maps` là một ca như thế: hai bản sao, một trong hai
+     sẽ âm thầm mất. */
+  const doi = clone(tot);
+  doi.maps = { ...doi.maps, [doi.mapId]: { w: doi.w, h: doi.h, tiles: doi.tiles, awayAt: 0 } };
+  ok(checkInvariants(doi, content).length > 0, "state dựng ra có vỡ bất biến thật");
+  const r2 = adoptState(doi, content, "load");
+  ok(r2.ok, "…nhưng migrate sửa được → NHẬN");
+  deepEq(checkInvariants(r2.state, content), [], "…và bản nhận về sạch bất biến — bản sao trùng đã bị dọn");
+  ok(!Object.prototype.hasOwnProperty.call(r2.state.maps, r2.state.mapId), "bản đồ đang chơi không còn nằm trong maps");
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
+await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);
 console.log(

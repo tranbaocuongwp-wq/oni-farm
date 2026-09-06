@@ -60,6 +60,12 @@ export interface MenuHandlers {
   load(): void;
   exportSave(): void;
   importSave(): void;
+  /** Ô sao lưu có gì không — game tự chép save cũ vào đó trước khi ghi đè lên
+   *  một save nó không đọc được (xem `backupSave` trong core/save.ts). */
+  hasBackup(): Promise<boolean>;
+  restoreBackup(): void;
+  /** Bắn một dòng toast. Menu KHÔNG tự có toast — mọi phản hồi đi qua main. */
+  say(text: string, kind?: "good" | "bad" | "info"): void;
   newGame(): void;
   toggleMute(): boolean;
   isMuted(): boolean;
@@ -87,7 +93,8 @@ export interface MenuHandlers {
   forceUpdate(): Promise<void>;
   install(): void;
   /** Bật/tắt bảng gỡ lỗi nổi. Phải có NÚT chứ không chỉ có phím tắt — điện
-   *  thoại không có bàn phím, mà đây là thiết bị chơi chính. */
+   *  thoại không có bàn phím, mà đây là thiết bị chơi chính. Nhưng nút đó
+   *  GIẤU sau năm lần chạm vào dòng phiên bản (xem `openPause`). */
   toggleDevPanel(): void;
   /** Mở lại hướng dẫn lần đầu. */
   replayTutorial(): void;
@@ -1319,6 +1326,27 @@ export function createMenus(
     body.appendChild(
       note("File save là JSON thuần — mở xem được, chép đi đâu cũng nhập lại được."),
     );
+    /* Ô SAO LƯU chỉ hiện khi có gì trong đó — tức là game từng phải bỏ một save
+       nó không đọc được. Người chơi bình thường không bao giờ thấy nút này, và
+       đúng là không nên thấy. */
+    const choSaoLuu = document.createElement("div");
+    body.appendChild(choSaoLuu);
+    void h.hasBackup().then((co) => {
+      if (!co || current !== openSaveFile) return;
+      choSaoLuu.appendChild(
+        note("Có một bản SAO LƯU: save cũ mà game không đọc được đã được giữ lại ở đây."),
+      );
+      choSaoLuu.appendChild(
+        mkBtn("Khôi phục bản sao lưu", () =>
+          askConfirm(
+            "Khôi phục bản sao lưu?",
+            "Ván đang chơi sẽ bị thay bằng bản sao lưu. Nếu bản đó vẫn không đọc được thì ván đang chơi giữ nguyên.",
+            () => h.restoreBackup(),
+            openSaveFile,
+          ),
+        ),
+      );
+    });
     body.appendChild(mkBtn("← Quay lại", () => openPause()));
   }
 
@@ -1374,14 +1402,46 @@ export function createMenus(
   }
 
   /* ------------------------------------------------------------ TẠM DỪNG */
+
+  /**
+   * Bảng gỡ lỗi đã được MỞ KHOÁ trong phiên này chưa.
+   *
+   * Nó có `+1k đ`, `Chín hết`, `Sang mùa` — hai cú chạm từ Tạm dừng là mất cả
+   * nền kinh tế của ván. Nhưng Cường có dùng nó thật trên điện thoại (gọi cá
+   * từ menu debug), nên không rào hẳn sau bản DEV. Giấu sau một thao tác CỐ Ý:
+   * chạm năm lần vào dòng phiên bản, kiểu Android. Bản DEV mở sẵn.
+   */
+  let devMoKhoa = import.meta.env.DEV;
+  let chamPhienBan = 0;
+  let chamPhienBanLuc = 0;
+  const CHAM_DE_MO = 5;
+  const CHAM_TRONG_MS = 3000;
+
   function openPause() {
     current = openPause;
     const c = getContent();
     const info = h.contentInfo();
-    const { body, foot } = shell(
+    const { body, foot, modal } = shell(
       "Tạm dừng",
       `Nội dung ${info.version} (${info.source}) · core ${CORE_VERSION}`,
     );
+
+    const dongPhienBan = modal.querySelector<HTMLElement>(".sub");
+    if (dongPhienBan) {
+      dongPhienBan.style.cursor = "default";
+      dongPhienBan.addEventListener("pointerdown", () => {
+        const luc = Date.now();
+        if (luc - chamPhienBanLuc > CHAM_TRONG_MS) chamPhienBan = 0;
+        chamPhienBanLuc = luc;
+        chamPhienBan++;
+        if (chamPhienBan < CHAM_DE_MO) return;
+        chamPhienBan = 0;
+        devMoKhoa = true;
+        h.say("Đã bật bảng gỡ lỗi.", "info");
+        close();
+        h.toggleDevPanel();
+      });
+    }
 
     /* MỘT lưới ô vuông cho tất cả. Trước đây menu này là bốn khối rời (lưới
        lưu/tải, danh sách chức năng, ghi chú cập nhật, hai nút cập nhật) — bốn
@@ -1404,11 +1464,14 @@ export function createMenus(
       tileBtn("file", "Save ra/vào", () => openSaveFile()),
       tileBtn("help", "Hướng dẫn", () => openHelp()),
       tileBtn("reload", "Cập nhật", () => openUpdate()),
-      tileBtn("bug", "Gỡ lỗi", () => {
-        close();
-        h.toggleDevPanel();
-      }, "dim"),
     );
+    if (devMoKhoa)
+      tiles.appendChild(
+        tileBtn("bug", "Gỡ lỗi", () => {
+          close();
+          h.toggleDevPanel();
+        }, "dim"),
+      );
     if (h.canInstall()) tiles.appendChild(tileBtn("install", "Cài về máy", () => h.install(), "accent"));
     body.appendChild(tiles);
 

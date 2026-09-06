@@ -1,0 +1,34 @@
+# LƯỚI BÁO ĐỘNG, không phải cổng chặn.
+#
+# Deploy thật đi qua Cloudflare Pages Git integration, chạy `npm run build` —
+# và `build` KHÔNG gọi test. Trước workflow này, cả bộ 102 kịch bản sim (24
+# giây) không có gì bắt nó phải chạy: một commit làm đỏ nửa bộ test vẫn lên
+# production như thường.
+#
+# Đây chỉ chạy test và báo đỏ trên commit/PR. Không deploy, không cần secret.
+name: Kiểm thử (typecheck + sim + OTA)
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: typecheck + sim + OTA
+        run: npm run test:all

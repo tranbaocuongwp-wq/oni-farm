@@ -23,16 +23,19 @@ import { observeScreen } from "./core/screen.ts";
 import { alignedTo, createNavigator } from "./core/navigate.ts";
 import { applySettings, loadSettings, saveSettings, type Settings } from "./core/settings.ts";
 import { buzz, setHaptics, setPadRumble } from "./core/haptics.ts";
-import { createLoop } from "./core/loop.ts";
+import { MAX_CONSECUTIVE_ERRORS, createLoop } from "./core/loop.ts";
 import { createStore, type Store } from "./core/store.ts";
 import { CORE_VERSION } from "./core/version.ts";
 import {
+  SLOT_BACKUP,
+  backupSave,
   exportToFile,
   importFromFile,
-  loadGame,
-  migrateSave,
+  loadSlot,
+  migrateSaveEx,
   saveGame,
 } from "./core/save.ts";
+import { adoptState as napState } from "./game/adopt.ts";
 import {
   checkForUpdate,
   pendingContentVersion,
@@ -51,9 +54,8 @@ import { padButtonName } from "./core/gamepad.ts";
 import { timChoNgoi, type Seat } from "./ui/focus.ts";
 import { createBuildMode } from "./ui/buildmode.ts";
 import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
-import type { Content, GameState, InteractKind, Stats } from "./game/types.ts";
-import { createNewGame, migrateForContent } from "./game/state.ts";
-import { checkInvariants } from "./game/invariants.ts";
+import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
+import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
 import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, tileInfo, type Hint } from "./game/hint.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
@@ -141,11 +143,32 @@ preventBrowserZoom();
 
 async function boot() {
   const bootEl = $("#boot");
-  const showError = (msg: string) => {
+  const showError = (msg: string, tieuDe = "Không khởi động được. Nội dung game có vấn đề:") => {
     bootEl.innerHTML = `<div class="inner"><div class="logo">ONI<span>FARM</span></div>
-      <p>Không khởi động được. Nội dung game có vấn đề:</p>
+      <p></p>
       <div class="err"></div></div>`;
+    (bootEl.querySelector("p") as HTMLElement).textContent = tieuDe;
     (bootEl.querySelector(".err") as HTMLElement).textContent = msg;
+    // Vào game rồi thì màn chờ đã đeo `.done` (mờ hẳn, không nhận chạm) — phải
+    // cởi ra, nếu không bảng lỗi hiện mà không ai thấy.
+    bootEl.classList.remove("done");
+    bootEl.style.display = "grid";
+  };
+
+  /**
+   * MÀN CHẶN: save trên máy này của một bản game MỚI HƠN.
+   *
+   * Không tạo store, không đăng ký autosave, không chạy vòng lặp — tức là
+   * KHÔNG CÓ ĐƯỜNG NÀO ghi vào khoá save. Trước đây chỗ này bắt đầu nông trại
+   * mới, rồi autosave 30 giây đè lên chính cái save còn nguyên vẹn đó.
+   */
+  const chanSaveMoiHon = () => {
+    bootEl.innerHTML = `<div class="inner"><div class="logo">ONI<span>FARM</span></div>
+      <p>Bản lưu trên máy này được ghi bởi một <b>phiên bản game mới hơn</b> bản đang chạy.
+      Game không mở nó để khỏi làm hỏng. Bấm cập nhật rồi mở lại — tiến trình vẫn còn nguyên.</p>
+      <button type="button" class="capnhat">Cập nhật ngay</button></div>`;
+    bootEl.querySelector(".capnhat")!.addEventListener("click", () => void buocCapNhat());
+    bootEl.classList.remove("done");
     bootEl.style.display = "grid";
   };
 
@@ -212,32 +235,44 @@ async function boot() {
   /* ---- 2. mỹ thuật ---- */
   const atlas = buildAtlas(content);
 
-  /* ---- 3. state: tiếp tục save cũ hoặc bắt đầu mới ---- */
+  /* ---- 3. state: tiếp tục save cũ hoặc bắt đầu mới ----
+
+     Bốn kết cục, và chỉ MỘT trong bốn được phép ghi đè lên khoá save:
+       · đọc được, hợp lệ         → chơi tiếp
+       · của bản MỚI HƠN          → màn chặn, thoát boot, không đụng gì cả
+       · hỏng / quá cũ / vỡ bất biến → SAO LƯU trước, rồi mới bắt đầu ván mới
+       · không có gì              → ván mới
+     Trước đây ba kết cục cuối cùng đi chung một nhánh, im lặng, và không sao lưu. */
   let initial: GameState;
-  const saved = await loadGame();
-  const migrated = saved ? migrateSave(saved) : null;
-  if (migrated) {
-    const fixed = migrateForContent(migrated, content);
-    /* Migrate xong thì PHẢI kiểm, kể cả ở bản phát hành.
-       `migrateForContent` bọc cả thân hàm trong try/catch và khi ném thì trả về
-       state CHƯA migrate — tức là state chắc chắn vỡ bất biến. Cộng với việc
-       store chỉ kiểm khi `import.meta.env.DEV`, cả lưới an toàn này lâu nay
-       không tồn tại ở đúng chỗ save của người chơi thật đi qua. Vỡ thì bắt đầu
-       nông trại mới còn hơn chơi tiếp trên một state hỏng. */
-    const vo = checkInvariants(fixed.state, content);
-    if (vo.length) {
-      initial = createNewGame(content);
-      contentWarnings.push(
-        `Save cũ không còn hợp lệ (${vo[0]}) — đã bắt đầu nông trại mới.`,
-      );
-    } else {
-      initial = fixed.state;
-      contentWarnings.push(...fixed.notes);
+  /** Đang chơi tiếp một save cũ (không phải ván mới) — để khỏi bật hướng dẫn. */
+  let tiepTucSave = false;
+  const vanMoiSauKhiSaoLuu = async (ly: string) => {
+    const coBan = await backupSave();
+    contentWarnings.push(
+      `${ly} — đã bắt đầu nông trại mới.` + (coBan ? " Bản cũ được giữ ở ô sao lưu (Save ra/vào)." : ""),
+    );
+    return createNewGame(content);
+  };
+  const doc = await loadSlot();
+  if (doc.kind === "ok") {
+    const mg = migrateSaveEx(doc.data);
+    if (!mg.ok && mg.why === "newer") {
+      chanSaveMoiHon();
+      return;
     }
-  } else {
-    initial = createNewGame(content);
-    if (saved) contentWarnings.push("Save cũ không đọc được — đã bắt đầu nông trại mới.");
-  }
+    if (!mg.ok) initial = await vanMoiSauKhiSaoLuu("Save cũ quá cũ, không đọc được");
+    else {
+      /* Migrate xong thì PHẢI kiểm, kể cả ở bản phát hành — và cùng một hàm
+         với Nạp/Nhập (`napState`), để ba lối vào chung một luật. */
+      const r = napState(mg.state, content, "boot");
+      if (r.ok) {
+        initial = r.state;
+        contentWarnings.push(...r.notes);
+        tiepTucSave = true;
+      } else initial = await vanMoiSauKhiSaoLuu(r.why);
+    }
+  } else if (doc.kind === "corrupt") initial = await vanMoiSauKhiSaoLuu("Save cũ bị hỏng, không đọc được");
+  else initial = createNewGame(content);
 
   const store: Store = createStore(initial, content, {
     validate: import.meta.env.DEV,
@@ -306,12 +341,10 @@ async function boot() {
       toasts.say(r.ok ? "Đã lưu game." : "Không lưu được — bộ nhớ trình duyệt bị chặn?", r.ok ? "good" : "bad");
     },
     load: async () => {
-      const d = await loadGame();
-      const st = d ? migrateSave(d) : null;
-      if (!st) return toasts.say("Chưa có bản lưu nào.", "bad");
-      adoptState(migrateForContent(st, content).state);
-      menus.close();
-      toasts.say("Đã tải bản lưu.", "good");
+      const d = await loadSlot();
+      if (d.kind === "empty") return toasts.say("Chưa có bản lưu nào.", "bad");
+      if (d.kind === "corrupt") return toasts.say("Bản lưu bị hỏng, không đọc được.", "bad");
+      if (nhanSave(d.data, "load")) toasts.say("Đã tải bản lưu.", "good");
     },
     exportSave: () => {
       exportToFile(store.snapshot());
@@ -319,11 +352,17 @@ async function boot() {
     },
     importSave: async () => {
       const d = await importFromFile();
-      const st = d ? migrateSave(d) : null;
-      if (!st) return toasts.say("File save không hợp lệ.", "bad");
-      adoptState(migrateForContent(st, content).state);
-      menus.close();
-      toasts.say("Đã nhập bản lưu.", "good");
+      if (!d) return toasts.say("File save không hợp lệ.", "bad");
+      if (nhanSave(d, "import")) toasts.say("Đã nhập bản lưu.", "good");
+    },
+    say: (text, kind) => toasts.say(text, kind),
+    hasBackup: async () => (await loadSlot(SLOT_BACKUP)).kind !== "empty",
+    restoreBackup: async () => {
+      const d = await loadSlot(SLOT_BACKUP);
+      if (d.kind === "empty") return toasts.say("Không có bản sao lưu nào.", "bad");
+      if (d.kind === "corrupt")
+        return toasts.say("Bản sao lưu bị hỏng — hãy xuất ra file để giữ lại.", "bad");
+      if (nhanSave(d.data, "load")) toasts.say("Đã khôi phục bản sao lưu.", "good");
     },
     newGame: () => adoptState(createNewGame(content)),
     toggleMute: () => {
@@ -387,33 +426,7 @@ async function boot() {
       return cauNoiDung;
     },
 
-    /**
-     * BUỘC cập nhật.
-     *
-     * Cố ý mạnh tay: gỡ hẳn service worker và xoá SẠCH mọi cache rồi tải lại.
-     * Đường "lịch sự" (`update(true)` của thanh báo) chỉ chạy khi Workbox đã
-     * thấy một bản mới đang chờ — mà đúng cái kẹt cần thoát ra là lúc nó KHÔNG
-     * thấy: người chơi mở PWA suốt, service worker cũ phục vụ mãi một bản cũ,
-     * và không có nút nào thoát ra được.
-     *
-     * Save nằm ở IndexedDB nên không đụng tới — chỉ cache bị xoá.
-     */
-    async forceUpdate() {
-      try {
-        const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
-        await Promise.all(regs.map((r) => r.unregister()));
-      } catch {
-        /* bỏ qua */
-      }
-      try {
-        const ks = await caches.keys();
-        await Promise.all(ks.map((k) => caches.delete(k)));
-      } catch {
-        /* bỏ qua */
-      }
-      // `?v=` để chắc chắn không ăn lại bản trong bộ nhớ đệm của chính trình duyệt.
-      location.replace(`${location.pathname}?v=${Date.now()}`);
-    },
+    forceUpdate: buocCapNhat,
     install: async () => {
       const p = installPrompt;
       if (!p) return;
@@ -426,6 +439,36 @@ async function boot() {
     replayTutorial: () => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS),
     isTouch: () => isTouch,
   });
+
+  /**
+   * Nhận một save từ Nạp/Nhập: migrate → KIỂM → thay state. Trả về `true` nếu
+   * đã thay. Từ chối thì nói lý do và GIỮ NGUYÊN ván đang chơi — nhập nhầm một
+   * file cụt không được phép làm mất ván đang dở.
+   *
+   * Cùng một `napState` với đường Boot. Trước đây hai đường này bỏ qua kiểm
+   * bất biến, và `store.replace` ở bản phát hành thì không kiểm gì.
+   */
+  function nhanSave(d: SaveData, nguon: "load" | "import"): boolean {
+    const mg = migrateSaveEx(d);
+    if (!mg.ok) {
+      toasts.say(
+        mg.why === "newer"
+          ? "Bản lưu này của phiên bản MỚI hơn — hãy cập nhật game rồi thử lại."
+          : "Bản lưu quá cũ, không đọc được.",
+        "bad",
+      );
+      return false;
+    }
+    const r = napState(mg.state, content, nguon);
+    if (!r.ok) {
+      toasts.say(`${r.why} — giữ nguyên ván đang chơi.`, "bad");
+      return false;
+    }
+    adoptState(r.state);
+    for (const n of r.notes) toasts.say(n, "info");
+    menus.close();
+    return true;
+  }
 
   /** Thay state (tải save, chơi mới): camera phải NHẢY tới chỗ mới. */
   function adoptState(next: GameState) {
@@ -576,9 +619,21 @@ async function boot() {
 
   /* ---- 7. tự lưu ---- */
   let dirtySince = 0;
+  /** Đã báo "không lưu được" chưa — báo MỘT lần, không phải mỗi 30 giây. */
+  let daBaoLoiLuu = false;
   const autosave = async () => {
     dirtySince = 0;
-    await saveGame(store.snapshot());
+    const r = await saveGame(store.snapshot());
+    if (r.ok) {
+      daBaoLoiLuu = false;
+      return;
+    }
+    /* Trước đây kết quả bị vứt đi (`void autosave()` ở mọi chỗ gọi): hết dung
+       lượng hay bị chặn là hỏng im lặng vĩnh viễn, người chơi chỉ biết khi mở
+       lại và thấy nông trại lùi một tuần. */
+    if (daBaoLoiLuu) return;
+    daBaoLoiLuu = true;
+    toasts.say("KHÔNG LƯU ĐƯỢC — bộ nhớ trình duyệt đầy hoặc bị chặn. Hãy xuất save ra file.", "bad");
   };
   let savedDay = store.getState().day;
   /** Mốc bắt đầu hiệu ứng chuyển ngày (giây của vòng lặp), 0 = không có. */
@@ -1411,6 +1466,26 @@ async function boot() {
   let holdCooldown = false;
   /** Nút DÙNG đã được giữ bao lâu (giây). */
   let heldFor = 0;
+  /* Một khung hình ném lỗi KHÔNG được làm đứng hình vĩnh viễn — xem loop.ts.
+     Lần đầu: nói một câu và LƯU NGAY (reducer thuần, nên state trong store vẫn
+     là state tốt cuối cùng — lỗi đã ném trước khi nó được gán). Lỗi ở mọi khung
+     liên tiếp thì dừng hẳn và nói thật, vì chạy tiếp chỉ là quay tròn. */
+  let daBaoLoiKhung = false;
+  const khiLoiKhungHinh = (e: unknown, lienTiep: number): boolean => {
+    console.error("[oni-farm] lỗi trong khung hình", e);
+    if (!daBaoLoiKhung) {
+      daBaoLoiKhung = true;
+      toasts.say("Game gặp lỗi — đã lưu lại ván của anh.", "bad");
+      void autosave();
+    }
+    if (lienTiep < MAX_CONSECUTIVE_ERRORS) return true;
+    showError(
+      e instanceof Error ? (e.stack ?? e.message) : String(e),
+      "Game gặp lỗi liên tục và phải dừng. Ván chơi đã được lưu — tải lại trang để chơi tiếp.",
+    );
+    return false;
+  };
+
   const loop = createLoop((dt) => {
     elapsed += dt;
     // Tay cầm là hệ HỎI VÒNG, không phát sự kiện — phải đọc đúng một lần mỗi
@@ -2146,7 +2221,7 @@ async function boot() {
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);
     devPanel.update(s, content);
-  });
+  }, { onError: khiLoiKhungHinh });
 
   /** Vật thể tương tác GẦN NHẤT quanh (x,y) — cùng luật với `interactHint`.
    *  Quét cả hình vuông bán kính 2, không chỉ bốn ô kề: đứng CHÉO góc quầy hay
@@ -2178,7 +2253,7 @@ async function boot() {
   loop.start();
 
   // Hướng dẫn lần đầu: chỉ khi chưa xem và đang là ván mới (save cũ = đã biết chơi).
-  if (!settings.tutorialSeen && !migrated) {
+  if (!settings.tutorialSeen && !tiepTucSave) {
     window.setTimeout(() => tutorial.start(isTouch ? TOUCH_STEPS : DESKTOP_STEPS), 500);
   } else if (!settings.tutorialSeen) setSetting("tutorialSeen", true);
 
@@ -2276,7 +2351,40 @@ void boot().catch((e) => {
   const el = document.querySelector("#boot");
   if (el instanceof HTMLElement) {
     el.style.display = "grid";
+    el.classList.remove("done");
     el.innerHTML = `<div class="inner"><div class="logo">ONI<span>FARM</span></div><p>Lỗi khởi động:</p>
-      <div class="err">${String(e instanceof Error ? e.stack ?? e.message : e)}</div></div>`;
+      <div class="err"></div></div>`;
+    (el.querySelector(".err") as HTMLElement).textContent = String(
+      e instanceof Error ? (e.stack ?? e.message) : e,
+    );
   }
 });
+
+/**
+ * BUỘC cập nhật.
+ *
+ * Cố ý mạnh tay: gỡ hẳn service worker và xoá SẠCH mọi cache rồi tải lại.
+ * Đường "lịch sự" (`update(true)` của thanh báo) chỉ chạy khi Workbox đã thấy
+ * một bản mới đang chờ — mà đúng cái kẹt cần thoát ra là lúc nó KHÔNG thấy:
+ * người chơi mở PWA suốt, service worker cũ phục vụ mãi một bản cũ, và không
+ * có nút nào thoát ra được.
+ *
+ * Save nằm ở IndexedDB nên không đụng tới — chỉ cache bị xoá. Đứng ngoài
+ * `boot()` vì màn chặn "save của bản mới hơn" cần nó TRƯỚC khi có store.
+ */
+async function buocCapNhat(): Promise<void> {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch {
+    /* bỏ qua */
+  }
+  try {
+    const ks = await caches.keys();
+    await Promise.all(ks.map((k) => caches.delete(k)));
+  } catch {
+    /* bỏ qua */
+  }
+  // `?v=` để chắc chắn không ăn lại bản trong bộ nhớ đệm của chính trình duyệt.
+  location.replace(`${location.pathname}?v=${Date.now()}`);
+}
