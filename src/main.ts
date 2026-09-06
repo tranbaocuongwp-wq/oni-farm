@@ -1054,7 +1054,7 @@ async function boot() {
    * còn cái ao ở góc (5,4), tức 28 ô — ngoài bán kính, nên nó không đi múc và
    * cày tiếp cho tới lúc kiệt sức trong khi 83 ô đang khô.
    *
-   * Quét cả lưới 40×30 chỉ tốn 1200 phép so, và chỉ chạy đúng lúc bình cạn.
+   * Quét cả lưới 48×37 chỉ tốn 1.776 phép so, và chỉ chạy đúng lúc bình cạn.
    */
   function nearestRefill(s: GameState): { x: number; y: number } | null {
     let best: { x: number; y: number } | null = null;
@@ -1262,7 +1262,7 @@ async function boot() {
       hints.push([b(0), "Tiếp"], [b(2), "Bỏ qua"]);
     } else if (inMenu) {
       hints.push(["✛", "Chuyển"], [b(0), "Chọn"], [b(2), "Đóng"]);
-      if (std && document.querySelector(".modal .tabs button")) hints.push([`${b(4)}/${b(5)}`, "Đổi tab"]);
+      if (std && menus.hasTabs()) hints.push([`${b(4)}/${b(5)}`, "Đổi tab"]);
     } else if (minimap.cursor()) {
       hints.push(["Cần phải", "Rê"], [b(0), "Đi tới đó"], [b(8), "Thôi"]);
     } else if (inBuild) {
@@ -1411,6 +1411,10 @@ async function boot() {
 
   /** Ghi lại chỗ ngồi hiện tại. Gọi ở CUỐI mỗi khung hình — tức là ngay trước
    *  cú bấm sẽ dựng lại menu. */
+  /** Dấu vân tay lần ghi nhớ tiêu điểm gần nhất — xem chỗ gọi trong vòng vẽ. */
+  let nhoAe: Element | null = null;
+  let nhoScroll = -1;
+  let nhoRoot: HTMLElement | null = null;
   function nhoTieuDiem(root: HTMLElement): void {
     const el = document.activeElement as HTMLElement | null;
     const trong = !!el && el !== root && root.contains(el);
@@ -2221,7 +2225,10 @@ async function boot() {
        tiêu điểm còn chữa luôn việc bấm một nút xong thứ tự phím Tab quay về
        đầu tài liệu. Chỉ nhánh "đặt tiêu điểm ban đầu" mới cần tay cầm — không
        có tay cầm mà tự dưng focus một cái nút là hành vi lạ. */
-    const r0 = focusRoot();
+    /* Mỗi khung hình chỉ HỎI DOM khi có lớp phủ đang mở — sáu `querySelector`
+       một khung cho một câu hỏi mà câu trả lời luôn là "không có gì" trong 95%
+       thời gian chơi. */
+    const r0 = modal || cardAnimal !== null || buildUI.isOpen() ? focusRoot() : null;
     if (r0 && r0 !== focusedRootEl) {
       focusedRootEl = r0;
       const k = khoaManHinh(r0);
@@ -2275,7 +2282,20 @@ async function boot() {
       focusedRootEl = null;
       focusMemo = null;
     }
-    if (r0) nhoTieuDiem(r0);
+    /* GHI NHỚ tiêu điểm: chỉ khi tiêu điểm hoặc chỗ cuộn ĐỔI, không phải mỗi
+       khung. `nhoTieuDiem` → `choNgoi` đọc `offsetLeft/offsetTop` dọc chuỗi
+       `offsetParent`, tức ép trình duyệt tính layout đồng bộ — 60 lần một giây
+       khi menu mở, cho một thứ đứng yên. */
+    if (r0) {
+      const ae = document.activeElement;
+      const sc = r0.querySelector<HTMLElement>(".body")?.scrollTop ?? 0;
+      if (ae !== nhoAe || sc !== nhoScroll || r0 !== nhoRoot) {
+        nhoAe = ae;
+        nhoScroll = sc;
+        nhoRoot = r0;
+        nhoTieuDiem(r0);
+      }
+    }
 
     minimap.setView(camera.rx / TILE, camera.ry / TILE, vpTiles().w, vpTiles().h);
     minimap.update(s, content);

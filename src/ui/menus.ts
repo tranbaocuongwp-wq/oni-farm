@@ -126,6 +126,9 @@ export interface Menus {
   openJournal(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
+  /** Màn đang mở có hàng tab không — thanh gợi ý tay cầm hỏi mỗi khung hình,
+   *  nên trả lời từ DOM con của menu thay vì `querySelector` cả tài liệu. */
+  hasTabs(): boolean;
   /** Hỏi một câu có/không rồi đóng — cho những lệnh không hoàn tác được phát
    *  từ ngoài menu (mổ thịt trên bảng con vật). */
   confirm(title: string, text: string, onYes: () => void): void;
@@ -1810,6 +1813,7 @@ export function createMenus(
     openHelp,
     openPen,
     openJournal,
+    hasTabs: () => !!root.querySelector(".tabs button"),
     refresh: () => current?.(),
     confirm: (title, text, onYes) =>
       askConfirm(title, text, () => {

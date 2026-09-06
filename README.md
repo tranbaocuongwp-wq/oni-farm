@@ -989,6 +989,38 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 9: hiệu năng, đo thật (core 1.35)
+
+Đo trên máy này ở khổ 430×932 @2x, nông trại 24 con vật + 60 cây, 240 khung mỗi mẫu:
+
+| Cảnh | Trước | Sau |
+|---|---|---|
+| Xuân, trưa | 6,9 ms/khung | 7,4 |
+| **Đông, trưa** (`desat` 0,52) | **14,0** | **6,9** |
+| **Đông, tối** (đèn) | **19,0** | **11,4** |
+| Xuân, tự động BẬT | 7,7 | 7,5 |
+| `autoJob` cầm cuốc (Node) | 1,04 ms | 0,80 |
+
+* **Lớp bão hoà là thủ phạm lớn nhất.** Mùa thu/đông từng vẽ một `fillRect` với
+  `globalCompositeOperation = "saturation"` phủ toàn canvas ở độ phân giải thiết bị, mỗi khung —
+  blend không tách kênh, thứ chậm nhất Canvas2D có, 24 trong mỗi 48 ngày, và vô hình nếu chỉ thử
+  vào xuân hạ. Giờ là `filter: saturate()` trên phần tử canvas (trình ghép GPU lo), còn lớp màu mùa
+  là một `div` nằm ngoài tầm bộ lọc — nên sắc vàng mùa thu không bị rút theo cảnh, đúng cái lý do
+  thứ tự "rút trước, phủ sau" ngày xưa phải giữ. Chỉ đụng DOM khi sang mùa.
+* Đèn ban đêm: gradient dựng một lần cho mỗi (bán kính, cường độ) rồi vẽ qua `translate` — trước
+  đây `createRadialGradient` + ba `addColorStop` cho mỗi đèn mỗi khung.
+* `inZone` thôi `.filter()` 13 vùng ở mỗi lần gọi (cache theo loại × bản đồ, khoá WeakMap theo
+  content nên OTA tự có cache mới). `autoJob` kẹp vành quét vào biên bản đồ — bỏ ~9.400 lần gọi
+  rỗng cho mỗi loại việc. Kịch bản 117–118 khẳng định kết quả **y hệt** duyệt thô.
+* TICK chạy bù nhiều bước (tab quay lại, cổng dịch chuyển) dùng chung MỘT túi A* cho các bước bù
+  thay vì mỗi bước một túi: trước đây tới 16 lượt × 2.000 nút trong một khung hình. Lối chơi bình
+  thường không đổi một ly (kịch bản 116).
+* Khi menu mở, thôi ép layout mỗi khung: ghi nhớ tiêu điểm chỉ khi tiêu điểm hoặc chỗ cuộn đổi;
+  thôi `querySelector` sáu lần một khung khi không có lớp phủ nào.
+* Thứ CHƯA làm, nói thẳng: renderer vẫn cấp phát một object + một closure cho mỗi thứ vẽ mỗi khung
+  (100–400 closure/khung); `catchUpEntities` vẫn chép sâu mỗi con vật mỗi khung; `growCropsIn` vẫn
+  quét 1.776 ô mỗi khung. Cả ba đo được dưới 0,1 ms trên máy này — chưa đáng một lần tái cấu trúc.
+
 ### Đợt 8: chiều sâu nội dung (core 1.34 · content 1.40)
 
 Rà soát ra ba lỗ hổng: 14 nấc tiến trình là ghi-rồi-bỏ (`stagesDone` không được một file UI nào

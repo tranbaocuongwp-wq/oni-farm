@@ -156,6 +156,14 @@ body {
   touch-action: none;
 }
 
+/* LỚP MÀU MÙA: div phủ ngay trên canvas, ngoài tầm `filter: saturate()` của
+   canvas nên sắc vàng mùa thu không bị rút theo cảnh. Không nhận chạm. */
+.season-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
 canvas#game {
   display: block;
   position: absolute;

@@ -15,7 +15,7 @@
    · Hộp va chạm là THAM SỐ. Xe tải rộng hơn người, con gà hẹp hơn; dùng chung
      một hộp cố định thì xe sẽ tìm ra đường mà nó không lọt.
    · Hàng đợi ưu tiên là HEAP nhị phân thay vì quét tuyến tính. Với một actor và
-     ~1200 ô thì quét tuyến tính còn nhanh hơn dựng heap — nhưng 20 actor thì
+     ~1800 ô thì quét tuyến tính còn nhanh hơn dựng heap — nhưng 20 actor thì
      không: quét tuyến tính là O(N²) trên số nút mở, và đó là thứ giết fps trên
      điện thoại trước tiên.
 ============================================================================ */
@@ -31,8 +31,7 @@ import {
   isSolid,
   speedMulAt,
   tileAt,
-  tileOkFor,
-} from "./world.ts";
+  tileOkFor, maxSpeedMul } from "./world.ts";
 
 /** Hộp va chạm của một thực thể, tính bằng world px. */
 export interface Box {
@@ -183,6 +182,9 @@ function heapPop(h: Node[]): Node | undefined {
  * mà `GameState` là JSON thuần — một mảng số gọn hơn hẳn một mảng object, và
  * không có gì để lệch.
  */
+/** Bộ đếm số lần gọi A* — CHỈ để test đo ngân sách; game không đọc. */
+export const PATH_STATS = { calls: 0 };
+
 export function findPath(
   state: GameState,
   content: Content,
@@ -191,6 +193,7 @@ export function findPath(
   goals: ReadonlySet<number>,
   opts: PathOptions = {},
 ): number[] | null {
+  PATH_STATS.calls++;
   const w = state.w;
   const box = opts.box ?? PLAYER_BOX;
   const swims = opts.swims === true;
@@ -205,16 +208,9 @@ export function findPath(
      (đường nhựa) mà vẫn ước lượng theo giá 1 là ước lượng THỪA, và A* mất tính
      tối ưu — nó vẫn trả về một đường hợp lệ, chỉ không phải đường ngắn nhất.
      Hỏng âm thầm, không crash, rất khó thấy. */
-  let maxMul = 1;
-  for (const g of Object.values(content.tiles.grounds ?? {})) {
-    const v = g?.speedMul;
-    if (typeof v === "number" && v > maxMul) maxMul = v;
-  }
-  for (const b of Object.values(content.buildings)) {
-    const v = b?.effects.speedMul;
-    if (typeof v === "number" && v > maxMul) maxMul = v;
-  }
-  const invMax = 1 / maxMul;
+  // `maxSpeedMul` có cache theo content — trước đây đoạn này viết lại y hệt
+  // nó và duyệt mọi nền + mọi công trình ở MỖI lần tìm đường.
+  const invMax = 1 / maxSpeedMul(content);
 
   const gScore = new Map<number, number>();
   const cameFrom = new Map<number, number>();

@@ -19,7 +19,7 @@
       trôi ở toạ độ thực nhưng luôn VẼ ở toạ độ nguyên, nên các hàng pixel không
       nhảy qua nhảy lại giữa hai cột màn hình.
    4. **Bám nhân vật (mặc định: luôn ở chính giữa) và kẹp vào biên bản đồ.**
-      Bản đồ có kích thước CỐ ĐỊNH (40×30 ô); chỉ khung nhìn mới co giãn theo
+      Bản đồ có kích thước CỐ ĐỊNH (48×37 ô); chỉ khung nhìn mới co giãn theo
       màn hình. Sát mép bản đồ thì camera dừng lại nên nhân vật rời khỏi tâm —
       đó là chủ ý, thà vậy còn hơn lộ vùng trống ngoài bản đồ.
 ============================================================================ */

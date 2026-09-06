@@ -13,7 +13,7 @@ import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
-import { findPath } from "../src/game/pathfind.ts";
+import { findPath, PATH_STATS } from "../src/game/pathfind.ts";
 import { driveable, pondDock } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn } from "../src/game/pen.ts";
 import { penSummary } from "../src/game/animals.ts";
@@ -7380,6 +7380,142 @@ test("115. tên người làm lấy từ content, không ghi cứng trong mã", 
   eq(w.length, 6, "thuê được 6 người");
   for (const e of w) ok(["Ất", "Giáp"].includes(e.worker.name), `tên '${e.worker.name}' phải lấy từ content, không phải bộ ghi cứng`);
   eq(store.getState().stats.hired, 6, "stats.hired đếm đúng số người đã thuê");
+});
+
+
+/* ========================================================================== */
+/* 116–118. Đợt 9 · Hiệu năng — sửa nhanh hơn mà KHÔNG đổi kết quả            */
+/* ========================================================================== */
+
+test("116. TICK chạy bù nhiều bước dùng CHUNG một túi A*, không phải mỗi bước một túi", () => {
+  /* `MAX_REPLANS_PER_STEP` = 2 được tôn trọng ở mọi đường, nhưng ngân sách
+     reset MỖI BƯỚC — một TICK chạy bù 8 bước (tab quay lại, cổng dịch chuyển)
+     là 16 lượt A* × 2.000 nút gói trong một khung hình. Giờ bước đầu có trọn
+     túi, các bước bù chia nhau một túi nữa. */
+  const store = mkStore(1801);
+  khoaNac(store);
+  const khu = content.tiles.pens.find((p) => p.id === "cattle");
+  setState(store, (s) => {
+    s.entSeq = 40;
+    s.entities = [];
+    // 30 con đều ĐÓI và đứng xa máng → con nào tới lượt cũng muốn tìm đường.
+    for (let i = 0; i < 30; i++)
+      s.entities.push({
+        id: i + 1, kind: "animal", def: "cow", map: s.mapId,
+        // Hàng trên và hàng dưới của khu — tránh hàng giữa vì máng ở đó là ô đặc.
+        x: (khu.x + 1 + (i % 10)) * TILE + 8, y: (khu.y + (Math.floor(i / 10) % 2 ? khu.h - 1 : 0)) * TILE + 8,
+        dir: "down", anim: 0, seed: 100 + i,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+  });
+  const buoc = 0.5; // ACTOR_STEP_MINUTES = 0,5 phút game
+  const perSec = 10 / content.balance.realSecondsPerGameTenMinutes;
+  const datLai = () =>
+    setState(store, (s) => {
+      for (const e of s.entities) e.ai = { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 };
+      s.minutes = Math.floor(s.minutes / buoc) * buoc + 0.001;
+    });
+  // Một TICK bình thường (một bước): tối đa MAX_REPLANS_PER_STEP lượt.
+  datLai();
+  PATH_STATS.calls = 0;
+  store.dispatch({ t: "TICK", dt: buoc / perSec });
+  const mot = PATH_STATS.calls;
+  /* Một lượt "tìm đường" của con vật có thể gọi A* nhiều hơn một lần (đích
+     chính rồi dự phòng), nên đo MỐC của một bước rồi so tỷ lệ — không đoán
+     con số cứng. */
+  ok(mot >= 1 && mot <= 6, `một bước: có tìm đường, tối đa 2 lượt × vài lần gọi (nhận ${mot})`);
+
+  // Nhảy 8 bước trong MỘT TICK: trước đây tới 16 lượt; giờ ≤ 2 (bước đầu) + 2 (túi chung).
+  datLai();
+  PATH_STATS.calls = 0;
+  store.dispatch({ t: "TICK", dt: (buoc * 8) / perSec });
+  const bu = PATH_STATS.calls;
+  ok(bu <= mot * 2 + 1, `chạy bù 8 bước: bước đầu + MỘT túi chung ≈ 2× một bước (nhận ${bu}, một bước ${mot}); trước đây ≈ 8×`);
+  ok(bu >= 1, "…nhưng vẫn có con được tìm đường, không phải khoá cứng");
+});
+
+test("117. inZone có cache cho ĐÚNG kết quả như duyệt thô, trên mọi ô, mọi vùng, mọi bản đồ", () => {
+  /* `inZone` từng `.filter()` 13 vùng ở mỗi lần gọi — hàng nghìn mảng rác mỗi
+     lần chế độ tự động chọn việc. Cache theo (loại, bản đồ) phải không đổi một
+     câu trả lời nào. */
+  const store = mkStore(1802);
+  const tho = (s, kind, x, y) => {
+    const list = (content.tiles.zones ?? []).filter((z) => z.kind === kind && z.map === s.mapId);
+    if (!list.length) return true;
+    return list.some((z) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  };
+  const kinds = [...new Set((content.tiles.zones ?? []).map((z) => z.kind))];
+  ok(kinds.length >= 2, `content có ít nhất hai loại vùng (${kinds.join(", ")})`);
+  let so = 0;
+  for (const mapId of content.mapOrder) {
+    const s = { ...store.getState(), mapId };
+    const def = content.maps[mapId];
+    for (const kind of kinds)
+      for (let y = 0; y < def.h; y += 2)
+        for (let x = 0; x < def.w; x += 2) {
+          if (inZone(s, content, kind, x, y) !== tho(s, kind, x, y)) throw new Error(`lệch ở ${mapId} ${kind} (${x},${y})`);
+          so++;
+        }
+  }
+  ok(so > 500, `đã so ${so} ô`);
+});
+
+test("118. autoJob kẹp vành vào biên bản đồ nhưng chọn ĐÚNG việc như quét không kẹp", () => {
+  /* Với R = 48 trên lưới 48×37, phần lớn vành ngoài nằm ngoài bản đồ; kẹp
+     dx/dy vào biên bỏ ~9.400 lần gọi rỗng mỗi loại việc. Kết quả phải y hệt —
+     kể cả khi đứng sát GÓC, nơi nửa vành bị cắt. */
+  const store = mkStore(1803);
+  khoaNac(store);
+  unlockAll(store);
+  setState(store, (s) => {
+    let n = 0;
+    for (let y = 0; y < s.h; y++)
+      for (let x = 0; x < s.w; x++) {
+        const t = s.tiles[idx(s.w, x, y)];
+        if (t && t.g === "grass" && !t.prop && !t.b && (x + y) % 7 === 0 && inZone(s, content, "farm", x, y)) {
+          t.tilled = true;
+          if (n++ % 2) t.crop = { id: "lettuce", stage: 0, grow: 0, regrown: false };
+        }
+      }
+  });
+  const s0 = store.getState();
+  const R = Math.max(s0.w, s0.h);
+  const goc = [
+    { x: 1, y: 1 }, { x: s0.w - 2, y: 1 }, { x: 1, y: s0.h - 2 }, { x: s0.w - 2, y: s0.h - 2 }, { x: 20, y: 18 },
+  ];
+  /* Tham chiếu: quét TỪNG ô cả bản đồ theo đúng luật ưu tiên (AUTO_ORDER, ô
+     gần nhất theo khoảng cách px, ô hotbar đầu tiên làm được) — không có vành,
+     không có kẹp. */
+  const thamChieu = (s, from) => {
+    const px = from.x * 16 + 8, py = from.y * 16 + 8;
+    for (const kind of AUTO_ORDER) {
+      let best = null, bd = Infinity;
+      for (let y = 0; y < s.h; y++)
+        for (let x = 0; x < s.w; x++)
+          for (let slot = 0; slot < content.balance.hotbarSlots; slot++) {
+            if (!s.inv[slot]) continue;
+            if (canUseAt(s, content, x, y, true, slot) !== kind) continue;
+            const d = Math.hypot(x * 16 + 8 - px, y * 16 + 8 - py);
+            if (d < bd) { bd = d; best = { x, y, kind }; }
+            break;
+          }
+      if (best) return best;
+    }
+    return null;
+  };
+  let daSo = 0;
+  for (const held of ["tool:hoe", "seed:lettuce"]) {
+    selectItem(store, held);
+    for (const g of goc) {
+      const s = store.getState();
+      const a = autoJob(s, content, R, g);
+      const b = thamChieu(s, g);
+      eq(a && `${a.kind}@${a.x},${a.y}`, b && `${b.kind}@${b.x},${b.y}`, `cầm ${held}, đứng (${g.x},${g.y}): kẹp biên cho cùng việc`);
+      if (a) daSo++;
+    }
+  }
+  ok(daSo >= 5, `phải có việc thật để so (đã so ${daSo} ca có việc)`);
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -813,17 +813,23 @@ export function autoJob(
       }
     };
 
-    for (let r = 0; r <= R; r++) {
+    /* Vành quét KẸP VÀO BIÊN bản đồ. Với R = 48 trên lưới 48×37, phần lớn các
+       vành ngoài nằm hoàn toàn ngoài bản đồ: trước đây vẫn gọi `consider` cho
+       từng ô rồi trả về ngay ở phép kiểm biên — ~9.400 lần gọi rỗng cho MỖI
+       loại việc. Kẹp dx/dy vào [0, w) × [0, h) thì không còn lần gọi rỗng nào,
+       và vành nào nằm trọn ngoài biên thì bỏ luôn. */
+    const Rmax = Math.max(cx, state.w - 1 - cx, cy, state.h - 1 - cy);
+    for (let r = 0; r <= Math.min(R, Rmax); r++) {
       if (r === 0) consider(cx, cy);
       else {
-        for (let dx = -r; dx <= r; dx++) {
-          consider(cx + dx, cy - r);
-          consider(cx + dx, cy + r);
-        }
-        for (let dy = -r + 1; dy <= r - 1; dy++) {
-          consider(cx - r, cy + dy);
-          consider(cx + r, cy + dy);
-        }
+        const dxLo = Math.max(-r, -cx);
+        const dxHi = Math.min(r, state.w - 1 - cx);
+        if (cy - r >= 0) for (let dx = dxLo; dx <= dxHi; dx++) consider(cx + dx, cy - r);
+        if (cy + r < state.h) for (let dx = dxLo; dx <= dxHi; dx++) consider(cx + dx, cy + r);
+        const dyLo = Math.max(-r + 1, -cy);
+        const dyHi = Math.min(r - 1, state.h - 1 - cy);
+        if (cx - r >= 0) for (let dy = dyLo; dy <= dyHi; dy++) consider(cx - r, cy + dy);
+        if (cx + r < state.w) for (let dy = dyLo; dy <= dyHi; dy++) consider(cx + r, cy + dy);
       }
       /* Cùng cận đã chứng minh ở `nearestTarget`, và ở đây nó CHẶT vì điểm số
          chỉ là khoảng cách: ô ở vòng r+1 trở ra cách ít nhất (r+1)*16-8 px.

@@ -21,8 +21,7 @@ import type {
   PropDef,
   ZoneKind,
   StoredMap,
-  Tile,
-} from "./types.ts";
+  Tile, ZoneDef } from "./types.ts";
 
 export const TILE = 16;
 export const PLAYER_W = 10;
@@ -68,7 +67,15 @@ export function speedMulAt(state: GameState, content: Content, px: number, py: n
 
 /** Hệ số tốc độ lớn nhất mà content cho phép — heuristic của A* phải chia cho
  *  con số này, nếu không nó ước lượng THỪA và A* mất tính tối ưu. */
+const MAXMUL_CACHE = new WeakMap<Content, number>();
 export function maxSpeedMul(content: Content): number {
+  const c = MAXMUL_CACHE.get(content);
+  if (c !== undefined) return c;
+  const v = tinhMaxSpeedMul(content);
+  MAXMUL_CACHE.set(content, v);
+  return v;
+}
+function tinhMaxSpeedMul(content: Content): number {
   let m = 1;
   for (const g of Object.values(content.tiles.grounds ?? {})) {
     const v = g?.speedMul;
@@ -312,6 +319,30 @@ export function isSolidTile(t: Tile, content: Content): boolean {
 
 /** Ô (x,y) có nằm trong một vùng `kind` nào không. Không khai vùng nào thuộc
  *  loại đó = không giới hạn, đúng hành vi trước khi có `zones`. */
+/**
+ * Danh sách vùng theo (loại, bản đồ) — TÍNH MỘT LẦN cho mỗi content.
+ *
+ * `inZone` từng `.filter()` mảng 13 vùng ở MỖI lần gọi, mà `canUseAt` gọi nó
+ * qua `isTillable` cho từng ô — chế độ tự động quét 1.776 ô × 7 loại việc là
+ * hàng nghìn mảng rác mỗi lần chọn việc. Content là object đóng băng, nên khoá
+ * WeakMap theo nó là đủ: đổi content (OTA) là một object khác, cache tự mới.
+ */
+const ZONE_CACHE = new WeakMap<Content, Map<string, ZoneDef[]>>();
+function zonesOf(content: Content, kind: ZoneKind, mapId: string): ZoneDef[] {
+  let m = ZONE_CACHE.get(content);
+  if (!m) {
+    m = new Map();
+    ZONE_CACHE.set(content, m);
+  }
+  const key = `${kind}|${mapId}`;
+  let list = m.get(key);
+  if (!list) {
+    list = (content.tiles.zones ?? []).filter((z) => z.kind === kind && z.map === mapId);
+    m.set(key, list);
+  }
+  return list;
+}
+
 export function inZone(
   state: GameState,
   content: Content,
@@ -319,9 +350,10 @@ export function inZone(
   x: number,
   y: number,
 ): boolean {
-  const list = (content.tiles.zones ?? []).filter((z) => z.kind === kind && z.map === state.mapId);
+  const list = zonesOf(content, kind, state.mapId);
   if (!list.length) return true;
-  return list.some((z) => x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+  for (const z of list) if (x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h) return true;
+  return false;
 }
 
 /** Vùng `kind` đầu tiên chứa ô này, để UI gọi đúng tên nó. */

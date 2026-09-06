@@ -355,7 +355,7 @@ function wanderGoal(e: Entity, s: GameState, r: number, avoidFarm: boolean): { x
  * lượt xoay vòng theo `planCursor`. Nhờ vậy chi phí A* là HẰNG SỐ theo số con —
  * 20 con hay 60 con thì vẫn ngần ấy lần tìm đường mỗi giây.
  */
-export function actorStep(d: Draft, content: Content): void {
+export function actorStep(d: Draft, content: Content, tuiChung: { left: number } | null = null): void {
   if (!d.s.entities.length) return;
 
   // Chó bắt sâu bọ TRƯỚC khi ai kịp nghĩ: làm ở đây thì nó bắt được cả ban ngày
@@ -366,7 +366,7 @@ export function actorStep(d: Draft, content: Content): void {
   const s = d.s;
   if (!s.entities.length) return;
 
-  let budget = MAX_REPLANS_PER_STEP;
+  let budget = tuiChung ? tuiChung.left : MAX_REPLANS_PER_STEP;
   const n = s.entities.length;
   const start = ((s.planCursor % n) + n) % n;
 
@@ -463,7 +463,7 @@ export function actorStep(d: Draft, content: Content): void {
     }
 
     /* Con chó ĐI TUẦN chứ không lang thang: nó nhắm thẳng vào con sâu bọ gần
-       nhất. Không có cái này thì nó đi ngẫu nhiên trên bản đồ 40×30 và gần như
+       nhất. Không có cái này thì nó đi ngẫu nhiên trên bản đồ 48×37 và gần như
        không bao giờ đứng đủ gần con chuột nào để đuổi — nuôi chó thành ra vô
        nghĩa, đúng thứ người chơi sẽ nhận ra ngay sau vài đêm. */
     let g: { x: number; y: number } | null = null;
@@ -548,6 +548,7 @@ export function actorStep(d: Draft, content: Content): void {
   }
 
   touch(d).planCursor = (start + MAX_REPLANS_PER_STEP) % Math.max(1, n);
+  if (tuiChung) tuiChung.left = budget;
 }
 
 /**
@@ -559,8 +560,14 @@ export function actorStep(d: Draft, content: Content): void {
 export function runActorSteps(d: Draft, content: Content): void {
   const want = Math.floor(d.s.minutes / ACTOR_STEP_MINUTES);
   let n = 0;
+  /* Bước ĐẦU của một TICK có trọn `MAX_REPLANS_PER_STEP` như thường. Các bước
+     CHẠY BÙ sau đó (tab quay lại, cổng dịch chuyển) dùng chung MỘT túi nữa —
+     không phải mỗi bước một túi mới. Trước đây 8 bước × 2 lượt A* × 2.000 nút
+     = 32.000 lần mở nút gói trong một khung hình. Lối chơi bình thường (một
+     bước mỗi TICK) không đổi một ly. */
+  const buChung = { left: MAX_REPLANS_PER_STEP };
   while (d.s.actStep < want && n < MAX_STEPS_PER_TICK) {
-    actorStep(d, content);
+    actorStep(d, content, n === 0 ? null : buChung);
     touch(d).actStep = d.s.actStep + 1;
     n++;
   }

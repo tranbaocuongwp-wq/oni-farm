@@ -218,6 +218,22 @@ export function createRenderer(
     g.imageSmoothingEnabled = false;
   }
 
+  /** Cache gradient đèn theo (bán kính đã nhân k, cường độ). Đổi mức phóng thì
+   *  `lr` đổi và cache tự có khoá mới; khoá cũ ít, không cần dọn. */
+  const GRAD_CACHE = new Map<string, CanvasGradient>();
+  function denGradient(lr: number, strength: number): CanvasGradient {
+    const key = `${lr.toFixed(2)}|${strength}`;
+    let gr = GRAD_CACHE.get(key);
+    if (!gr) {
+      gr = ng.createRadialGradient(0, 0, 0, 0, 0, lr);
+      gr.addColorStop(0, `rgba(0,0,0,${strength})`);
+      gr.addColorStop(0.55, `rgba(0,0,0,${strength * 0.45})`);
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      GRAD_CACHE.set(key, gr);
+    }
+    return gr;
+  }
+
   /* ---- động tác TỪ CHỐI ---- */
   /** Giây của đồng hồ vẽ lúc bắt đầu lắc đầu; -1 = không lắc. */
   let refuseAt = -1;
@@ -340,12 +356,12 @@ export function createRenderer(
         if (t.g === "water") {
           g.drawImage(atlas.water[waterFrame % atlas.water.length]!, px, py);
           // bọt ở cạnh giáp đất — ao đọc ra là ao
-          const sides: [Side, Tile | undefined][] = [
-            ["n", at(s, x, y - 1)],
-            ["s", at(s, x, y + 1)],
-            ["w", at(s, x - 1, y)],
-            ["e", at(s, x + 1, y)],
-          ];
+          // Bốn cạnh đọc thẳng, không dựng mảng bộ đôi cho MỖI ô nước MỖI khung.
+          SIDES_TMP[0]![1] = at(s, x, y - 1);
+          SIDES_TMP[1]![1] = at(s, x, y + 1);
+          SIDES_TMP[2]![1] = at(s, x - 1, y);
+          SIDES_TMP[3]![1] = at(s, x + 1, y);
+          const sides = SIDES_TMP;
           // BÓNG bờ trước, BỌT sau: bọt nằm ngay mép nước nên phải ở trên cùng,
           // còn cái bóng thì chìm xuống dưới nó.
           for (const [sd, nb] of sides)
@@ -400,6 +416,16 @@ export function createRenderer(
       }
     }
   }
+
+  /** Bộ đệm bốn cạnh dùng lại cho mọi ô nước — không cấp phát mỗi ô mỗi khung. */
+  const SIDES_TMP: [Side, Tile | undefined][] = [
+    ["n", undefined],
+    ["s", undefined],
+    ["w", undefined],
+    ["e", undefined],
+  ];
+  /** Cỡ chữ biển đã gán vào `g.font` lần trước. */
+  let fontCo = -1;
 
   /* ---- lớp vật thể, sắp theo chiều sâu ---- */
   interface Item {
@@ -763,29 +789,45 @@ export function createRenderer(
   }
 
   /** Lớp phủ toàn màn: sương, tint âm u, tối bão + chớp. Sau lớp đêm. */
+  /** Lớp phủ màu mùa — một div ngay sau canvas, không nhận chạm. */
+  const tintEl = document.createElement("div");
+  tintEl.className = "season-tint";
+  tintEl.setAttribute("aria-hidden", "true");
+  canvas.insertAdjacentElement("afterend", tintEl);
+  let mauMuaKey = "";
+  function datMauMua(st: WeatherFx["seasonTint"]): void {
+    const de = st?.desat ?? 0;
+    const alpha = st?.alpha ?? 0;
+    const color = st?.color ?? "";
+    const key = `${de}|${alpha}|${color}`;
+    if (key === mauMuaKey) return;
+    mauMuaKey = key;
+    canvas.style.filter = de > 0.001 ? `saturate(${(1 - de).toFixed(3)})` : "";
+    if (alpha > 0.001 && color) {
+      tintEl.style.background = color;
+      tintEl.style.opacity = String(alpha);
+      tintEl.hidden = false;
+    } else tintEl.hidden = true;
+  }
+
   function drawWeatherScreen(timeSec: number, wx: WeatherFx, reduceMotion: boolean) {
     // Màu của MÙA vẽ trước và KHÔNG phụ thuộc trong nhà hay ngoài trời: mưa thì
     // chỉ rơi ngoài sân, còn mùa đông thì trong nhà cũng là mùa đông.
-    if (wx.seasonTint) {
-      const st = wx.seasonTint;
-      // Rút bão hoà TRƯỚC rồi mới phủ màu: làm ngược lại thì chính lớp màu vừa
-      // phủ cũng bị rút mất, và mùa thu hết cả sắc vàng.
-      const de = st.desat ?? 0;
-      if (de > 0.001) {
-        g.globalCompositeOperation = "saturation";
-        g.globalAlpha = de;
-        g.fillStyle = "#808080";
-        g.fillRect(0, 0, canvas.width, canvas.height);
-        g.globalAlpha = 1;
-        g.globalCompositeOperation = "source-over";
-      }
-      if (st.alpha > 0.001) {
-        g.fillStyle = st.color;
-        g.globalAlpha = st.alpha;
-        g.fillRect(0, 0, canvas.width, canvas.height);
-        g.globalAlpha = 1;
-      }
-    }
+    /* MÀU MÙA không vẽ lên canvas nữa — hai việc, hai chỗ:
+
+         · RÚT BÃO HOÀ: `filter: saturate()` trên chính phần tử canvas. Trước
+           đây là một `fillRect` với `globalCompositeOperation = "saturation"`
+           phủ TOÀN canvas ở độ phân giải thiết bị (1,5 triệu pixel trên một
+           máy 412×915 @2x), 24 trong mỗi 48 ngày. Blend không tách kênh là thứ
+           chậm nhất Canvas2D có, thường rơi về đường phần mềm trên Android.
+           Đo trên máy này: mùa đông 14,0 ms/khung so với mùa xuân 6,9 — riêng
+           lớp này ăn 7 ms. Bộ lọc CSS thì trình ghép GPU lo, gần như miễn phí.
+         · PHỦ MÀU: một `<div>` nằm trên canvas, ngoài tầm bộ lọc — nên lớp màu
+           mùa thu không bị rút mất sắc vàng cùng với cảnh (đúng cái lý do
+           thứ tự "rút trước, phủ sau" ngày xưa phải giữ).
+
+       Chỉ đụng DOM khi giá trị ĐỔI — mỗi lần sang mùa, không phải mỗi khung. */
+    datMauMua(wx.seasonTint);
     if (!wx.outdoor) return;
     let color = "";
     let alpha = 0;
@@ -938,8 +980,12 @@ export function createRenderer(
     const py = s.player.y / TILE;
     const co = 5 * scale; // 5 world px — vừa dưới nửa chiều cao tấm ván
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.font = `${co}px ui-sans-serif, system-ui, sans-serif`;
-    g.textBaseline = "alphabetic";
+    // Gán `font` là một phép phân tích chuỗi ở phía trình duyệt — chỉ làm khi cỡ đổi.
+    if (co !== fontCo) {
+      fontCo = co;
+      g.font = `${co}px ui-sans-serif, system-ui, sans-serif`;
+      g.textBaseline = "alphabetic";
+    }
     for (const b of bien) {
       if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
       const d = Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py);
@@ -993,12 +1039,14 @@ export function createRenderer(
       const ly = (l.wy - camera.y) * k;
       const lr = l.r * k;
       if (lx < -lr || lx > night.width + lr || ly < -lr || ly > night.height + lr) continue;
-      const grad = ng.createRadialGradient(lx, ly, 0, lx, ly, lr);
-      grad.addColorStop(0, `rgba(0,0,0,${l.strength})`);
-      grad.addColorStop(0.55, `rgba(0,0,0,${l.strength * 0.45})`);
-      grad.addColorStop(1, "rgba(0,0,0,0)");
+      /* Gradient dựng MỘT LẦN cho mỗi (bán kính, cường độ) rồi vẽ qua
+         `translate` — trước đây `createRadialGradient` + ba `addColorStop` cho
+         MỖI đèn MỖI khung sau 17 giờ (5–15 đèn/khung). */
+      const grad = denGradient(lr, l.strength);
+      ng.translate(lx, ly);
       ng.fillStyle = grad;
-      ng.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+      ng.fillRect(-lr, -lr, lr * 2, lr * 2);
+      ng.translate(-lx, -ly);
     }
     ng.globalCompositeOperation = "source-over";
 
