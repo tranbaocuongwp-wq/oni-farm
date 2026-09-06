@@ -29,6 +29,8 @@ import { fromAnimals, sellPriceOf } from "../game/items.ts";
 import { sellSlots } from "../game/inventory.ts";
 import { penSummary } from "../game/animals.ts";
 import { khoaNgoai } from "./inert.ts";
+import { energyOf } from "../game/actions.ts";
+import { requirementProgress, statValue } from "../game/progression.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
@@ -36,6 +38,8 @@ export interface MenuHandlers {
   swap(a: number, b: number): void;
   /** Bỏ hẳn một ô túi đồ. */
   drop(slot: number): void;
+  /** ĂN món ở ô túi đồ để hồi năng lượng (core 1.34). */
+  eat(slot: number): void;
   craft(id: string): void;
   canCraft(id: string): boolean;
   /** Còn thiếu gì để làm được công thức này. */
@@ -118,6 +122,8 @@ export interface Menus {
   openPen(id: string): void;
   /** Bảng nút tay cầm — mở tự động lần đầu nhận ra tay cầm. */
   openPadHelp(): void;
+  /** NHẬT KÝ nông trại: các nấc đã đạt / đang tới, phần thưởng, và mục tiêu. */
+  openJournal(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
   /** Hỏi một câu có/không rồi đóng — cho những lệnh không hoàn tác được phát
@@ -491,7 +497,7 @@ export function createMenus(
     // Nhãn NGẮN: năm tab mà nhãn hai chữ thì chúng xuống dòng, và hàng tab cao
     // gần bằng một hàng hàng hoá — trong khi nó chỉ là cái để chọn chỗ đứng.
     mkTab("seed", "Hạt");
-    mkTab("feed", "Thức ăn");
+    mkTab("feed", "Vật tư");
     mkTab("build", "Xây");
     mkTab("animal", "Vật nuôi");
     mkTab("worker", "Thợ");
@@ -551,11 +557,20 @@ export function createMenus(
         const an = c.animalOrder
           .filter((a) => c.animals[a]?.job !== "pest" && c.animals[a]?.feed.includes(`item:${id}`))
           .map((a) => c.animals[a]!.name);
+        /* Tab này giờ là VẬT TƯ nói chung — ống nước, tấm kính (để chế vòi
+           tưới / nhà kính), thuốc trừ sâu — chứ không chỉ thức ăn. Dòng phụ
+           phải nói đúng món đó DÙNG vào đâu. */
+        const dung = c.recipes.filter((r) => r.in.some((v) => v.id === `item:${id}`)).map((r) => r.name);
+        const sub = an.length
+          ? an.length > 2 ? `cho ${an.length} loài` : `cho ${an.join(", ")}`
+          : id === "medicine" ? "xịt lên cây bệnh"
+          : dung.length ? `chế ${dung.slice(0, 2).join(", ")}`
+          : "vật tư";
         gf.appendChild(
           buyCard({
             art: `item:${id}`,
             name: m.name,
-            subs: [an.length ? (an.length > 2 ? `cho ${an.length} loài` : `cho ${an.join(", ")}`) : "chưa loài nào ăn"],
+            subs: [sub],
             price: money(gia),
             disabled: s.money < gia,
             onClick: () => {
@@ -569,8 +584,8 @@ export function createMenus(
       foot.appendChild(
         note(
           coMon
-            ? "Đổ vào MÁNG trong khu chuồng để cả đàn ăn dần, hoặc đứng cạnh con vật bấm CHO ĂN. Cá thì đứng bờ ao bấm CHO CÁ ĂN."
-            : "Chưa có thức ăn nào bày bán.",
+            ? "Thức ăn: đổ vào MÁNG trong khu chuồng hoặc đứng cạnh con vật bấm CHO ĂN. Ống nước, tấm kính: mang về bàn chế tạo để làm vòi tưới, sàn nhà kính."
+            : "Chưa có vật tư nào bày bán.",
         ),
       );
     } else if (shopTab === "worker") {
@@ -1202,7 +1217,7 @@ export function createMenus(
     foot.appendChild(
       note(
         picked >= 0
-          ? "Chạm ô đích để đổi chỗ, hoặc bấm BỎ MÓN NÀY để vứt đi."
+          ? "Chạm ô đích để đổi chỗ, ĂN nếu ăn được, hoặc BỎ để vứt đi."
           : "Chạm một món để chọn. Hai ô công cụ đầu (cuốc, bình) cố định.",
       ),
     );
@@ -1214,6 +1229,19 @@ export function createMenus(
     const chon = picked >= 0 ? s.inv[picked] : null;
     const g2 = document.createElement("div");
     g2.className = "grid2";
+    /* ĂN. Đầu ra thứ hai của nông sản: hồi năng lượng giữa ngày thay vì phải
+       về ngủ. Chỉ hiện khi món đang chọn ăn được, và nói rõ hồi bao nhiêu. */
+    const hoi = chon ? energyOf(chon.id, c) : 0;
+    if (chon && picked >= 2 && hoi > 0) {
+      const i = picked;
+      const daNo = s.energy >= c.balance.energyMax;
+      const bAn = mkBtn(daNo ? "Đang no" : `Ăn · +${hoi} năng lượng`, () => {
+        h.eat(i);
+        openBag();
+      }, "primary");
+      bAn.disabled = daNo;
+      g2.appendChild(bAn);
+    }
     if (chon && picked >= 2) {
       g2.appendChild(
         mkBtn(`Bỏ ${nameOf(chon.id)}${chon.n > 1 ? ` ×${chon.n}` : ""}`, () => {
@@ -1465,6 +1493,7 @@ export function createMenus(
         openPause();
       }, h.autoWork() ? "primary" : ""),
       tileBtn("bag", "Balo", () => openBag()),
+      tileBtn("goal", "Nhật ký", () => openJournal()),
       tileBtn("gear", "Cài đặt", () => openSettings()),
       tileBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
       tileBtn("load", c.strings.ui["load"] ?? "Tải game", () => h.load()),
@@ -1640,6 +1669,89 @@ export function createMenus(
   }
 
   /* ------------------------------------------------------------ HƯỚNG DẪN */
+  /* ------------------------------------------------------------- NHẬT KÝ */
+
+  /**
+   * NHẬT KÝ NÔNG TRẠI — nơi duy nhất người chơi XEM LẠI được mình đã đi tới
+   * đâu.
+   *
+   * Trước core 1.34, `stagesDone` không được một file UI nào đọc: hoàn thành
+   * một nấc là một dòng toast trôi qua trong hai giây, không phần thưởng,
+   * không danh sách. Mười bốn nấc được viết ra mà người chơi có thể đi hết
+   * ván không biết chúng tồn tại.
+   */
+  function openJournal() {
+    current = openJournal;
+    const s = getState();
+    const c = getContent();
+    const xong = s.stagesDone.length;
+    const { body, foot } = shell("Nhật ký nông trại", `${xong}/${c.stages.length} nấc · ${s.goalsDone.length}/${c.goals.length} mục tiêu`, "sheet");
+
+    const tenMon = (id: string) => itemLabel(id, c);
+    const thuong = (st: (typeof c.stages)[number]): string => {
+      const r = st.reward;
+      if (!r) return "";
+      const parts: string[] = [];
+      if (r.money) parts.push(`${money(r.money)}`);
+      for (const it of r.items ?? []) parts.push(`${tenMon(it.id)} ×${it.n}`);
+      return parts.join(" · ");
+    };
+    const dieuKien = (req: Record<string, number>): string => {
+      const TEN: Record<string, string> = {
+        money: "tiền", day: "ngày", tilled: "ô đã cày", planted: "lượt gieo", watered: "lượt tưới",
+        harvested: "lượt thu hoạch", sold: "món đã bán", earned: "đ kiếm được", cured: "cây đã chữa",
+        gathered: "sữa/trứng/lông đã thu", crafted: "lần chế tạo", hired: "người đã thuê",
+      };
+      return Object.entries(req)
+        .map(([k, v]) => {
+          const have = statValue(s, k) ?? 0;
+          const ten = k.startsWith("built.") ? `${c.buildings[k.slice(6)]?.name ?? k.slice(6)} đã xây` : (TEN[k] ?? k);
+          return `${Math.min(have, v).toLocaleString("vi-VN")}/${v.toLocaleString("vi-VN")} ${ten}`;
+        })
+        .join(" · ");
+    };
+
+    const h1 = document.createElement("div");
+    h1.className = "bag-head";
+    h1.textContent = "CÁC NẤC";
+    body.appendChild(h1);
+    for (const st of c.stages) {
+      const da = s.stagesDone.includes(st.id);
+      const p = da ? 1 : requirementProgress(s, st.require);
+      const row = document.createElement("div");
+      row.className = `jrow${da ? " done" : ""}`;
+      row.innerHTML =
+        `<div class="jhead"><b></b><span class="jmark"></span></div>` +
+        `<div class="jbar"><i></i></div>` +
+        `<div class="jsub"></div><div class="jgift"></div>`;
+      (row.querySelector("b") as HTMLElement).textContent = st.name;
+      (row.querySelector(".jmark") as HTMLElement).textContent = da ? "✓" : `${Math.round(p * 100)}%`;
+      (row.querySelector(".jbar i") as HTMLElement).style.width = `${Math.round(p * 100)}%`;
+      (row.querySelector(".jsub") as HTMLElement).textContent = da ? (st.toast ?? "") : dieuKien(st.require);
+      const g = thuong(st);
+      const eg = row.querySelector(".jgift") as HTMLElement;
+      if (g) eg.textContent = `${da ? "Đã nhận" : "Thưởng"}: ${g}`;
+      else eg.remove();
+      body.appendChild(row);
+    }
+
+    const h2 = document.createElement("div");
+    h2.className = "bag-head";
+    h2.textContent = "MỤC TIÊU";
+    body.appendChild(h2);
+    for (const g of c.goals) {
+      const da = s.goalsDone.includes(g.id);
+      const row = document.createElement("div");
+      row.className = `jrow goal${da ? " done" : ""}`;
+      row.innerHTML = `<div class="jhead"><b></b><span class="jmark"></span></div><div class="jsub"></div>`;
+      (row.querySelector("b") as HTMLElement).textContent = g.text;
+      (row.querySelector(".jmark") as HTMLElement).textContent = da ? "✓" : "";
+      (row.querySelector(".jsub") as HTMLElement).textContent = da ? "" : dieuKien(g.require);
+      body.appendChild(row);
+    }
+    foot.appendChild(mkBtn("Đóng", close, "primary wide"));
+  }
+
   function openHelp() {
     current = openHelp;
     const touch = h.isTouch();
@@ -1697,6 +1809,7 @@ export function createMenus(
     openBag,
     openHelp,
     openPen,
+    openJournal,
     refresh: () => current?.(),
     confirm: (title, text, onYes) =>
       askConfirm(title, text, () => {

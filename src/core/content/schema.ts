@@ -166,6 +166,7 @@ export function validateCrops(raw: unknown): string[] {
     const ymax = k.num(item, "yieldMax", 1);
     if (ymin !== null && ymax !== null && ymax < ymin)
       k.fail("yieldMax", "phải >= yieldMin");
+    if (item["energy"] !== undefined) k.num(item, "energy", 0);
     const art = k.obj(item, "art");
     if (art) {
       // form là TUỲ CHỌN: pack cũ không có trường này vẫn hợp lệ và vẫn vẽ như xưa.
@@ -269,6 +270,7 @@ export function validateItems(raw: unknown): string[] {
       k.str(m, "name");
       k.num(m, "sellPrice", 0);
       if (m["buyPrice"] !== undefined) k.num(m, "buyPrice", 0);
+      if (m["energy"] !== undefined) k.num(m, "energy", 0);
       if (m["sell"] !== undefined && typeof m["sell"] !== "boolean")
         k.fail("sell", "phải là true/false");
       c.merge(k);
@@ -536,6 +538,11 @@ export function validateActors(raw: unknown): string[] {
       if (box) {
         k.num(box as Record<string, unknown>, "w", 1, 64);
         k.num(box as Record<string, unknown>, "h", 1, 64);
+      }
+      const names = w["names"];
+      if (names !== undefined) {
+        if (!Array.isArray(names) || !names.length || !names.every(isStr))
+          k.fail("names", "phải là mảng tên (chuỗi), ít nhất một tên");
       }
       const skins = k.arr(w, "skins");
       if (skins) {
@@ -947,6 +954,23 @@ export function validateProgression(raw: unknown): string[] {
         /* `unlocks` đã bỏ hẳn: cửa hàng bán mọi thứ ngay từ đầu. Pack cũ còn
            trường đó thì BỎ QUA, không báo lỗi — nó chỉ là dữ liệu thừa, không
            làm hỏng gì, và từ chối cả pack vì một trường thừa là quá tay. */
+        const rw = item["reward"];
+        if (rw !== undefined) {
+          if (!isObj(rw)) k.fail("reward", "phải là object { money?, items? }");
+          else {
+            if (rw["money"] !== undefined) k.num(rw, "money", 0);
+            const its = rw["items"];
+            if (its !== undefined) {
+              if (!Array.isArray(its)) k.fail("reward.items", "phải là mảng { id, n }");
+              else
+                its.forEach((v, j) => {
+                  if (!isObj(v)) return k.fail(`reward.items[${j}]`, "phải là object");
+                  if (!isStr(v["id"])) k.fail(`reward.items[${j}].id`, "phải là id vật phẩm");
+                  if (!isNum(v["n"]) || (v["n"] as number) < 1) k.fail(`reward.items[${j}].n`, "phải là số >= 1");
+                });
+            }
+          }
+        }
       } else {
         k.str(item, "text");
       }

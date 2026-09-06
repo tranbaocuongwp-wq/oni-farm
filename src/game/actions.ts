@@ -773,12 +773,12 @@ export function missingFor(
 /** Chế tạo. Nguyên liệu có thể gồm CẢ CÔNG CỤ (nâng cấp ăn cái cũ).
  *  Ngoại lệ: hai ô công cụ đầu (cuốc/bình tưới) là vĩnh viễn — công thức nào
  *  "ăn" chúng thì vẫn được tính là đủ nguyên liệu, nhưng chúng không mất đi. */
-export function craft(d: Draft, content: Content, recipeId: string): void {
+export function craft(d: Draft, content: Content, recipeId: string): boolean {
   const r = findRecipe(content, recipeId);
-  if (!r) return;
+  if (!r) return false;
   if (!hasNearbyInteract(d.s, content, "CRAFT")) {
     toastText(d, "Phải đứng cạnh bàn chế tạo.", "bad");
-    return;
+    return false;
   }
   const missing = missingFor(d.s, content, recipeId);
   if (missing.length > 0) {
@@ -786,24 +786,69 @@ export function craft(d: Draft, content: Content, recipeId: string): void {
       .map((m) => `${itemName(m.id, content)} ${m.have}/${m.need}`)
       .join(", ");
     toastText(d, `Thiếu nguyên liệu: ${what}.`, "bad");
-    return;
+    return false;
   }
   const outN = Math.max(1, Math.floor(r.out.n));
   if (!canAdd(d.s.inv, r.out.id, outN)) {
     toastKey(d, content, "invFull", "bad");
-    return;
+    return false;
   }
 
   let inv = d.s.inv;
   for (const need of r.in) {
     const n = Math.max(0, Math.floor(need.n));
     const left = removeForCraft(inv, need.id, n);
-    if (!left) return; // đã kiểm ở trên, nhưng thà không làm gì còn hơn làm nửa vời
+    if (!left) return false; // đã kiểm ở trên, nhưng thà không làm gì còn hơn làm nửa vời
     inv = left;
   }
   const added = addItem(inv, r.out.id, outN);
   setInv(d, added.inv);
+  const st = dStats(d);
+  st.crafted = (st.crafted ?? 0) + 1;
   toastText(d, `Đã chế tạo ${itemName(r.out.id, content)} ×${outN}.`, "good");
+  return true;
+}
+
+/**
+ * Năng lượng một món hồi khi ĂN, hoặc 0 nếu không ăn được (core 1.34).
+ * Cây đọc `crops[].energy`, vật tư đọc `materials[].energy`.
+ */
+export function energyOf(id: string, content: Content): number {
+  const i = id.indexOf(":");
+  if (i < 0) return 0;
+  const kind = id.slice(0, i);
+  const ref = id.slice(i + 1);
+  const v = kind === "crop" ? content.crops[ref]?.energy : kind === "item" ? content.materials[ref]?.energy : 0;
+  return Number.isFinite(v) && (v as number) > 0 ? Math.floor(v as number) : 0;
+}
+
+/**
+ * ĂN một món ở ô `slot` của balo: +energy (kẹp ở `energyMax`), trừ một.
+ *
+ * Đây là đầu ra thứ hai của nông sản — trước core 1.34 năng lượng chỉ hồi được
+ * bằng cách ngủ, và 58/61 cây chỉ có đúng một đích là quầy bán. Không cần đứng
+ * ở đâu: ăn thì ăn ngay trong balo. Đang no (năng lượng đầy) thì từ chối, để
+ * không ai vô tình ăn mất một quả cà phê 320đ đổi lấy con số 0.
+ */
+export function eat(d: Draft, content: Content, slot: number): boolean {
+  const it = d.s.inv[slot];
+  if (!it) return false;
+  const hoi = energyOf(it.id, content);
+  if (hoi <= 0) {
+    toastText(d, `${itemName(it.id, content)} không ăn được.`, "bad");
+    return false;
+  }
+  const max = content.balance.energyMax;
+  if (d.s.energy >= max) {
+    toastText(d, "Đang no — ăn lúc này chỉ phí.", "info");
+    return false;
+  }
+  const left = removeItem(d.s.inv, it.id, 1);
+  if (!left) return false;
+  setInv(d, left);
+  touch(d).energy = Math.min(max, d.s.energy + hoi);
+  toastText(d, `Ăn ${itemName(it.id, content)}: +${hoi} năng lượng`, "good");
+  return true;
 }
 
 /* ---------------------------------------------------------------- INTERACT */

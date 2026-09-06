@@ -1,5 +1,5 @@
 {
-  "$comment": "Công cụ và VẬT LIỆU. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) sinh tự động từ crops.json. Vật liệu mang tiền tố item:<id>.\n\ntool.action quyết định công cụ làm được gì; tool.power là số nhát ăn được mỗi lần vung (rìu thép bổ 2 nhát/lần); tool.capacity là sức chứa của bình tưới.\n\nbuyPrice: vật liệu MUA được ở cửa hàng (tab Thức ăn). Vắng = chỉ nhặt/chế được, không bán ra. Có nó thì việc nuôi không còn phụ thuộc hoàn toàn vào việc đi cắt cỏ: hết cỏ vẫn mua được cám, chỉ là tốn tiền hơn — một lựa chọn, chứ không phải một ngõ cụt.",
+  "$comment": "Công cụ và VẬT LIỆU. Hạt giống (seed:<crop>) và nông sản (crop:<crop>) sinh tự động từ crops.json. Vật liệu mang tiền tố item:<id>.\n\ntool.action quyết định công cụ làm được gì; tool.power là số nhát ăn được mỗi lần vung (rìu thép bổ 2 nhát/lần); tool.capacity là sức chứa của bình tưới.\n\nbuyPrice: vật liệu MUA được ở cửa hàng (tab Thức ăn). Vắng = chỉ nhặt/chế được, không bán ra. Có nó thì việc nuôi không còn phụ thuộc hoàn toàn vào việc đi cắt cỏ: hết cỏ vẫn mua được cám, chỉ là tốn tiền hơn — một lựa chọn, chứ không phải một ngõ cụt.\n\nCore 1.34: energy = ăn được, hồi bấy nhiêu năng lượng (trứng, sữa; cây thì khai trong crops.json). pipe/glass là vật tư CHỈ MUA — vòi tưới và sàn nhà kính cần chúng, để tiền còn có chỗ tiêu. Tám món chế biến (phô mai, cuộn len, cà phê rang, trà sấy, mứt dâu, chả cá, xúc xích) làm ở bàn chế tạo từ một nguyên liệu, bán lãi 25–35% so với bán thô.",
   "tools": [
     {
       "id": "hoe",
@@ -70,27 +70,32 @@
       "id": "medicine",
       "name": "Thuốc trừ sâu",
       "sellPrice": 10,
-      "sell": false
+      "sell": false,
+      "buyPrice": 35
     },
     {
       "id": "milk",
       "name": "Sữa bò",
-      "sellPrice": 42
+      "sellPrice": 42,
+      "energy": 16
     },
     {
       "id": "goatmilk",
       "name": "Sữa dê",
-      "sellPrice": 58
+      "sellPrice": 58,
+      "energy": 20
     },
     {
       "id": "egg",
       "name": "Trứng gà",
-      "sellPrice": 26
+      "sellPrice": 26,
+      "energy": 12
     },
     {
       "id": "duckegg",
       "name": "Trứng vịt",
-      "sellPrice": 38
+      "sellPrice": 38,
+      "energy": 15
     },
     {
       "id": "wool",
@@ -152,6 +157,60 @@
       "sellPrice": 8,
       "buyPrice": 20,
       "sell": false
+    },
+    {
+      "id": "pipe",
+      "name": "Ống nước",
+      "sellPrice": 30,
+      "buyPrice": 120,
+      "sell": false
+    },
+    {
+      "id": "glass",
+      "name": "Tấm kính",
+      "sellPrice": 15,
+      "buyPrice": 60,
+      "sell": false
+    },
+    {
+      "id": "cheese",
+      "name": "Phô mai",
+      "sellPrice": 170
+    },
+    {
+      "id": "goatcheese",
+      "name": "Phô mai dê",
+      "sellPrice": 230
+    },
+    {
+      "id": "yarn",
+      "name": "Cuộn len",
+      "sellPrice": 190
+    },
+    {
+      "id": "roastcoffee",
+      "name": "Cà phê rang",
+      "sellPrice": 1150
+    },
+    {
+      "id": "driedtea",
+      "name": "Trà sấy",
+      "sellPrice": 1050
+    },
+    {
+      "id": "jam",
+      "name": "Mứt dâu",
+      "sellPrice": 780
+    },
+    {
+      "id": "fishcake",
+      "name": "Chả cá",
+      "sellPrice": 250
+    },
+    {
+      "id": "sausage",
+      "name": "Xúc xích",
+      "sellPrice": 360
     }
   ]
 }

@@ -183,7 +183,9 @@
       "feeds": [
         "item:hay",
         "item:fodder",
-        "item:feedmix"
+        "item:feedmix",
+        "crop:corn",
+        "crop:cassava"
       ]
     },
     {
@@ -211,7 +213,11 @@
       "h": 3,
       "feeds": [
         "item:feedmix",
-        "crop:corn"
+        "crop:corn",
+        "crop:rice",
+        "crop:wheat",
+        "crop:barley",
+        "crop:soybean"
       ]
     },
     {
@@ -225,7 +231,8 @@
       "swim": true,
       "feeds": [
         "item:fishfeed",
-        "item:fodder"
+        "item:fodder",
+        "crop:corn"
       ]
     }
   ],

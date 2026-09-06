@@ -12,7 +12,7 @@
 import type { Action, Content, GameState, StoredMap } from "./types.ts";
 import { applyProgression, commit, dPlayer, draft, storedView, toastKey, toastText, touch } from "./state.ts";
 import { dirFromVector, movePlayer } from "./player.ts";
-import { buildLine, canUseAt, craft, refill, useAt } from "./actions.ts";
+import { buildLine, canUseAt, craft, eat, refill, useAt } from "./actions.ts";
 import { swapSlots } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { growCrops, growCropsIn, newDay } from "./newday.ts";
@@ -429,6 +429,11 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       return commit(d);
     }
 
+    case "EAT": {
+      if (eat(d, content, action.slot | 0)) applyProgression(d, content);
+      return commit(d);
+    }
+
     case "SLAUGHTER": {
       if (state.busy > 0) return banTay(state);
       slaughter(d, content, action.x | 0, action.y | 0);
@@ -437,7 +442,7 @@ export function reduce(state: GameState, action: Action, content: Content): Game
 
     case "HIRE": {
       if (state.busy > 0) return banTay(state);
-      hireWorker(d, content, action.job);
+      if (hireWorker(d, content, action.job)) applyProgression(d, content);
       return commit(d);
     }
 

@@ -305,6 +305,9 @@ async function boot() {
     cardAnimal = null;
   });
   hud.onAnimalCycle((d) => cycleAnimal(store.getState(), d));
+  hud.onGoalClick(() => {
+    if (!menus.isOpen()) menus.openJournal();
+  });
   /* MỔ THỊT — hỏi một câu vì không hoàn tác được, rồi dispatch cái action đã
      nằm sẵn trong reducer từ lâu mà chưa có nút nào gọi. */
   hud.onAnimalSlaughter(() => {
@@ -351,6 +354,7 @@ async function boot() {
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
     drop: (slot) => store.dispatch({ t: "DROP", slot }),
+    eat: (slot) => store.dispatch({ t: "EAT", slot }),
     swap: (a, b) => {
       store.dispatch({ t: "SWAP", a, b });
       buzz("tap");

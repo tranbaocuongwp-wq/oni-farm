@@ -252,12 +252,18 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
 
     case "materials": {
       const add = Number.isFinite(n) ? Math.max(1, Math.floor(n as number)) : 50;
+      /* Chỉ vật liệu THÔ — không phải thứ chế ra ở bàn (phô mai, cà phê rang,
+         thuốc…). Từ core 1.34 có 30 loại vật liệu mà balo có 28 ô: cho mỗi
+         loại một chồng là balo đầy cứng, và mọi thứ chế tiếp theo đều "balo
+         đầy". Thứ chế được thì cheat cho nguyên liệu là đủ. */
+      const cheRa = new Set(content.recipes.map((r) => r.out.id));
       let inv = d.s.inv;
       for (const id of content.materialOrder) {
+        if (cheRa.has(`item:${id}`)) continue;
         inv = addItem(inv, `item:${id}`, add).inv;
       }
       setInv(d, inv);
-      toastText(d, `[debug] +${add} mỗi loại vật liệu`, "good");
+      toastText(d, `[debug] +${add} mỗi loại vật liệu thô`, "good");
       return;
     }
 

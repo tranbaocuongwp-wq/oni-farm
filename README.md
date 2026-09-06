@@ -989,6 +989,28 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 8: chiều sâu nội dung (core 1.34 · content 1.40)
+
+Rà soát ra ba lỗ hổng: 14 nấc tiến trình là ghi-rồi-bỏ (`stagesDone` không được một file UI nào
+đọc, sáu toast vẫn rao "mở khoá" cây của một hệ thống đã xoá), nông sản chỉ có đúng một đầu ra
+là quầy bán (58/61 cây, cả 12 sản phẩm chăn nuôi), và tiền hết ý nghĩa vì vòi tưới lẫn nhà kính
+chế miễn phí được từ gỗ + đá.
+
+* **Nấc có phần thưởng** (`reward: { money?, items? }`) và xem lại được ở **Nhật ký nông trại**
+  (ô trong Tạm dừng, hoặc bấm chip mục tiêu). 18 nấc, xếp tăng dần, thêm nấc cho chăn nuôi
+  (`gathered`), chế biến (`crafted`), thuê người (`hired`) và một nấc xa "Huyền thoại". Thưởng
+  tràn balo thì vào kho.
+* **Ăn để hồi sức**: mọi cây và trứng/sữa có `energy`; nút "Ăn" trong balo. Đầu ra thứ hai cho
+  cả 61 cây mà không phải ép mỗi cây một công thức.
+* **Tám công thức chế biến** một nguyên liệu → một món bán lãi 25–35%: phô mai, phô mai dê, cuộn
+  len, cà phê rang, trà sấy, mứt dâu, chả cá, xúc xích. Nông sản làm thức ăn: gà/vịt ăn lúa, lúa
+  mì, lúa mạch, đậu nành; bò/dê/cừu ăn ngô, khoai mì; cá ăn ngô.
+* **Tiền có chỗ tiêu**: vòi tưới cần **ống nước** (120đ), nhà kính cần **tấm kính** (60đ) — hai
+  vật tư chỉ mua; tab "Thức ăn" thành "Vật tư", bán luôn thuốc trừ sâu 35đ. Cừu 700đ → 520đ, lông
+  mỗi 2 ngày 1–2 cuộn: hết là món hàng bẫy.
+* HUD ghi **năm** từ năm thứ hai; tên người làm nằm trong `actors.workers.names`.
+* Cheat "materials" chỉ cho vật liệu thô (30 loại × một chồng thì balo 28 ô đầy cứng).
+
 ### Đợt 1–5 (core 1.25–1.31)
 
 | Bản | Nội dung |

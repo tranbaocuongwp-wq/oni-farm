@@ -2632,7 +2632,7 @@ function makeCropIcon(def: CropDef): HTMLCanvasElement {
    được "đây là sữa" trước khi màu nói "của con nào".
 --------------------------------------------------------------------------- */
 
-type MatKind = "chai" | "trung" | "long" | "thit" | "ca" | "soi";
+type MatKind = "chai" | "trung" | "long" | "thit" | "ca" | "soi" | "ong" | "kinh" | "khoi" | "tui";
 
 const MAT: Record<string, { kind: MatKind; mau: string; toi: string; nhan?: string }> = {
   medicine: { kind: "chai", mau: "#7fd4a8", toi: "#3f8c68", nhan: "#e8f7ef" },
@@ -2649,6 +2649,17 @@ const MAT: Record<string, { kind: MatKind; mau: string; toi: string; nhan?: stri
   duckmeat: { kind: "thit", mau: "#d8a880", toi: "#a67a54" },
   fishmeat: { kind: "ca", mau: "#f0b49a", toi: "#c07f66" },
   fiber: { kind: "soi", mau: "#9ab86a", toi: "#6a8a44" },
+  // core 1.34 — vật tư chỉ mua và món chế biến
+  pipe: { kind: "ong", mau: "#9aa3ad", toi: "#5f6770" },
+  glass: { kind: "kinh", mau: "#bfe4f0", toi: "#6fa9bd" },
+  cheese: { kind: "khoi", mau: "#f2cf5a", toi: "#c29a2a" },
+  goatcheese: { kind: "khoi", mau: "#f4efd6", toi: "#c7bd94" },
+  yarn: { kind: "long", mau: "#d86a5c", toi: "#9c3f36" },
+  roastcoffee: { kind: "tui", mau: "#6b4a2c", toi: "#3d2814", nhan: "#e8c37a" },
+  driedtea: { kind: "tui", mau: "#7fa653", toi: "#4f6f31", nhan: "#e8f0d0" },
+  jam: { kind: "chai", mau: "#c0334a", toi: "#7e1f30", nhan: "#f6e6c8" },
+  fishcake: { kind: "khoi", mau: "#e8c9a0", toi: "#b8946a" },
+  sausage: { kind: "thit", mau: "#b8543f", toi: "#7d3327" },
 };
 
 function veVatTu(s: Surface, kind: MatKind, mau: string, toi: string, nhan?: string): void {
@@ -2714,6 +2725,44 @@ function veVatTu(s: Surface, kind: MatKind, mau: string, toi: string, nhan?: str
     for (let i = -3; i <= 3; i++) s.px(8 + i, Math.round(9 + Math.abs(i) * 0.3), sang);
     s.hline(3, 11, 10, "#cfd8de");
     s.hline(3, 12, 10, "#a8b4bd");
+    return;
+  }
+  if (kind === "ong") {
+    // ỐNG NƯỚC: một khuỷu chữ L, hai đầu có gờ nối
+    s.rect(3, 4, 9, 3, toi);
+    s.rect(3, 4, 9, 1, sang);
+    s.rect(10, 4, 3, 10, toi);
+    s.vline(10, 4, 10, sang);
+    s.rect(2, 3, 2, 5, mau);
+    s.rect(9, 12, 5, 2, mau);
+    s.px(2, 3, sang);
+    return;
+  }
+  if (kind === "kinh") {
+    // TẤM KÍNH: hình chữ nhật nghiêng, một vệt phản quang chéo
+    s.rect(3, 2, 10, 12, toi);
+    s.rect(4, 3, 8, 10, mau);
+    for (let i = 0; i < 6; i++) s.px(5 + i, 11 - i, "#ffffff");
+    for (let i = 0; i < 4; i++) s.px(8 + i, 12 - i, sang);
+    return;
+  }
+  if (kind === "khoi") {
+    // KHỐI (phô mai, chả): miếng góc vuông có mặt trên sáng, lỗ nhỏ
+    s.rect(2, 6, 12, 7, toi);
+    s.rect(2, 6, 12, 1, sang);
+    s.rect(3, 7, 10, 5, mau);
+    s.px(5, 9, toi);
+    s.px(9, 8, toi);
+    s.px(8, 11, toi);
+    return;
+  }
+  if (kind === "tui") {
+    // TÚI (cà phê rang, trà sấy): túi đứng miệng gấp, có nhãn màu
+    s.rect(4, 3, 8, 11, toi);
+    s.rect(5, 4, 6, 9, mau);
+    s.rect(4, 2, 8, 2, toi);
+    s.hline(4, 2, 8, sang);
+    if (nhan) s.rect(5, 7, 6, 3, nhan);
     return;
   }
   // SỢI: bó sợi xoắn, buộc một nút ở giữa

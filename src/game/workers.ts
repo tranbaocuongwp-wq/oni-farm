@@ -19,7 +19,7 @@
 
 import type { Content, Entity, GameState, InvSlot, WorkerJob } from "./types.ts";
 import type { Draft } from "./state.ts";
-import { dEntity, randInt, toastKey, toastText, touch } from "./state.ts";
+import { dEntity, randInt, toastKey, toastText, touch, dStats } from "./state.ts";
 import { addItem, canAdd } from "./inventory.ts";
 import { setStore, storeHasRoom } from "./storage.ts";
 import { MAX_ENTITIES, removeEntity } from "./entities.ts";
@@ -70,8 +70,11 @@ export function hireWorker(d: Draft, content: Content, job: WorkerJob): number |
   const id = s.entSeq + 1;
   s.entSeq = id;
   s.money = s.money - cfg.hireFee;
+  const st = dStats(d);
+  st.hired = (st.hired ?? 0) + 1;
 
-  const rn = randInt(s.seed, 0, NAMES.length - 1);
+  const ten = cfg.names && cfg.names.length ? cfg.names : NAMES;
+  const rn = randInt(s.seed, 0, ten.length - 1);
   s.seed = rn.seed;
   const rs = randInt(s.seed, 0, Math.max(0, cfg.skins.length - 1));
   s.seed = rs.seed;
@@ -89,7 +92,7 @@ export function hireWorker(d: Draft, content: Content, job: WorkerJob): number |
     ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
     animal: { age: 0, fed: 0, hungryDays: 0, prod: [] },
     worker: {
-      name: NAMES[rn.v] ?? "Tư",
+      name: ten[rn.v] ?? NAMES[0] ?? "Tư",
       skin: rs.v,
       job,
       energy: cfg.energyMax,

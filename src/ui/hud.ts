@@ -26,7 +26,7 @@
 
 import type { Content, GameState } from "../game/types.ts";
 import { itemName } from "../game/items.ts";
-import { currentSeason, dayOfSeason } from "../game/season.ts";
+import { currentSeason, dayOfSeason, yearOf } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
 import { bestGoal } from "../game/progression.ts";
@@ -62,6 +62,8 @@ export interface Hud {
   onAnimalCycle(fn: (d: number) => void): void;
   /** Người chơi bấm MỔ THỊT trên bảng con vật — main biết con nào đang mở. */
   onAnimalSlaughter(fn: () => void): void;
+  /** Người chơi bấm vào chip mục tiêu — mở Nhật ký. */
+  onGoalClick(fn: () => void): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -111,7 +113,8 @@ export function itemHint(id: string, content: Content): string {
     }
     case "crop": {
       const c = content.crops[ref];
-      return c ? `Bán ${c.sellPrice}đ/cái ở quầy thu mua` : "";
+      if (!c) return "";
+      return `Bán ${c.sellPrice}đ/cái ở quầy thu mua` + (c.energy ? ` · ăn +${c.energy} năng lượng` : "");
     }
     case "build": {
       const b = content.buildings[ref];
@@ -119,7 +122,8 @@ export function itemHint(id: string, content: Content): string {
     }
     case "item": {
       const m = content.materials[ref];
-      return m ? `Vật liệu chế tạo · bán ${m.sellPrice}đ` : "";
+      if (!m) return "";
+      return (m.energy ? `Ăn +${m.energy} năng lượng · ` : "Vật liệu chế tạo · ") + `bán ${m.sellPrice}đ`;
     }
     default:
       return "";
@@ -245,8 +249,12 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     }, 1600);
   };
 
-  /* ---- mục tiêu: chip bấm để thu gọn ---- */
-  elGoalBox.addEventListener("click", () => elGoalBox.classList.toggle("collapsed"));
+  /* ---- mục tiêu: chip bấm để MỞ NHẬT KÝ ----
+     Trước đây bấm là thu gọn — nhưng trạng thái thu gọn bị ép mở lại mỗi lần
+     đổi mục tiêu, nên nó chưa bao giờ thật sự là một lựa chọn. Mở Nhật ký thì
+     cái chip thành cửa vào của toàn bộ tiến trình. */
+  let onGoal: () => void = () => {};
+  elGoalBox.addEventListener("click", () => onGoal());
 
   /* ---- hotbar: chạm chọn, nhấn giữ xem mô tả ---- */
   let holdTimer = 0;
@@ -377,6 +385,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     },
     onAnimalSlaughter(fn) {
       onSlaughter = fn;
+    },
+    onGoalClick(fn) {
+      onGoal = fn;
     },
     onAnimalCycle(fn) {
       onCycle = fn;
@@ -549,8 +560,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         // TRONG MÙA để tính còn kịp gieo lứa nữa không, chứ số ngày cộng dồn
         // từ đầu ván thì chẳng nói lên điều gì.
         const sea = currentSeason(s, content);
+        // Từ năm 2 trở đi ghi cả năm: "Năm 2 · Xuân 3". Một năm là 48 ngày,
+        // và trước đây chơi ba năm cũng không có chỗ nào nói đang năm mấy.
+        const nam = yearOf(s.day, content);
         elDay.textContent = sea
-          ? `${sea.name} ${dayOfSeason(s.day, content)}`
+          ? `${nam >= 2 ? `Năm ${nam} · ` : ""}${sea.name} ${dayOfSeason(s.day, content)}`
           : String(s.day);
       }
       const clock = formatClock(s.minutes);

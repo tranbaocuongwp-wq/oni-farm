@@ -2294,6 +2294,52 @@ body.pointer-focus .animal-card button:focus:not(:focus-visible) {
    `auto-fit` + `minmax` chứ không phải `repeat(3, …)`: màn hình cực nhỏ
    (≤320px) ra hai cột, tablet ngang ra năm — không cần một điểm ngắt nào.
    ========================================================================== */
+/* NHẬT KÝ: mỗi nấc một hàng — tên, phần trăm, thanh, điều kiện, phần thưởng. */
+.jrow {
+  padding: 7px 0 8px;
+  border-bottom: 1px solid var(--edge);
+}
+.jrow .jhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.jrow .jmark {
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+}
+.jrow.done .jmark {
+  color: var(--green);
+}
+.jrow .jbar {
+  height: 5px;
+  margin: 4px 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.jrow .jbar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.jrow.done .jbar i {
+  background: var(--gold);
+}
+.jrow .jsub,
+.jrow .jgift {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  line-height: 1.35;
+}
+.jrow .jgift {
+  color: var(--gold);
+}
+.jrow.done .jsub {
+  font-style: italic;
+}
 .menu-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));

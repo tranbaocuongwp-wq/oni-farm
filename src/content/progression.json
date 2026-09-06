@@ -1,11 +1,14 @@
 {
-  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, built.<id>.\n\nKHÔNG CÒN MỞ KHOÁ. Cửa hàng bán mọi thứ ngay từ đầu — có tiền thì mua, hết. Mốc và mục tiêu giờ chỉ để ĐÁNH DẤU tiến độ và nói một câu chúc mừng, không chặn gì cả: một cái cửa hàng bày ra bốn ô '??? chưa mở' là bốn lời hứa mà người chơi không làm gì được với chúng.",
+  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, cured, gathered, crafted, hired, built.<id>.\n\nKHÔNG CÒN MỞ KHOÁ. Cửa hàng bán mọi thứ ngay từ đầu — có tiền thì mua, hết. Nấc và mục tiêu để ĐÁNH DẤU tiến độ, nói một câu, và (từ core 1.34) PHÁT THƯỞNG: 'reward' { money?, items? [{id,n}] } — tiền cộng thẳng, vật phẩm vào balo, tràn thì vào kho. Nấc xếp theo ngưỡng tăng dần; không nấc nào trùng điều kiện với một mục tiêu để khỏi bắn hai toast một lúc. Toàn bộ xem lại được ở Nhật ký nông trại.",
   "stages": [
     {
       "id": "start",
       "name": "Bắt đầu",
       "require": {},
-      "toast": "Nông trại là của bạn rồi. Cày một ô và gieo hạt đi!"
+      "toast": "Nông trại là của bạn rồi. Cày một ô và gieo hạt đi!",
+      "reward": {
+        "money": 50
+      }
     },
     {
       "id": "pro",
@@ -13,7 +16,16 @@
       "require": {
         "harvested": 5
       },
-      "toast": "Vào nghề rồi — năm cây đầu tiên đã xong."
+      "toast": "Vào nghề rồi — năm cây đầu tiên đã xong. Thử một loại hạt mới xem.",
+      "reward": {
+        "money": 120,
+        "items": [
+          {
+            "id": "seed:tomato",
+            "n": 4
+          }
+        ]
+      }
     },
     {
       "id": "green",
@@ -21,7 +33,16 @@
       "require": {
         "harvested": 15
       },
-      "toast": "Mười lăm cây. Luống rau bắt đầu ra dáng."
+      "toast": "Mười lăm cây. Luống rau bắt đầu ra dáng.",
+      "reward": {
+        "money": 200,
+        "items": [
+          {
+            "id": "item:fiber",
+            "n": 6
+          }
+        ]
+      }
     },
     {
       "id": "herb",
@@ -29,7 +50,16 @@
       "require": {
         "harvested": 30
       },
-      "toast": "Ba mươi cây. Tay nghề lên rồi đấy."
+      "toast": "Ba mươi cây. Tay nghề lên rồi — cây lâu ngày như cà phê, trà bắt đầu đáng trồng.",
+      "reward": {
+        "money": 300,
+        "items": [
+          {
+            "id": "item:medicine",
+            "n": 2
+          }
+        ]
+      }
     },
     {
       "id": "mech",
@@ -37,31 +67,19 @@
       "require": {
         "money": 800
       },
-      "toast": "Có vốn rồi: vòi tưới và sàn nhà kính đáng đồng tiền lắm."
-    },
-    {
-      "id": "root",
-      "name": "Ruộng củ",
-      "require": {
-        "planted": 60
-      },
-      "toast": "Mốc Ruộng củ — xong rồi!"
-    },
-    {
-      "id": "modern",
-      "name": "Hiện đại hoá",
-      "require": {
-        "day": 8
-      },
-      "toast": "Sang ngày thứ tám. Đủ tiền thì tậu vòi tưới với nhà kính đi."
-    },
-    {
-      "id": "field",
-      "name": "Ruộng lớn",
-      "require": {
-        "harvested": 60
-      },
-      "toast": "Ruộng lớn: lúa, đậu nành, đậu phộng, vừng và bí ngòi."
+      "toast": "Có vốn rồi. Ống nước với tấm kính ở cửa hàng — mang về bàn chế tạo là ra vòi tưới, sàn nhà kính.",
+      "reward": {
+        "items": [
+          {
+            "id": "item:pipe",
+            "n": 1
+          },
+          {
+            "id": "item:glass",
+            "n": 2
+          }
+        ]
+      }
     },
     {
       "id": "auto",
@@ -69,15 +87,114 @@
       "require": {
         "harvested": 45
       },
-      "toast": "Bốn mươi lăm lượt thu hoạch — nông trại vào guồng rồi."
+      "toast": "Bốn mươi lăm lượt thu hoạch — nông trại vào guồng rồi. Người làm thuê ở tab cuối cửa hàng.",
+      "reward": {
+        "money": 400
+      }
+    },
+    {
+      "id": "root",
+      "name": "Ruộng củ",
+      "require": {
+        "planted": 60
+      },
+      "toast": "Sáu mươi lượt gieo. Củ cải, cà rốt đổ được vào máng heo — ruộng nuôi luôn chuồng.",
+      "reward": {
+        "items": [
+          {
+            "id": "seed:radish",
+            "n": 6
+          },
+          {
+            "id": "seed:carrot",
+            "n": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "modern",
+      "name": "Hiện đại hoá",
+      "require": {
+        "day": 8
+      },
+      "toast": "Sang ngày thứ tám. Nhìn Nhật ký xem còn nấc nào gần tới.",
+      "reward": {
+        "money": 250
+      }
+    },
+    {
+      "id": "field",
+      "name": "Ruộng lớn",
+      "require": {
+        "harvested": 60
+      },
+      "toast": "Sáu mươi lượt thu hoạch. Lúa, đậu nành ngoài bán còn cho gà ăn được.",
+      "reward": {
+        "money": 500,
+        "items": [
+          {
+            "id": "seed:rice",
+            "n": 6
+          }
+        ]
+      }
+    },
+    {
+      "id": "barn",
+      "name": "Chăn nuôi",
+      "require": {
+        "gathered": 30
+      },
+      "toast": "Ba mươi lần vắt sữa, nhặt trứng. Mang sữa về bàn chế tạo làm phô mai — lãi hơn bán thô.",
+      "reward": {
+        "money": 600,
+        "items": [
+          {
+            "id": "item:feedmix",
+            "n": 10
+          }
+        ]
+      }
+    },
+    {
+      "id": "craft",
+      "name": "Chế biến",
+      "require": {
+        "crafted": 10
+      },
+      "toast": "Mười lần đứng bàn chế tạo. Cà phê rang, trà sấy, mứt dâu bán gấp mấy lần nguyên liệu.",
+      "reward": {
+        "money": 700
+      }
     },
     {
       "id": "scale",
       "name": "Mở rộng",
       "require": {
-        "money": 3000
+        "money": 4000
       },
-      "toast": "Nông trại lớn mạnh: bí đỏ, dưa lưới, khổ qua, mướp và ớt chuông."
+      "toast": "Bốn nghìn đồng trong túi. Đủ tậu thêm đàn, thêm người.",
+      "reward": {
+        "money": 800,
+        "items": [
+          {
+            "id": "item:hay",
+            "n": 12
+          }
+        ]
+      }
+    },
+    {
+      "id": "crew",
+      "name": "Có người làm",
+      "require": {
+        "hired": 1
+      },
+      "toast": "Thuê được người đầu tiên. Từ giờ ruộng tự thu, kho tự đầy.",
+      "reward": {
+        "money": 900
+      }
     },
     {
       "id": "tropic",
@@ -85,15 +202,33 @@
       "require": {
         "day": 20
       },
-      "toast": "Vườn nhiệt đới: khoai mì, khoai môn, gừng, nghệ và mía."
+      "toast": "Ngày thứ hai mươi — gần hết hai mùa. Cây nào chưa chín tới cuối mùa là héo, tính trước đi.",
+      "reward": {
+        "money": 600,
+        "items": [
+          {
+            "id": "item:glass",
+            "n": 4
+          }
+        ]
+      }
     },
     {
       "id": "berry",
       "name": "Vườn quả mọng",
       "require": {
-        "harvested": 150
+        "harvested": 120
       },
-      "toast": "Vườn quả mọng: dâu tây, việt quất, đậu Hà Lan, cải xoăn và cần tây."
+      "toast": "Một trăm hai mươi lượt thu hoạch. Dâu tây, việt quất là cây lãi nhất mùa xuân hạ.",
+      "reward": {
+        "money": 1000,
+        "items": [
+          {
+            "id": "seed:strawberry",
+            "n": 4
+          }
+        ]
+      }
     },
     {
       "id": "bloom",
@@ -101,15 +236,44 @@
       "require": {
         "money": 8000
       },
-      "toast": "Vườn hoa nở: hướng dương, cúc vạn thọ, hoa cúc, sả và kinh giới."
+      "toast": "Tám nghìn đồng. Oải hương, hoa hồng — trồng cho đẹp mà bán cũng được giá.",
+      "reward": {
+        "money": 1500,
+        "items": [
+          {
+            "id": "seed:lavender",
+            "n": 4
+          }
+        ]
+      }
     },
     {
       "id": "estate",
       "name": "Điền trang",
       "require": {
-        "earned": 30000
+        "earned": 25000
       },
-      "toast": "Điền trang: cà phê, trà xanh, oải hương, hoa hồng, lúa mì và lúa mạch."
+      "toast": "Hai mươi lăm nghìn đồng kiếm được. Nông trại này là một điền trang rồi.",
+      "reward": {
+        "money": 2500,
+        "items": [
+          {
+            "id": "item:pipe",
+            "n": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "legend",
+      "name": "Huyền thoại",
+      "require": {
+        "earned": 100000
+      },
+      "toast": "Một trăm nghìn đồng. Không còn nấc nào nữa — cứ thoải mái làm nông.",
+      "reward": {
+        "money": 5000
+      }
     }
   ],
   "goals": [
@@ -149,6 +313,13 @@
       }
     },
     {
+      "id": "g_gather",
+      "text": "Vắt sữa hoặc nhặt trứng 10 lần",
+      "require": {
+        "gathered": 10
+      }
+    },
+    {
       "id": "g_cure",
       "text": "Chữa một cây bệnh",
       "require": {
@@ -160,6 +331,13 @@
       "text": "Lắp vòi tưới tự động đầu tiên",
       "require": {
         "built.sprinkler": 1
+      }
+    },
+    {
+      "id": "g_craft",
+      "text": "Chế biến 5 món ở bàn chế tạo",
+      "require": {
+        "crafted": 5
       }
     },
     {

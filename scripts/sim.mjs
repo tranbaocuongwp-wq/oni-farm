@@ -24,7 +24,7 @@ import { MAX_ENTITIES } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
-import { canCraft, canUseAt, missingFor, waterCapacity } from "../src/game/actions.ts";
+import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
 import { sellSlots } from "../src/game/inventory.ts";
 import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN } from "../src/game/hint.ts";
@@ -349,6 +349,20 @@ function unlockAll(store) {
   });
 }
 
+/**
+ * KHOÁ mọi nấc tiến trình (đánh dấu đã đạt) để chúng KHÔNG phát thưởng nữa.
+ *
+ * Từ core 1.34 nấc có phần thưởng tiền/vật phẩm. Kịch bản nào khẳng định
+ * "trừ đúng N đồng" hay "còn đúng 0 món" mà để nấc tự bắn giữa chừng thì cộng
+ * thêm một khoản không do hành động đang thử sinh ra. Gọi cái này ở đầu — trừ
+ * những kịch bản đang thử CHÍNH cái nấc.
+ */
+function khoaNac(store, except = []) {
+  setState(store, (s) => {
+    s.stagesDone = content.stages.map((x) => x.id).filter((id) => !except.includes(id));
+  });
+}
+
 /** Ô đất trống (grass, không prop/công trình) trong khối wxh, tránh quanh người chơi. */
 function findOpenBlock(s, bw, bh) {
   const px = Math.floor(s.player.x / TILE);
@@ -581,6 +595,10 @@ test("4. sàn nhà kính giữ ẩm qua nhiều ngày, cây lớn không cần t
 test("6. CÓ TIỀN LÀ MUA ĐƯỢC, không mốc nào chặn; mốc chỉ đánh dấu tiến độ", () => {
   const store = mkStore();
   deepEq(store.getState().stagesDone, ["start"], "mốc start áp ngay từ createNewGame");
+  // Từ đây khoá nấc lại: đặt 5.000đ là hai nấc bắn ngay và THƯỞNG tiền, làm
+  // phép "trừ đúng tiền" bên dưới lệch — mà kịch bản này thử cửa hàng, không
+  // thử phần thưởng (kịch bản 110 lo việc đó).
+  khoaNac(store);
 
   /* Cửa hàng bán TẤT từ ngày đầu. Trước đây hàng khoá theo mốc, và người chơi
      mở tab lên thấy bốn ô "??? chưa mở" — bốn lời hứa mà họ không làm gì được
@@ -1700,8 +1718,13 @@ test("28. các lệnh DEBUG chạy đúng và không vỡ bất biến", () => {
   green("unlockAll");
 
   store.dispatch({ t: "DEBUG", op: "materials" });
-  for (const id of content.materialOrder)
-    ok(countInv(store, `item:${id}`) >= 50, `materials cho ít nhất 50 ${id}`);
+  /* Cheat chỉ cho vật liệu THÔ — thứ chế ra ở bàn (phô mai, cà phê rang,
+     thuốc) thì không, vì 30 loại × một chồng là balo 28 ô đầy cứng. */
+  const cheRa = new Set(content.recipes.map((r) => r.out.id));
+  for (const id of content.materialOrder) {
+    if (cheRa.has(`item:${id}`)) eq(countInv(store, `item:${id}`), 0, `materials KHÔNG cho ${id} (đồ chế)`);
+    else ok(countInv(store, `item:${id}`) >= 50, `materials cho ít nhất 50 ${id}`);
+  }
   green("materials");
 });
 
@@ -3038,6 +3061,7 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
   ok(linePath(0, 0, 99, 0).length <= 24, "tuyến bị chặn ở MAX_LINE");
 
   const store = mkStore(905);
+  khoaNac(store);
   walkTo(store, HOME.x, HOME.y);
   const p = store.getState().player;
   const cx = Math.floor(p.x / TILE);
@@ -3064,6 +3088,7 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
 
   // ô ĐẦU ngoài tầm với → không làm gì cả
   const st2 = mkStore(906);
+  khoaNac(st2);
   walkTo(st2, HOME.x, HOME.y);
   setState(st2, (s) => { s.inv[3] = { id: "build:greenhouse", n: 20 }; });
   selectItem(st2, "build:greenhouse");
@@ -3074,6 +3099,7 @@ test("53. xây theo tuyến: hình chữ L, thiếu vật liệu thì dừng, ng
 
   /* VẼ BAO NHIÊU TÍNH TIỀN BẤY NHIÊU: hết hàng trong balo thì mua tại chỗ. */
   const st3 = mkStore(907);
+  khoaNac(st3);
   walkTo(st3, HOME.x, HOME.y);
   const q = st3.getState().player;
   const qx = Math.floor(q.x / TILE), qy = Math.floor(q.y / TILE);
@@ -3482,6 +3508,7 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
 
 test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", () => {
   const store = mkStore(925);
+  khoaNac(store);
   walkTo(store, HOME.x, HOME.y);
   const drop = content.tiles.dropoff;
   const gate = content.tiles.gate;
@@ -3538,6 +3565,7 @@ test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", 
 test("59. thuê người: trừ tiền, tới điểm giao, 3 ngày trả lương một lần, hết tiền thì nghỉ", () => {
   const cfg = content.workers;
   const store = mkStore(930);
+  khoaNac(store);
   walkTo(store, HOME.x, HOME.y);
   const drop = content.tiles.dropoff;
 
@@ -4044,6 +4072,7 @@ test("66. đặt vật xuống KHÔNG được tự nhốt mình; save đang k�
 test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật đói tới máng ăn", () => {
   const content = loadContent();
   const store = mkStore(1501);
+  khoaNac(store);
   const s0 = store.getState();
 
   /* ---- (a) bản đồ phải THẬT SỰ có khu, không chỉ có khai báo ---------- */
@@ -4321,11 +4350,16 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
 
   /* ---- (c) thức ăn MUA được ở cửa hàng --------------------------------- */
   const banDuoc = content.materialOrder.filter((id) => (content.materials[id].buyPrice ?? 0) > 0);
-  ok(banDuoc.length >= 2, `có ít nhất 2 loại thức ăn bày bán, đang có ${banDuoc.length}`);
+  ok(banDuoc.length >= 2, `có ít nhất 2 loại vật tư bày bán, đang có ${banDuoc.length}`);
+  /* Tab này từ core 1.34 là VẬT TƯ nói chung: mỗi thứ bày bán phải có ÍT NHẤT
+     một công dụng — loài nào đó ăn, chữa được cây, hay là nguyên liệu của một
+     công thức. Bày bán một món không dùng vào đâu là bán không khí. */
   for (const id of banDuoc) {
     const anDuoc = content.animalOrder.some((a) => content.animals[a]?.feed.includes(`item:${id}`));
-    ok(anDuoc, `'${id}' bày bán thì phải có loài nào đó ăn được`);
+    const cheDuoc = content.recipes.some((r) => r.in.some((v) => v.id === `item:${id}`));
+    ok(anDuoc || cheDuoc || id === "medicine", `'${id}' bày bán thì phải dùng được vào đâu đó`);
   }
+  ok(content.animalOrder.filter((a) => content.materialOrder.some((id) => (content.materials[id].buyPrice ?? 0) > 0 && content.animals[a]?.feed.includes(`item:${id}`))).length >= 3, "vẫn có thức ăn mua được cho ít nhất ba loài");
   const store = mkStore(1602);
   unlockAll(store);
   const mon = `item:${banDuoc[0]}`;
@@ -7050,7 +7084,7 @@ test("106. chip mục tiêu chỉ vào cái GẦN XONG NHẤT, không kẹt ở 
     s.stats.earned = 0;
     s.stats.built = {};
   });
-  eq(bestGoal(store.getState(), content)?.id, "g_cure", "hoà 0/N thì lấy cái đầu tiên chưa xong");
+  eq(bestGoal(store.getState(), content)?.id, "g_gather", "hoà 0/N thì lấy cái đầu tiên chưa xong (g_gather đứng trước g_cure)");
 
   /* (b) Tiền 2.900/3.000 → g_rich 97% phải THẮNG g_cure 0%. */
   setState(store, (s) => {
@@ -7157,6 +7191,195 @@ test("109. công tắc âm thanh đi qua settings nên SỐNG SÓT qua tải l�
   eq(parseSettings({ sound: "no" }).sound, true, "sai kiểu → mặc định");
   eq(parseSettings({ v: 2, control: "tap" }).sound, true, "settings đời v2 (chưa có khoá) → điền mặc định, không vỡ");
   ok(SETTINGS_VERSION >= 3, "phiên bản settings đã tăng vì thêm khoá");
+});
+
+
+/* ========================================================================== */
+/* 110–115. Đợt 8 · Chiều sâu nội dung                                        */
+/* ========================================================================== */
+
+test("110. nấc tiến trình PHÁT THƯỞNG đúng một lần, tràn balo thì vào kho", () => {
+  /* Trước core 1.34, `stagesDone` không được một file UI nào đọc và nấc không
+     thưởng gì: 14 nấc hoàn thành trong im lặng. Giờ mỗi nấc có `reward`. */
+  const store = mkStore(1701);
+  const nac = content.stages.find((x) => x.id === "pro"); // harvested 5
+  ok(nac && nac.reward && nac.reward.money > 0 && nac.reward.items?.length, "nấc 'pro' có thưởng tiền lẫn vật phẩm");
+  // Khoá mọi nấc TRỪ 'pro' — chỉ đo đúng một nấc.
+  khoaNac(store, ["pro"]);
+  const tien0 = store.getState().money;
+  const mon = nac.reward.items[0];
+  const co0 = countInv(store, mon.id);
+  setState(store, (s) => {
+    s.stats.harvested = 5;
+  });
+  // Nấc chỉ bắn khi có một action thành công đi qua applyProgression.
+  selectItem(store, "tool:hoe");
+  walkTo(store, HOME.x, HOME.y);
+  use(store, PLOTS[0].x, PLOTS[0].y);
+  const s1 = store.getState();
+  ok(s1.stagesDone.includes("pro"), "nấc 'pro' đã đạt");
+  eq(s1.money - tien0, nac.reward.money, `thưởng đúng ${nac.reward.money}đ (cày không sinh tiền)`);
+  eq(countInv(store, mon.id) - co0, mon.n, `thưởng đúng ${mon.n} ${mon.id}`);
+  ok(s1.log.some((l) => /Thưởng/.test(l.text)), "có toast nói rõ phần thưởng");
+
+  // Không thưởng hai lần: thêm hành động nữa, tiền không nhúc nhích.
+  const tien1 = s1.money;
+  use(store, PLOTS[1].x, PLOTS[1].y);
+  eq(store.getState().money, tien1, "làm tiếp không thưởng lại nấc đã đạt");
+
+  /* Tràn balo → vào KHO. Nhét đầy balo trước, rồi cho một nấc thưởng vật phẩm. */
+  const st2 = mkStore(1702);
+  khoaNac(st2, ["green"]); // harvested 15 → fiber ×6
+  setState(st2, (s) => {
+    for (let i = 2; i < s.inv.length; i++) s.inv[i] = { id: "item:stone", n: 99 };
+    s.stats.harvested = 15;
+  });
+  const kho0 = st2.getState().store.reduce((n, v) => n + (v && v.id === "item:fiber" ? v.n : 0), 0);
+  selectItem(st2, "tool:hoe");
+  walkTo(st2, HOME.x, HOME.y);
+  use(st2, PLOTS[0].x, PLOTS[0].y);
+  const kho1 = st2.getState().store.reduce((n, v) => n + (v && v.id === "item:fiber" ? v.n : 0), 0);
+  ok(st2.getState().stagesDone.includes("green"), "nấc 'green' đã đạt");
+  eq(kho1 - kho0, 6, "balo đầy → 6 sợi cỏ thưởng rơi vào KHO, không bốc hơi");
+  deepEq(checkInvariants(st2.getState(), content), [], "bất biến sạch sau khi thưởng tràn");
+});
+
+test("111. ĂN hồi năng lượng: trừ một, kẹp trần, không ăn được thì từ chối", () => {
+  /* Đầu ra thứ hai của nông sản. Trước đây năng lượng chỉ hồi bằng cách ngủ,
+     và 58/61 cây chỉ có đúng một đích là quầy bán. */
+  const store = mkStore(1703);
+  khoaNac(store);
+  const cay = "crop:lettuce";
+  const hoi = energyOf(cay, content);
+  ok(hoi > 0, `xà lách ăn được, hồi ${hoi}`);
+  ok(energyOf("item:stone", content) === 0, "đá không ăn được");
+  ok(energyOf("item:egg", content) > 0, "trứng ăn được");
+  ok(content.cropOrder.every((id) => (content.crops[id].energy ?? 0) > 0), "MỌI cây đều ăn được");
+
+  giveItem(store, cay, 3);
+  const slot = store.getState().inv.findIndex((v) => v && v.id === cay);
+  setState(store, (s) => {
+    s.energy = 20;
+  });
+  store.dispatch({ t: "EAT", slot });
+  let s1 = store.getState();
+  eq(s1.energy, 20 + hoi, "ăn một quả: +đúng energy");
+  eq(countInv(store, cay), 2, "…và trừ đúng một quả");
+
+  // Kẹp trần
+  setState(store, (s) => {
+    s.energy = content.balance.energyMax - 2;
+  });
+  store.dispatch({ t: "EAT", slot });
+  eq(store.getState().energy, content.balance.energyMax, "không vượt energyMax");
+  eq(countInv(store, cay), 1, "vẫn trừ một quả khi gần đầy");
+
+  // Đang no → từ chối, KHÔNG trừ
+  store.dispatch({ t: "EAT", slot });
+  eq(countInv(store, cay), 1, "đang no thì không ăn mất quả nào");
+  ok(/no/.test(store.getState().log[store.getState().log.length - 1].text), "…và nói vì sao");
+
+  // Món không ăn được
+  giveItem(store, "item:stone", 1);
+  const sd = store.getState().inv.findIndex((v) => v && v.id === "item:stone");
+  setState(store, (s) => {
+    s.energy = 10;
+  });
+  store.dispatch({ t: "EAT", slot: sd });
+  eq(store.getState().energy, 10, "đá: không đổi năng lượng");
+  eq(countInv(store, "item:stone"), 1, "…và không mất đá");
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến sạch");
+});
+
+test("112. progression.json sạch: không toast nào rao mở khoá, nấc không trùng mục tiêu, thưởng có thật", () => {
+  /* Sáu toast từng liệt kê cây "mở khoá" của một hệ thống đã bị xoá; ba nấc
+     trùng điều kiện với ba mục tiêu nên bắn hai toast một lúc; một toast là
+     bản nháp. */
+  for (const st of content.stages) {
+    ok(!/:\s*[^.]+,\s*[^.]+,\s*[^.]+/.test(st.toast ?? ""), `toast nấc '${st.id}' không còn là danh sách cây mở khoá`);
+    ok(!/xong rồi!$/.test(st.toast ?? ""), `toast nấc '${st.id}' không phải bản nháp`);
+    ok(!!st.reward && ((st.reward.money ?? 0) > 0 || (st.reward.items?.length ?? 0) > 0), `nấc '${st.id}' có phần thưởng`);
+  }
+  const kyReq = (r) => JSON.stringify(Object.entries(r).sort());
+  const nacReq = new Set(content.stages.map((s) => kyReq(s.require)));
+  for (const g of content.goals)
+    ok(!nacReq.has(kyReq(g.require)), `mục tiêu '${g.id}' không trùng điều kiện với một nấc nào`);
+  // Cùng một khoá thì ngưỡng phải TĂNG DẦN theo thứ tự file.
+  const cuoi = {};
+  for (const st of content.stages)
+    for (const [k, v] of Object.entries(st.require)) {
+      ok(!(k in cuoi) || v > cuoi[k], `nấc '${st.id}': ${k} ${v} phải lớn hơn nấc trước (${cuoi[k]})`);
+      cuoi[k] = v;
+    }
+  // Có nấc cho chăn nuôi, chế biến, thuê người — ba mảng từng không được đếm.
+  for (const k of ["gathered", "crafted", "hired"])
+    ok(content.stages.some((s) => k in s.require), `có nấc đếm '${k}'`);
+});
+
+test("113. cừu thôi là món hàng bẫy: đ/ngày ngang dê, hoàn vốn ≤ 12 ngày", () => {
+  /* 700đ → 23đ/ngày, thua con gà 140đ → 26đ/ngày, và game không hề báo. */
+  const dNgay = (id) => {
+    const a = content.animals[id];
+    return a.products.reduce((n, p) => n + ((p.min + p.max) / 2 / p.every) * content.materials[p.id.slice(5)].sellPrice, 0);
+  };
+  const cuu = dNgay("sheep"), ga = dNgay("chicken"), de = dNgay("goat");
+  ok(cuu >= ga, `cừu ${cuu.toFixed(0)}đ/ngày ≥ gà ${ga.toFixed(0)}đ/ngày`);
+  ok(cuu >= de * 0.85, `cừu ${cuu.toFixed(0)}đ/ngày ngang dê ${de.toFixed(0)}đ/ngày`);
+  ok(content.animals.sheep.price / cuu <= 12, `hoàn vốn ${(content.animals.sheep.price / cuu).toFixed(1)} ngày ≤ 12`);
+});
+
+test("114. mỗi công thức chế biến bán lãi hơn nguyên liệu, và nguyên liệu có nguồn", () => {
+  const gia = (id) => {
+    if (id.startsWith("crop:")) return content.crops[id.slice(5)]?.sellPrice ?? 0;
+    if (id.startsWith("item:")) return content.materials[id.slice(5)]?.sellPrice ?? 0;
+    return 0;
+  };
+  const coNguon = (id) => {
+    if (id.startsWith("crop:")) return !!content.crops[id.slice(5)];
+    if (id.startsWith("item:")) {
+      const m = content.materials[id.slice(5)];
+      if (!m) return false;
+      if ((m.buyPrice ?? 0) > 0) return true;
+      if (content.animalOrder.some((a) => (content.animals[a].products ?? []).some((p) => p.id === id) || content.animals[a].meat?.id === id)) return true;
+      if (content.recipes.some((r) => r.out.id === id)) return true;
+      if (Object.values(content.props).some((p) => (p.drops ?? []).some((d) => d.id === id))) return true;
+      return ["wood", "stone", "fiber"].includes(m.id);
+    }
+    return true;
+  };
+  const cheBien = content.recipes.filter((r) => r.out.id.startsWith("item:") && content.materials[r.out.id.slice(5)]?.sell !== false && r.in.every((v) => !v.id.startsWith("tool:")) && !["medicine", "fodder"].includes(r.id));
+  ok(cheBien.length >= 8, `có ít nhất 8 công thức chế biến (đang có ${cheBien.length})`);
+  for (const r of cheBien) {
+    const vao = r.in.reduce((n, v) => n + gia(v.id) * v.n, 0);
+    const ra = gia(r.out.id) * r.out.n;
+    ok(ra > vao * 1.15, `'${r.id}': bán ra ${ra} phải lãi > 15% so với nguyên liệu ${vao}`);
+    for (const v of r.in) ok(coNguon(v.id), `'${r.id}': nguyên liệu ${v.id} phải có nguồn`);
+  }
+  // Vòi tưới và nhà kính KHÔNG còn chế miễn phí: cần một thứ chỉ mua được.
+  for (const id of ["sprinkler", "greenhouse"]) {
+    const r = content.recipes.find((x) => x.id === id);
+    ok(r.in.some((v) => (content.materials[v.id.slice(5)]?.buyPrice ?? 0) > 0), `'${id}' cần một vật tư mua bằng tiền`);
+  }
+});
+
+test("115. tên người làm lấy từ content, không ghi cứng trong mã", () => {
+  ok(Array.isArray(content.workers.names) && content.workers.names.length >= 10, "actors.workers.names có ít nhất 10 tên");
+  /* Dùng một content có bộ tên KHÁC HẲN bộ mặc định trong mã. Nếu chỉ dùng
+     content gốc thì mười tên ghi cứng nằm trọn trong danh sách content, và mã
+     bỏ qua content vẫn xanh — chính cái bẫy tôi vừa dính khi cấy lỗi. */
+  const c2 = contentWith((raw) => {
+    raw.actors.workers.names = ["Ất", "Giáp"];
+  });
+  const store = createStore(createNewGame(c2, 1704), c2, { validate: true, strict: true });
+  setState(store, (s) => {
+    s.stagesDone = c2.stages.map((x) => x.id);
+    s.money = 100000;
+  });
+  for (let i = 0; i < 6; i++) store.dispatch({ t: "HIRE", job: "crops" });
+  const w = store.getState().entities.filter((e) => e.kind === "worker");
+  eq(w.length, 6, "thuê được 6 người");
+  for (const e of w) ok(["Ất", "Giáp"].includes(e.worker.name), `tên '${e.worker.name}' phải lấy từ content, không phải bộ ghi cứng`);
+  eq(store.getState().stats.hired, 6, "stats.hired đếm đúng số người đã thuê");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

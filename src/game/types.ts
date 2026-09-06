@@ -71,6 +71,12 @@ export interface CropDef {
   seedName: string;
   seedPrice: number;
   sellPrice: number;
+  /**
+   * ĂN ĐƯỢC: hồi bấy nhiêu năng lượng khi ăn một quả (core 1.34). Vắng = không
+   * ăn được. Đây là đầu ra THỨ HAI của nông sản ngoài quầy bán — 58/61 cây
+   * từng chỉ là một con số tiền, và năng lượng thì chỉ hồi được bằng cách ngủ.
+   */
+  energy?: number;
   /** Số ngày cho MỖI lần chuyển giai đoạn.
    *  Số giai đoạn hiển thị = growthDays.length + 1.
    *  Cây chín khi stage === growthDays.length. */
@@ -233,6 +239,9 @@ export interface WorkerContent {
   speed: number;
   box: { w: number; h: number };
   skins: CharSkin[];
+  /** Tên gọi cho vui của người làm. Vắng thì core dùng bộ tên mặc định — từng
+   *  bị ghi cứng trong TypeScript, trái với "actors là dữ liệu thuần". */
+  names?: string[];
 }
 
 /** Một mùa. `weather` ghi đè trọng số trong weather.json cho riêng mùa này —
@@ -304,6 +313,8 @@ export interface MaterialDef {
   id: string;
   name: string;
   sellPrice: number;
+  /** Ăn được: hồi bấy nhiêu năng lượng (trứng, sữa). Vắng = không ăn được. */
+  energy?: number;
   /**
    * Giá MUA ở cửa hàng. Vắng = không bán, chỉ nhặt hoặc chế được.
    *
@@ -709,11 +720,20 @@ export interface MapData {
 /** Điều kiện đọc từ GameState.stats + money/day. Khoá lồng dùng dấu chấm: "built.solar". */
 export type Requirement = Record<string, number>;
 
+/** Phần thưởng khi đạt một nấc: tiền cộng thẳng, vật phẩm vào balo (tràn thì
+ *  vào kho). Trước core 1.34 nấc chỉ là một dòng toast trôi qua — 14 nấc mà
+ *  người chơi hoàn thành không nhận được gì và không xem lại được. */
+export interface StageReward {
+  money?: number;
+  items?: { id: string; n: number }[];
+}
+
 export interface ProgressionStage {
   id: string;
   name: string;
   require: Requirement;
   toast?: string;
+  reward?: StageReward;
 }
 
 export interface Goal {
@@ -871,6 +891,11 @@ export interface Stats {
   cured: number;
   /** số sản phẩm vật nuôi đã thu — sữa, trứng, lông (core 1.6) */
   gathered: number;
+  /** số lần chế tạo / chế biến ở bàn (core 1.34). Tuỳ chọn để save cũ không
+   *  phải migrate — chỗ đọc dùng `?? 0`. */
+  crafted?: number;
+  /** số người làm đã thuê (core 1.34). */
+  hired?: number;
 }
 
 /** Thông điệp cho UI. Reducer đẩy vào đây; UI đọc rồi xoá. */
@@ -1196,8 +1221,8 @@ export type Action =
   | { t: "FIRE"; id: number }
   /** Đổi việc được giao. */
   | { t: "ASSIGN"; id: number; job: WorkerJob }
-  /** Mua một chiếc xe — cũng được giao tới bằng xe giao hàng. */
-  | { t: "BUY_VEHICLE"; def: string }
+  /** ĂN một món trong ô `slot` của balo để hồi năng lượng (core 1.34). */
+  | { t: "EAT"; slot: number }
   /** Chỉ dùng từ bảng gỡ lỗi. Giữ trong reducer để mọi thay đổi state vẫn đi
    *  qua đúng một cửa, thay vì cho UI thò tay vào sửa thẳng. */
   | { t: "DEBUG"; op: DebugOp; n?: number }

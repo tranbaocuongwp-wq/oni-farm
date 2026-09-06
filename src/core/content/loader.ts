@@ -132,6 +132,7 @@ export function validatePack(raw: RawPack): string[] {
   // require chỉ được dùng khoá mà progression.ts biết đọc
   const statKeys = new Set([
     "money", "day", "tilled", "planted", "watered", "harvested", "sold", "earned", "cured", "gathered",
+    "crafted", "hired",
   ]);
   const checkReq = (where: string, req: Record<string, number>) => {
     for (const k of Object.keys(req)) {
@@ -165,6 +166,11 @@ export function validatePack(raw: RawPack): string[] {
     if (kind === "build") return buildingIdSet.has(ref);
     return false;
   };
+  // Phần thưởng nấc phải trỏ vào vật phẩm có thật — một id sai là nấc đó
+  // thưởng ra một món ma nằm trong balo không tên không hình.
+  for (const s of prog.stages)
+    for (const it of s.reward?.items ?? [])
+      if (!knownItem(it.id)) errors.push(`progression stage '${s.id}': reward có '${it.id}' — không có vật phẩm này`);
 
   const maps = raw.maps as Record<string, MapData>;
   for (const pr of props) {

@@ -15,12 +15,14 @@
    content mới dùng khoá core cũ chưa biết).
 ============================================================================ */
 
-import type { Content, GameState, LogEntry, Requirement } from "./types.ts";
+import type { Content, GameState, LogEntry, Requirement, StageReward } from "./types.ts";
 
 export interface ProgressionResult {
   stagesDone: string[];
   goalsDone: string[];
   toasts: { text: string; kind: LogEntry["kind"] }[];
+  /** Phần thưởng của các nấc vừa đạt, theo đúng thứ tự `stagesDone`. */
+  rewards: StageReward[];
 }
 
 /** Đọc một khoá thống kê. undefined = core không hiểu khoá này. */
@@ -36,6 +38,8 @@ export function statValue(state: GameState, key: string): number | undefined {
     case "earned": return state.stats.earned;
     case "cured": return state.stats.cured ?? 0;
     case "gathered": return state.stats.gathered ?? 0;
+    case "crafted": return state.stats.crafted ?? 0;
+    case "hired": return state.stats.hired ?? 0;
     default: break;
   }
   if (key.startsWith("built.")) return state.stats.built[key.slice(6)] ?? 0;
@@ -65,7 +69,7 @@ export function requirementProgress(state: GameState, req: Requirement): number 
 
 /** Tính phần mới đạt được. Trả null nếu không có gì mới (khỏi tạo rác). */
 export function evaluateProgression(state: GameState, content: Content): ProgressionResult | null {
-  const res: ProgressionResult = { stagesDone: [], goalsDone: [], toasts: [] };
+  const res: ProgressionResult = { stagesDone: [], goalsDone: [], toasts: [], rewards: [] };
   const doneStages = new Set(state.stagesDone);
 
   for (const st of content.stages) {
@@ -73,6 +77,7 @@ export function evaluateProgression(state: GameState, content: Content): Progres
     if (!meetsRequirement(state, st.require)) continue;
     res.stagesDone.push(st.id);
     if (st.toast) res.toasts.push({ text: st.toast, kind: "good" });
+    if (st.reward) res.rewards.push(st.reward);
   }
 
   const doneGoals = new Set(state.goalsDone);

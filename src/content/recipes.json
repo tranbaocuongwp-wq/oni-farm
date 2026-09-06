@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — công thức chế tạo, làm ở BÀN CHẾ TẠO trong nhà. Nguyên liệu có thể là vật liệu (item:), công cụ (tool:) hay bất cứ vật phẩm nào — nên nâng cấp công cụ chính là một công thức ăn cả công cụ cũ lẫn vật liệu.\n\nLƯU Ý VÒNG BOOTSTRAP: rìu cần gỗ mà gỗ lại cần rìu — nên BỤI CỎ DẠI (phá được bằng tay không) vừa ra sợi vừa ra ít cành khô. Từ bụi làm ra rìu, rìu mở khoá gỗ, gỗ+sợi làm cuốc chim, cuốc chim mở khoá đá, đá mở khoá mọi thứ còn lại. Đổi công thức thì phải giữ nguyên chuỗi này.\n\nTÊN công thức KHÔNG được tự chép số lượng vào: bảng chế tạo đã in '×n' từ `out.n` rồi, nên 'Đường nhựa ×4' hiện ra thành 'Đường nhựa ×4 ×4'. Số lượng có ĐÚNG MỘT nguồn là `out.n` — validatePack chặn nếu tên lặp lại nó.",
+  "$comment": "LÀN NHANH — công thức chế tạo, làm ở BÀN CHẾ TẠO trong nhà. Nguyên liệu có thể là vật liệu (item:), công cụ (tool:) hay bất cứ vật phẩm nào — nên nâng cấp công cụ chính là một công thức ăn cả công cụ cũ lẫn vật liệu.\n\nLƯU Ý VÒNG BOOTSTRAP: rìu cần gỗ mà gỗ lại cần rìu — nên BỤI CỎ DẠI (phá được bằng tay không) vừa ra sợi vừa ra ít cành khô. Từ bụi làm ra rìu, rìu mở khoá gỗ, gỗ+sợi làm cuốc chim, cuốc chim mở khoá đá, đá mở khoá mọi thứ còn lại. Đổi công thức thì phải giữ nguyên chuỗi này.\n\nTÊN công thức KHÔNG được tự chép số lượng vào: bảng chế tạo đã in '×n' từ `out.n` rồi, nên 'Đường nhựa ×4' hiện ra thành 'Đường nhựa ×4 ×4'. Số lượng có ĐÚNG MỘT nguồn là `out.n` — validatePack chặn nếu tên lặp lại nó.\n\nCore 1.34: vòi tưới và sàn nhà kính không còn chế MIỄN PHÍ — cần ống nước / tấm kính chỉ mua được, để tiền có chỗ tiêu. Thêm tám công thức CHẾ BIẾN một nguyên liệu → một món bán lãi hơn bán thô: đầu ra thứ hai cho sữa, lông, cà phê, trà, dâu, cá, heo.",
   "recipes": [
     {
       "id": "axe",
@@ -111,38 +111,42 @@
     {
       "id": "sprinkler",
       "name": "Vòi tưới tự động",
-      "desc": "Tự làm, khỏi mua.",
+      "desc": "Cần một ống nước (mua ở cửa hàng) cộng đá và gỗ tự kiếm.",
       "out": {
         "id": "build:sprinkler",
         "n": 1
       },
       "in": [
         {
+          "id": "item:pipe",
+          "n": 1
+        },
+        {
           "id": "item:stone",
-          "n": 10
+          "n": 6
         },
         {
           "id": "item:wood",
-          "n": 8
+          "n": 4
         }
       ]
     },
     {
       "id": "greenhouse",
       "name": "Sàn nhà kính",
-      "desc": "Ô luôn giữ ẩm.",
+      "desc": "Ô luôn giữ ẩm. Cần một tấm kính (mua ở cửa hàng) và gỗ.",
       "out": {
         "id": "build:greenhouse",
         "n": 1
       },
       "in": [
         {
-          "id": "item:stone",
-          "n": 4
+          "id": "item:glass",
+          "n": 1
         },
         {
           "id": "item:wood",
-          "n": 4
+          "n": 2
         }
       ]
     },
@@ -173,6 +177,126 @@
         {
           "id": "item:fiber",
           "n": 4
+        }
+      ]
+    },
+    {
+      "id": "cheese",
+      "name": "Phô mai",
+      "desc": "Ba chai sữa bò ép thành một khối. Bán lãi hơn bán sữa.",
+      "out": {
+        "id": "item:cheese",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "item:milk",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "goatcheese",
+      "name": "Phô mai dê",
+      "desc": "Ba chai sữa dê.",
+      "out": {
+        "id": "item:goatcheese",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "item:goatmilk",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "yarn",
+      "name": "Cuộn len",
+      "desc": "Hai bó lông cừu xe thành một cuộn.",
+      "out": {
+        "id": "item:yarn",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "item:wool",
+          "n": 2
+        }
+      ]
+    },
+    {
+      "id": "roastcoffee",
+      "name": "Cà phê rang",
+      "desc": "Ba mẻ cà phê rang lên — bán được hơn hẳn ba mẻ thô.",
+      "out": {
+        "id": "item:roastcoffee",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "crop:coffee",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "driedtea",
+      "name": "Trà sấy",
+      "desc": "Ba mẻ trà xanh sấy khô.",
+      "out": {
+        "id": "item:driedtea",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "crop:tea",
+          "n": 3
+        }
+      ]
+    },
+    {
+      "id": "jam",
+      "name": "Mứt dâu",
+      "desc": "Bốn rổ dâu tây nấu một hũ mứt.",
+      "out": {
+        "id": "item:jam",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "crop:strawberry",
+          "n": 4
+        }
+      ]
+    },
+    {
+      "id": "fishcake",
+      "name": "Chả cá",
+      "desc": "Hai miếng thịt cá quết thành chả.",
+      "out": {
+        "id": "item:fishcake",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "item:fishmeat",
+          "n": 2
+        }
+      ]
+    },
+    {
+      "id": "sausage",
+      "name": "Xúc xích",
+      "desc": "Hai miếng thịt heo dồn thành xúc xích.",
+      "out": {
+        "id": "item:sausage",
+        "n": 1
+      },
+      "in": [
+        {
+          "id": "item:pork",
+          "n": 2
         }
       ]
     }

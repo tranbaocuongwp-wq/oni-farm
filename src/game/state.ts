@@ -26,8 +26,9 @@ import type {
 } from "./types.ts";
 import { CORE_VERSION, SAVE_VERSION } from "../core/version.ts";
 import { buildAllMaps, mapIdsOf, tileCenterX, tileCenterY } from "./world.ts";
-import { createInventory } from "./inventory.ts";
+import { createInventory, addItem } from "./inventory.ts";
 import { evaluateProgression } from "./progression.ts";
+import { itemName } from "./items.ts";
 
 /* Cầu nối cho làn render/UI: main.ts nhập migrateForContent từ đây, còn phần
    cài đặt nằm cạnh checkInvariants (cùng một mối lo: giữ state hợp lệ). */
@@ -332,6 +333,32 @@ export function applyProgression(d: Draft, content: Content): void {
   if (res.goalsDone.length) d.s.goalsDone = [...d.s.goalsDone, ...res.goalsDone];
   d.changed = true;
   for (const t of res.toasts) toastText(d, t.text, t.kind);
+  /* PHÁT THƯỞNG. Nấc được ghi vào `stagesDone` ở trên TRƯỚC khi thưởng, nên dù
+     `applyProgression` chạy lại bao nhiêu lần cũng không thưởng hai lần cho
+     cùng một nấc — `evaluateProgression` bỏ qua nấc đã có trong danh sách. */
+  for (const rw of res.rewards) {
+    if (rw.money && rw.money > 0) {
+      touch(d).money = d.s.money + Math.floor(rw.money);
+      toastText(d, `Thưởng +${Math.floor(rw.money)}đ`, "good");
+    }
+    for (const it of rw.items ?? []) {
+      const n = Math.max(1, Math.floor(it.n));
+      const r = addItem(d.s.inv, it.id, n);
+      setInv(d, r.inv);
+      let con = n - r.added;
+      // Balo đầy thì phần còn lại vào KHO — không để một phần thưởng bốc hơi.
+      if (con > 0) {
+        const k = addItem(d.s.store, it.id, con);
+        d.s.store = k.inv;
+        con -= k.added;
+      }
+      toastText(
+        d,
+        `Thưởng: ${itemName(it.id, content)} ×${n - con}` + (con > 0 ? " (balo và kho đều đầy, mất " + con + ")" : ""),
+        con > 0 ? "bad" : "good",
+      );
+    }
+  }
 }
 
 /* ------------------------------------------------------------- game mới */
@@ -382,6 +409,8 @@ export function createNewGame(content: Content, seed = 1): GameState {
       gathered: 0,
       built: {},
       cured: 0,
+      crafted: 0,
+      hired: 0,
     },
 
     log: [],
