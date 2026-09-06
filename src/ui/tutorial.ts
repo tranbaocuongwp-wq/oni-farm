@@ -10,6 +10,7 @@
    settings (thuộc máy, không thuộc ván chơi): đổi máy thì xem lại — đúng ý,
    vì máy khác có thể là màn hình khác.
 ============================================================================ */
+import { khoaNgoai } from "./inert.ts";
 
 export interface TutorialStep {
   title: string;
@@ -75,6 +76,7 @@ export function createTutorial(root: HTMLElement, onDone: () => void): Tutorial 
     open = false;
     root.innerHTML = "";
     root.hidden = true;
+    khoaNgoai(root, false, "tutorial");
     onDone();
   };
 
@@ -83,6 +85,8 @@ export function createTutorial(root: HTMLElement, onDone: () => void): Tutorial 
     if (!st) return close();
     root.innerHTML = "";
     root.hidden = false;
+    // Chặn cả BÀN PHÍM, không chỉ chuột: Tab không được nhảy ra HUD phía sau.
+    khoaNgoai(root, true, "tutorial");
 
     const ring = document.createElement("div");
     ring.className = "tut-ring";

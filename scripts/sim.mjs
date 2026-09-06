@@ -35,6 +35,7 @@ import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
 import { createLoop, MAX_CONSECUTIVE_ERRORS } from "../src/core/loop.ts";
 import { adoptState } from "../src/game/adopt.ts";
+import { bestGoal } from "../src/game/progression.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
 import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
@@ -7023,6 +7024,139 @@ test("105. cửa nạp chung: Boot / Nạp / Nhập cùng một luật, state h�
   ok(r2.ok, "…nhưng migrate sửa được → NHẬN");
   deepEq(checkInvariants(r2.state, content), [], "…và bản nhận về sạch bất biến — bản sao trùng đã bị dọn");
   ok(!Object.prototype.hasOwnProperty.call(r2.state.maps, r2.state.mapId), "bản đồ đang chơi không còn nằm trong maps");
+});
+
+
+/* ========================================================================== */
+/* 106–109. Đợt 7 · Mở khoá thứ đã viết sẵn                                   */
+/* ========================================================================== */
+
+test("106. chip mục tiêu chỉ vào cái GẦN XONG NHẤT, không kẹt ở 'Chữa một cây bệnh'", () => {
+  /* `hud.ts` từng lấy mục tiêu chưa xong ĐẦU TIÊN theo thứ tự file. Mục tiêu
+     thứ 6 `g_cure` cần thuốc chỉ chế được ở bàn trong nhà, bệnh thì 2%/đêm —
+     người chơi khá xong 1–5 trong hai ngày rồi nhìn dòng đó mãi, bốn mục tiêu
+     sau không bao giờ hiện. */
+  const store = mkStore(1601);
+  const xong5 = (s) => {
+    s.goalsDone = ["g_till", "g_plant", "g_water", "g_harvest", "g_sell"];
+    s.stats.cured = 0;
+  };
+  /* (a) Chưa có gì tiến: mọi mục tiêu còn lại đều 0/N → HOÀ → lấy cái đứng
+     trước trong file, tức vẫn là g_cure. Thứ tự tác giả vẫn có nghĩa khi hoà. */
+  setState(store, (s) => {
+    xong5(s);
+    s.money = 0;
+    s.stats.harvested = 0;
+    s.stats.earned = 0;
+    s.stats.built = {};
+  });
+  eq(bestGoal(store.getState(), content)?.id, "g_cure", "hoà 0/N thì lấy cái đầu tiên chưa xong");
+
+  /* (b) Tiền 2.900/3.000 → g_rich 97% phải THẮNG g_cure 0%. */
+  setState(store, (s) => {
+    xong5(s);
+    s.money = 2900;
+  });
+  const g = bestGoal(store.getState(), content);
+  eq(g?.id, "g_rich", `mục tiêu gần xong nhất là g_rich (nhận ${g?.id})`);
+  eq(g?.have, 2900, "…kèm số đang có");
+  eq(g?.need, 3000, "…và số cần");
+
+  /* (c) Hai cái cùng nhích: earned 15.000/30.000 (50%) và harvested 100/150
+     (67%) → harvested thắng. */
+  setState(store, (s) => {
+    xong5(s);
+    s.money = 0;
+    s.stats.earned = 15000;
+    s.stats.harvested = 100;
+  });
+  eq(bestGoal(store.getState(), content)?.id, "g_farmer", "67% thắng 50%");
+
+  /* (d) Xong hết → null, chip nói câu kết. */
+  setState(store, (s) => {
+    s.goalsDone = content.goals.map((x) => x.id);
+  });
+  eq(bestGoal(store.getState(), content), null, "xong hết → null");
+});
+
+test("107. hết năng lượng thì nút nói TRƯỚC khi bấm, không sáng xanh rồi trượt", () => {
+  /* `canUseAt` cố ý không kiểm năng lượng, nên ở 0 năng lượng nút vẫn ghi CÀY
+     sáng xanh, `USE` vẫn khoá 0,42 giây, tới lúc cuốc chạm đất mới trượt — và
+     dòng `.why` dưới nút chưa bao giờ nói vì sao. */
+  const store = mkStore(1602);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[0];
+  selectItem(store, "tool:hoe");
+  const day = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(day.kind, "till", "còn sức: CÀY");
+  ok(day.ready, "còn sức: ready");
+  eq(day.why, null, "còn sức: không có lý do gì");
+
+  setState(store, (s) => {
+    s.energy = 0;
+  });
+  const het = hintAt(store.getState(), content, plot.x, plot.y);
+  eq(het.kind, "till", "hết sức: nút VẪN ghi CÀY (để người chơi biết ô này có việc)");
+  ok(!het.ready, "hết sức: KHÔNG sáng xanh");
+  ok(typeof het.why === "string" && /năng lượng/i.test(het.why), `hết sức: dòng lý do nói về năng lượng (nhận "${het.why}")`);
+
+  /* Việc KHÔNG tốn sức thì không bị chặn: nhấc khúc gỗ tay không. */
+  setState(store, (s) => {
+    s.energy = 0;
+    s.sel = 5;
+    s.inv[5] = null;
+  });
+  const goNear = { x: plot.x + 1, y: plot.y };
+  setState(store, (s) => {
+    putProp(s, goNear.x, goNear.y, "log");
+  });
+  const nhac = hintAt(store.getState(), content, goNear.x, goNear.y);
+  if (nhac.kind === "lift") ok(nhac.ready, "hết sức vẫn NHẤC được — việc không tốn năng lượng không bị chặn");
+});
+
+test("108. bảng khu bấm hụt thì phải NÓI vì sao — không còn từ chối im lặng", () => {
+  /* `PEN_GATHER` / `PEN_POUR` thoát ở `penInReach` TRƯỚC khi tới được hàm
+     biết toast, nên hai nút "Đổ máng" / "Thu tất cả" bấm được mà tuyệt đối
+     không có gì xảy ra. Và mười lăm chỗ `busy > 0` khác cũng trả về không một
+     lời. */
+  const store = mkStore(1603);
+  const khu = content.tiles.pens.find((p) => p.id === "cattle");
+  /* Đứng ở NHÀ, xa khu gia súc — đúng cảnh reducer phải từ chối. */
+  walkTo(store, HOME.x, HOME.y);
+  giveItem(store, khu.feeds[0], 5);
+  selectItem(store, khu.feeds[0]);
+  const logTruoc = store.getState().log.length;
+  store.dispatch({ t: "PEN_POUR", pen: khu.id });
+  const l1 = store.getState().log;
+  ok(l1.length > logTruoc, "đổ máng từ xa: có MỘT dòng lý do");
+  ok(/đứng ở khu/i.test(l1[l1.length - 1].text), `…nói đúng chuyện đứng xa (nhận "${l1[l1.length - 1].text}")`);
+  store.dispatch({ t: "PEN_GATHER", pen: khu.id });
+  const l2 = store.getState().log;
+  ok(l2.length > l1.length, "thu cả khu từ xa: cũng có lý do");
+
+  /* Đang BẬN TAY (giữa một nhát cuốc) mà bấm chế tạo từ menu → nói "bận tay". */
+  setState(store, (s) => {
+    s.busy = 0.3;
+    s.pending = { x: HOME.x, y: HOME.y, kind: "TILL" };
+  });
+  const l3 = store.getState().log.length;
+  store.dispatch({ t: "CRAFT", id: "axe" });
+  const l4 = store.getState().log;
+  ok(l4.length > l3, "bận tay mà bấm chế tạo: có lý do");
+  ok(/bận tay/i.test(l4[l4.length - 1].text), `…nói đúng "bận tay" (nhận "${l4[l4.length - 1].text}")`);
+  clearBusy(store);
+});
+
+test("109. công tắc âm thanh đi qua settings nên SỐNG SÓT qua tải lại trang", () => {
+  /* Từng là `let enabled = true` cấp module trong sfx.ts, không đụng
+     localStorage — trong khi công tắc "Âm thanh" ngồi giữa hai công tắc CÓ lưu
+     ở cùng bảng Cài đặt. Tắt tiếng, tải lại, nó kêu lại. */
+  ok("sound" in DEFAULT_SETTINGS, "settings có khoá `sound`");
+  eq(DEFAULT_SETTINGS.sound, true, "mặc định BẬT");
+  eq(parseSettings({ sound: false }).sound, false, "tắt rồi thì đọc lại vẫn tắt");
+  eq(parseSettings({ sound: "no" }).sound, true, "sai kiểu → mặc định");
+  eq(parseSettings({ v: 2, control: "tap" }).sound, true, "settings đời v2 (chưa có khoá) → điền mặc định, không vỡ");
+  ok(SETTINGS_VERSION >= 3, "phiên bản settings đã tăng vì thêm khoá");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

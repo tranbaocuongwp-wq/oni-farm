@@ -9,7 +9,7 @@
    của trình duyệt), nên mọi hàm ở đây đều an toàn khi gọi trước lúc đó.
 ============================================================================ */
 
-type Voice = "till" | "water" | "plant" | "harvest" | "coin" | "build" | "sleep" | "deny";
+type Voice = "till" | "water" | "plant" | "harvest" | "coin" | "buy" | "build" | "sleep" | "deny";
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -103,6 +103,12 @@ export function play(v: Voice) {
     case "coin":
       tone(1050, 0.07, "square", 0.12);
       setTimeout(() => tone(1400, 0.12, "square", 0.1), 60);
+      break;
+    /* MUA: cùng họ với "coin" nhưng đi XUỐNG — tiền ra khỏi túi. Trước đây mua
+       không có tiếng nào: bus phản hồi chỉ nghe `money` TĂNG. */
+    case "buy":
+      tone(1400, 0.06, "square", 0.1);
+      setTimeout(() => tone(1050, 0.1, "square", 0.1), 60);
       break;
     case "build":
       tone(220, 0.07, "square", 0.14);

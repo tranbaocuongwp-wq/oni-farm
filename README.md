@@ -34,7 +34,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 40 kịch bản mô phỏng game (gợi ý hành động, parse cài đặt, hiệu lực trễ, SWAP balo, ô kế tiếp), Node thuần |
+| `npm run test:sim` | Hơn 100 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run icons` | Sinh lại icon PNG |
@@ -952,6 +952,55 @@ sắp cạn), chip mục tiêu thu gọn được, toast gộp trùng "×3" nằ
 bao giờ đè lên nhân vật, modal thành bottom-sheet trên màn dọc, nút ☰ và cụm nút lật theo
 tay thuận. Mọi thứ tôn trọng `env(safe-area-inset-*)`. Xem [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md).
 
+### Đợt 6–7: an toàn, rồi mở khoá thứ đã viết sẵn (core 1.32–1.33)
+
+Sau khi Đợt 5 lên mạng, ba luồng rà soát toàn bộ mã nguồn ra hơn 40 phát hiện. Hai đợt đầu
+của phần còn lại:
+
+**Đợt 6 — an toàn (core 1.32).** Đợt duy nhất mà lỗi của nó không hoàn tác được.
+* `step(dt)` từng đứng trần trong vòng lặp: một khung hình ném là `requestAnimationFrame`
+  không được đặt lại, và autosave (chỉ nổ trong `step`) chết theo. Giờ mỗi khung được bọc; lỗi
+  lẻ thì lưu ngay rồi chạy tiếp, lỗi liên tục 10 khung mới dừng và nói thật.
+* Save của bản **mới hơn** từng bị xử như save hỏng: bắt đầu ván mới rồi autosave đè lên trong
+  30 giây. Giờ `migrateSaveEx` nói rõ lý do, gặp `newer` thì màn chặn có nút cập nhật và **không
+  tạo store** — không có đường nào ghi vào khoá save.
+* Save hỏng / quá cũ / vỡ bất biến: **sao lưu nguyên blob** sang `main:backup` trước khi ghi đè;
+  màn "Save ra/vào" hiện nút khôi phục khi ô đó có gì.
+* Boot, Nạp, Nhập cùng đi qua một cửa (`game/adopt.ts`): migrate → kiểm bất biến → ok/why. Nạp
+  hay Nhập vỡ thì giữ nguyên ván đang chơi.
+* Bảng gỡ lỗi (`+1k đ`, `Chín hết`…) từng ship thẳng trong lưới menu Tạm dừng. Giờ giấu sau
+  **5 lần chạm vào dòng phiên bản** — Cường có dùng nó thật nên không rào hẳn sau DEV.
+* `.github/workflows/test.yml` chạy `test:all` trên mọi push. Trước đó 100+ kịch bản không có gì
+  bắt phải chạy.
+
+**Đợt 7 — mở khoá thứ đã viết sẵn (core 1.33).** Gần như không có luật chơi mới.
+* **Mổ thịt** có nút. Action `SLAUGHTER` viết đủ từ lâu, sim có test, bảng con vật còn in số
+  thịt sẽ được — mà không một chỗ nào trong UI dispatch nó.
+* Chip mục tiêu chỉ vào cái **gần xong nhất** (`bestGoal`), không phải cái đầu danh sách — nó
+  từng kẹt vĩnh viễn ở "Chữa một cây bệnh".
+* Vắt sữa, nhặt trứng, chữa cây có tiếng + hạt + rung; mua hàng có tiếng riêng; xu bắn ở chân
+  nhân vật chứ không ở ô cuốc lần cuối.
+* Hết năng lượng: nút nói **trước** ("Hết năng lượng — về ngủ", không sáng xanh), và khi trượt
+  thì đủ bộ tiếng + rung + lắc đầu.
+* Reducer từ chối **có lý do**: hai nút của bảng khu từng bấm được mà không có gì xảy ra.
+* `Escape` / ☰ / START bóc lớp từ nông tới sâu như nút X — không còn mở menu đè lên chế độ xây.
+  Có tay cầm thì lưới Tạm dừng có ô "Sơ đồ nút".
+* Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
+* Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
+* Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 1–5 (core 1.25–1.31)
+
+| Bản | Nội dung |
+|---|---|
+| 1.25 | **Đợt 1** — hết mất công cụ chế tạo khi nạp save · đồng hồ vật nuôi chạy thật · con có chuồng thôi bị bốc qua rào mỗi đêm · `dEntity` chép sâu · migrate hỏng thì lùi về ván mới |
+| 1.26 | Tay cầm: một nút, một thanh gợi ý dưới hotbar |
+| 1.27 | Máng bốn mức theo món · rắc cám xuống hồ, cá bơi tới ăn · hết năng lượng thì lắc đầu |
+| 1.28 | Nút ngữ cảnh đeo hình đồ đang cầm |
+| 1.29 · content 1.38 | **Đợt 2** — `sellable()` một nguồn cho cả 5 đường bán · cờ `materials[].sell` · quầy chia hai mục |
+| 1.30 · content 1.39 | **Đợt 4** — người làm đi được tới lô xa (bán kính quét + dây buộc cả hai đầu) · thôi bôi đen ô tốt · kho đầy thì đứng chờ · chó tuần bắt được chuột đầu kia bản đồ |
+| 1.31 | **Đợt 5** — nút chính quyết định bằng *món đang cầm × bán kính 6 ô quanh chân* rồi tự đi tới làm, không quét cả bản đồ · nút phụ chỉ tra cứu · **gỡ hẳn** vành "dè chừng" (xem ghi chú ở mục core 1.23 bên dưới) · cụm chạm còn đúng hai nút 80/64px · pad: A hành động, B tra cứu, X quay lại |
+
 ### Sơ đồ nút tay cầm: một nút một việc, một việc một nút (core 1.24)
 
 Cái người chơi bắt lỗi không phải một nút sai, mà là **sơ đồ tự mâu thuẫn**. Ba chỗ chồng chéo,
@@ -989,6 +1038,11 @@ cái nào đang thật. Trước đây dải góc chỉ **mờ đi** (opacity .4
 tắt hẳn.
 
 ### Con vật DÈ CHỪNG, và hai cái nút bám theo quanh mình (core 1.23)
+
+> **Đã gỡ ở core 1.31.** Cường nói ba lần rằng anh không muốn con vật đứng lại khi anh tới
+> gần, và đo lại thì lo ngại mà vành này sinh ra để chữa không đứng vững: trễ một thao tác
+> 0,21 s, con nhanh nhất nhích 0,39 ô, tầm với 1,4 ô. Đoạn dưới giữ nguyên làm sử liệu thiết
+> kế — vì sao nó từng có, và vì sao bỏ được.
 
 **Vành dè chừng.** Luật "tới gần thì đứng lại" vẫn chạy, nhưng nó là một cái **công tắc** ở
 đúng hai ô: ngoài hai ô con vật phóng đúng tốc độ, trong hai ô nó đứng phắt lại. Người chơi đi

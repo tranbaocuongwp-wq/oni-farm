@@ -44,6 +44,25 @@ function penInReach(state: GameState, content: Content, penId: string): boolean 
   return penNear(state, content, px, py, 2)?.id === penId;
 }
 
+/**
+ * Từ chối CÓ LÝ DO — cho những lệnh phát từ menu hay bảng.
+ *
+ * Mười lăm chỗ `if (state.busy > 0) return state` từng trả về không một lời:
+ * bấm "Chế tạo" hay "Thu tất cả" trong lúc đang vung cuốc 0,42 giây thì nút
+ * không làm gì và không nói gì. Hai nút của bảng khu còn tệ hơn — chúng thoát
+ * ở `penInReach` TRƯỚC khi tới được hàm biết toast, nên bấm được mà tuyệt đối
+ * không có gì xảy ra. Reducer là chỗ duy nhất giữ luật, nên cũng là chỗ duy
+ * nhất biết VÌ SAO.
+ */
+function tuChoi(state: GameState, ly: string): GameState {
+  const d = draft(state);
+  toastText(d, ly, "bad");
+  return commit(d);
+}
+function banTay(state: GameState): GameState {
+  return tuChoi(state, "Đang bận tay — chờ một nhịp.");
+}
+
 export function reduce(state: GameState, action: Action, content: Content): GameState {
   const d = draft(state);
 
@@ -301,39 +320,39 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     }
 
     case "CRAFT": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       craft(d, content, action.id);
       if (d.changed) applyProgression(d, content);
       return commit(d);
     }
 
     case "STORE_PUT": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       putToStore(d, content, action.slot | 0, action.n);
       return commit(d);
     }
 
     case "STORE_TAKE": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       takeFromStore(d, content, action.slot | 0, action.n);
       return commit(d);
     }
 
     case "STORE_PUT_ALL": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       putAllToStore(d, content);
       return commit(d);
     }
 
     case "STORE_SELL_ALL": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       sellStore(d, content);
       if (d.changed) applyProgression(d, content);
       return commit(d);
     }
 
     case "BUY_ANIMAL": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       const def = content.animals[action.def];
       if (!def) return state;
       if (state.money < def.price) {
@@ -390,19 +409,19 @@ export function reduce(state: GameState, action: Action, content: Content): Game
        không nhận một lệnh "thu trứng chuồng gà" phát từ đầu kia nông trại —
        reducer là chỗ duy nhất giữ luật, UI chỉ là một cách gọi nó. */
     case "PEN_GATHER": {
-      if (state.busy > 0) return state;
-      if (!penInReach(state, content, action.pen)) return state;
+      if (state.busy > 0) return banTay(state);
+      if (!penInReach(state, content, action.pen)) return tuChoi(state, "Phải đứng ở khu đó mới thu được.");
       if (gatherPen(d, content, action.pen) > 0) applyProgression(d, content);
       return commit(d);
     }
 
     case "PEN_POUR": {
-      if (state.busy > 0) return state;
-      if (!penInReach(state, content, action.pen)) return state;
+      if (state.busy > 0) return banTay(state);
+      if (!penInReach(state, content, action.pen)) return tuChoi(state, "Phải đứng ở khu đó mới đổ được.");
       const pen = (content.tiles.pens ?? []).find((p) => p.id === action.pen);
-      if (!pen || pen.map !== state.mapId) return state;
+      if (!pen || pen.map !== state.mapId) return tuChoi(state, "Khu này không ở bản đồ đang đứng.");
       const m = pourSpotIn(state, content, pen);
-      if (!m) return state;
+      if (!m) return tuChoi(state, "Khu này không có máng.");
       // Hồ thì RẮC xuống nước, khu cạn thì ĐỔ vào máng — hai cái tên khác nhau
       // vì hai hình ảnh khác nhau, nhưng cùng để lại thức ăn thật ở một chỗ.
       if (pen.swim) feedPond(d, content, m.x, m.y);
@@ -411,19 +430,19 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     }
 
     case "SLAUGHTER": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       slaughter(d, content, action.x | 0, action.y | 0);
       return commit(d);
     }
 
     case "HIRE": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       hireWorker(d, content, action.job);
       return commit(d);
     }
 
     case "FIRE": {
-      if (state.busy > 0) return state;
+      if (state.busy > 0) return banTay(state);
       fireWorker(d, content, action.id | 0);
       return commit(d);
     }

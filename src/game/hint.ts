@@ -117,6 +117,12 @@ function interactNear(
   return best;
 }
 
+/** Năng lượng một việc tốn — 0 cho việc không tốn (nhấc, đặt, đổ máng…). */
+export function energyFor(content: Content, kind: Exclude<HintKind, null>): number {
+  const c = content.balance.energyCost as unknown as Record<string, number | undefined>;
+  return c[kind] ?? 0;
+}
+
 /** Vì sao không làm được gì ở ô này với thứ đang cầm. Chỉ trả về câu ngắn.
  *  Ưu tiên nói về VẬT PHẨM ĐANG CẦM trước (đó là thứ người chơi đổi được ngay),
  *  rồi mới tới trạng thái ô. */
@@ -228,6 +234,14 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
 
   const use = canUseAt(state, content, x, y, true);
   if (use !== null) {
+    /* HẾT NĂNG LƯỢNG phải nói TRƯỚC khi bấm. `canUseAt` cố ý không kiểm năng
+       lượng (nó trả lời "ô này có việc gì", không phải "anh còn sức không"),
+       nên trước đây ở 0 năng lượng nút vẫn ghi CÀY sáng xanh, `USE` vẫn khoá
+       0,42 giây, rồi tới lúc cuốc chạm đất mới trượt — và cái nút chưa bao giờ
+       nói vì sao. */
+    const can = energyFor(content, use);
+    if (can > 0 && state.energy < can)
+      return { kind: use, label: LABEL[use], ready: false, why: "Hết năng lượng — về ngủ" };
     return { kind: use, label: LABEL[use], ready: inReach(state, x, y), why: null };
   }
 

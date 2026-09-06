@@ -442,6 +442,19 @@ body[data-hand="left"] .mid-col {
   color: var(--ink);
   font-weight: 700;
 }
+/* Nút MỔ THỊT nằm cùng hàng với số thịt — nhỏ, đỏ, đẩy sang phải. */
+.animal-card .mo {
+  margin-left: auto;
+  min-height: 24px;
+  padding: 2px 9px;
+  font-size: 0.72em;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  border-radius: 999px;
+  background: rgba(150, 46, 40, 0.92);
+  border-color: #c95048;
+  color: #fff;
+}
 .animal-card .mnote {
   font-size: 0.88em;
   line-height: 1.3;

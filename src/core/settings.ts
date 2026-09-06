@@ -22,7 +22,7 @@ const KEY = "oni-farm:settings";
 
 /** Tăng khi đổi NGHĨA của một khoá (không phải khi thêm khoá mới — thêm khoá
  *  thì parseSettings đã tự điền mặc định). */
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 /**
  * Cách điều khiển trên thiết bị cảm ứng.
@@ -51,6 +51,12 @@ export interface Settings {
   zoom: ZoomLevel;
   /** Rung nhẹ khi thao tác thành công (navigator.vibrate, chỉ Android/Chrome). */
   haptics: boolean;
+  /**
+   * Âm thanh bật/tắt. Từng là một biến cấp module trong `sfx.ts` không đi qua
+   * localStorage — trong khi công tắc "Âm thanh" ngồi giữa hai công tắc CÓ lưu
+   * ở cùng bảng Cài đặt. Tắt tiếng, tải lại, nó kêu lại, và không dấu hiệu nào
+   * nói vì sao riêng cái đó khác. */
+  sound: boolean;
   /** Tắt nhấp nháy/chuyển cảnh cho ai say chuyển động (cũng theo prefers-reduced-motion). */
   reduceMotion: boolean;
   /** Đã xem hướng dẫn lần đầu chưa. */
@@ -91,6 +97,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   uiScale: "auto",
   zoom: "normal",
   haptics: true,
+  sound: true,
   reduceMotion: false,
   tutorialSeen: false,
   contextButton: true,
@@ -121,6 +128,7 @@ export function parseSettings(raw: unknown): Settings {
     uiScale: oneOf(v["uiScale"], ["auto", "small", "large"] as const, d.uiScale),
     zoom: oneOf(v["zoom"], ["near", "normal", "far"] as const, d.zoom),
     haptics: bool(v["haptics"], d.haptics),
+    sound: bool(v["sound"], d.sound),
     padDead: oneOf(v["padDead"], ["hep", "normal", "rong"] as const, d.padDead),
     padInvertY: bool(v["padInvertY"], d.padInvertY),
     padSwapAB: bool(v["padSwapAB"], d.padSwapAB),

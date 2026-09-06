@@ -92,11 +92,43 @@ export function evaluateProgression(state: GameState, content: Content): Progres
   return res;
 }
 
-/** Mục tiêu tiếp theo chưa xong — UI hiện ở góc màn hình. */
-export function nextGoal(state: GameState, content: Content): { id: string; text: string } | null {
+export interface GoalView {
+  id: string;
+  text: string;
+  /** Điều kiện ĐẦU TIÊN của mục tiêu — để in "3/10" cạnh chữ. */
+  key: string | null;
+  have: number;
+  need: number;
+  /** 0..1 — trung bình các điều kiện. */
+  progress: number;
+}
+
+/**
+ * Mục tiêu đáng hiện ở góc màn hình: cái GẦN XONG NHẤT trong số chưa xong.
+ *
+ * Trước đây là cái ĐẦU TIÊN chưa xong theo thứ tự file — và mục tiêu thứ 6
+ * "Chữa một cây bệnh" cần thuốc chỉ chế được ở bàn trong nhà, bệnh thì 2%/đêm.
+ * Người chơi khá xong 1–5 trong hai ngày rồi nhìn dòng đó mãi; bốn mục tiêu
+ * sau không bao giờ hiện. Chọn theo tiến độ thì cái chip luôn chỉ vào thứ đang
+ * nhích, và mục tiêu nào rồi cũng tới lượt.
+ *
+ * Hoà thì lấy cái đứng trước trong file — thứ tự tác giả vẫn có nghĩa khi tiến
+ * độ ngang nhau (mọi mục tiêu 0/N lúc ván mới chẳng hạn).
+ */
+export function bestGoal(state: GameState, content: Content): GoalView | null {
+  let best: GoalView | null = null;
   for (const g of content.goals) {
     if (state.goalsDone.includes(g.id)) continue;
-    return { id: g.id, text: g.text };
+    const [key, need] = Object.entries(g.require ?? {})[0] ?? [null, 0];
+    const v: GoalView = {
+      id: g.id,
+      text: g.text,
+      key,
+      have: key ? (statValue(state, key) ?? 0) : 0,
+      need: need ?? 0,
+      progress: requirementProgress(state, g.require),
+    };
+    if (!best || v.progress > best.progress) best = v;
   }
-  return null;
+  return best;
 }

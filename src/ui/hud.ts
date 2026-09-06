@@ -29,6 +29,7 @@ import { itemName } from "../game/items.ts";
 import { currentSeason, dayOfSeason } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
+import { bestGoal } from "../game/progression.ts";
 import type { AnimalStats } from "../game/animals.ts";
 import type { WorkerCard } from "../game/workers.ts";
 
@@ -59,6 +60,8 @@ export interface Hud {
   onAnimalClose(fn: () => void): void;
   /** Người chơi bấm ‹ hoặc › để xem con kế bên. */
   onAnimalCycle(fn: (d: number) => void): void;
+  /** Người chơi bấm MỔ THỊT trên bảng con vật — main biết con nào đang mở. */
+  onAnimalSlaughter(fn: () => void): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -338,20 +341,12 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     }
   }
 
+  /* Mục tiêu GẦN XONG NHẤT, không phải cái đầu danh sách — xem `bestGoal`.
+     Cùng một nguồn với progression.ts thay vì tự đọc `stats` một cách khác. */
   function currentGoal(s: GameState, content: Content): string {
-    const g = content.goals.find((x) => !s.goalsDone.includes(x.id));
+    const g = bestGoal(s, content);
     if (!g) return "Xong hết mục tiêu — cứ thoải mái làm nông!";
-    const [k, need] = Object.entries(g.require)[0] ?? [];
-    if (!k || need === undefined) return g.text;
-    const have = readStat(s, k);
-    return have < need && need > 1 ? `${g.text} <b>${have}/${need}</b>` : g.text;
-  }
-
-  function readStat(s: GameState, key: string): number {
-    if (key === "money") return s.money;
-    if (key === "day") return s.day;
-    if (key.startsWith("built.")) return s.stats.built[key.slice(6)] ?? 0;
-    return (s.stats as unknown as Record<string, number>)[key] ?? 0;
+    return g.key && g.have < g.need && g.need > 1 ? `${g.text} <b>${g.have}/${g.need}</b>` : g.text;
   }
 
   let bannerTimer = 0;
@@ -365,6 +360,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   let animalKey = "";
   let onClose: () => void = () => {};
   let onCycle: (d: number) => void = () => {};
+  let onSlaughter: () => void = () => {};
 
   /** "còn 3 giờ" / "còn 2 ngày" — người chơi nghĩ bằng giờ với ngày, không
    *  bằng phút game. */
@@ -378,6 +374,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   return {
     onAnimalClose(fn) {
       onClose = fn;
+    },
+    onAnimalSlaughter(fn) {
+      onSlaughter = fn;
     },
     onAnimalCycle(fn) {
       onCycle = fn;
@@ -472,10 +471,15 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         );
       }
       // Thịt là một con SỐ, không phải một quãng — thanh không nói được gì.
+      /* Và có NÚT. Action `SLAUGHTER` đã viết đủ từ lâu (reducer, toast, RNG,
+         cả kịch bản sim), bảng này còn in ra số thịt sẽ được — mà không một chỗ
+         nào trong UI dispatch nó. Cả một đường kiếm tiền của chăn nuôi tắt đèn
+         vì thiếu đúng một cái nút. */
       if (st.meat && st.mature)
         rows.push(
           `<div class="mrow"><i class="ri" data-item="${st.meat.id}"></i>` +
-            `<b class="mval">${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b></div>`,
+            `<b class="mval">${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`}</b>` +
+            `<button type="button" class="mo" aria-label="Mổ thịt">MỔ THỊT</button></div>`,
         );
 
       /* Hai mũi tên ‹ › nhảy sang con KẾ BÊN. Không có chúng thì muốn so hai
@@ -494,6 +498,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         });
       bind(".ax.prev", () => onCycle(-1));
       bind(".ax.next", () => onCycle(1));
+      if (elAnimal.querySelector(".mo")) bind(".mo", () => onSlaughter());
       elAnimal
         .querySelectorAll<HTMLElement>(".ax:not(.prev):not(.next)")
         .forEach((b) =>
@@ -686,9 +691,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
            thì người chơi đứng trước quầy mà không biết bấm cái gì. */
         const bb = document.querySelector<HTMLElement>("#abtn .b");
         if (bb) {
-          bb.textContent = iHint?.label ?? "E";
+          /* Không có gì để tra cứu thì ghi "XEM" mờ — KHÔNG phải "E": đây là
+             cái điện thoại, không có phím E nào cả. */
+          bb.textContent = iHint?.label ?? "XEM";
           bb.classList.toggle("ready", !!iHint);
-          bb.setAttribute("aria-label", iHint?.label ?? "Tương tác");
+          bb.setAttribute("aria-label", iHint?.label ?? "Tra cứu");
         }
         /* Thanh gợi ý cho TAY CẦM — nói ĐÚNG NHỮNG GÌ CÁI NÚT KHÔNG NÓI ĐƯỢC.
 

@@ -28,6 +28,7 @@ import { PAD_MAP, type PadBind } from "../core/input.ts";
 import { fromAnimals, sellPriceOf } from "../game/items.ts";
 import { sellSlots } from "../game/inventory.ts";
 import { penSummary } from "../game/animals.ts";
+import { khoaNgoai } from "./inert.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
@@ -119,6 +120,9 @@ export interface Menus {
   openPadHelp(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
+  /** Hỏi một câu có/không rồi đóng — cho những lệnh không hoàn tác được phát
+   *  từ ngoài menu (mổ thịt trên bảng con vật). */
+  confirm(title: string, text: string, onYes: () => void): void;
 }
 
 const money = (n: number) => `${n.toLocaleString("vi-VN")}đ`;
@@ -150,6 +154,7 @@ export function createMenus(
     current = null;
     root.classList.remove("open");
     root.innerHTML = "";
+    khoaNgoai(root, false, "menu");
   };
 
   root.addEventListener("pointerdown", (e) => {
@@ -263,6 +268,8 @@ export function createMenus(
     modal.querySelector("[data-x]")!.addEventListener("click", close);
     root.appendChild(modal);
     root.classList.add("open");
+    // `aria-modal` chỉ là lời hứa; `inert` trên phần còn lại mới giữ được Tab.
+    khoaNgoai(root, true, "menu");
     return {
       modal,
       body: modal.querySelector(".body") as HTMLElement,
@@ -686,8 +693,8 @@ export function createMenus(
       body.appendChild(gb);
       foot.appendChild(
         note(
-          "Đây là BẢNG GIÁ. Công trình xây trong CHẾ ĐỘ XÂY DỰNG (menu Tạm dừng, " +
-            "hoặc nút XÂY cạnh nút hành động): thời gian dừng lại, ấn rồi rê để kéo " +
+          "Đây là BẢNG GIÁ. Công trình xây trong CHẾ ĐỘ XÂY DỰNG (ô Xây dựng trong menu " +
+            "Tạm dừng, hoặc cầm công trình rồi bấm nút chính): thời gian dừng lại, ấn rồi rê để kéo " +
             "cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu. ",
         ),
       );
@@ -1473,6 +1480,10 @@ export function createMenus(
         }, "dim"),
       );
     if (h.canInstall()) tiles.appendChild(tileBtn("install", "Cài về máy", () => h.install(), "accent"));
+    /* SƠ ĐỒ NÚT chỉ mở lại được bằng R3 — mà R3 rào sau sơ đồ chuẩn, nên tay
+       cầm trình duyệt không nhận ra thì mất hẳn đường xem bảng nút, đúng nhóm
+       cần nó nhất. Có tay cầm là có ô này. */
+    if (h.padInfo().connected) tiles.appendChild(tileBtn("help", "Sơ đồ nút", () => openPadHelp()));
     body.appendChild(tiles);
 
     // Chỉ còn nhắc khi THẬT SỰ có bản đang chờ — dòng này từng hiện vĩnh viễn
@@ -1610,7 +1621,7 @@ export function createMenus(
     toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… thay vì chữ DÙNG cố định.",
       () => h.settings().contextButton, (v) => h.setSetting("contextButton", v));
     toggle("Âm thanh", "Tiếng 8-bit tổng hợp, không có file nhạc.",
-      () => !h.isMuted(), () => h.toggleMute());
+      () => h.settings().sound, (v) => h.setSetting("sound", v));
     /* Một công tắc cho CẢ HAI đường rung. Trước đây nó chỉ tắt rung điện
        thoại, tay cầm vẫn rung — và mục này còn bị giấu khi chơi bằng tay cầm
        trên máy tính, tức là không có cách nào tắt. */
@@ -1638,19 +1649,20 @@ export function createMenus(
       <div class="help-grid">
         <span class="k">Chạm 1 lần</span><span>Nhân vật <b>đi tới</b> ô đó và ngắm sẵn ô đó</span>
         <span class="k">Chạm 2 lần</span><span><b>Làm ngay</b> tại ô đó: cày, gieo, tưới, thu…</span>
-        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút với ô đang ngắm</span>
-        <span class="k">Nút E</span><span>Tương tác với thứ trước mặt: cửa, giường, quầy</span>
+        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút — theo món đang cầm và những gì quanh mình, kể cả mở cửa hàng, lên giường, múc nước</span>
+        <span class="k">Nút XEM</span><span>Tra cứu thứ gần mình: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
         <span class="k">Nhấn giữ ô hotbar</span><span>Xem vật phẩm đó dùng để làm gì</span>
         <span class="k">Bản đồ nhỏ</span><span>Bấm vào để đi xa; ô vàng = cây chín</span>
       </div>`
       : `
       <div class="help-grid">
         <span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Di chuyển (hoặc mũi tên) · giữ <kbd>Shift</kbd> để chạy</span>
-        <span class="k"><kbd>Space</kbd></span><span>Dùng vật phẩm đang cầm lên ô đang ngắm</span>
-        <span class="k"><kbd>E</kbd></span><span>Tương tác: cửa, giường, máy bán hạt, quầy, giếng</span>
-        <span class="k"><kbd>1</kbd>–<kbd>9</kbd></span><span>Chọn ô hotbar (hoặc lăn chuột / <kbd>Tab</kbd>)</span>
+        <span class="k"><kbd>Space</kbd> / <kbd>Enter</kbd></span><span>Nút chính: làm theo món đang cầm và những gì quanh mình — cả mở cửa hàng, lên giường, múc nước</span>
+        <span class="k"><kbd>E</kbd></span><span>Nút tra cứu: bảng con vật, bảng khu, thẻ ô</span>
+        <span class="k"><kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd></span><span>Chọn ô hotbar (hoặc lăn chuột / <kbd>Tab</kbd>)</span>
+        <span class="k"><kbd>I</kbd> <kbd>F</kbd></span><span>Balo · bật/tắt tự động làm</span>
         <span class="k"><kbd>B</kbd> <kbd>M</kbd></span><span>Cửa hàng nhanh · bật/tắt bản đồ nhỏ</span>
-        <span class="k"><kbd>Esc</kbd></span><span>Tạm dừng: lưu, tải, cài đặt</span>
+        <span class="k"><kbd>Esc</kbd></span><span>Quay lại một lớp (đóng bảng, thoát chế độ xây); không có gì mở thì Tạm dừng</span>
         <span class="k">Bấm 1 / 2 lần</span><span>Đi tới ô đó / làm ngay tại ô đó</span>
       </div>`;
     body.innerHTML = `${keys}
@@ -1686,5 +1698,10 @@ export function createMenus(
     openHelp,
     openPen,
     refresh: () => current?.(),
+    confirm: (title, text, onYes) =>
+      askConfirm(title, text, () => {
+        close();
+        onYes();
+      }, null),
   };
 }

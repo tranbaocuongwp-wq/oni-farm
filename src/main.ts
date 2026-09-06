@@ -61,6 +61,7 @@ import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
 import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
+import { itemName } from "./game/items.ts";
 import { workerCard, workerNear } from "./game/workers.ts";
 import { canPlaceBuilding, inReach } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
@@ -231,6 +232,7 @@ async function boot() {
   let settings: Settings = loadSettings();
   applySettings(settings);
   setHaptics(settings.haptics);
+  setMuted(!settings.sound);
 
   /* ---- 2. mỹ thuật ---- */
   const atlas = buildAtlas(content);
@@ -303,6 +305,28 @@ async function boot() {
     cardAnimal = null;
   });
   hud.onAnimalCycle((d) => cycleAnimal(store.getState(), d));
+  /* MỔ THỊT — hỏi một câu vì không hoàn tác được, rồi dispatch cái action đã
+     nằm sẵn trong reducer từ lâu mà chưa có nút nào gọi. */
+  hud.onAnimalSlaughter(() => {
+    const s = store.getState();
+    const e = s.entities.find((x) => x.id === cardAnimal && x.kind === "animal" && x.map === s.mapId);
+    if (!e) return;
+    const st = animalStats(e, content);
+    if (!st) return;
+    const ten = content.animals[e.def]?.name ?? "con vật";
+    const duoc = st.meat
+      ? `${st.meat.min === st.meat.max ? st.meat.min : `${st.meat.min}–${st.meat.max}`} ${itemName(st.meat.id, content)}`
+      : "thịt";
+    menus.confirm(`Mổ ${ten} này?`, `Không hoàn tác được. Được ${duoc}.`, () => {
+      const truoc = store.getState().entities.length;
+      store.dispatch({ t: "SLAUGHTER", x: Math.floor(e.x / TILE), y: Math.floor(e.y / TILE) });
+      if (store.getState().entities.length < truoc) {
+        cardAnimal = null;
+        play("coin");
+        buzz("heavy");
+      } else deny();
+    });
+  });
   const toasts = createToasts($("#toasts"));
 
   const tutorial = createTutorial($("#tutorial"), () => {
@@ -315,6 +339,7 @@ async function boot() {
     saveSettings(settings);
     applySettings(settings);
     setHaptics(settings.haptics);
+    setMuted(!settings.sound);
     if (key === "zoom" && camera.setZoom(settings.zoom)) {
       renderer.applyViewport();
       const p = store.getState().player;
@@ -365,8 +390,10 @@ async function boot() {
       if (nhanSave(d.data, "load")) toasts.say("Đã khôi phục bản sao lưu.", "good");
     },
     newGame: () => adoptState(createNewGame(content)),
+    /* Đi qua `setSetting` để CÓ LƯU — trước đây chỉ lật một biến trong sfx.ts,
+       tải lại trang là kêu lại. */
     toggleMute: () => {
-      setMuted(!isMuted());
+      setSetting("sound", !settings.sound);
       return isMuted();
     },
     isMuted,
@@ -563,12 +590,19 @@ async function boot() {
 
   const countBuilt = (st: Stats) => Object.values(st.built).reduce((x, y) => x + y, 0);
 
-  const feedback = (sfx: Parameters<typeof play>[0], fx: BurstKind | null, hap: "success" | "heavy" = "success") => {
+  const feedback = (
+    sfx: Parameters<typeof play>[0],
+    fx: BurstKind | null,
+    hap: "success" | "heavy" = "success",
+    at: { x: number; y: number } | null = lastUse,
+  ) => {
     play(sfx);
     buzz(hap);
-    if (fx && lastUse) renderer.burst(fx, lastUse.x, lastUse.y);
+    if (fx && at) renderer.burst(fx, at.x, at.y);
   };
+  const chanNhanVat = (s: GameState) => ({ x: Math.floor(s.player.x / TILE), y: Math.floor(s.player.y / TILE) });
 
+  let lastMapForMoney = store.getState().mapId;
   store.subscribe((s) => {
     const a = s.stats;
     const b = lastStats;
@@ -576,11 +610,26 @@ async function boot() {
     else if (a.watered > b.watered) feedback("water", "water");
     else if (a.planted > b.planted) feedback("plant", "leaf");
     else if (a.harvested > b.harvested) feedback("harvest", "leaf");
+    /* VẮT SỮA / NHẶT TRỨNG và CHỮA CÂY từng không có mặt ở đây: không tiếng,
+       không hạt, không rung — chỉ một dòng toast. Vắt sữa là động từ trung tâm
+       của cả mảng chăn nuôi mà bấm xong thấy như không có gì xảy ra. */
+    else if ((a.gathered ?? 0) > (b.gathered ?? 0)) feedback("harvest", "leaf", "success", lastUse ?? chanNhanVat(s));
+    else if ((a.cured ?? 0) > (b.cured ?? 0)) feedback("plant", "leaf", "success", lastUse ?? chanNhanVat(s));
     else if (countBuilt(a) > countBuilt(b)) feedback("build", "spark", "heavy");
     else if (s.money > lastMoney) {
       play("coin");
-      if (lastUse) renderer.burst("coin", lastUse.x, lastUse.y);
+      /* Xu bắn ở CHÂN NHÂN VẬT, không phải ở `lastUse` — bán từ menu thì
+         `lastUse` là ô cuốc lần cuối, hay ở ngoài khung nhìn, thỉnh thoảng ở
+         bản đồ khác. */
+      renderer.burst("coin", Math.floor(s.player.x / TILE), Math.floor(s.player.y / TILE));
+    } else if (s.money < lastMoney && s.mapId === lastMapForMoney) {
+      /* MUA thì tiền đi xuống — nhánh trên không bao giờ nổ. Không có tiếng
+         "mua" thì bấm mua một con bò 800đ cũng câm như bấm hụt. Rào theo bản
+         đồ để đổi bản đồ (không đổi tiền) không kêu nhầm. */
+      play("buy");
+      buzz("tap");
     }
+    lastMapForMoney = s.mapId;
     if (s.day > lastDay) play("sleep");
     lastStats = a;
     lastMoney = s.money;
@@ -1098,11 +1147,15 @@ async function boot() {
     if (!e) return false;
     const def = content.animals[e.def];
     if (!def) return false;
+    // Ghi `lastUse` để hạt của bus phản hồi rơi ĐÚNG con vật, không phải ô
+    // cuốc lần cuối.
     if (readyProduct(e, content) >= 0) {
+      lastUse = { x: tx, y: ty };
       store.dispatch({ t: "GATHER", x: tx, y: ty });
       return true;
     }
     if (def.feed && e.animal.fed <= 0) {
+      lastUse = { x: tx, y: ty };
       store.dispatch({ t: "FEED", x: tx, y: ty });
       return true;
     }
@@ -1655,12 +1708,12 @@ async function boot() {
         /* Escape / Start là nút LÙI MỘT LỚP, nên nó phải gỡ đúng lớp trên
            cùng. Thiếu `devPanel` ở đây thì mở bảng gỡ lỗi rồi bấm Escape lại
            bật thêm menu Tạm dừng chồng lên nó — lùi mà lại tiến. */
+        /* MENU (Escape, nút ☰, START) đi cùng đường với QUAY LẠI: đóng thứ đang
+           mở từ nông tới sâu, hết rồi mới bật menu Tạm dừng. Trước đây nhánh
+           này chỉ biết tutorial/menus/devpanel, nên Escape trong CHẾ ĐỘ XÂY mở
+           menu Tạm dừng ĐÈ LÊN chế độ xây, và người chơi bàn phím không có phím
+           nào đóng được bảng con vật. */
         case "menu":
-          if (tutorial.isOpen()) tutorial.close();
-          else if (menus.isOpen()) menus.close();
-          else if (devPanel.isOpen()) devPanel.close();
-          else menus.openPause();
-          break;
 
         /* QUAY LẠI (nút B trên tay cầm).
            Một thứ tự duy nhất, từ nông tới sâu: đóng cái đang mở; không có gì
@@ -2051,7 +2104,9 @@ async function boot() {
          thì cái lắc đầu rơi ĐÚNG khoảnh khắc nhát cuốc trượt. */
       const hetSuc = content.strings.msg["noEnergy"];
       if (hetSuc && s.log.some((v) => v.id > logDaLac && v.text === hetSuc)) {
-        renderer.refuse();
+        // Cùng bộ ba như mọi chỗ từ chối khác: tiếng + rung + lắc đầu. Trước
+        // đây chỉ có cái lắc đầu — trên điện thoại để trong túi thì bằng không.
+        deny();
       }
       logDaLac = s.log[s.log.length - 1]?.id ?? logDaLac;
       const upTo = toasts.show(s.log);
