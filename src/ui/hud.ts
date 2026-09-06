@@ -40,6 +40,8 @@ export interface Hud {
     hint: Hint | null,
     /** Việc NÚT TƯƠNG TÁC sẽ làm — nhãn riêng, vì nó là một nút khác. */
     iHint: { label: string } | null,
+    /** Chuyến đang chạy ("CÀY · Lô A2"): nút chính thành DỪNG. `null` = không. */
+    dangLam?: string | null,
   ): void;
   /** Tên nút "dùng" của tay cầm đang cắm (A / ✕ / B…). Rỗng = không có tay cầm. */
   /** hotbar bấm được bằng chuột/chạm */
@@ -547,7 +549,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       }
       elAnimal.hidden = false;
     },
-    update(s, content, hint, iHint) {
+    update(s, content, hint, iHint, dangLam = null) {
       if (s.money !== prev.money) {
         const up = prev.money >= 0 && s.money > prev.money;
         prev.money = s.money;
@@ -661,7 +663,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
       // nút hành động theo ngữ cảnh — do main gắn DOM nút, HUD chỉ đổi nhãn qua
       // data-attribute trên <body> để CSS/nút đọc; nhẹ hơn là sửa nhiều phần tử
-      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}|${s.carry ?? ""}|${iHint?.label ?? ""}`;
+      const hk = `${hint ? `${hint.label}|${hint.ready ? 1 : 0}|${hint.why ?? ""}` : ""}|${s.inv[s.sel]?.id ?? ""}|${s.carry ?? ""}|${iHint?.label ?? ""}|${dangLam ?? ""}`;
       if (hk !== prev.hint) {
         prev.hint = hk;
         const btn = document.querySelector<HTMLElement>("#abtn .a");
@@ -688,21 +690,26 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
             c.className = "it";
             btn.appendChild(c);
           }
+          /* Đang trong CHUYẾN thì nút này là DỪNG — vẫn giữ hình món đang cầm,
+             vì chuyến là của món đó. Nhãn việc quay lại ngay khi chuyến xong. */
           const nhan = document.createElement("span");
-          nhan.textContent = hint?.label ?? "DÙNG";
+          nhan.textContent = dangLam ? "DỪNG" : (hint?.label ?? "DÙNG");
           btn.appendChild(nhan);
           btn.classList.toggle("cocam", !!camSrc);
-          btn.dataset["kind"] = hint?.kind ?? "none";
-          btn.classList.toggle("ready", !!hint?.ready);
-          btn.classList.toggle("far", !!hint && !hint.ready && hint.kind !== null);
+          btn.classList.toggle("dung", !!dangLam);
+          btn.dataset["kind"] = dangLam ? "run" : (hint?.kind ?? "none");
+          btn.classList.toggle("ready", !!dangLam || !!hint?.ready);
+          btn.classList.toggle("far", !dangLam && !!hint && !hint.ready && hint.kind !== null);
           btn.setAttribute(
             "aria-label",
-            `${hint?.label ?? "Dùng vật phẩm"}${camId ? ` — ${itemName(camId, content)}` : ""}`,
+            dangLam
+              ? `Dừng — đang ${dangLam}`
+              : `${hint?.label ?? "Dùng vật phẩm"}${camId ? ` — ${itemName(camId, content)}` : ""}`,
           );
         }
         if (why) {
-          why.textContent = hint?.why ?? "";
-          why.hidden = !hint?.why;
+          why.textContent = dangLam ? "" : (hint?.why ?? "");
+          why.hidden = dangLam ? true : !hint?.why;
         }
         /* Nút TƯƠNG TÁC cũng phải nói nó sẽ làm gì. Từ khi nút chính thôi mở
            cửa hàng, chữ "MUA" không còn hiện ở đâu nữa — mà không thấy chữ đó
@@ -734,17 +741,26 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
           /* KHÔNG còn icon ở đây nữa — nó đã nằm trên chính cái nút. Thanh này
              giữ phần mà một hình 16px không nói được: TÊN đầy đủ, và vì sao
              chưa làm được. */
-          if (heldId) {
+          if (dangLam) {
+            // Đang trong chuyến: dải này nói ĐANG LÀM GÌ, Ở ĐÂU — thứ nút DỪNG
+            // không có chỗ in.
             const t = document.createElement("span");
-            t.textContent = itemName(heldId, content);
+            t.textContent = `Đang làm: ${dangLam}`;
             pc.appendChild(t);
+            pc.hidden = false;
+          } else {
+            if (heldId) {
+              const t = document.createElement("span");
+              t.textContent = itemName(heldId, content);
+              pc.appendChild(t);
+            }
+            if (hint?.why) {
+              const w = document.createElement("i");
+              w.textContent = hint.why;
+              pc.appendChild(w);
+            }
+            pc.hidden = !heldId && !hint?.why;
           }
-          if (hint?.why) {
-            const w = document.createElement("i");
-            w.textContent = hint.why;
-            pc.appendChild(w);
-          }
-          pc.hidden = !heldId && !hint?.why;
         }
       }
     },

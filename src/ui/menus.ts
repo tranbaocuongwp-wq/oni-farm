@@ -1650,7 +1650,7 @@ export function createMenus(
       toggle("Đảo trục Y cần ngắm", "Gạt cần phải lên thì con trỏ đi xuống. Chỉ đụng cần NGẮM, không đụng cần đi.",
         () => h.settings().padInvertY, (v) => h.setSetting("padInvertY", v));
     }
-    toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… thay vì chữ DÙNG cố định.",
+    toggle("Nút hành động theo ngữ cảnh", "Nút chính hiện CÀY / GIEO / TƯỚI… và bấm một lần là làm hết việc của món đang cầm. Tắt thì chỉ làm đúng ô đang ngắm.",
       () => h.settings().contextButton, (v) => h.setSetting("contextButton", v));
     toggle("Âm thanh", "Tiếng 8-bit tổng hợp, không có file nhạc.",
       () => h.settings().sound, (v) => h.setSetting("sound", v));
@@ -1764,7 +1764,7 @@ export function createMenus(
       <div class="help-grid">
         <span class="k">Chạm 1 lần</span><span>Nhân vật <b>đi tới</b> ô đó và ngắm sẵn ô đó</span>
         <span class="k">Chạm 2 lần</span><span><b>Làm ngay</b> tại ô đó: cày, gieo, tưới, thu…</span>
-        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút — theo món đang cầm và những gì quanh mình, kể cả mở cửa hàng, lên giường, múc nước</span>
+        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút, theo món đang cầm. Bấm <b>một lần</b> là làm <b>hết việc của món đó</b>, khu nào gọn khu đó — cuốc thì cày hết lô, cám thì đổ hết máng; hết việc / hết món / hết sức thì tự dừng. Đang làm thì nút ghi DỪNG. Cũng mở cửa hàng, lên giường, múc nước</span>
         <span class="k">Nút XEM</span><span>Tra cứu thứ gần mình: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
         <span class="k">Nhấn giữ ô hotbar</span><span>Xem vật phẩm đó dùng để làm gì</span>
         <span class="k">Bản đồ nhỏ</span><span>Bấm vào để đi xa; ô vàng = cây chín</span>
@@ -1772,7 +1772,7 @@ export function createMenus(
       : `
       <div class="help-grid">
         <span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Di chuyển (hoặc mũi tên) · giữ <kbd>Shift</kbd> để chạy</span>
-        <span class="k"><kbd>Space</kbd> / <kbd>Enter</kbd></span><span>Nút chính: làm theo món đang cầm và những gì quanh mình — cả mở cửa hàng, lên giường, múc nước</span>
+        <span class="k"><kbd>Space</kbd> / <kbd>Enter</kbd></span><span>Nút chính: làm theo món đang cầm. Bấm <b>một lần</b> là làm <b>hết việc của món đó</b>, khu nào gọn khu đó; hết việc / hết món / hết sức thì tự dừng, bấm lại cũng dừng. Không bao giờ tự đổi món. Cũng mở cửa hàng, lên giường, múc nước</span>
         <span class="k"><kbd>E</kbd></span><span>Nút tra cứu: bảng con vật, bảng khu, thẻ ô</span>
         <span class="k"><kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd></span><span>Chọn ô hotbar (hoặc lăn chuột / <kbd>Tab</kbd>)</span>
         <span class="k"><kbd>I</kbd> <kbd>F</kbd></span><span>Balo · bật/tắt tự động làm</span>

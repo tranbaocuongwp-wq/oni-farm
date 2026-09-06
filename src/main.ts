@@ -57,7 +57,8 @@ import { createTutorial, DESKTOP_STEPS, TOUCH_STEPS } from "./ui/tutorial.ts";
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { INTERACT_SCAN, autoJob, contextAction, facingTile, hintAt, interactHint, nearestTarget, tileInfo, type Hint } from "./game/hint.ts";
+import { INTERACT_SCAN, autoJob, facingTile, hintAt, interactHint, tileInfo, type Hint } from "./game/hint.ts";
+import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
 import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
@@ -896,16 +897,14 @@ async function boot() {
     }
   }
 
-  /** Loại việc của nhát GẦN NHẤT — để giữ nút thì tiếp tục đúng việc đó. */
-  let lastKind: UseKind = null;
-
   /* ---- TỰ ĐỘNG LÀM ----------------------------------------------------
      Cố ý KHÔNG nằm trong `GameState`: đây là ý định nhất thời của người chơi,
      đúng cùng lý do đích của `nav` không được lưu vào save (xem đầu
      core/navigate.ts). Nhờ vậy mốc này không phải tăng SAVE_VERSION.
 
-     Cùng một hàm `continueWork` mà nút DÙNG giữ-để-làm-tiếp đang dùng — và
-     cũng chính là hàm mà AI người làm thuê sẽ dùng lại. Viết một lần. */
+     Đây là công tắc trong menu Tạm dừng — "trông nông trại hộ tôi", CÓ đổi
+     tay. Khác hẳn CHUYẾN của nút chính (xem `run` bên dưới), thứ không bao
+     giờ đổi ô hotbar. */
   let autoWork = false;
   /** Ô mà chế độ tự động đang làm dở — xem `autoStep`. */
   let autoAnchor: { x: number; y: number } | null = null;
@@ -973,21 +972,9 @@ async function boot() {
   function tryUse(s: GameState, tx: number, ty: number): boolean {
     if (!inReachOf(s, tx, ty)) return false;
     lastUse = { x: tx, y: ty };
-    const kind = canUseAt(s, content, tx, ty);
-    if (kind !== null) lastKind = kind;
     store.dispatch({ t: "USE", x: tx, y: ty });
     return true;
   }
-
-  /**
-   * Giữ nút DÙNG (hoặc bấm liên tục): xong nhát này thì tự tìm ô KẾ TIẾP trong
-   * tầm công cụ và làm tiếp — ưu tiên cùng loại việc, ưu tiên ô thẳng hàng.
-   * Không tự đi xa: hết ô quanh chân thì dừng, người chơi chạm chỗ khác.
-   * Trả về true nếu đã bắt đầu một nhát mới.
-   */
-  /** Bán kính "giữ nút DÙNG thì làm tiếp ô kế bên" — cố ý HẸP: giữ nút là ý
-   *  định làm nốt chỗ đang đứng, không phải lệnh đi khắp nông trại. */
-  const AUTO_RADIUS = 12;
 
   /**
    * Bán kính của chế độ TỰ ĐỘNG: cả bản đồ.
@@ -1003,53 +990,10 @@ async function boot() {
   const autoRadius = (s: GameState) => Math.max(s.w, s.h);
 
   /**
-   * Làm tiếp việc kế tiếp. Ba nấc, ưu tiên từ gần ra xa:
-   *   1. ô đang ngắm còn việc → làm ngay (cày xong đổi hạt là gieo ngay)
-   *   2. ô trong TẦM VỚI → làm ngay
-   *   3. ô ở XA → tự ĐI TỚI rồi làm khi đến nơi
-   *
-   * Nấc 3 là chỗ mới. Nó đi qua đúng đường ống `nav.goTo(act:true)` →
-   * `takeArrival()` → `actOnTile()` vốn đã chạy cho cú chạm kép, nên không sinh
-   * thêm máy trạng thái nào.
-   */
-  function continueWork(s: GameState): boolean {
-    if (s.busy > 0) return false;
-    /* CHƯA làm việc gì thì đây không phải "làm tiếp" — nhường cho `khongCoViec`.
-
-       Không có dòng này thì cú bấm ĐẦU TIÊN rơi vào `nearestTarget(null)` = "ô
-       nào cũng được, việc nào cũng được" trong bán kính 12, và nhân vật lững
-       thững đi tới một ô ngẫu nhiên gần đó — cầm bao bắp đứng cạnh chuồng gà
-       mà lại đi nhổ cỏ. `khongCoViec` mới là chỗ biết hỏi món đang cầm trước
-       khi chọn việc, nên cú bấm đầu tiên phải tới được nó. */
-    if (!lastKind) return false;
-    if (aimed && inReachOf(s, aimed.x, aimed.y) && canUseAt(s, content, aimed.x, aimed.y) !== null)
-      return tryUse(s, aimed.x, aimed.y);
-
-    const near = nearestTarget(s, content, lastKind, null);
-    if (near) {
-      aimed = { x: near.x, y: near.y };
-      return tryUse(s, near.x, near.y);
-    }
-
-    const far = nearestTarget(s, content, lastKind, null, {
-      radius: AUTO_RADIUS,
-      requireReach: false,
-    });
-    if (!far) return false;
-    aimed = { x: far.x, y: far.y };
-    // Đánh dấu đây là chuyến đi ĐỂ LÀM VIỆC, không phải cú chạm của người chơi.
-    // Tới nơi thì chỉ được DÙNG công cụ, tuyệt đối không `tryInteract` — nếu
-    // không, đi cày một ô cạnh quầy thu mua là bật ngay hộp thoại bán hàng giữa
-    // lúc đang tự động làm, và thế giới đứng hình cho tới khi người chơi tắt nó.
-    workGoal = { x: far.x, y: far.y };
-    return nav.goTo(s, content, far.x, far.y, { avoidStandingOn: holdingSolidBuilding(s) });
-  }
-
-  /**
    * Ô MÚC NƯỚC gần nhất (ao, giếng) trên CẢ bản đồ.
    *
-   * Cố ý không giới hạn trong `AUTO_RADIUS` như các việc khác. Việc trên ruộng
-   * thì có ở khắp nơi nên bán kính 12 ô là đúng — đi xa hơn chỉ là lang thang.
+   * Cố ý không giới hạn bán kính như các việc khác. Việc trên ruộng thì có ở
+   * khắp nơi nên gần thôi là đúng — đi xa hơn chỉ là lang thang.
    * Nhưng nguồn nước thì CÓ MỘT CHỖ: đo được lúc thử, người chơi đứng ở (33,25)
    * còn cái ao ở góc (5,4), tức 28 ô — ngoài bán kính, nên nó không đi múc và
    * cày tiếp cho tới lúc kiệt sức trong khi 83 ô đang khô.
@@ -1074,10 +1018,10 @@ async function boot() {
   /**
    * MỘT bước của chế độ tự động.
    *
-   * Khác `continueWork` ở đúng một điểm, nhưng là điểm quyết định: nó tự ĐỔI
-   * TAY. `continueWork` chỉ biết thứ đang cầm, nên bật tự động lúc đang cầm
-   * cuốc là cày cả nông trại rồi dừng — không gieo, không tưới, không thu.
-   * Ở đây `autoJob` chọn việc trước rồi mới nói phải cầm ô hotbar nào.
+   * Khác CHUYẾN của nút chính (`runStep`) ở đúng một điểm, nhưng là điểm
+   * quyết định: nó tự ĐỔI TAY. Chuyến chỉ biết thứ đang cầm, nên cầm cuốc là
+   * cày hết rồi dừng — không gieo, không tưới, không thu. Ở đây `autoJob` chọn
+   * việc trước rồi mới nói phải cầm ô hotbar nào.
    *
    * Đổi tay tốn đúng một khung hình (dispatch SELECT rồi trả về true): khung
    * sau `s.busy` vẫn bằng 0 nên nó vào lại đây và ra tay ngay. Cố ý không gộp
@@ -1124,7 +1068,6 @@ async function boot() {
       return true;
     }
     aimed = { x: job.x, y: job.y };
-    lastKind = job.kind;
     // Neo bám theo ô vừa chọn: nó trôi dần theo luống đang làm, và sau mỗi
     // chuyến đi múc nước thì đây là chỗ phải quay về.
     autoAnchor = { x: job.x, y: job.y };
@@ -1166,59 +1109,109 @@ async function boot() {
     return false;
   }
 
-  /**
-   * Bấm nút chính mà ô đang ngắm KHÔNG có gì làm được.
-   *
-   * Đây là chỗ nút ngữ cảnh thành đúng nghĩa của nó: quyết định bằng **món
-   * đang chọn ở hotbar × hoàn cảnh trong `CTX_RADIUS` ô quanh nhân vật**, rồi
-   * tự đi tới đúng ô ấy làm cho xong.
-   *
-   *   · có việc trong tầm với        → làm ngay tại chỗ;
-   *   · có việc trong bán kính       → tự đi tới, tới nơi làm, rồi DỪNG;
-   *   · không có gì trong bán kính   → lắc đầu (`deny`).
-   *
-   * Chỉ MỘT việc. Không quét cả bản đồ, không tự đổi ô hotbar, không nối sang
-   * việc thứ hai — chế độ tự động là một công tắc riêng trong menu Tạm dừng,
-   * không phải thứ nút chính lén bật lên.
-   */
-  function khongCoViec(s: GameState): void {
-    /* Ô đang ngắm không có việc. Hỏi `contextAction` — cùng hàm mà `hintAt`
-       dùng để in nhãn, nên nút không nói một đằng làm một nẻo — rồi ĐI TỚI
-       đúng ô nó chỉ và làm cho xong.
+  /* ---- CHUYẾN CỦA MÓN ĐANG CẦM --------------------------------------
+     Luật Cường đặt: "đang chọn cái gì [ở hotbar] có thể làm được ở khu vực nào
+     thì phải di chuyển về khu vực đó để tiến hành làm, lặp lại chuyện đó,
+     không có tự ý thay đổi công cụ." Bấm nút chính MỘT lần: làm hết việc của
+     món đang cầm, khu nào gọn khu đó, dừng khi hết việc / hết món / hết sức,
+     hoặc bấm lại. Chọn ô và khu nằm ở `game/run.ts` (thuần, test được); ở đây
+     chỉ có vòng đời: bắt đầu, đi, dùng, dừng.
 
-       KHÔNG còn "nhận cả chuyến". Ở 1.27.0 chỗ này gọi `autoJob` với bán kính
-       `max(w, h)` = cả bản đồ, và `slotsFor` còn tự đổi ô hotbar. Cường chơi
-       thật rồi tả đúng cái nó làm: "bấm vô cái nó chạy đi tùm lum nhổ cỏ lượm
-       đá gì, mà rõ ràng tôi đang ở gần chuồng gà."
+     Cố ý không lưu vào save, cùng lý do với `autoWork`. */
+  let run: Run | null = null;
+  /** Bản đồ lúc bắt đầu chuyến — sang bản đồ khác là chuyến dừng. */
+  let runMap = "";
+  /** Đồng hồ "không tiến triển" — lưới an toàn cuối, cùng ngưỡng với tự động. */
+  let runIdle = 0;
+  let runMark = "";
+  /** Ô vừa thử và dấu vân tay lúc thử: thử lại đúng ô đó mà không có gì đổi
+   *  nghĩa là nhát ấy bị từ chối (túi đầy, kẹt đường…) — dừng, không lặp. */
+  let runTried: { key: string; mark: string } | null = null;
 
-       Giờ ba mệnh đề, cả ba cùng đúng:
-         · đầu vào  = món đang chọn × mọi thứ trong `CTX_RADIUS` quanh nhân vật
-         · có đi    — trong bán kính mà ngoài tầm với thì tự đi tới rồi làm
-         · và chỉ thế — không quét cả bản đồ, không đổi ô hotbar, không nối
-                        sang việc thứ hai. Xong một việc là dừng. */
-    if (settings.contextButton) {
-      const a0 = targetTile(s);
-      if (a0) {
-        const pa = contextAction(s, content, a0.x, a0.y);
-        if (pa) {
-          // `workGoal` đánh dấu "chuyến đi ĐỂ LÀM VIỆC": tới nơi chỉ dùng công
-          // cụ, không bật hộp thoại nào giữa chừng.
-          workGoal = { x: pa.at.x, y: pa.at.y };
-          if (nav.goTo(s, content, pa.at.x, pa.at.y, { avoidStandingOn: holdingSolidBuilding(s) }))
-            return;
-          workGoal = null;
-          if (inReachOf(s, pa.at.x, pa.at.y)) {
-            if (tryAnimal(s, pa.at.x, pa.at.y)) return;
-            if (tryUse(s, pa.at.x, pa.at.y)) return;
-            if (tryInteract(s, pa.at.x, pa.at.y)) return;
-          }
-        }
-      }
-    }
+  /** Mọi thứ một nhát thành công có thể đổi. Đủ rộng để bao cả đổ máng, cho
+   *  cá ăn (không có bộ đếm riêng) — năng lượng tụt là bằng chứng. */
+  const runProgress = (s: GameState): string => `${JSON.stringify(s.stats)}|${s.water}|${s.energy}`;
 
-    deny();
+  function stopRun(reason?: "done" | "noItem" | "noEnergy"): void {
+    if (!run) return;
+    const ten = run.itemId ? itemName(run.itemId, content) : "tay không";
+    run = null;
+    runTried = null;
+    workGoal = null;
+    nav.cancel();
+    if (reason === "noItem") toasts.say(`Hết ${ten} — dừng.`, "info");
+    else if (reason === "noEnergy") toasts.say("Hết năng lượng — về ngủ.", "bad");
+    else if (reason === "done") toasts.say(`Hết việc cho ${ten} ở đây.`, "info");
   }
 
+  /**
+   * Bắt đầu chuyến cho món đang cầm. Món không có chuyến (cầm đá, cầm công
+   * trình) thì lắc đầu. Bước đầu chạy NGAY để bấm là có phản hồi — hết việc
+   * thì toast liền, không đợi một khung hình.
+   */
+  function batDauChuyen(s: GameState): void {
+    if (!settings.contextButton) {
+      deny();
+      return;
+    }
+    const r = runFor(s, content);
+    if (!r) {
+      deny();
+      return;
+    }
+    if (autoWork) setAuto(false);
+    run = r;
+    runMap = s.mapId;
+    runIdle = 0;
+    runMark = runProgress(s);
+    runTried = null;
+    runStep(s);
+  }
+
+  /** Một bước của chuyến: hỏi ô kế, trong tầm thì làm, xa thì đi. */
+  function runStep(s: GameState): void {
+    if (!run) return;
+    const t = nextRunTarget(s, content, run);
+    if ("stop" in t) {
+      stopRun(t.stop);
+      if (t.stop === "done") deny();
+      return;
+    }
+    const mark = runProgress(s);
+    if ("refill" in t) {
+      const { x, y } = t.refill;
+      const key = `muc:${x},${y}`;
+      if (runTried && runTried.key === key && runTried.mark === mark) {
+        stopRun("done");
+        return;
+      }
+      runTried = { key, mark };
+      aimed = { x, y };
+      if (inReachOf(s, x, y)) {
+        if (!tryInteract(s, x, y)) stopRun("done");
+        return;
+      }
+      workGoal = { x, y, refill: true };
+      if (!nav.goTo(s, content, x, y, {})) stopRun("done");
+      return;
+    }
+    run.area = t.area;
+    const key = `${t.job}:${t.x},${t.y}`;
+    if (runTried && runTried.key === key && runTried.mark === mark) {
+      stopRun("done");
+      return;
+    }
+    runTried = { key, mark };
+    aimed = { x: t.x, y: t.y };
+    if (inReachOf(s, t.x, t.y)) {
+      const ok = t.job === "gather" ? tryAnimal(s, t.x, t.y) : tryUse(s, t.x, t.y);
+      if (!ok) stopRun("done");
+      return;
+    }
+    // Chuyến đi ĐỂ LÀM VIỆC: tới nơi chỉ dùng công cụ, không mở hộp thoại nào.
+    workGoal = { x: t.x, y: t.y };
+    if (!nav.goTo(s, content, t.x, t.y, { avoidStandingOn: holdingSolidBuilding(s) })) stopRun("done");
+  }
 
   function actOnTile(s: GameState, tx: number, ty: number): boolean {
     return tryAnimal(s, tx, ty) || tryInteract(s, tx, ty) || tryUse(s, tx, ty);
@@ -1277,7 +1270,7 @@ async function boot() {
          hiện ở đâu khác. Đủ ngắn để liếc một cái là đọc xong. */
       if (std)
         hints.push([b(1), "Tra cứu"], [b(3), "Balo"], [b(6), "Chạy"], [b(7), "Phóng"], [b(10), "Xây dựng"]);
-      else hints.push([b(0), "Làm"], [b(1), "Tra cứu"], [b(2), "Quay lại"]);
+      else hints.push([b(0), run ? "Dừng" : "Làm"], [b(1), "Tra cứu"], [b(2), "Quay lại"]);
     }
 
     /* Khi thanh này nói về một LỚP PHỦ (menu, hướng dẫn, bản đồ nhỏ, chế độ
@@ -1523,10 +1516,6 @@ async function boot() {
 
   /* ---- 10. vòng lặp ---- */
   let elapsed = 0;
-  /** Giữ nút mà quanh chân hết việc thì im cho tới khi nhả nút — không kêu "deny" mỗi khung hình. */
-  let holdCooldown = false;
-  /** Nút DÙNG đã được giữ bao lâu (giây). */
-  let heldFor = 0;
   /* Một khung hình ném lỗi KHÔNG được làm đứng hình vĩnh viễn — xem loop.ts.
      Lần đầu: nói một câu và LƯU NGAY (reducer thuần, nên state trong store vẫn
      là state tốt cuối cùng — lỗi đã ném trước khi nó được gán). Lỗi ở mọi khung
@@ -1612,10 +1601,14 @@ async function boot() {
        không xem được góc bên kia nông trại. */
     const building = buildUI.isOpen();
 
-    if (modal) nav.cancel();
+    if (modal) {
+      nav.cancel();
+      if (run) stopRun();
+    }
     if (building) {
       nav.cancel();
       if (autoWork) setAuto(false);
+      if (run) stopRun();
     }
 
     /* Đang RÊ CON TRỎ Ô (chế độ xây, hoặc con trỏ bản đồ nhỏ) thì cần gạt lái
@@ -1629,6 +1622,7 @@ async function boot() {
         // Người chơi tự cầm lái thì nhường ngay — cùng luật với `nav.cancel()`:
         // nhập tay luôn thắng thứ đang chạy tự động.
         if (autoWork) setAuto(false);
+        if (run) stopRun();
         nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
         aimed = null;
@@ -1691,22 +1685,21 @@ async function boot() {
         }
       }
 
-      // GIỮ nút DÙNG: hết khoá là tự sang ô kế tiếp trong tầm. Cú bấm ĐẦU do
-      // intent "use" xử lý (nó còn lo cả cửa hàng/giường); khối này chỉ tiếp
-      // quản sau khi đã giữ quá 0,2s và nhát trước là một việc trên ô — nên bấm
-      // MUA cạnh cửa hàng không bao giờ bị hiểu nhầm thành cày. Đang tự đi tới
-      // đích (nav) thì tới nơi mới làm.
-      if (input.useHeld() && !building) {
-        heldFor += dt;
-        if (heldFor > 0.2 && lastKind !== null && !nav.target()) {
-          const s = store.getState();
-          if (s.busy <= 0 && !holdCooldown) {
-            if (!continueWork(s)) holdCooldown = true; // hết việc quanh đây: đợi nhả nút
-          }
+      /* CHUYẾN của nút chính: chờ hết `busy` và hết đường đang đi rồi mới hỏi
+         ô kế — tuần tự từng việc một. Đổi bản đồ là dừng; đứng không quá
+         ngưỡng cũng dừng (lưới an toàn, không phải đường thường). */
+      if (run && !building) {
+        const s = store.getState();
+        if (s.mapId !== runMap) stopRun();
+        else {
+          const mark = runProgress(s);
+          if (mark !== runMark) {
+            runMark = mark;
+            runIdle = 0;
+          } else if (nav.target()) runIdle = 0;
+          else if ((runIdle += dt) > AUTO_IDLE_LIMIT) stopRun("done");
+          if (run && s.busy <= 0 && !nav.target()) runStep(s);
         }
-      } else {
-        heldFor = 0;
-        holdCooldown = false;
       }
     }
 
@@ -1782,10 +1775,13 @@ async function boot() {
           break;
         case "auto":
           // Nút AUTO (cảm ứng) = chế độ ĐẦY ĐỦ, không giới hạn loại việc.
+          if (run) stopRun();
           setAuto(!autoWork, null);
           toasts.say(autoWork ? "Tự động làm: BẬT" : "Tự động làm: TẮT", "info");
           break;
         case "select":
+          // Đổi món là đổi ý — chuyến của món cũ dừng, KHÔNG tự cầm lại.
+          if (run) stopRun();
           store.dispatch({ t: "SELECT", slot: it.slot });
           break;
         case "selectDelta": {
@@ -1808,6 +1804,7 @@ async function boot() {
             break;
           }
           const n = content.balance.hotbarSlots;
+          if (run) stopRun();
           store.dispatch({ t: "SELECT", slot: (s.sel + it.d + n) % n });
           break;
         }
@@ -1857,12 +1854,37 @@ async function boot() {
             buildUI.open();
             break;
           }
+          // Đang trong chuyến thì nút chính là DỪNG — đúng như nhãn trên nút.
+          if (run) {
+            stopRun();
+            buzz("tap");
+            break;
+          }
           let c = targetTile(s);
-          // Nút hành động theo ngữ cảnh: ô đang ngắm ở XA thì đi tới rồi làm,
-          // thay vì bấm hụt. Trên điện thoại đây là đường tắt tự nhiên nhất:
-          // chạm ô, thấy nút ghi CÀY, bấm CÀY — nhân vật tự đi rồi cày.
+          /* Ô đang ngắm ở XA mà CÓ VIỆC với món đang cầm (hoặc có gì để tương
+             tác) thì đi tới rồi làm — chạm ô, thấy nút ghi CÀY, bấm CÀY. Trước
+             đây hỏi `tileActionable`, một hàm mù món: mọi ô đất đều "được",
+             nhân vật đi tới nơi rồi lắc đầu. Việc ở ô đó cùng loại với chuyến
+             của món thì tới nơi làm xong là chuyến tiếp tục. */
           if (c && !inReachOf(s, c.x, c.y) && aimed && settings.contextButton) {
-            if (tileActionable(s, c.x, c.y) && nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
+            const kx = canUseAt(s, content, c.x, c.y, true);
+            if (kx !== null) {
+              const r = runFor(s, content);
+              if (r && (r.jobs as string[]).includes(kx)) {
+                if (autoWork) setAuto(false);
+                run = r;
+                runMap = s.mapId;
+                runIdle = 0;
+                runMark = runProgress(s);
+                runTried = null;
+              }
+              workGoal = { x: c.x, y: c.y };
+              if (nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
+              workGoal = null;
+              if (run) stopRun();
+            } else if (interactAt(s, content, c.x, c.y) !== null) {
+              if (nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
+            }
           }
           if (c && !inReachOf(s, c.x, c.y)) c = targetTile(s, true);
           if (c && inReachOf(s, c.x, c.y)) {
@@ -1878,16 +1900,27 @@ async function boot() {
                làm. Hỏi công cụ trước thì chuyện đó không xảy ra được: đứng
                trên đất cày được mà cầm cuốc thì luôn là CÀY, và cái quầy chỉ
                lên tiếng khi trên tay không có việc gì cho ô đó. */
-            if (canUseAt(s, content, c.x, c.y) !== null) {
+            const kx = canUseAt(s, content, c.x, c.y);
+            if (kx !== null) {
               tryUse(s, c.x, c.y);
+              // Nhát này cùng loại với chuyến của món → làm xong là làm tiếp.
+              const r = runFor(s, content);
+              if (r && (r.jobs as string[]).includes(kx) && settings.contextButton) {
+                if (autoWork) setAuto(false);
+                run = r;
+                runMap = s.mapId;
+                runIdle = 0;
+                runMark = runProgress(s);
+                runTried = { key: `${kx}:${c.x},${c.y}`, mark: runMark };
+              }
             } else if (tryInteract(s, c.x, c.y)) {
               break;
             } else if (s.busy <= 0) {
-              // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là tự sang ô kế
-              // tiếp trong tầm công cụ, cùng loại việc.
-              if (!continueWork(s)) khongCoViec(s);
+              // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là CHUYẾN của
+              // món đang cầm — làm hết việc của nó, khu nào gọn khu đó.
+              batDauChuyen(s);
             }
-          } else khongCoViec(s);
+          } else batDauChuyen(s);
           break;
         }
         case "pointer": {
@@ -1904,11 +1937,15 @@ async function boot() {
           const ty = snapped.y;
           aimed = { x: tx, y: ty };
           // Người chơi tự chạm thì đây KHÔNG còn là chuyến đi làm việc nữa —
-          // tới nơi được phép mở cửa hàng/giường như bình thường.
+          // tới nơi được phép mở cửa hàng/giường như bình thường. Chuyến đang
+          // chạy cũng dừng: nhập tay luôn thắng thứ đang chạy tự động.
+          if (run) stopRun();
           workGoal = null;
-          // Chạm trúng con vật thì mở bảng của NÓ; chạm ra chỗ khác thì đóng.
-          const chuot = animalNear(s, tx, ty);
-          cardAnimal = chuot ? chuot.id : null;
+          /* Chạm-để-đi là để ĐI. Từng mở bảng con vật khi chạm trong 1,4 ô
+             quanh nó — mà 24 con đi khắp sân, nên gần như cú chạm nào cũng
+             "mở bảng", và camera (hồi còn bám con vật đang mở bảng) bỏ nhân
+             vật lại. Mở bảng giờ là việc của nút XEM và nút vai — có chủ ý. */
+          cardAnimal = null;
 
 
           if (!it.double) {
@@ -2121,14 +2158,14 @@ async function boot() {
       if (upTo) store.dispatch({ t: "LOG_SEEN", upTo });
     }
 
-    /* Đang MỞ BẢNG một con vật thì camera bám con VẬT, không bám nhân vật.
-       Nếu không thì bảng nói về một con nằm ngoài màn hình — đọc "sữa bò tới
-       lứa" mà không thấy con bò đâu thì phải tự đoán nó ở góc nào của nông
-       trại. Thế giới vẫn chạy bình thường trong lúc đó: đây là ống nhòm, không
-       phải nút tạm dừng. */
-    const nhin = cardAnimal !== null ? s.entities.find((e) => e.id === cardAnimal) : null;
-    if (nhin && nhin.map === s.mapId) camera.follow(nhin.x, nhin.y, dt);
-    else camera.follow(s.player.x, s.player.y, dt);
+    /* Camera LUÔN bám nhân vật. Chấm hết.
+
+       Đợt 7 từng cho camera bám con vật đang mở bảng — nghe hợp lý, và là lỗi
+       Cường gặp "ngay từ lúc mở game": `cardAnimal` được đặt bởi những cú chạm
+       không hề định mở bảng, rồi không gì xoá nó khi nhân vật đi, nên camera
+       theo con bò còn nhân vật đi ra khỏi khung. Muốn nhìn con vật thì đi tới
+       — đó cũng là cách người chơi đang mong. */
+    camera.follow(s.player.x, s.player.y, dt);
     const navT = nav.target();
     const cursor: Cursor | null = modal
       ? null
@@ -2188,7 +2225,8 @@ async function boot() {
       ? null
       : interactHint(s, content, Math.floor(s.player.x / TILE), Math.floor(s.player.y / TILE)) ??
         (cursor ? interactHint(s, content, cursor.x, cursor.y) : null);
-    hud.update(s, content, hint, iHint);
+    const dangLam = run ? `${run.label}${run.area ? " · " + run.area.name : ""}` : null;
+    hud.update(s, content, hint, iHint, dangLam);
 
     /* Bảng vật nuôi: CHỈ con người chơi đã chạm vào. Tự đóng khi con đó không
        còn (bán thịt, chết đói, sang bản đồ khác) — giữ lại một cái bảng nói về
@@ -2202,10 +2240,11 @@ async function boot() {
               e.map === s.mapId &&
               (e.kind === "animal" || e.kind === "worker"),
           ) ?? null);
-    if (cardAnimal !== null && !shown) cardAnimal = null;
-    hud.showAnimal(
-      shown ? (shown.kind === "worker" ? workerCard(shown, content) : animalStats(shown, content)) : null,
-    );
+    const the = shown ? (shown.kind === "worker" ? workerCard(shown, content) : animalStats(shown, content)) : null;
+    // Thẻ không vẽ ra được (con vật không có định nghĩa…) thì cũng KHÔNG giữ
+    // id lại — giữ là một bảng vô hình không có nút ×, không đóng được.
+    if (cardAnimal !== null && !the) cardAnimal = null;
+    hud.showAnimal(the);
     drawPadBar(menus.isOpen() || devPanel.isOpen(), buildUI.isOpen(), tutorial.isOpen());
     /* ---- GIỮ TIÊU ĐIỂM & CHỖ CUỘN QUA MỖI LẦN VẼ LẠI --------------------
        Mỗi cú bấm trong menu gọi lại `open*()`, mà `shell()` mở đầu bằng

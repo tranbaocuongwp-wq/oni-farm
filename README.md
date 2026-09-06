@@ -286,9 +286,8 @@ Nút **AUTO** cạnh nút DÙNG (hoặc phím `F`) bật chế độ tự độn
 làm được với thứ đang cầm, **tự đi tới** nếu ở xa, làm xong mới chọn việc kế tiếp — tuần tự
 từng việc một, đúng như khi bạn tự bấm.
 
-Nó dùng **chính hàm** `nearestTarget` mà chế độ giữ-nút-DÙNG đang dùng, chỉ khác hai tham số
-(`radius`, `requireReach`). Cố ý viết một lần: sau này AI người làm thuê cũng gọi đúng hàm
-đó, nếu tách hai đường thì thứ tự ưu tiên của người chơi và của người làm sẽ trôi khỏi nhau.
+Nó khác **chuyến của nút chính** (xem Đợt 10) ở đúng một điểm: nó **tự đổi tay** — đi hết
+bậc ưu tiên THU → CHỮA → GIEO → TƯỚI → CÀY. Chuyến của nút chính thì không bao giờ đổi món.
 
 Tự tắt khi: bạn tự cầm lái, quanh đây hết việc, hoặc **4 giây không có tiến triển nào**. Phép
 đo cuối cùng là thứ quan trọng: thao tác ở đây có hiệu lực TRỄ (`USE` đặt `busy` rồi mới kiểm
@@ -816,11 +815,9 @@ và âm thanh/hạt/rung (suy từ diff thống kê) tự rơi đúng khoảnh k
 Ngủ dậy hay bước qua cửa thì nhát dở bị bỏ (`pending = null`), không mang sang ngày mới.
 `pending` vào save (v6) kèm bất biến `pending ≠ null ⇒ busy > 0`.
 
-**Giữ nút = làm tiếp.** `src/game/hint.ts › nearestTarget` quét 5×5 ô quanh chân, chỉ lấy
-ô **trong tầm với** mà vật phẩm đang cầm làm được việc, ưu tiên cùng loại việc vừa làm
-(đang cày không nhảy sang thu hoạch), rồi ô thẳng hàng, rồi khoảng cách. Không tự đi xa —
-muốn sang luống khác thì chạm. Vòng lặp chính chỉ tiếp quản sau khi đã giữ quá 0,2s và
-nhát trước là một việc trên ô, nên bấm MUA cạnh cửa hàng không bao giờ bị hiểu nhầm.
+**Bấm một lần = làm hết việc của món đang cầm.** Từ Đợt 10 nút chính không còn "giữ nút
+thì làm tiếp ô kế": bấm một lần là một **chuyến** (`src/game/run.ts`) — món quyết định việc
+và khu, khu nào gọn khu đó, không bao giờ đổi ô hotbar. Chi tiết ở mục Đợt 10.
 
 Ba chi tiết khiến nó không phiền:
 
@@ -988,6 +985,54 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 10: camera bám lại nhân vật, và nút chính thành CHUYẾN của món đang cầm (core 1.36)
+
+Cường chơi bản 1.35 và báo hai chuyện: **camera không đi theo nhân vật — ngay từ lúc mở game**,
+và **nút ngữ cảnh hay đi lung tung**. Luật anh đặt, nguyên văn: *"đang chọn cái gì [ở hotbar]
+có thể làm được ở khu vực nào thì phải di chuyển về khu vực đó để tiến hành làm, lặp lại chuyện
+đó, không có tự ý thay đổi công cụ."*
+
+**Camera.** Cả game có đúng một chỗ gọi `camera.follow()`, và Đợt 7 cho nó bám *con vật đang mở
+bảng*. Nghe hợp lý — nhưng `cardAnimal` được đặt bởi **mỗi cú chạm-để-đi rơi trong 1,4 ô quanh
+một con vật** (cách đi chính trên điện thoại, 24 con đi khắp sân), và không gì xoá nó khi nhân
+vật đi bằng joystick. Nên camera theo con bò, nhân vật đi ra khỏi khung; mở menu rồi đóng thì
+"hết" vì `modal` xoá `cardAnimal` — đó là lý do khó tái hiện. Giờ: **camera luôn bám nhân vật,
+chấm hết**; chạm-để-đi là để đi, không mở bảng; mở bảng là việc của nút XEM và nút vai; thẻ
+không vẽ ra được thì `cardAnimal` cũng bị xoá (bịt ca "khoá camera mà không có nút ×").
+
+**Nút chính.** Bản Đợt 5 sửa `contextAction` (bán kính 6 ô, lọc dọn dẹp, xếp theo món) nhưng nó
+bị che bởi `continueWork` đứng trước: bán kính 12, không lọc dọn dẹp, và `lastKind` **không bao
+giờ được xoá khi đổi ô hotbar** — cày một nhát rồi đổi sang hạt, mọi cú bấm sau vẫn "làm tiếp
+việc cày". Cộng thêm nhánh đi-tới-ô-ngắm hỏi `tileActionable` mù món, và nhánh giữ-nút cũng gọi
+`continueWork`. Và không có chỗ nào chọn đích **theo khu**: 12 lô là 12 hình chữ nhật không gì
+phân biệt — đứng giữa A1 và A2, ô "gần nhất" luân phiên hai lô.
+
+Giờ nút chính là **một chuyến** (`src/game/run.ts`, thuần, test được trong Node):
+
+| Món đang cầm | Việc | Khu tìm việc |
+|---|---|---|
+| Cuốc | cày, nhổ cây bệnh | từng lô ruộng |
+| Hạt / bình tưới / thuốc | gieo / tưới (cạn thì múc rồi làm tiếp) / chữa | từng lô |
+| Thức ăn | đổ máng / cho cá ăn | **chỉ những khu nhận món đó** (`pens[].feeds`) |
+| Rìu / cuốc chim | chặt / đập | **chỉ trong Rừng** |
+| Tay không | thu cây chín, thu sữa/trứng | từng lô, rồi từng chuồng |
+
+* Bấm một lần: làm **hết việc của món đó**, khu đang dở làm cho gọn rồi mới sang khu kế (khu
+  đầu = khu đang đứng trong nếu có việc, không thì khu gần nhất). Dừng khi hết việc / hết món /
+  hết sức — có toast nói lý do — hoặc bấm lại, đổi ô hotbar, tự cầm lái, mở menu, đổi bản đồ.
+* **Không bao giờ đổi ô hotbar.** `slot` ghi lúc bắt đầu và mọi câu hỏi đều hỏi `canUseAt(…,
+  slot)`; hết hạt là ô đó trống và vẫn là ô đang chọn. Công tắc "Tự động làm" trong Tạm dừng (có
+  đổi tay) là thứ khác, giữ nguyên.
+* Nút ghi **DỪNG** (đỏ) trong lúc chạy; dải dưới hotbar ghi "Đang làm: CÀY · Lô A2".
+* Gỡ hẳn `continueWork`, `AUTO_RADIUS`, nhánh giữ-nút, `lastKind`. Nhánh đi-tới-ô-ngắm chỉ còn
+  khi ô đó thật sự có việc với món đang cầm hoặc có gì để tương tác.
+* Kịch bản 119–122, mỗi cái cấy lại lỗi để chắc nó đỏ: món → việc → khu và `sel` không đổi;
+  đứng trong A2 thì cày hết A2 dù A1 gần hơn, khu đang dở thắng khu gần hơn; chạy trọn chuyến
+  gieo tới hết hạt (số ô gieo = số hạt, bình cạn → bước đầu là đi múc); rìu không bao giờ nhắm
+  cây trang trí ngoài rừng. Trình duyệt thật ở 430×932 và 1000×700: đi tay 10 ô sau khi chạm
+  cạnh bò → camera đi theo, nhân vật ở tâm; mở bảng bằng XEM rồi đi → vẫn theo nhân vật; cuốc ở
+  A2 → 30 ô A2 rồi 30 ô A1, không một lần xen kẽ; cám → đổ hết rồi "Hết Cám tổng hợp — dừng."
 
 ### Đợt 9: hiệu năng, đo thật (core 1.35)
 
@@ -1315,7 +1360,7 @@ Phủ 69 kịch bản, gồm những thứ dễ hỏng nhất: cây không lớn
 hệt · **load save cũ với content đã gỡ cây thì không crash** · `reduce` không mutate
 state cũ · **nhãn nút ngữ cảnh đổi đúng CÀY → GIEO → TƯỚI → THU** · parse cài đặt hỏng vẫn ra hợp lệ ·
 **thao tác có hiệu lực trễ đúng mốc chạm đất, nhát dở bị bỏ khi ngủ** · SWAP balo gộp stack và giữ
-hai ô công cụ · giữ nút tự sang ô kế tiếp cùng loại việc, hết ô thì dừng.
+hai ô công cụ · chuyến của món đang cầm làm gọn từng lô, dừng khi hết hạt, không đổi ô hotbar.
 
 Lớp UI soát bằng Chromium headless ở bốn khổ máy (checklist trong `docs/MOBILE-UX.md`).
 

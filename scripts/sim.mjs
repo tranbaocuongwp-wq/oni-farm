@@ -36,6 +36,8 @@ import * as migrateApi from "../src/core/save.ts";
 import { createLoop, MAX_CONSECUTIVE_ERRORS } from "../src/core/loop.ts";
 import { adoptState } from "../src/game/adopt.ts";
 import { bestGoal } from "../src/game/progression.ts";
+import { runFor, areasFor, nextRunTarget } from "../src/game/run.ts";
+import { interactAt } from "../src/game/world.ts";
 import { SAVE_VERSION } from "../src/core/version.ts";
 import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRemap } from "../src/core/gamepad.ts";
 import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
@@ -7516,6 +7518,201 @@ test("118. autoJob kẹp vành vào biên bản đồ nhưng chọn ĐÚNG việ
     }
   }
   ok(daSo >= 5, `phải có việc thật để so (đã so ${daSo} ca có việc)`);
+});
+
+/* ------------------------------------------------ Đợt 10: chuyến của món đang cầm */
+
+test("119. runFor: món đang cầm quyết định việc và khu; không bao giờ đổi ô hotbar", () => {
+  const store = mkStore();
+  const selCua = () => store.getState().sel;
+  const thu = (held, jobs, khuKind, khuMin) => {
+    if (held) selectItem(store, held);
+    else store.dispatch({ t: "SELECT", slot: 5 }); // ô trống = tay không
+    const s0 = store.getState();
+    const sel0 = s0.sel;
+    const r = runFor(s0, content);
+    ok(r, `cầm ${held ?? "tay không"} phải có chuyến`);
+    eq(r.jobs.join(","), jobs, `cầm ${held ?? "tay không"} → việc`);
+    eq(r.slot, sel0, "slot của chuyến = ô hotbar lúc bắt đầu");
+    const khu = areasFor(s0, content, r);
+    ok(khu.length >= khuMin, `cầm ${held ?? "tay không"}: ít nhất ${khuMin} khu (có ${khu.length})`);
+    ok(khu.every((a) => khuKind.includes(a.kind)), `cầm ${held ?? "tay không"}: khu chỉ thuộc ${khuKind}`);
+    // Hỏi ô kế vài lần — state không được đổi, sel càng không.
+    for (let i = 0; i < 3; i++) nextRunTarget(store.getState(), content, r);
+    eq(selCua(), sel0, `sel không đổi sau khi hỏi chuyến (cầm ${held ?? "tay không"})`);
+  };
+  thu("tool:hoe", "till,pull", ["lot"], 12);
+  thu("seed:lettuce", "plant", ["lot"], 12);
+  thu("tool:can", "water", ["lot"], 12);
+  giveItem(store, "item:feedmix", 5);
+  thu("item:feedmix", "pour,feedpond", ["pen"], 3);
+  // Cám gà chỉ tới khu NHẬN cám gà — đọc từ pens[].feeds, không phải mọi chuồng.
+  {
+    selectItem(store, "item:feedmix");
+    const r = runFor(store.getState(), content);
+    const ids = areasFor(store.getState(), content, r).map((a) => a.id).sort();
+    const mong = content.tiles.pens.filter((p) => (p.feeds ?? []).includes("item:feedmix")).map((p) => p.id).sort();
+    eq(ids.join(","), mong.join(","), "khu của cám = đúng những chuồng có feedmix trong feeds");
+    ok(ids.length < content.tiles.pens.length, "và không phải mọi chuồng");
+  }
+  giveItem(store, "tool:axe", 1);
+  thu("tool:axe", "chop", ["forest"], 1);
+  thu(null, "harvest,gather", ["lot", "pen"], 13);
+  // Cầm đá: không có chuyến. Cầm công trình: không có chuyến (đi chế độ xây).
+  giveItem(store, "item:stone", 3);
+  selectItem(store, "item:stone");
+  eq(runFor(store.getState(), content), null, "cầm đá → không có chuyến");
+  // Đang VÁC gì đó → không có chuyến.
+  setState(store, (s) => { s.carry = "log"; });
+  store.dispatch({ t: "SELECT", slot: 0 });
+  eq(runFor(store.getState(), content), null, "đang vác → không có chuyến");
+});
+
+test("120. chuyến làm GỌN TỪNG LÔ: đứng trong A2 thì cày hết A2 rồi mới sang A1; khu đang dở thắng khu gần hơn", () => {
+  const store = mkStore();
+  khoaNac(store);
+  const a1 = content.tiles.zones.find((z) => z.id === "loa1");
+  const a2 = content.tiles.zones.find((z) => z.id === "loa2");
+  /* Bố trí để "ô gần nhất trên cả bản đồ" và "khu đang đứng trong" CHỌN KHÁC
+     NHAU: nhân vật đứng ở mép trái A2 trên một ô đã xong; A2 chỉ còn việc ở hai
+     cột tận bên phải (cách 4–5 ô); còn A1 kề bên trái thì ô nào cũng còn việc
+     (cách 2 ô). Gần nhất thuần tuý → A1. Gọn từng khu → A2 trước. */
+  setState(store, (s) => {
+    for (const z of content.tiles.zones.filter((z) => z.kind === "farm"))
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) setTile(s, x, y, { prop: null, tilled: true, wet: true, crop: null, b: null });
+    for (let y = a1.y; y < a1.y + a1.h; y++)
+      for (let x = a1.x; x < a1.x + a1.w; x++) setTile(s, x, y, { tilled: false, wet: false });
+    for (let y = a2.y; y < a2.y + a2.h; y++)
+      for (let x = a2.x + a2.w - 2; x < a2.x + a2.w; x++) setTile(s, x, y, { tilled: false, wet: false });
+    s.energy = 150;
+  });
+  walkTo(store, a2.x, a2.y + 2);
+  selectItem(store, "tool:hoe");
+  const run = runFor(store.getState(), content);
+  const thuTu = [];
+  for (let i = 0; i < 80; i++) {
+    const s = store.getState();
+    const t = nextRunTarget(s, content, run);
+    if ("stop" in t) break;
+    ok(!("refill" in t), "cày thì không đi múc");
+    run.area = t.area;
+    thuTu.push(t.area.id);
+    walkTo(store, t.x, t.y);
+    use(store, t.x, t.y);
+    ok(tile(store, t.x, t.y).tilled, `ô (${t.x},${t.y}) phải cày được`);
+  }
+  const soA2 = 2 * a2.h;
+  eq(thuTu.length, soA2 + a1.w * a1.h, "làm hết cả hai lô");
+  eq(thuTu[0], "loa2", "bước đầu tiên ở A2 — khu đang đứng trong, dù A1 gần hơn");
+  eq(thuTu.slice(0, soA2).every((id) => id === "loa2"), true, `${soA2} bước đầu đều ở A2`);
+  eq(thuTu.slice(soA2).every((id) => id === "loa1"), true, "rồi mới toàn A1");
+  eq(store.getState().sel, 0, "sel không đổi suốt chuyến");
+
+  /* KHU ĐANG DỞ thắng khu gần hơn — ca đi múc nước về: nhân vật đang đứng
+     NGOÀI mọi lô, sát A1, chuyến đang dở ở A2 → ô kế vẫn phải ở A2. */
+  setState(store, (s) => {
+    for (const z of [a1, a2])
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) setTile(s, x, y, { tilled: true, wet: false });
+    s.water = 24;
+  });
+  walkTo(store, a1.x - 1, a1.y - 1);
+  selectItem(store, "tool:can");
+  const r2 = runFor(store.getState(), content);
+  r2.area = { kind: "lot", id: a2.id, name: a2.name, x: a2.x, y: a2.y, w: a2.w, h: a2.h };
+  const t2 = nextRunTarget(store.getState(), content, r2);
+  ok(!("stop" in t2) && !("refill" in t2), "có ô tưới");
+  eq(t2.area.id, "loa2", `đang dở A2 thì ô kế ở A2, dù A1 gần hơn (được (${t2.x},${t2.y}))`);
+  ok(t2.x >= a2.x && t2.x < a2.x + a2.w, "ô kế nằm trong A2");
+});
+
+test("121. chạy trọn chuyến gieo tới hết hạt: sel không đổi, số ô gieo = số hạt; bình cạn → bước đầu là đi múc", () => {
+  const store = mkStore();
+  khoaNac(store);
+  const a3 = content.tiles.zones.find((z) => z.id === "loa3");
+  setState(store, (s) => {
+    for (let y = a3.y; y < a3.y + a3.h; y++)
+      for (let x = a3.x; x < a3.x + a3.w; x++) setTile(s, x, y, { prop: null, tilled: true, wet: false, crop: null, b: null });
+    s.energy = 150;
+  });
+  walkTo(store, a3.x + 2, a3.y + 2);
+  selectItem(store, "seed:lettuce");
+  const hat = countInv(store, "seed:lettuce");
+  ok(hat > 0 && hat < a3.w * a3.h, `có ${hat} hạt, ít hơn số ô trong lô`);
+  const run = runFor(store.getState(), content);
+  const sel0 = store.getState().sel;
+  let gieo = 0;
+  let ket = null;
+  for (let i = 0; i < 200; i++) {
+    const s = store.getState();
+    eq(s.sel, sel0, "sel không đổi giữa chuyến");
+    const t = nextRunTarget(s, content, run);
+    if ("stop" in t) { ket = t.stop; break; }
+    ok(!("refill" in t), "gieo thì không đi múc");
+    run.area = t.area;
+    walkTo(store, t.x, t.y);
+    use(store, t.x, t.y);
+    ok(tile(store, t.x, t.y).crop, `ô (${t.x},${t.y}) phải gieo được`);
+    gieo++;
+  }
+  eq(ket, "noItem", "chuyến dừng vì HẾT HẠT");
+  eq(gieo, hat, "số ô gieo = số hạt ban đầu");
+  eq(countInv(store, "seed:lettuce"), 0, "hết sạch hạt");
+  eq(store.getState().sel, sel0, "sel không đổi sau chuyến — không tự cầm món khác");
+  ok(store.getState().inv[sel0] === null, "ô hotbar đó trống, và vẫn là ô đang chọn");
+
+  // BÌNH CẠN mà còn luống khô → bước đầu tiên là đi MÚC, không phải dừng.
+  selectItem(store, "tool:can");
+  setState(store, (s) => { s.water = 0; });
+  const r2 = runFor(store.getState(), content);
+  const t2 = nextRunTarget(store.getState(), content, r2);
+  ok("refill" in t2, `bình cạn + luống khô → refill (được ${JSON.stringify(t2)})`);
+  eq(interactAt(store.getState(), content, t2.refill.x, t2.refill.y), "REFILL", "ô múc là ô REFILL thật");
+  // Hết luống khô thì không đi múc vô ích: chuyến XONG.
+  setState(store, (s) => { for (const t of s.tiles) if (t?.tilled) t.wet = true; });
+  const t3 = nextRunTarget(store.getState(), content, r2);
+  eq(t3.stop, "done", "bình cạn nhưng không còn luống khô → done, không đi múc");
+});
+
+test("122. rìu chỉ chặt trong RỪNG: cây ngoài sân gần hơn không bao giờ là đích của chuyến", () => {
+  const store = mkStore();
+  khoaNac(store);
+  giveItem(store, "tool:axe", 1);
+  selectItem(store, "tool:axe");
+  const rung = content.tiles.zones.find((z) => z.kind === "forest");
+  // Đứng ở sân, cạnh một cái cây trang trí đặt sát chân — cách rừng hơn 10 ô.
+  const px = 30, py = 7;
+  setState(store, (s) => {
+    setTile(s, px + 1, py, { prop: null, tilled: false, wet: false, crop: null, b: null });
+    putProp(s, px + 1, py, "tree");
+    s.energy = 150;
+  });
+  walkTo(store, px, py);
+  ok(!inZone(store.getState(), content, "farm", px + 1, py) && !inZone(store.getState(), content, "forest", px + 1, py), "cây thử nằm ngoài ruộng và ngoài rừng");
+  ok(canUseAt(store.getState(), content, px + 1, py) === "chop", "ngắm thẳng vào thì vẫn chặt được (đường ô-ngắm không đổi)");
+  const run = runFor(store.getState(), content);
+  let n = 0;
+  for (let i = 0; i < 6; i++) {
+    const s = store.getState();
+    const t = nextRunTarget(s, content, run);
+    if ("stop" in t) break;
+    ok(!(t.x === px + 1 && t.y === py), `bước ${i}: đích không phải cây ngoài sân`);
+    ok(t.x >= rung.x && t.x < rung.x + rung.w && t.y >= rung.y && t.y < rung.y + rung.h, `bước ${i}: đích (${t.x},${t.y}) nằm trong Rừng`);
+    eq(t.area.kind, "forest", "khu là rừng");
+    run.area = t.area;
+    // Cây là ô đặc — đứng ở ô kề không đặc rồi chặt.
+    const s1 = store.getState();
+    const ke = [[t.x, t.y - 1], [t.x - 1, t.y], [t.x + 1, t.y], [t.x, t.y + 1]].find(([x, y]) => !isSolid(s1, content, x, y));
+    ok(ke, `cây (${t.x},${t.y}) phải có ô kề đứng được`);
+    walkTo(store, ke[0], ke[1]);
+    // chặt tới khi đổ (nhiều nhát)
+    for (let k = 0; k < 8 && tile(store, t.x, t.y).prop; k++) use(store, t.x, t.y);
+    n++;
+  }
+  ok(n >= 2, `chuyến rừng có việc thật (${n} cây)`);
+  ok(tile(store, px + 1, py).prop === "tree", "cây ngoài sân vẫn còn nguyên");
+  eq(store.getState().sel, store.getState().sel, "sel không đổi");
 });
 
 /* ------------------------------------------------------------------ tổng kết */

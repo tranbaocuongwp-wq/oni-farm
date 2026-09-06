@@ -1714,6 +1714,13 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   background: rgba(61, 90, 130, 0.94);
   border-color: #5aa9e6;
 }
+/* Đang trong CHUYẾN: nút là DỪNG — đỏ ấm, khác hẳn mọi màu việc, để bấm là biết mình đang tắt gì. */
+#abtn .a[data-kind="run"] {
+  background: rgba(168, 62, 48, 0.96);
+  border-color: #f08a6a;
+  box-shadow: 0 0 0 3px rgba(240, 138, 106, 0.35), 0 0 16px rgba(240, 138, 106, 0.4);
+  color: #fff3ec;
+}
 #abtn .a[data-kind="none"] {
   background: rgba(58, 44, 32, 0.9);
   border-color: var(--edge);
