@@ -51,7 +51,7 @@ import { diseaseNight } from "./disease.ts";
 import { animalNight, patrolNight, pestNight } from "./animals.ts";
 import { catchUpEntities, spawnEntity } from "./entities.ts";
 import { payWages, restWorkers } from "./workers.ts";
-import { maybeSendBuyer } from "./vehicles.ts";
+import { maybeSendBoat, maybeSendBuyer } from "./vehicles.ts";
 import {
   cropInSeason,
   isLastDayOfSeason,
@@ -614,6 +614,7 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
 
   // ---- 5f. thỉnh thoảng xe thu mua ghé, nếu kho có hàng -------------------
   maybeSendBuyer(d, content);
+  maybeSendBoat(d, content);
 
   if (rep.stormCrops > 0) toastKey(d, content, "stormDamage", "bad", `×${rep.stormCrops}`);
   if (rep.felled > 0) toastKey(d, content, "stormFell", "bad", `×${rep.felled}`);

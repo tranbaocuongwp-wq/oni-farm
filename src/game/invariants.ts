@@ -236,9 +236,16 @@ export function checkInvariants(state: GameState, content: Content): string[] {
             : en.kind === "vehicle"
               ? content.vehicles[en.def]?.box
               : content.animals[en.def]?.box;
-        // Loài dưới nước ĐẢO NGƯỢC luật: với nó, nước mới là chỗ hợp lệ. Dùng
-        // phép kiểm chung ở đây sẽ báo mọi con cá là "nằm trong ô đặc".
-        const swims = content.animals[en.def]?.housing === "water";
+        /* Thứ SỐNG DƯỚI NƯỚC đảo ngược luật: với nó, nước mới là chỗ hợp lệ.
+           Dùng phép kiểm chung ở đây sẽ báo mọi con cá là "nằm trong ô đặc".
+
+           Và không chỉ con cá: THUYỀN cũng vậy. Chỗ này từng chỉ hỏi bảng vật
+           nuôi, nên với một chiếc thuyền nó trả `undefined` → coi như đi bộ →
+           mọi ô nước thành ô đặc, và con thuyền vỡ bất biến ngay từ giây nó
+           xuất hiện. Hỏi cả hai bảng thì đúng cho cả hai. */
+        const swims =
+          content.animals[en.def]?.housing === "water" ||
+          content.vehicles[en.def]?.sea === true;
         if (box && blockedForActor(state, content, en.x, en.y, box.w, box.h, swims))
           e.push(
             `thực thể ${en.id} ('${en.def}') nằm trong ô solid tại ` +

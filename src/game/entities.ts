@@ -134,7 +134,11 @@ export function actorShape(
     return { speed: content.workers.speed, box: content.workers.box, swims: false };
   if (e.kind === "vehicle") {
     const v = content.vehicles[e.def];
-    return v ? { speed: v.speed, box: v.box, swims: false } : null;
+    /* THUYỀN "bơi" theo đúng nghĩa của `blockedForActor`: với nó mặt nước là
+       chỗ đi được và mặt đất là chỗ chặn. Thiếu chỗ này thì con thuyền sinh ra
+       giữa biển và không nhúc nhích được một pixel nào — mọi ô quanh nó bị coi
+       là ô đặc. */
+    return v ? { speed: v.speed, box: v.box, swims: v.sea === true } : null;
   }
   const def = animalDef(content, e.def);
   return def ? { speed: def.speed, box: def.box, swims: def.housing === "water" } : null;

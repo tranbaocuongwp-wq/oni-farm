@@ -23,7 +23,7 @@ import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entit
 import { gatherFrom, gatherPen, penNear, slaughter } from "./animals.ts";
 import { assignJob, fireWorker, hireWorker } from "./workers.ts";
 import { sendVehicle } from "./vehicles.ts";
-import { buy, sell, sellAll } from "./economy.ts";
+import { buy, buyFromBoat, sell, sellAll } from "./economy.ts";
 import {
   TILE,
   blockedAt,
@@ -519,6 +519,11 @@ export function reduce(state: GameState, action: Action, content: Content): Game
     case "BUY": {
       buy(d, content, action.id, action.n);
       if (d.changed) applyProgression(d, content);
+      return commit(d);
+    }
+
+    case "BUY_BOAT": {
+      buyFromBoat(d, content, action.id, action.n);
       return commit(d);
     }
 

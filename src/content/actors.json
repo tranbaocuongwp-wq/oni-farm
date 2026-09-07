@@ -492,6 +492,39 @@
         "glass": "#d8e8f0",
         "accent": "#e8c05a"
       }
+    },
+    {
+      "id": "boat",
+      "name": "Thuyền buôn",
+      "price": 0,
+      "capacity": 1,
+      "speed": 52,
+      "sea": true,
+      "stayMinutes": 240,
+      "sells": [
+        {
+          "id": "item:wood",
+          "price": 14
+        },
+        {
+          "id": "item:stone",
+          "price": 22
+        },
+        {
+          "id": "item:fiber",
+          "price": 9
+        }
+      ],
+      "box": {
+        "w": 13,
+        "h": 11
+      },
+      "art": {
+        "body": "#c9a227",
+        "dark": "#8a6b18",
+        "glass": "#e8f2f8",
+        "accent": "#7a5230"
+      }
     }
   ]
 }

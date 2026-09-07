@@ -14,7 +14,7 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
 import { findPath, PATH_STATS, walkableTile, stepSpeed } from "../src/game/pathfind.ts";
-import { driveable, pondDock, MAX_VEHICLES } from "../src/game/vehicles.ts";
+import { driveable, driveableFor, pondDock, MAX_VEHICLES } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM , canPourFromStore } from "../src/game/pen.ts";
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
@@ -25,9 +25,9 @@ import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor, waterSpotForBox, tileCenterX, tileCenterY, maxSpeedMul } from "../src/game/world.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
-import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
-import { sellSlots } from "../src/game/inventory.ts";
-import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN } from "../src/game/hint.ts";
+import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src/game/items.ts";
+import { sellSlots, countItem} from "../src/game/inventory.ts";
+import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import { cropInSeason } from "../src/game/season.ts";
@@ -3380,11 +3380,15 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   });
   const doi = content.animals.pig.starveDays;
   for (let i = 0; i < doi - 1; i++) sleep(st2);
-  ok(st2.getState().entities.length === 1, `còn sống sau ${doi - 1} ngày đói`);
+  /* Đếm ĐÚNG con heo, không đếm tổng số thực thể: từ khi có thuyền buôn ghé
+     ba ngày một lần thì trên bản đồ còn những thứ khác, và chúng không liên
+     quan gì tới chuyện con heo sống hay chết. */
+  const conHeo = (st) => st.getState().entities.filter((e) => e.def === "pig").length;
+  ok(conHeo(st2) === 1, `còn sống sau ${doi - 1} ngày đói`);
   const truoc = st2.getState().entities[0].animal.hungryDays;
   ok(truoc >= doi - 1, `đếm đúng số ngày đói: ${truoc}`);
   sleep(st2);
-  eq(st2.getState().entities.length, 0, `đói đủ ${doi} ngày thì chết`);
+  eq(conHeo(st2), 0, "quá số ngày nhịn thì chết đói");
   deepEq(checkInvariants(st2.getState(), content), [], "bất biến sau khi con vật chết");
 
   // --- gà thả rông KHÔNG chết đói: tự kiếm ăn ---
@@ -3401,7 +3405,11 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
     });
   });
   for (let i = 0; i < 12; i++) sleep(st3);
-  eq(st3.getState().entities.length, 1, "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống");
+  eq(
+    st3.getState().entities.filter((e) => e.def === "chicken").length,
+    1,
+    "gà thả rông tự kiếm ăn, 12 ngày vắng mặt vẫn sống",
+  );
 
   /* --- và ĐI TÌM CỎ thật: con CHÓ trên nông trại còn cỏ thì không chết,
          mà bãi cỏ nó ăn phải BIẾN MẤT.
@@ -3450,7 +3458,7 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
   });
   const co0 = demCo(st4);
   for (let i = 0; i < content.animals.dog.starveDays + 3; i++) sleep(st4);
-  eq(st4.getState().entities.length, 1, "còn cỏ thì con chó thả rông không chết đói");
+  eq(st4.getState().entities.filter((e) => e.def === "dog").length, 1, "còn cỏ thì con chó thả rông không chết đói");
   ok(demCo(st4) < co0, `bãi cỏ bị gặm bớt: ${co0} → ${demCo(st4)}`);
   eq(st4.getState().entities[0].animal.hungryDays, 0, "ăn được thì đồng hồ đói về 0");
   deepEq(checkInvariants(st4.getState(), content), [], "bất biến sau khi gặm cỏ");
@@ -3510,14 +3518,14 @@ test("57. vòng đời vật nuôi: đói → chết; cho ăn thì hồi; tới 
     ok(trongKhu(mangCan) !== false, "máng cạn: con heo vẫn KHÔNG bị bốc qua rào");
     sleep(mangCan);
   }
-  eq(mangCan.getState().entities.length, 0, "máng cạn thì cỏ ngoài rào cũng không cứu được");
+  eq(mangCan.getState().entities.filter((e) => e.kind === "animal").length, 0, "máng cạn thì cỏ ngoài rào cũng không cứu được");
 
   const mangDay = dungHeo(928, true);
   for (let i = 0; i < content.animals.pig.starveDays + 3; i++) {
     sleep(mangDay);
     ok(trongKhu(mangDay), "máng đầy: con heo ăn máng và ở yên trong khu");
   }
-  eq(mangDay.getState().entities.length, 1, "máng đầy thì con heo sống");
+  eq(mangDay.getState().entities.filter((e) => e.def === "pig").length, 1, "máng đầy thì con heo sống");
   deepEq(checkInvariants(mangDay.getState(), content), [], "bất biến sau mấy đêm ăn máng");
 });
 
@@ -3622,7 +3630,11 @@ test("59. thuê người: trừ tiền, tới điểm giao, 3 ngày trả lươn
   // hết tiền → nghỉ việc, và tiền KHÔNG âm
   setState(store, (s) => { s.money = 0; });
   for (let i = 0; i < cfg.wageEveryDays; i++) sleep(store);
-  eq(store.getState().entities.length, 0, "không đủ tiền trả lương thì người làm nghỉ");
+  eq(
+    store.getState().entities.filter((e) => e.kind === "worker").length,
+    0,
+    "không đủ tiền trả lương thì NGƯỜI LÀM nghỉ",
+  );
   ok(store.getState().money >= 0, "và tiền không bao giờ âm");
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau khi nghỉ việc");
 });
@@ -10068,6 +10080,163 @@ test("144. XE vào từ cổng ở mép, qua CẦU ĐƯỜNG — và cầu tàu 
     }
     ok(daGiao, "chuyến giao hàng phải chạy TRỌN VẸN trên tuyến dài, không vỡ bất biến giữa đường");
     ok(store.getState().entities.length > truoc, "và con vật phải có mặt trên nông trại");
+  }
+});
+
+test("145. THUYỀN BUÔN ghé bến biển bán hàng cửa hàng trên bờ không có", () => {
+  /* Cường muốn "thêm thuyền ở ngoài biển để mua được vài loại hàng đặc biệt".
+
+     Con thuyền dùng CHUNG bộ máy với xe tải — sinh ở cổng, tìm đường, làm
+     việc, rồi đi ra — và khác đúng một câu hỏi: "ô này đi được không". Xe hỏi
+     mặt đường, thuyền hỏi mặt nước. Tách bằng một cờ (`vehicles.boat.sea`)
+     chứ không bằng một hệ thống thứ hai.
+
+     "Hàng đặc biệt" ở đây là gỗ, đá, sợi cỏ: những thứ cửa hàng trên bờ KHÔNG
+     BAO GIỜ bán, và nông trại chỉ có được bằng cách bổ củi với đập đá. Giá cao
+     hơn giá bán lại, nên nó mua cho người chơi THỜI GIAN chứ không mua tiền. */
+
+  const def = content.vehicles["boat"];
+  ok(!!def, "content phải có thuyền buôn");
+  ok(def.sea === true, "thuyền phải khai `sea` — nó đi trên nước");
+  ok((def.sells ?? []).length >= 1, "thuyền phải mang hàng để bán");
+  ok(!!content.tiles.seaGate && !!content.tiles.dock, "phải có cổng biển và bến");
+
+  const s0 = mkStore().getState();
+
+  /* --- Hàng của thuyền phải THẬT SỰ đặc biệt ------------------------- */
+  for (const mon of def.sells) {
+    ok(!!itemName(mon.id, content), `món '${mon.id}' phải là vật phẩm có thật`);
+    const giaBo = buyPriceOf(mon.id, content);
+    eq(giaBo, 0, `'${mon.id}' không được bày bán ở cửa hàng trên bờ — thế mới là hàng đặc biệt`);
+    const giaBan = sellPriceOf(mon.id, content);
+    ok(
+      mon.price > giaBan,
+      `mua ${mon.price}đ mà bán lại được ${giaBan}đ thì thành cỗ máy in tiền`,
+    );
+  }
+
+  /* --- Cổng biển và bến phải NẰM TRÊN NƯỚC và thuyền đi tới được ------ */
+  {
+    const g = content.tiles.seaGate;
+    const b = content.tiles.dock;
+    eq(tileAt(s0, g.x, g.y)?.g, "water", "cổng biển phải ở trên mặt nước");
+    eq(tileAt(s0, b.x, b.y)?.g, "water", "bến phải ở trên mặt nước");
+    ok(driveableFor(s0, content, def, g.x, g.y), "thuyền phải đi được ở cổng biển");
+    ok(driveableFor(s0, content, def, b.x, b.y), "thuyền phải đi được ở bến");
+    // và XE thì KHÔNG — nước không phải mặt đường
+    ok(!driveable(s0, content, b.x, b.y), "xe tải không được đi trên mặt nước");
+    // ngược lại, thuyền không leo lên đường
+    const duong = content.tiles.parking.spots[0];
+    ok(
+      !driveableFor(s0, content, def, duong.x, duong.y),
+      "thuyền không được chạy trên mặt đường",
+    );
+
+    const p = findPath(s0, content, g.x, g.y, new Set([idx(s0.w, b.x, b.y)]), {
+      maxNodes: 20000,
+      box: def.box,
+      swims: true,
+      pass: (x, y) => driveableFor(s0, content, def, x, y),
+    });
+    ok(!!p && p.length > 0, "thuyền phải có đường từ cổng biển vào tới bến");
+  }
+
+  /* --- Ghé ĐÚNG NHỊP, và người chơi đoán được ------------------------- */
+  {
+    const store = mkStore();
+    const coThuyen = () => store.getState().entities.some((e) => e.def === "boat");
+    const ngayGhe = [];
+    for (let n = 0; n < 9; n++) {
+      // dọn thuyền cũ để mỗi ngày là một phép thử độc lập
+      setState(store, (s) => {
+        s.entities = s.entities.filter((e) => e.def !== "boat");
+      });
+      sleep(store);
+      if (coThuyen()) ngayGhe.push(store.getState().day);
+    }
+    ok(ngayGhe.length >= 2, `thuyền phải ghé nhiều lần trong chín ngày, đang ${ngayGhe.length}`);
+    for (const d of ngayGhe) eq(d % 3, 0, `thuyền ghé ngày ${d} — phải đúng nhịp ba ngày, không rút xúc xắc`);
+  }
+
+  /* --- CẬP BẾN rồi mới mở sạp, và mua được thật ----------------------- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 5000;
+      s.day = 2;
+    });
+    sleep(store); // sang ngày 3 → thuyền ghé
+    const th0 = store.getState().entities.find((e) => e.def === "boat");
+    ok(!!th0, "sang ngày chia hết cho 3 thì thuyền phải xuất hiện");
+    eq(th0.ai.phase, "in", "vừa sinh ra thì thuyền đang BƠI VÀO, chưa mở sạp");
+
+    const ben = content.tiles.dock;
+    /* Hỏi NGAY TẠI CHỖ CON THUYỀN, không hỏi ở bến.
+
+       Bản đầu tôi đứng ở bến rồi hỏi — nhưng lúc ấy con thuyền còn ngoài cổng
+       biển, nên câu trả lời "không có sạp" đến từ KHOẢNG CÁCH chứ không từ
+       trạng thái. Phép kiểm xanh mà không kiểm gì: gỡ hẳn điều kiện "đã cập
+       bến" ra khỏi `boatAt` thì nó vẫn xanh. */
+    const oThuyen = { x: Math.floor(th0.x / TILE), y: Math.floor(th0.y / TILE) };
+    ok(
+      !boatAt(store.getState(), oThuyen.x, oThuyen.y),
+      "thuyền còn ĐANG BƠI VÀO thì chưa mở sạp — đứng ngay cạnh nó cũng không mua được",
+    );
+
+    // chạy tới khi nó cập bến
+    for (let k = 0; k < 60000; k++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      const th = store.getState().entities.find((e) => e.def === "boat");
+      if (!th || th.ai.phase === "wait") break;
+    }
+    const th = store.getState().entities.find((e) => e.def === "boat");
+    ok(!!th, "thuyền phải còn đó");
+    eq(th.ai.phase, "wait", "thuyền phải CẬP BẾN được — không có đường vào là con thuyền vô nghĩa");
+
+    setState(store, (s) => {
+      s.player.x = ben.x * TILE + 8;
+      s.player.y = (ben.y - 1) * TILE + 8;
+      s.money = 5000;
+    });
+    ok(!!boatAt(store.getState(), ben.x, ben.y - 1), "cập bến rồi thì đứng cạnh phải thấy sạp");
+
+    /* NÚT CHÍNH phải nói ra cái sạp, không phải "DÙNG".
+
+       Người mua đứng trên CẦU TÀU — ô dưới chân có vật thể — và `contextAction`
+       có một cửa thoát sớm cho đúng trường hợp ấy ("ô đang ngắm có vật thì câu
+       trả lời phải nói về nó"). Cửa ấy nuốt mất con thuyền: đứng sát bên mà nút
+       vẫn ghi DÙNG. */
+    const ca = contextAction(
+      store.getState(),
+      content,
+      Math.floor(store.getState().player.x / TILE),
+      Math.floor(store.getState().player.y / TILE),
+    );
+    eq(ca?.kind, "boat", `đứng cạnh thuyền thì nút chính phải mở sạp, đang là ${ca?.kind}`);
+
+    const mon = def.sells[0];
+    const truoc = store.getState().money;
+    const coTruoc = countItem(store.getState().inv, mon.id);
+    store.dispatch({ t: "BUY_BOAT", id: mon.id, n: 1 });
+    const s2 = store.getState();
+    eq(countItem(s2.inv, mon.id), coTruoc + 1, `mua ${mon.id} từ thuyền thì phải vào túi`);
+    eq(s2.money, truoc - mon.price, "và trừ đúng GIÁ CỦA THUYỀN");
+  }
+
+  /* --- Thuyền đi rồi thì KHÔNG mua được nữa --------------------------- */
+  {
+    const store = mkStore();
+    setState(store, (s) => { s.money = 5000; });
+    const ben = content.tiles.dock;
+    setState(store, (s) => {
+      s.player.x = ben.x * TILE + 8;
+      s.player.y = (ben.y - 1) * TILE + 8;
+    });
+    const mon = def.sells[0];
+    const truoc = store.getState().money;
+    store.dispatch({ t: "BUY_BOAT", id: mon.id, n: 1 });
+    eq(store.getState().money, truoc, "không có thuyền thì không trừ một đồng nào");
+    eq(countItem(store.getState().inv, mon.id), 0, "…và không nhận được món nào");
   }
 });
 

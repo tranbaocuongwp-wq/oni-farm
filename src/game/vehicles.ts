@@ -56,6 +56,31 @@ export function vehicleCount(s: GameState): number {
  * và cấm nó ở đây khiến việc lát đường trở thành một quyết định có hậu quả thật
  * — không có đường thì xe không tới được kho.
  */
+/**
+ * Ô này ĐI ĐƯỢC với loại xe `def` không.
+ *
+ * Thuyền và xe tải dùng CHUNG toàn bộ bộ máy — sinh ở cổng, tìm đường, làm
+ * việc, rồi đi ra — và khác nhau đúng ở câu hỏi này. Tách bằng một hàm chứ
+ * không bằng một hệ thống thứ hai.
+ */
+export function driveableFor(
+  s: GameState,
+  content: Content,
+  def: VehicleDef | null,
+  x: number,
+  y: number,
+): boolean {
+  if (!def?.sea) return driveable(s, content, x, y);
+  const t = tileAt(s, x, y);
+  if (!t) return false;
+  /* Thuyền đi trên MẶT NƯỚC, và cây cầu là vật cản chứ không phải mặt đường —
+     đúng chiều ngược lại với xe tải. Cầu bắc TRÊN mặt nước, thuyền chui không
+     lọt. */
+  if (t.prop) return false;
+  if (t.b) return false;
+  return t.g === "water";
+}
+
 export function driveable(s: GameState, content: Content, x: number, y: number): boolean {
   const t = tileAt(s, x, y);
   if (!t) return false;
@@ -88,9 +113,10 @@ function drivePath(
   from: { x: number; y: number },
   to: { x: number; y: number },
   box: { w: number; h: number },
+  def: VehicleDef | null = null,
 ): number[] | null {
-  // Chặn trước bằng `driveable`: ô đích không phải mặt đường thì khỏi tìm.
-  if (!driveable(s, content, to.x, to.y)) return null;
+  // Chặn trước: ô đích không đi được với loại xe này thì khỏi tìm.
+  if (!driveableFor(s, content, def, to.x, to.y)) return null;
   const path = findPath(s, content, from.x, from.y, new Set([idx(s.w, to.x, to.y)]), {
     maxNodes: MAX_NODES_VEHICLE,
     box,
@@ -99,7 +125,11 @@ function drivePath(
        qua bãi cỏ. Soát lại là bỏ cả chuyến — chiếc xe đứng chờ rồi thả hàng
        ngay giữa đường. Lọc trong vòng lặp thì nó tự tìm đường VÒNG theo đường
        nhựa, đúng như một chiếc xe thật. */
-    pass: (x, y) => driveable(s, content, x, y),
+    /* THUYỀN hỏi hộp va chạm bằng luật BƠI. Không có dòng này thì `findPath`
+       kiểm thân con thuyền bằng luật đi bộ — và với luật ấy mọi ô nước đều là
+       ô đặc, nên con thuyền không tìm ra đường ở giữa biển. */
+    swims: def?.sea === true,
+    pass: (x, y) => driveableFor(s, content, def, x, y),
     leash: { x: Math.floor((from.x + to.x) / 2), y: Math.floor((from.y + to.y) / 2), r: LEASH_TILES + 14 },
   });
   if (!path) return null;
@@ -116,7 +146,11 @@ export function sendVehicle(
   errand: NonNullable<Entity["veh"]>["errand"],
 ): number | null {
   const def = vehicleDef(content, defId);
-  const gate = content.tiles.gate;
+  /* Sinh ra ở ĐÚNG cổng của loại xe ấy: thuyền ngoài biển, xe ngoài đường.
+     Thiếu chỗ này thì con thuyền hiện ra giữa rừng, không ô nào quanh nó đi
+     được, và nó bị dọn đi ngay ở bước đầu tiên — biến mất trước khi người chơi
+     kịp thấy. */
+  const gate = (def?.sea ? content.tiles.seaGate : content.tiles.gate) ?? content.tiles.gate;
   if (!def || !gate) return null;
   if (gate.map !== d.s.mapId) return null;
   if (vehicleCount(d.s) >= MAX_VEHICLES) return null;
@@ -225,7 +259,9 @@ export function vehicleStep(
   const cur = d.s.entities[index];
   if (!cur?.veh) return false;
   const def = vehicleDef(content, cur.def);
-  const gate = content.tiles.gate;
+  /* THUYỀN ra vào bằng CỔNG BIỂN, xe bằng cổng đường. Cùng một máy trạng thái,
+     chỉ khác hai cái mốc. */
+  const gate = (def?.sea ? content.tiles.seaGate : content.tiles.gate) ?? content.tiles.gate;
   const drop = content.tiles.dropoff ?? content.tiles.spawn;
   if (!def || !gate) return false;
 
@@ -256,7 +292,7 @@ export function vehicleStep(
     }
     if (e.ai.path.length) return true;
     if (!takeBudget()) return true;
-    const p = drivePath(d.s, content, { x: cx, y: cy }, gate, box);
+    const p = drivePath(d.s, content, { x: cx, y: cy }, gate, box, def);
     if (p) e.ai.path = p;
     else removeEntity(d, e.id); // không về được thì thôi, đừng kẹt mãi
     return true;
@@ -278,7 +314,10 @@ export function vehicleStep(
     v.errand?.kind === "drop" && content.animals[v.errand.animal]?.housing === "water"
       ? pondDock(d.s, content)
       : null;
-  const spot = chocCa ?? freeParkSpot(d.s, content, e.id);
+  /* THUYỀN BUÔN cập BẾN ở cuối cầu tàu — một ô nước cố định trong content.
+     Nó không dùng bãi đậu: bãi nằm trước cửa kho, trên cạn. */
+  const ben = def.sea ? (content.tiles.dock ?? null) : null;
+  const spot = ben ?? chocCa ?? freeParkSpot(d.s, content, e.id);
   if (!spot) {
     v.wait = 2; // bãi đầy: chờ rồi hỏi lại
     return true;
@@ -288,14 +327,16 @@ export function vehicleStep(
   e.ai.ty = spot.y;
 
   if (Math.abs(cx - dich.x) + Math.abs(cy - dich.y) <= 1) {
-    v.wait = WAIT_MINUTES;
+    /* Thuyền ở lại LÂU HƠN hẳn: người chơi phải đi bộ xuống tận bến biển ở đáy
+       bản đồ, và một cái sạp mở mười hai phút thì tới nơi là nó đã nhổ neo. */
+    v.wait = def.sea ? (def.stayMinutes ?? WAIT_MINUTES) : WAIT_MINUTES;
     e.ai.phase = "wait";
     e.ai.path = [];
     return true;
   }
   if (e.ai.path.length) return true;
   if (!takeBudget()) return true;
-  const p = drivePath(d.s, content, { x: cx, y: cy }, dich, box);
+  const p = drivePath(d.s, content, { x: cx, y: cy }, dich, box, def);
   if (p && p.length) e.ai.path = p;
   else {
     // Không có đường vào — thường là người chơi chưa lát đường tới kho. Đứng
@@ -350,6 +391,10 @@ function doErrand(d: Draft, content: Content, index: number): void {
   if (!e?.veh?.errand) return;
   const er = e.veh.errand;
   const drop = content.tiles.dropoff ?? content.tiles.spawn;
+
+  /* THUYỀN chỉ đứng đó cho người chơi tới mua. Không thả hàng, không gom
+     hàng — cả `doErrand` với nó là một việc rỗng, và đó là đúng. */
+  if (er.kind === "shop") return;
 
   if (er.kind === "drop") {
     const def = content.animals[er.animal];
@@ -419,6 +464,25 @@ function doErrand(d: Draft, content: Content, index: number): void {
 /* ------------------------------------------------------------ sang ngày mới */
 
 /** Thỉnh thoảng cho một xe thu mua ghé, nếu kho có hàng. Gọi lúc sang ngày. */
+/**
+ * THUYỀN BUÔN có ghé hôm nay không.
+ *
+ * Cứ ba ngày một lần, và tính THẲNG TỪ `day` chứ không rút xúc xắc: người chơi
+ * phải ĐOÁN ĐƯỢC hôm nào thuyền tới thì mới có lý do đi bộ xuống tận bến biển
+ * ở đáy bản đồ. Một sự kiện ngẫu nhiên ở một nơi đi mất hai phút thì không ai
+ * đi lần thứ hai.
+ *
+ * Nó cũng không cần điều kiện gì khác: thuyền đến để BÁN, nên kho trống hay
+ * đầy đều không liên quan — khác hẳn xe thu mua.
+ */
+export function maybeSendBoat(d: Draft, content: Content): boolean {
+  const def = content.vehicles["boat"];
+  if (!def || !content.tiles.seaGate || !content.tiles.dock) return false;
+  if (d.s.day % 3 !== 0) return false;
+  if (vehicleCount(d.s) >= MAX_VEHICLES) return false;
+  return sendVehicle(d, content, "boat", { kind: "shop" }) !== null;
+}
+
 export function maybeSendBuyer(d: Draft, content: Content): boolean {
   if (!content.vehicles["buyer"]) return false;
   // Có hàng BÁN ĐƯỢC — không chỉ nông sản. Một kho đầy sữa với len mà xe thu

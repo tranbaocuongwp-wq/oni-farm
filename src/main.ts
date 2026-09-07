@@ -57,7 +57,7 @@ import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tuto
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { INTERACT_SCAN, autoJob, facingTile, hintAt, interactHint, tileInfo, type Hint } from "./game/hint.ts";
+import { INTERACT_SCAN, autoJob, facingTile, hintAt, interactHint, tileInfo, type Hint, boatAt} from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
@@ -362,6 +362,7 @@ async function boot() {
 
   const menus = createMenus($("#modal-root"), atlas, () => store.getState(), () => content, {
     buy: (id, n) => store.dispatch({ t: "BUY", id, n }),
+    buyBoat: (id, n) => store.dispatch({ t: "BUY_BOAT", id, n }),
     drop: (slot) => store.dispatch({ t: "DROP", slot }),
     eat: (slot) => store.dispatch({ t: "EAT", slot }),
     swap: (a, b) => {
@@ -905,6 +906,17 @@ async function boot() {
   }
 
   function tryInteract(s: GameState, tx: number, ty: number): boolean {
+    /* THUYỀN BUÔN xét TRƯỚC vật thể trên lưới: cái sạp là chính con thuyền,
+       không phải một ô nào cả, nên `nearbyInteract` (thứ chỉ đọc lưới) không
+       bao giờ thấy nó. Và nó chỉ có mặt trong lúc thuyền còn cập bến, nên
+       không có nguy cơ nuốt mất một tương tác cố định nào. */
+    const px = Math.floor(s.player.x / TILE);
+    const py = Math.floor(s.player.y / TILE);
+    if (boatAt(s, px, py)) {
+      buzz("tap");
+      menus.openShopTab("boat");
+      return true;
+    }
     const hit = nearbyInteract(s, tx, ty);
     if (!hit) return false;
     buzz("tap");

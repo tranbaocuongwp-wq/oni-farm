@@ -12,7 +12,7 @@
    chơi thật (nó gọi đúng các hàm mà reducer gọi).
 ============================================================================ */
 
-import type { Content, GameState, InteractKind } from "./types.ts";
+import type { Content, GameState, InteractKind, Entity} from "./types.ts";
 import { canUseAt, putdownWouldTrap, type UseKind } from "./actions.ts";
 import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
@@ -23,6 +23,8 @@ import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
   | UseKind
+  /** sạp của THUYỀN BUÔN đang cập bến — chỉ có mặt khi con thuyền có mặt */
+  | "boat"
   | "shop"
   | "sell"
   | "craft"
@@ -55,6 +57,7 @@ export const LABEL: Record<Exclude<HintKind, null>, string> = {
   cure: "CHỮA",
   pull: "NHỔ",
   shop: "MUA",
+  boat: "THUYỀN BUÔN",
   sell: "BÁN",
   craft: "CHẾ",
   sleep: "NGỦ",
@@ -442,6 +445,22 @@ export function contextAction(
 
      Ngoại lệ: việc thuộc bậc 1 vẫn được phép thắng — cầm bao cám mà ngắm vào
      bụi cỏ thì ý định vẫn là cho gà ăn, không phải nhổ bụi cỏ ấy. */
+  /* THUYỀN BUÔN đang cập bến — xét TRƯỚC cửa thoát sớm ngay dưới.
+
+     Cái sạp là CHÍNH CON THUYỀN, không phải một ô nào cả, nên nó không đi qua
+     `interactNear` (thứ chỉ biết đọc vật thể trên lưới) mà hỏi thẳng danh sách
+     thực thể. Vì sao không đặt một vật thể "sạp" lên ô bến cho gọn: cái sạp
+     chỉ tồn tại trong lúc con thuyền còn đó, mà lưới ô nằm trong save và không
+     ai dọn nó đi khi thuyền nhổ neo — một cái sạp ma đứng lại giữa biển là thứ
+     không cách nào sửa từ phía người chơi.
+
+     Và nó phải đứng TRƯỚC bước 3, vì người mua đứng trên CẦU TÀU: ô dưới chân
+     có vật thể, nên bước 3 trả `null` và cả câu trả lời bị nuốt. Đứng ngay
+     cạnh con thuyền mà nút ghi "DÙNG" là đúng cảnh ấy. */
+  const th = boatAt(state, px, py);
+  if (th) xet("boat", { x: Math.floor(th.x / TILE), y: Math.floor(th.y / TILE) });
+  if (th && bestBac > 0) return best;
+
   const t0 = tileAt(state, x, y);
   const oNgamCoVat = !!state.carry || !!(t0 && (t0.prop || t0.crop || t0.b));
   if (oNgamCoVat && bestBac > 0) return null;
@@ -478,6 +497,23 @@ export function contextAction(
   return best;
 }
 
+
+/**
+ * THUYỀN BUÔN đang cập bến trong tầm với của (x,y), hoặc null.
+ *
+ * "Đang cập bến" = đã tới nơi và đang đứng chờ (`ai.phase === "wait"`). Thuyền
+ * còn đang bơi vào hay đã nhổ neo thì không mua bán gì được — người chơi nhìn
+ * thấy nó ngoài xa mà nút vẫn sáng là một lời hứa suông.
+ */
+export function boatAt(state: GameState, x: number, y: number): Entity | null {
+  for (const e of state.entities) {
+    if (e.kind !== "vehicle" || e.map !== state.mapId) continue;
+    if (e.veh?.errand?.kind !== "shop" || e.ai.phase !== "wait") continue;
+    const d = Math.max(Math.abs(Math.floor(e.x / TILE) - x), Math.abs(Math.floor(e.y / TILE) - y));
+    if (d <= INTERACT_SCAN) return e;
+  }
+  return null;
+}
 
 /**
  * Việc đáng làm nhất ở KHU quanh (x,y), kèm ô phải đứng để làm.

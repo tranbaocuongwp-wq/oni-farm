@@ -36,6 +36,8 @@ import { workerCard } from "../game/workers.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
+  /** mua từ THUYỀN BUÔN đang cập bến */
+  buyBoat(id: string, n: number): void;
   /** Đổi chỗ hai ô túi đồ (balo ⇄ hotbar). */
   swap(a: number, b: number): void;
   /** Bỏ hẳn một ô túi đồ. */
@@ -118,6 +120,8 @@ export interface Menus {
   isOpen(): boolean;
   close(): void;
   openShop(): void;
+  /** Mở cửa hàng NGAY tại một tab — thuyền buôn mở thẳng sạp của nó. */
+  openShopTab(tab: "seed" | "feed" | "build" | "animal" | "worker" | "boat"): void;
   openSell(): void;
   openStore(): void;
   openCraft(): void;
@@ -144,6 +148,8 @@ export interface Menus {
 const money = (n: number) => `${n.toLocaleString("vi-VN")}đ`;
 
 /** Tên hiển thị của một id vật phẩm — kho trộn cả nông sản lẫn nguyên liệu. */
+import { boatAt } from "../game/hint.ts";
+
 function itemLabel(id: string, c: Content): string {
   if (id.startsWith("crop:")) return c.crops[id.slice(5)]?.name ?? id;
   if (id.startsWith("item:")) return c.materials[id.slice(5)]?.name ?? id;
@@ -162,7 +168,7 @@ export function createMenus(
 ): Menus {
   let current: (() => void) | null = null;
   /** tab đang chọn của cửa hàng — nhớ giữa các lần mở */
-  let shopTab: "seed" | "feed" | "build" | "animal" | "worker" = "seed";
+  let shopTab: "seed" | "feed" | "build" | "animal" | "worker" | "boat" = "seed";
   /** số lượng đang chọn ở quầy bán, theo id */
   const sellQty = new Map<string, number>();
 
@@ -496,6 +502,7 @@ export function createMenus(
       build: "Bảng giá công trình",
       animal: "Chợ vật nuôi",
       worker: "Nhà môi giới việc làm",
+      boat: "Sạp trên thuyền buôn",
     };
     const { body, foot } = shell(TEN_TAB[shopTab], `Bạn có ${money(s.money)}`, "sheet");
 
@@ -517,6 +524,14 @@ export function createMenus(
     mkTab("build", "Xây");
     mkTab("animal", "Vật nuôi");
     mkTab("worker", "Thợ");
+    /* Tab THUYỀN chỉ có mặt khi con thuyền có mặt. Bày một tab rỗng quanh năm
+       là hứa một thứ không tồn tại; bày nó ĐÚNG lúc thuyền cập bến thì chính
+       cái tab hiện ra là lời báo "hôm nay có hàng lạ". */
+    const thuyen = boatAt(getState(), 
+      Math.floor(getState().player.x / 16),
+      Math.floor(getState().player.y / 16));
+    if (thuyen) mkTab("boat", "Thuyền");
+    else if (shopTab === "boat") shopTab = "seed";
     body.appendChild(tabs);
 
     if (shopTab === "seed") {
@@ -602,6 +617,39 @@ export function createMenus(
           coMon
             ? "Thức ăn: đổ vào MÁNG trong khu chuồng, hoặc rắc xuống mặt hồ cho cá — con vật tự tới ăn. Ống nước, tấm kính: mang về bàn chế tạo để làm vòi tưới, sàn nhà kính."
             : "Chưa có vật tư nào bày bán.",
+        ),
+      );
+    } else if (shopTab === "boat") {
+      /* SẠP TRÊN THUYỀN: món ở đây là thứ cửa hàng trên bờ KHÔNG BAO GIỜ bán —
+         gỗ, đá, sợi cỏ. Đó là toàn bộ lý do con thuyền tồn tại: nó bán cái mà
+         nông trại chỉ có được bằng cách bổ củi và đập đá.
+
+         Giá cao hơn giá bán lại, nên không có kẽ hở mua đi bán lại kiếm lời —
+         nó mua cho bạn THỜI GIAN, không mua cho bạn tiền. */
+      const gb = cardGrid();
+      const ban = thuyen ? (c.vehicles[thuyen.def]?.sells ?? []) : [];
+      for (const mon of ban) {
+        const ten = itemLabel(mon.id, c);
+        gb.appendChild(
+          buyCard({
+            art: mon.id,
+            name: ten,
+            subs: ["từ ngoài biển"],
+            price: money(mon.price),
+            disabled: s.money < mon.price,
+            onClick: () => {
+              h.buyBoat(mon.id, 1);
+              openShop();
+            },
+          }),
+        );
+      }
+      body.appendChild(gb);
+      foot.appendChild(
+        note(
+          ban.length
+            ? "Thuyền ghé ba ngày một lần và đậu ở bến biển cuối cầu tàu. Hàng ở đây không có ở cửa hàng nào trên bờ."
+            : "Thuyền không mang hàng gì.",
         ),
       );
     } else if (shopTab === "worker") {
@@ -1894,6 +1942,10 @@ export function createMenus(
     isOpen: () => root.classList.contains("open"),
     close,
     openShop,
+    openShopTab(tab) {
+      shopTab = tab;
+      openShop();
+    },
     openPadHelp,
     openSell,
     openStore,

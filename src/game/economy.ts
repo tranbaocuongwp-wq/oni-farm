@@ -7,10 +7,12 @@
 
 import type { Content } from "./types.ts";
 import type { Draft } from "./state.ts";
-import { dStats, setInv, toastKey, touch } from "./state.ts";
+import { dStats, setInv, toastKey, toastText, touch } from "./state.ts";
 import { addItem, canAdd, countItem, sellSlots, removeItem } from "./inventory.ts";
 import { buyPriceOf, itemName, sellPriceOf, shopItemId } from "./items.ts";
 import { cropInSeason } from "./season.ts";
+import { boatAt } from "./hint.ts";
+import { TILE } from "./world.ts";
 
 /* Không còn `canBuy`: cửa hàng bán tất, điều kiện duy nhất là TIỀN — và tiền
    thì `buy()` kiểm ngay dưới đây. Giữ một hàm luôn trả true chỉ tổ làm nơi gọi
@@ -47,6 +49,45 @@ export function buy(d: Draft, content: Content, id: string, n: number): void {
   setInv(d, r.inv);
   touch(d).money = d.s.money - cost;
   toastKey(d, content, "bought", "good", `${itemName(itemIdent, content)} ×${count}`);
+}
+
+/**
+ * MUA TỪ THUYỀN BUÔN.
+ *
+ * Đường riêng, không đi qua `buy`, và có lý do: giá ở đây là giá CỦA CON
+ * THUYỀN (khai trong `vehicles.boat.sells`), còn `buy` thì hỏi `buyPriceOf` —
+ * bảng giá của cửa hàng trên bờ. Gỗ, đá, sợi cỏ không có giá mua ở cửa hàng
+ * nào cả (đó chính là điều làm chúng thành "hàng đặc biệt"), nên đi qua `buy`
+ * thì `unit <= 0` và cú bấm rơi vào hư không.
+ *
+ * Ba cổng, theo đúng thứ tự người chơi gặp: thuyền phải CÒN ĐÓ, phải bán món
+ * ấy, và túi phải còn chỗ — kiểm chỗ trước khi trừ tiền, như mọi lối mua khác.
+ */
+export function buyFromBoat(d: Draft, content: Content, id: string, n: number): void {
+  const count = Math.floor(n);
+  if (!Number.isFinite(count) || count <= 0) return;
+
+  const th = boatAt(d.s, Math.floor(d.s.player.x / TILE), Math.floor(d.s.player.y / TILE));
+  if (!th) {
+    toastText(d, "Thuyền buôn đã nhổ neo.", "bad");
+    return;
+  }
+  const mon = (content.vehicles[th.def]?.sells ?? []).find((v) => v.id === id);
+  if (!mon || mon.price <= 0) return;
+
+  const cost = mon.price * count;
+  if (d.s.money < cost) {
+    toastKey(d, content, "noMoney", "bad");
+    return;
+  }
+  if (!canAdd(d.s.inv, id, count)) {
+    toastKey(d, content, "invFull", "bad");
+    return;
+  }
+  const r = addItem(d.s.inv, id, count);
+  setInv(d, r.inv);
+  touch(d).money = d.s.money - cost;
+  toastKey(d, content, "bought", "good", `${itemName(id, content)} ×${count}`);
 }
 
 export function sell(d: Draft, content: Content, id: string, n: number): void {

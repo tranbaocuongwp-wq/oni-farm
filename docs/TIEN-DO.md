@@ -29,6 +29,7 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 
 | Đợt | Core | Content | Nội dung | Kịch bản mới | Đột biến đã cấy |
 |---|---|---|---|---|---|
+| 20 | 1.47.0 | 1.47.0 | **THUYỀN BUÔN**: ghé bến biển ba ngày một lần, bán gỗ/đá/sợi cỏ — thứ cửa hàng trên bờ không bao giờ có. Dùng chung bộ máy với xe tải, khác đúng một cờ `sea`; kéo theo bốn chỗ từng ngầm định "xe chạy trên cạn" (sinh ở cổng nào, đi bằng luật nào, hộp va chạm hỏi luật nào, bất biến hiểu nước là gì) | 145 | 5 |
 | 19 | 1.46.0 | 1.46.0 | Xe vào từ cổng ở mép PHẢI, vòng qua rừng Nam và **qua sông** rồi mới lên kho (80 bước); tách CẦU ĐƯỜNG (xe chạy được) khỏi cầu tàu đi bộ; bất biến thôi chặn xe ở trần đường đi của con vật | 144 | 3 |
 | 18 | 1.45.0 | 1.45.0 | Cổng ra MÉP PHẢI bản đồ — xe thôi hiện ra giữa đồng (Đợt 17 nối đất xuống dưới làm cổng cũ thành ra giữa bản đồ); biển hiệu gắn thẳng lên mặt tiền công trình lớn thay cho tấm ván cắm bên cạnh; sông có bốn lối qua thay vì một; gỡ một khối kiểm biển bị **lặp nguyên văn** trong `validatePack` | 143 | 3 |
 | 17 | 1.44.0 | 1.44.0 | **Bản đồ cao gấp đôi**: 48×37 → 48×73, nối thêm xuống DƯỚI nên save cũ giữ nguyên từng ô; sông cắt ngang có cầu gỗ; đất mới để giãn công trình; rừng Nam là khu chặt được thật; biển và cầu tàu ở đáy bản đồ | 142 | 4 |

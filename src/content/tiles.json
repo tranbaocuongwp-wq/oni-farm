@@ -608,5 +608,15 @@
       "text": "Rừng",
       "side": "e"
     }
-  ]
+  ],
+  "seaGate": {
+    "map": "farm",
+    "x": 45,
+    "y": 71
+  },
+  "dock": {
+    "map": "farm",
+    "x": 30,
+    "y": 68
+  }
 }

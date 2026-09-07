@@ -203,6 +203,20 @@ export interface VehicleDef {
   /** chở được bao nhiêu món */
   capacity: number;
   speed: number;
+  /**
+   * ĐI TRÊN NƯỚC thay vì trên đường.
+   *
+   * Thuyền buôn ngoài biển dùng CÙNG bộ máy với xe tải — sinh ở cổng, đi tới
+   * đích, làm việc, rồi đi ra — và khác đúng một câu hỏi: "ô này đi được
+   * không". Tách bằng một cờ chứ không bằng một hệ thống thứ hai, vì mọi thứ
+   * còn lại (hàng đợi, ngân sách A*, trần đường đi, dọn xác lúc ra khỏi bản
+   * đồ) đều đã đúng sẵn.
+   */
+  sea?: boolean;
+  /** Bán những món này khi đang cập bến. Giá của THUYỀN, không phải giá chợ. */
+  sells?: { id: string; price: number }[];
+  /** Cập bến bao nhiêu phút game rồi nhổ neo. */
+  stayMinutes?: number;
   box: { w: number; h: number };
   /** xe thu mua trả cao hơn quầy bao nhiêu phần (0,15 = +15%) */
   buyBonus?: number;
@@ -640,6 +654,10 @@ export interface TilesDef {
   spawn: { map: string; x: number; y: number };
   /** CỔNG: ô ở mép bản đồ mà xe từ ngoài đi vào. Thiếu thì không có xe nào. */
   gate?: { map: string; x: number; y: number };
+  /** Cổng BIỂN: thuyền buôn ra vào bằng đây, không phải cổng đường. */
+  seaGate?: { map: string; x: number; y: number };
+  /** BẾN: ô nước ở cuối cầu tàu, chỗ thuyền cập vào mở sạp. */
+  dock?: { map: string; x: number; y: number };
   /**
    * BÃI ĐẬU trước kho — chỗ xe thu mua dừng lại.
    *
@@ -1058,7 +1076,12 @@ export interface VehicleState {
    *   · `drop` — thả con vật này xuống (xe giao hàng)
    *   · `buy`  — mua sạch nông sản trong kho (xe thu mua)
    */
-  errand: { kind: "drop"; animal: string } | { kind: "buy" } | null;
+  errand:
+    | { kind: "drop"; animal: string }
+    | { kind: "buy" }
+    /** THUYỀN BUÔN: cập bến, mở sạp, rồi nhổ neo. Không chở gì cả. */
+    | { kind: "shop" }
+    | null;
   /** phút game còn phải đứng chờ */
   wait: number;
   /** đã làm xong việc chưa — xong thì quay ra khỏi bản đồ */
@@ -1263,6 +1286,8 @@ export type Action =
   | { t: "STORE_SELL_ALL" }
   /** Mua và thả một con vật xuống (x,y) của bản đồ đang chơi. */
   | { t: "BUY_ANIMAL"; def: string }
+  /** mua từ THUYỀN BUÔN đang cập bến — giá của thuyền, không phải giá chợ */
+  | { t: "BUY_BOAT"; id: string; n: number }
   /** Cho con vật gần ô (x,y) ăn. */
   /** Thu sữa/trứng/lông của con vật gần ô (x,y). */
   | { t: "GATHER"; x: number; y: number }
