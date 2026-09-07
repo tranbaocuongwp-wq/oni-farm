@@ -9426,6 +9426,100 @@ test("139. BẢN ĐỒ NHỎ chỉ vẽ lại ô ĐỔI MÀU, và ảnh vẽ d�
   }
 });
 
+test("140. CÔNG TRÌNH NHIỀU Ô: chợ và quầy là một dãy, bấm ở ô nào cũng trúng", () => {
+  /* Chợ và quầy từng là MỘT ô 16×16 đứng lẻ giữa sân — nhỏ hơn cả cái ghế
+     băng cạnh nó, và nhìn không ra một nơi để mua bán. Giờ chúng là công trình
+     NHIỀU Ô (`prop.block`) và cao hai ô (`prop.tall`).
+
+     Ba điều phải đúng cùng lúc, và kịch bản này canh cả ba:
+
+       · MỖI ô của dãy đều là một cửa tương tác thật. Vẽ to ra mà chỉ ô giữa
+         bấm được thì người chơi đứng trước hai ô kia sẽ tưởng game hỏng.
+       · Dãy KHÔNG lấn vào ba ô nghiệp vụ: điểm giao hàng và ba chỗ đậu xe.
+         Lấn một ô thôi là xe không đỗ được, và cả hệ giao hàng chết lặng.
+       · Vẫn ĐI TỚI ĐƯỢC: một cái quầy bị bịt là một cái quầy không tồn tại. */
+
+  const s0 = mkStore().getState();
+
+  const oCua = (id) => {
+    const out = [];
+    for (let y = 0; y < s0.h; y++)
+      for (let x = 0; x < s0.w; x++) if (tileAt(s0, x, y)?.prop === id) out.push({ x, y });
+    return out;
+  };
+
+  for (const [id, kind] of [["shop", "shop"], ["counter", "sell"]]) {
+    const o = oCua(id);
+    ok(o.length >= 2, `${id} phải là công trình NHIỀU ô, đang có ${o.length}`);
+    ok(content.props[id].block === true, `${id} phải khai block: true để tự nối`);
+    ok(content.props[id].tall === true, `${id} phải khai tall: true — dãy nhà cao hai ô`);
+
+    /* Một DÃY LIỀN, cùng một hàng: `makeBlockTile` chỉ nối trái–phải, nên một
+       ô rời ra sẽ vẽ thành cái hộp đứng lẻ y như bản cũ. */
+    const hang = new Set(o.map((p) => p.y));
+    eq(hang.size, 1, `${id} phải nằm gọn trên MỘT hàng (đang trải ${hang.size} hàng)`);
+    const xs = o.map((p) => p.x).sort((a, b) => a - b);
+    for (let i = 1; i < xs.length; i++)
+      eq(xs[i], xs[i - 1] + 1, `${id}: các ô phải LIỀN nhau, đứt quãng ở x=${xs[i - 1]}`);
+
+    /* MỌI ô của dãy đều bấm được — ĐI TỚI đứng ngay dưới ô đó rồi hỏi.
+
+       Phải đi thật, không được chỉ truyền toạ độ: `contextAction` quét vật thể
+       biết nói chuyện quanh CHÂN NHÂN VẬT (`interactNear(px, py)`), không quanh
+       ô được truyền vào. Truyền toạ độ mà để nhân vật đứng nguyên chỗ cũ thì
+       câu trả lời nói về chỗ CŨ — tôi đã tự bẫy mình đúng chỗ này: nhân vật
+       còn đứng cạnh cửa nhà nên mọi ô hỏi đều ra "VÀO". */
+    for (const p of o) {
+      const duoi = { x: p.x, y: p.y + 1 };
+      ok(
+        tileAt(s0, duoi.x, duoi.y) && !isSolid(s0, content, duoi.x, duoi.y),
+        `phải đứng được dưới ô ${id} (${p.x},${p.y})`,
+      );
+      const st = mkStore();
+      ok(walkTo(st, duoi.x, duoi.y) !== false, `đi tới được ô đứng dưới ${id} (${p.x},${p.y})`);
+      const pl = st.getState().player;
+      const ca = contextAction(
+        st.getState(),
+        content,
+        Math.floor(pl.x / TILE),
+        Math.floor(pl.y / TILE),
+      );
+      eq(
+        ca?.kind,
+        kind,
+        `đứng dưới ô ${id} (${p.x},${p.y}) thì nút chính phải là ${kind}, đang là ${ca?.kind}`,
+      );
+    }
+  }
+
+  /* --- BA Ô NGHIỆP VỤ không được đụng vào -------------------------------
+     Điểm giao là nơi xe thả hàng; ba chỗ đậu là nơi xe đứng. Đặt công trình
+     đè lên bất kỳ ô nào trong đó thì xe không bao giờ tới nơi được, mà lỗi ấy
+     không hiện ra cho tới lúc người chơi mua con vật đầu tiên. */
+  const drop = content.tiles.dropoff;
+  const spots = content.tiles.parking.spots;
+  for (const [ten, o] of [["điểm giao", drop], ...spots.map((p, i) => [`chỗ đậu ${i + 1}`, p])]) {
+    const t = tileAt(s0, o.x, o.y);
+    ok(t, `${ten} (${o.x},${o.y}) phải là một ô có thật`);
+    eq(t.prop, null, `${ten} (${o.x},${o.y}) không được bị công trình đè lên`);
+    ok(driveable(s0, content, o.x, o.y), `${ten} (${o.x},${o.y}) xe phải đỗ được`);
+  }
+
+  /* --- Quầy vẫn SÁT điểm giao, đo từ ô GẦN NHẤT của dãy ---------------- */
+  const quay = oCua("counter");
+  const gan = Math.min(...quay.map((p) => Math.abs(p.x - drop.x) + Math.abs(p.y - drop.y)));
+  ok(gan <= 3, `ô quầy gần điểm giao nhất phải trong 3 ô, đang cách ${gan}`);
+
+  /* --- Và vẫn ĐI TỚI ĐƯỢC bằng chân, không phải dịch chuyển ------------ */
+  for (const [ten, at] of [["chợ", AT_SHOP], ["quầy", AT_COUNTER]]) {
+    const st = mkStore();
+    walkTo(st, at.x, at.y);
+    const p = st.getState().player;
+    eq(Math.floor(p.x / TILE), at.x, `đi bộ tới được chỗ đứng của ${ten} (x)`);
+    eq(Math.floor(p.y / TILE), at.y, `đi bộ tới được chỗ đứng của ${ten} (y)`);
+  }
+});
+
 /* ------------------------------------------------------------------ tổng kết */
 
 await Promise.all(choDoi);

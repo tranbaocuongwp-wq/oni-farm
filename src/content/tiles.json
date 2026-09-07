@@ -486,10 +486,10 @@
     },
     {
       "map": "farm",
-      "x": 39,
+      "x": 36,
       "y": 5,
       "text": "Quầy thu mua",
-      "side": "w"
+      "side": "e"
     },
     {
       "map": "farm",

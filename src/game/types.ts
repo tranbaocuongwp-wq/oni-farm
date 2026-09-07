@@ -366,6 +366,20 @@ export interface PropDef {
   /** Cao 2 ô (cây lớn) — renderer vẽ tràn lên ô phía trên. */
   tall?: boolean;
   /**
+   * CÔNG TRÌNH NHIỀU Ô tự nối: mỗi ô nhìn hai ô kề TRÁI–PHẢI cùng id để chọn
+   * hình (đầu trái · thân · đầu phải · đứng một mình).
+   *
+   * Vì sao cần: chợ và quầy thu mua từng là một ô 16×16 đứng lẻ giữa sân, nhỏ
+   * hơn cả cái ghế băng cạnh nó — nhìn không ra một nơi để mua bán. Nhà thì đã
+   * có cơ chế tự nối riêng (`houseVariantKey`), nhưng nó gắn cứng bảng màu của
+   * NGÔI NHÀ. Cờ này là bản dùng chung: mọi vật thể bật nó đều tự nối, và tự
+   * nối bằng MÀU CỦA CHÍNH NÓ trong content.
+   *
+   * Đi cùng `tall` thì thành một dãy nhà cao hai ô — đó là cách chợ và quầy
+   * đang dùng.
+   */
+  block?: boolean;
+  /**
    * CHỖ ĐỨNG trong ô. `tall` nói chuyện CHIỀU CAO lúc vẽ; `place` nói chuyện
    * ô có bị CHIẾM hay không — hai câu hỏi khác nhau, nên là hai trường khác
    * nhau.

@@ -43,6 +43,7 @@ import {
   PLAYER_ACT_FRAME,
   PLAYER_RAISE_FRAME,
   houseVariantKey,
+  blockVariantKey,
   tileMaskKey,
   variantFor,
   type Atlas,
@@ -485,8 +486,19 @@ export function createRenderer(
              không dùng hình tĩnh trong `atlas.props`. Máng cạn và máng đầy phải
              nhìn ra khác nhau từ bên kia sân, nếu không thì người chơi không có
              cách nào biết vì sao đàn bò đang đói. */
-          const img =
-            t.prop === "trough"
+          /* CÔNG TRÌNH NHIỀU Ô (`prop.block`): chọn hình theo hai ô kề TRÁI–PHẢI
+             cùng loại, nên ba ô chợ kề nhau ra một dãy nhà chứ không phải ba
+             cái hộp giống hệt đứng cạnh nhau. Cùng khuôn với hàng rào tự nối,
+             chỉ khác là nó chỉ nhìn ngang — xem `makeBlockTile`. */
+          const khoi = content.props[t.prop]?.block ? atlas.blocks[t.prop] : undefined;
+          const img = khoi
+            ? khoi.get(
+                blockVariantKey(
+                  s.tiles[y * s.w + x - 1]?.prop === t.prop && x > 0,
+                  s.tiles[y * s.w + x + 1]?.prop === t.prop && x < s.w - 1,
+                ),
+              )
+            : t.prop === "trough"
               ? atlas.trough(t.troughId ?? null, mucAn(content, t.trough ?? 0))
               : atlas.props[t.prop];
           if (img) {

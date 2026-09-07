@@ -150,8 +150,10 @@
     },
     {
       "id": "shop",
-      "name": "Máy bán hạt giống",
+      "name": "Chợ hạt giống",
       "solid": true,
+      "tall": true,
+      "block": true,
       "interact": "SHOP",
       "art": {
         "body": "#b8c6d4",
@@ -163,6 +165,8 @@
       "id": "counter",
       "name": "Quầy thu mua",
       "solid": true,
+      "tall": true,
+      "block": true,
       "interact": "SELL",
       "art": {
         "body": "#7a5230",

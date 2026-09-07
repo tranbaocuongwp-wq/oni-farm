@@ -2487,6 +2487,8 @@ export interface Atlas {
   props: Record<string, HTMLCanvasElement>;
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
+  /** vật thể NHIỀU Ô tự nối (`prop.block`): id → (khoá trái-phải → sprite) */
+  blocks: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật nuôi: dựng LƯỜI ở lần dùng đầu tiên để thời gian khởi động không đổi */
   animal(defId: string, dir: PlayerDir, frame: number, pose?: AnimalPose): HTMLCanvasElement | null;
   /** Bong bóng cảm xúc 9×9 nổi trên đầu con vật / người làm. */
@@ -2575,6 +2577,67 @@ function makeFence(art: { body: string; dark: string; accent: string }, n: Neigh
   s.hline(6, TOP, 4, art.accent);
   s.shadow(8, TILE - 1, 3, 1.2);
   return outline(s).c;
+}
+
+/**
+ * MỘT Ô của một công trình nhiều ô tự nối (`prop.block`).
+ *
+ * Cao hai ô: nửa trên là MÁI, nửa dưới là MẶT TIỀN. Một dãy ba–bốn ô kề nhau
+ * ra một dãy nhà, thay vì ba–bốn cái hộp 16×16 đứng rời.
+ *
+ * Chỉ nhìn TRÁI–PHẢI, không nhìn trên–dưới. Vì sao: một công trình cao hai ô
+ * đã chiếm sẵn ô phía trên bằng phần vẽ tràn lên, nên xếp chồng hai hàng là
+ * chồng mái lên mái. Nối theo chiều ngang thì một hàng ô là một dãy phố —
+ * đúng hình dạng của chợ và của quầy thu mua.
+ *
+ * Màu lấy từ `art` của CHÍNH vật thể trong content, không gắn cứng như
+ * `makeHouseTile`. Nhờ vậy thêm một công trình nhiều ô nữa chỉ là thêm một
+ * object JSON có `block: true`.
+ */
+function makeBlockTile(art: PropArt, left: boolean, right: boolean): HTMLCanvasElement {
+  const H = TILE * 2;
+  const s = surface(TILE, H);
+  const than = art.body;
+  const toi = art.dark;
+  const sang = lighten(art.body);
+  const nhan = art.accent;
+
+  const MAI = 7; // mái chiếm 7px trên cùng của nửa trên
+
+  /* ---- MÁI ---- */
+  s.rect(0, 2, TILE, MAI, toi);
+  s.hline(0, 2, TILE, sang); // sống mái bắt sáng
+  s.hline(0, MAI + 1, TILE, shade(toi, 0.75)); // bóng dưới diềm
+  // Diềm mái nhô ra ở hai ĐẦU dãy — đó là thứ cho biết dãy nhà bắt đầu/kết thúc.
+  if (!left) s.vline(0, 2, MAI, shade(toi, 0.72));
+  if (!right) s.vline(TILE - 1, 2, MAI, shade(toi, 0.72));
+
+  /* ---- THÂN ---- */
+  const T = MAI + 2;
+  s.rect(0, T, TILE, H - T - 1, than);
+  if (!left) s.vline(0, T, H - T - 1, shade(than, 0.72));
+  if (!right) s.vline(TILE - 1, T, H - T - 1, shade(than, 0.72));
+
+  /* ---- BẠT CHE: sọc màu nhấn, chạy suốt dãy ---- */
+  s.rect(0, T, TILE, 3, nhan);
+  for (let x = left ? 0 : 1; x < TILE; x += 4) s.rect(x, T, 2, 3, shade(nhan, 0.72));
+  s.hline(0, T + 3, TILE, shade(nhan, 0.6));
+
+  /* ---- MẶT TIỀN: quầy gỗ + khoảng tối bên trong ---- */
+  const Q = T + 5;
+  s.rect(1, Q, TILE - 2, H - Q - 2, shade(than, 0.45)); // trong nhà, tối
+  s.hline(1, Q, TILE - 2, shade(than, 0.62));
+  // mặt quầy chìa ra
+  s.rect(0, H - 4, TILE, 3, sang);
+  s.hline(0, H - 4, TILE, lighten(sang));
+  s.hline(0, H - 2, TILE, toi);
+  s.shadow(TILE / 2, H - 1, 7, 1.4);
+  return outline(s).c;
+}
+
+/** Khoá biến thể của một ô công trình nhiều ô: chỉ trái–phải. */
+export function blockVariantKey(left: boolean, right: boolean): string {
+  return `${left ? 1 : 0}${right ? 1 : 0}`;
 }
 
 function houseKey(n: Neighbors, door: boolean): string {
@@ -3658,9 +3721,19 @@ export function buildAtlas(content: Content): Atlas {
 
   const FALLBACK_ART: PropArt = { body: "#8a8f98", dark: "#4a4f56", accent: "#c8cfdb" };
   const props: Record<string, HTMLCanvasElement> = {};
+  const blocks: Record<string, Map<string, HTMLCanvasElement>> = {};
   for (const id of content.propOrder) {
     if (id === "house" || id === "door") continue;
-    props[id] = makeProp(id, content.props[id]?.art ?? FALLBACK_ART);
+    const art = content.props[id]?.art ?? FALLBACK_ART;
+    props[id] = makeProp(id, art);
+    /* Vật thể NHIỀU Ô: dựng sẵn cả bốn biến thể (đứng lẻ · đầu trái · thân ·
+       đầu phải). Bốn hình cho mỗi loại — rẻ hơn hẳn việc dựng lại lúc vẽ. */
+    if (content.props[id]?.block) {
+      const m = new Map<string, HTMLCanvasElement>();
+      for (const l of [false, true])
+        for (const r of [false, true]) m.set(blockVariantKey(l, r), makeBlockTile(art, l, r));
+      blocks[id] = m;
+    }
   }
 
   /* Máng và mẻ cám dựng LƯỜI: bốn mức × mỗi món là vài chục hình, mà một ván
@@ -3713,6 +3786,7 @@ export function buildAtlas(content: Content): Atlas {
   return {
     grass, path, asphalt, concrete, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
     autotiles,
+    blocks,
     animal: animalOf,
     emote: emoteOf,
     worker: workerOf,
