@@ -155,8 +155,8 @@
   },
   "gate": {
     "map": "farm",
-    "x": 30,
-    "y": 36
+    "x": 47,
+    "y": 26
   },
   "parking": {
     "map": "farm",
@@ -484,23 +484,26 @@
     {
       "map": "farm",
       "x": 15,
-      "y": 4,
+      "y": 2,
       "text": "Nhà",
-      "side": "e"
+      "w": 8,
+      "style": "facade"
     },
     {
       "map": "farm",
       "x": 25,
-      "y": 4,
+      "y": 3,
       "text": "Chợ",
-      "side": "e"
+      "w": 3,
+      "style": "facade"
     },
     {
       "map": "farm",
-      "x": 36,
+      "x": 39,
       "y": 5,
       "text": "Quầy thu mua",
-      "side": "e"
+      "w": 2,
+      "style": "facade"
     },
     {
       "map": "farm",
@@ -539,10 +542,11 @@
     },
     {
       "map": "farm",
-      "x": 38,
-      "y": 4,
+      "x": 39,
+      "y": 2,
       "text": "Kho",
-      "side": "e"
+      "w": 6,
+      "style": "facade"
     },
     {
       "map": "farm",

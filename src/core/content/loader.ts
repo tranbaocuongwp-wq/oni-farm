@@ -220,15 +220,39 @@ export function validatePack(raw: RawPack): string[] {
     if (oCoBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
     oCoBien.add(key);
     const oBien = tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."];
-    /* KHÔNG cắm biển ra giữa lòng đường: một tấm biển đứng giữa mặt đường thì
-       nhìn ra là vật cản chứ không ra vật chỉ đường. */
-    if (oBien?.ground === "asphalt")
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
-    /* Và không cắm vào ô ĐẶC hay xuống nước: chỗ đó không ai đứng tới đọc. */
-    if (oBien?.ground === "water")
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm dưới nước`);
-    if (oBien?.prop && props.find((q) => q.id === oBien.prop)?.solid)
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) bị vật thể '${oBien.prop}' che kín`);
+    if (sg.style === "facade") {
+      /* BIỂN HIỆU MẶT TIỀN đảo ngược mọi luật dưới đây: nó GẮN LÊN công trình,
+         nên ô của nó BẮT BUỘC phải có một vật thể đặc. Cắm nó ra bãi cỏ thì
+         dòng chữ lơ lửng giữa trời, không dính vào cái gì. */
+      const vt = oBien?.prop ? props.find((q) => q.id === oBien.prop) : null;
+      if (!vt?.solid)
+        errors.push(
+          `tiles.signs '${sg.text}': biển MẶT TIỀN phải nằm trên một công trình đặc, ` +
+            `ô (${sg.x},${sg.y}) đang là '${oBien?.prop ?? oBien?.ground ?? "trống"}'`,
+        );
+      /* …và phải phủ đúng bề ngang công trình: mọi ô trong `w` phải cùng loại
+         vật thể ấy, nếu không dòng chữ tràn ra ngoài mái. */
+      const rong = sg.w ?? 1;
+      for (let k = 0; k < rong; k++) {
+        const ch = sm.rows[sg.y]?.[sg.x + k];
+        if (tilesDef.legend[ch ?? "."]?.prop !== oBien?.prop) {
+          errors.push(
+            `tiles.signs '${sg.text}': khai rộng ${rong} ô nhưng ô (${sg.x + k},${sg.y}) không phải '${oBien?.prop}'`,
+          );
+          break;
+        }
+      }
+    } else {
+      /* KHÔNG cắm biển ra giữa lòng đường: một tấm biển đứng giữa mặt đường thì
+         nhìn ra là vật cản chứ không ra vật chỉ đường. */
+      if (oBien?.ground === "asphalt")
+        errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
+      /* Và không cắm vào ô ĐẶC hay xuống nước: chỗ đó không ai đứng tới đọc. */
+      if (oBien?.ground === "water")
+        errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm dưới nước`);
+      if (oBien?.prop && props.find((q) => q.id === oBien.prop)?.solid)
+        errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) bị vật thể '${oBien.prop}' che kín`);
+    }
     /* BIỂN CỦA MỘT KHU PHẢI ĐỨNG BÊN TRONG CHÍNH KHU ĐÓ.
        Cắm ra con ngõ giữa hai lô thì nó thành biển của con ngõ: lô nào cũng
        đọc thấy mà chẳng lô nào nhận, và ngõ rộng đúng một ô nên tấm biển
@@ -393,70 +417,6 @@ export function validatePack(raw: RawPack): string[] {
     if (cayDuoc === 0)
       errors.push(`tiles.zones '${z.id}': khu ruộng không có ô nào cuốc được`);
   }
-
-  /* ---- BIỂN CẮM -------------------------------------------------------
-     Biển ĐỨNG Ở MÉP Ô: `place: "edge"` trong props.json, nghĩa là nó KHÔNG
-     chiếm ô nào. Lưới chỉ có đúng một chỗ cho vật thể ở mỗi ô, nên một vật
-     "edge" mà nằm trong legend là tự mâu thuẫn — nó vừa bảo không chiếm ô vừa
-     giữ mất cái chỗ duy nhất ấy. Vì thế biển sống ở danh sách riêng này và chỉ
-     là một lớp VẼ; kiểm ở đây để không ai lỡ tay đưa nó ngược vào lưới. */
-  const coBien = new Set<string>();
-  for (const sg of tilesDef.signs ?? []) {
-    const sm = maps?.[sg.map];
-    if (!sm) {
-      errors.push(`tiles.signs '${sg.text}': bản đồ '${sg.map}' không tồn tại`);
-      continue;
-    }
-    if (sg.x < 0 || sg.y < 0 || sg.x >= sm.w || sg.y >= sm.h) {
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm ngoài bản đồ '${sg.map}'`);
-      continue;
-    }
-    const key = `${sg.map}:${sg.x},${sg.y}`;
-    if (coBien.has(key)) errors.push(`tiles.signs: hai tấm biển chồng lên ô (${sg.x},${sg.y})`);
-    coBien.add(key);
-    const oBien = tilesDef.legend[sm.rows[sg.y]?.[sg.x] ?? "."];
-    /* KHÔNG cắm biển ra giữa lòng đường: một tấm biển đứng giữa mặt đường thì
-       nhìn ra là vật cản chứ không ra vật chỉ đường. */
-    if (oBien?.ground === "asphalt")
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm trên mặt đường nhựa`);
-    /* Và không cắm vào ô ĐẶC hay xuống nước: chỗ đó không ai đứng tới đọc. */
-    if (oBien?.ground === "water")
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) nằm dưới nước`);
-    if (oBien?.prop && props.find((q) => q.id === oBien.prop)?.solid)
-      errors.push(`tiles.signs '${sg.text}': ô (${sg.x},${sg.y}) bị vật thể '${oBien.prop}' che kín`);
-    /* BIỂN CỦA MỘT KHU PHẢI ĐỨNG BÊN TRONG CHÍNH KHU ĐÓ.
-       Cắm ra con ngõ giữa hai lô thì nó thành biển của con ngõ: lô nào cũng
-       đọc thấy mà chẳng lô nào nhận, và ngõ rộng đúng một ô nên tấm biển
-       chiếm trọn mặt đi. Chỗ đúng là ô GÓC của khu — bên trong, mà vẫn ở mép
-       ngoài để đứng ngoài đọc được. */
-    const trong = (r: { x: number; y: number; w: number; h: number }) =>
-      sg.x >= r.x && sg.x < r.x + r.w && sg.y >= r.y && sg.y < r.y + r.h;
-    for (const z of tilesDef.zones ?? [])
-      if (z.map === sg.map && z.name === sg.text && !trong(z))
-        errors.push(`tiles.signs '${sg.text}': phải cắm BÊN TRONG khu '${z.id}' mà nó gọi tên`);
-    for (const c of tilesDef.pens ?? []) {
-      if (c.map !== sg.map || c.name !== sg.text) continue;
-      /* Ao cá là ngoại lệ duy nhất, và vì lý do vật lý: ruột nó là NƯỚC, không
-         cắm cọc xuống được. Biển của ao đứng SÁT BỜ — sát đủ để không ai nhầm
-         nó là biển của khoảnh cỏ bên cạnh. */
-      const sat = { x: c.x - 1, y: c.y - 1, w: c.w + 2, h: c.h + 2 };
-      if (c.swim ? !trong(sat) : !trong(c))
-        errors.push(
-          c.swim
-            ? `tiles.signs '${sg.text}': phải cắm SÁT BỜ ao '${c.id}' mà nó gọi tên`
-            : `tiles.signs '${sg.text}': phải cắm BÊN TRONG chuồng '${c.id}' mà nó gọi tên`,
-        );
-    }
-  }
-  /* Chiều ngược lại: vật ĐỨNG Ở MÉP không được có mặt trong legend. Đưa nó vào
-     lưới là lấy mất ô của người chơi đúng cái thứ vừa hứa là không lấy — và
-     legend còn phải nói ô đó nền gì, nên mỗi tấm sẽ tự đắp một mảng nền dưới
-     chân mình. */
-  for (const [ch, e] of Object.entries(tilesDef.legend))
-    if (e?.prop && props.find((q) => q.id === e.prop)?.place === "edge")
-      errors.push(
-        `tiles.legend '${ch}': '${e.prop}' đứng ở MÉP ô (place "edge") nên không được nằm trong lưới`,
-      );
 
   if (raw.actors !== undefined) {
     const ar2 = raw.actors as { animals?: AnimalDef[] } | null;

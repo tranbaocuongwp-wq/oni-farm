@@ -920,6 +920,9 @@ export function createRenderer(
     const img = atlas.props["sign"];
     if (!bien || !bien.length || !img) return;
     for (const b of bien) {
+      // Biển MẶT TIỀN không có cột — nó là chữ gắn lên công trình, không phải
+      // tấm ván cắm xuống đất. Chỉ `drawSignLabels` vẽ nó.
+      if (b.style === "facade") continue;
       if (b.map !== s.mapId || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) continue;
       const px = b.x * TILE - camera.rx;
       const py = b.y * TILE - camera.ry;
@@ -1003,6 +1006,31 @@ export function createRenderer(
       const d = Math.hypot(b.x + 0.5 - px, b.y + 0.5 - py);
       if (d > XA) continue;
       const mo = (d <= GAN ? 1 : 1 - (d - GAN) / (XA - GAN)) * signFade(s, b.x, b.y);
+
+      if (b.style === "facade") {
+        /* BIỂN HIỆU trên mặt tiền: chữ căn GIỮA bề ngang công trình, đặt ở
+           khoảng trên của ô — chỗ mà `makeBlockTile` để trống làm dải bạt, và
+           chỗ mà mái nhà/mái kho vừa hết.
+
+           Không có nền đục như biển cắm: nền ở đây là chính mặt tiền công
+           trình, vốn đã tối và đặc. Thêm một hộp đen nữa thì thành cái nhãn
+           dán đè lên, không ra biển hiệu. Thay vào đó là một viền chữ mảnh,
+           đủ để đọc trên cả mái sáng lẫn tường tối. */
+        const rong = b.w ?? 1;
+        const cx = (b.x * TILE + (rong * TILE) / 2 - camera.rx) * scale + tx;
+        const cy2 = (b.y * TILE + 6 - camera.ry) * scale + ty;
+        g.globalAlpha = mo;
+        g.textAlign = "center";
+        g.lineWidth = Math.max(2, co * 0.42);
+        g.strokeStyle = "rgba(18,13,8,0.92)";
+        g.lineJoin = "round";
+        g.strokeText(b.text, Math.round(cx), Math.round(cy2));
+        g.fillStyle = "#ffe9a8";
+        g.fillText(b.text, Math.round(cx), Math.round(cy2));
+        g.textAlign = "left";
+        g.globalAlpha = 1;
+        continue;
+      }
       /* Chữ NEO VÀO GÓC mà tấm biển nép vào, và trải về phía KHU nó gọi tên —
          không trải đều hai bên. Trải đều thì một nửa dòng chữ nằm trên lối đi
          phía bên kia, đúng cái làm nó trông như dán bừa lên mặt đường. */

@@ -4809,9 +4809,27 @@ test("71. quy hoạch: lô ruộng đều nhau và rời nhau, mọi khu đều 
   for (const t of ["Nhà", "Kho", "Bãi giao nhận", "Chợ", "Rừng"]) ok(chu.has(t), `có biển '${t}'`);
   eq(content.props.sign.place, "edge", "biển là loại vật thể ĐỨNG Ở MÉP ô");
   for (const b of bien) {
-    /* Ô mang biển vẫn là ô TRỐNG: biển không chiếm ô nào, nên nó không được
-       để lại dấu vết gì trong lưới — không vật thể, không đổi nền. */
     const t = tile(store, b.x, b.y);
+    if (b.style === "facade") {
+      /* BIỂN HIỆU MẶT TIỀN đảo ngược luật: nó GẮN LÊN công trình, nên ô của nó
+         BẮT BUỘC phải có một vật thể đặc. Toà nhà rộng tám ô mà tên nó nằm trên
+         một tấm ván 16px cắm nép bên cạnh thì đọc ra là "có một cái biển ở
+         đây", không phải "toà nhà này tên gì". */
+      ok(
+        !!t?.prop && content.props[t.prop]?.solid === true,
+        `biển MẶT TIỀN '${b.text}' phải nằm trên công trình đặc, ô (${b.x},${b.y}) đang là '${t?.prop ?? t?.g}'`,
+      );
+      ok(b.w >= 1, `biển mặt tiền '${b.text}' phải khai bề ngang công trình`);
+      for (let k = 0; k < b.w; k++)
+        eq(
+          tile(store, b.x + k, b.y)?.prop,
+          t.prop,
+          `biển '${b.text}' khai rộng ${b.w} ô — ô thứ ${k + 1} phải cùng là '${t.prop}'`,
+        );
+      continue;
+    }
+    /* Ô mang biển CẮM vẫn là ô TRỐNG: nó không chiếm ô nào, nên không được
+       để lại dấu vết gì trong lưới — không vật thể, không đổi nền. */
     ok(!t?.prop, `ô của biển '${b.text}' không được có vật thể trong lưới (đang là '${t?.prop}')`);
     ok(!isSolid(s, content, b.x, b.y), `biển '${b.text}' không chặn lối đi`);
     ok(t?.g !== "asphalt" && t?.g !== "water", `biển '${b.text}' không đứng giữa đường/dưới nước`);
@@ -9819,6 +9837,126 @@ test("142. BẢN ĐỒ CAO GẤP ĐÔI: nối thêm xuống dưới, và save c�
     eq(coDat, sau.w * (sau.h - CU_H), "mọi ô của phần mới phải được dựng ra");
 
     eq(checkInvariants(sau, content).length, 0, "bất biến phải sạch sau khi migrate");
+  }
+});
+
+test("143. CỔNG nằm ở MÉP bản đồ, biển hiệu gắn lên nhà, và sông có nhiều lối qua", () => {
+  /* Ba chỗ Cường chỉ ra, cùng một tinh thần: thứ gì cũng phải có chỗ đứng thật.
+
+     (a) Xe giao hàng và xe thu mua "chạy từ ngoài hư vô vô". Cổng đứng ở
+         (30,36) — GIỮA bản đồ, trên hàng cây viền của bản đồ CŨ. Trước Đợt 17
+         đó đúng là mép ngoài; nối thêm đất xuống dưới xong thì nó thành ra
+         giữa đồng, và chiếc xe hiện ra ngay trước mặt người chơi.
+
+     (b) Toà nhà rộng tám ô mà tên nó nằm trên một tấm ván 16px cắm nép bên
+         cạnh.
+
+     (c) Con sông chỉ có MỘT lối qua, ở đúng chỗ con đường. Đứng ở góc bản đồ
+         mà muốn sang bờ nam thì phải lội ngang gần nửa nông trại. */
+
+  const s = mkStore().getState();
+
+  /* --- (a) CỔNG phải ở MÉP, và mép ấy phải đi được -------------------- */
+  {
+    const g = content.tiles.gate;
+    const oMep = g.x <= 1 || g.y <= 1 || g.x >= s.w - 2 || g.y >= s.h - 2;
+    ok(oMep, `cổng (${g.x},${g.y}) phải nằm sát mép bản đồ ${s.w}×${s.h} — xe không chạy ra từ giữa đồng`);
+    ok(driveable(s, content, g.x, g.y), `ô cổng (${g.x},${g.y}) phải là mặt đường xe chạy được`);
+    ok(
+      tileAt(s, g.x, g.y)?.g !== "water",
+      "cổng không được nằm dưới nước — xe tải không đi từ ngoài biển vào",
+    );
+
+    /* Và phải có ĐƯỜNG THẬT từ cổng tới bãi đậu, đi bằng luật của XE (chỉ mặt
+       đường), với đúng hộp va chạm của chiếc xe to nhất. */
+    const box = Object.values(content.vehicles).reduce(
+      (a, v) => (v.box.w * v.box.h > a.w * a.h ? v.box : a),
+      { w: 1, h: 1 },
+    );
+    let toiDuoc = 0;
+    for (const o of content.tiles.parking.spots) {
+      const p = findPath(s, content, g.x, g.y, new Set([idx(s.w, o.x, o.y)]), {
+        maxNodes: 20000,
+        box,
+        pass: (x, y) => driveable(s, content, x, y),
+      });
+      if (p) toiDuoc++;
+    }
+    eq(
+      toiDuoc,
+      content.tiles.parking.spots.length,
+      "xe phải lái được từ cổng tới MỌI chỗ đậu — bãi nào không tới được là bãi chết",
+    );
+  }
+
+  /* --- và chuyến giao hàng chạy TRỌN VẸN từ cổng mới ------------------ */
+  {
+    const store = mkStore();
+    store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+    const loai = content.animalOrder.find(
+      (id) => content.animals[id]?.job !== "pest" && content.animals[id]?.housing !== "water",
+    );
+    const truoc = store.getState().entities.length;
+    store.dispatch({ t: "BUY_ANIMAL", def: loai });
+    const xe = store.getState().entities.find((e) => e.kind === "vehicle");
+    ok(!!xe, "mua con vật thì phải có xe chở tới");
+    const g = content.tiles.gate;
+    eq(Math.floor(xe.x / TILE), g.x, "xe phải sinh ra ĐÚNG ở cổng (x)");
+    eq(Math.floor(xe.y / TILE), g.y, "xe phải sinh ra ĐÚNG ở cổng (y)");
+
+    for (let k = 0; k < 40000 && store.getState().entities.length <= truoc + 1; k++)
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+    ok(
+      store.getState().entities.some((e) => e.def === loai),
+      "xe phải chạy tới nơi và thả được con vật xuống — cổng mới không được làm chết đường giao hàng",
+    );
+  }
+
+  /* --- (b) BIỂN HIỆU MẶT TIỀN cho công trình lớn ---------------------- */
+  {
+    const mt = (content.tiles.signs ?? []).filter((b) => b.style === "facade");
+    ok(mt.length >= 4, `phải có ít nhất bốn biển hiệu mặt tiền, đang có ${mt.length}`);
+    for (const ten of ["Nhà", "Kho", "Chợ", "Quầy thu mua"]) {
+      const b = mt.find((q) => q.text === ten);
+      ok(!!b, `'${ten}' phải là biển hiệu gắn lên công trình, không phải tấm ván cắm cạnh`);
+      const t = tileAt(s, b.x, b.y);
+      ok(content.props[t?.prop]?.solid === true, `biển '${ten}' phải nằm trên công trình đặc`);
+      ok(b.w >= 2, `biển '${ten}' phải phủ bề ngang công trình (đang ${b.w} ô)`);
+    }
+  }
+
+  /* --- (c) SÔNG phải có NHIỀU lối qua, và chúng phải rải đều ---------- */
+  {
+    // hàng sông = hàng đầu tiên có nước ở phần mới
+    let hangSong = -1;
+    for (let y = 37; y < s.h && hangSong < 0; y++)
+      if (tileAt(s, 1, y)?.g === "water") hangSong = y;
+    ok(hangSong > 0, "phải tìm được hàng sông");
+
+    const cot = [];
+    for (let x = 0; x < s.w; x++) if (tileAt(s, x, hangSong)?.prop === "pier") cot.push(x);
+    ok(cot.length >= 6, `sông phải có nhiều lối qua, đang có ${cot.length} ô cầu`);
+
+    /* Gom các ô cầu liền nhau thành TỪNG CÂY CẦU, rồi đo khoảng cách xa nhất
+       mà người chơi phải đi dọc bờ để tới được một cây. Một cây cầu duy nhất ở
+       giữa nghĩa là đứng ở góc thì phải lội gần nửa nông trại. */
+    const cau = [];
+    for (const x of cot) {
+      const cuoi = cau[cau.length - 1];
+      if (cuoi && x === cuoi[cuoi.length - 1] + 1) cuoi.push(x);
+      else cau.push([x]);
+    }
+    ok(cau.length >= 3, `phải có từ ba cây cầu trở lên, đang có ${cau.length}`);
+
+    let xaNhat = 0;
+    for (let x = 1; x < s.w - 1; x++) {
+      const d = Math.min(...cau.map((c) => Math.min(...c.map((cx) => Math.abs(cx - x)))));
+      if (d > xaNhat) xaNhat = d;
+    }
+    ok(
+      xaNhat <= 10,
+      `từ chỗ xa nhất trên bờ tới cây cầu gần nhất phải trong 10 ô, đang là ${xaNhat}`,
+    );
   }
 });
 

@@ -894,6 +894,16 @@ export function validateTiles(raw: unknown): string[] {
         if (t !== null && t.length > 18)
           k.fail("text", `dài ${t.length} ký tự — biển cắm chỉ chứa được 18`);
         if (v["side"] !== undefined) k.enumStr(v, "side", ["e", "w"] as const);
+        if (v["style"] !== undefined) k.enumStr(v, "style", ["post", "facade"] as const);
+        /* BIỂN HIỆU MẶT TIỀN phải biết công trình rộng mấy ô — chữ căn giữa
+           trên ngần ấy ô. Thiếu `w` thì nó căn giữa trên đúng một ô và lệch
+           hẳn sang mép trái toà nhà. */
+        if (v["style"] === "facade") {
+          const w = k.num(v, "w", 1, 40);
+          if (w === null) k.fail("w", "biển mặt tiền phải khai bề ngang công trình");
+        } else if (v["w"] !== undefined) {
+          k.fail("w", "chỉ biển mặt tiền mới dùng `w`");
+        }
         c.merge(k);
       });
   }

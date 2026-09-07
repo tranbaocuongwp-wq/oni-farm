@@ -685,6 +685,23 @@ export interface SignDef {
    * `e` = nép sang phải (khu nằm bên phải), `w` = sang trái. Vắng = `e`.
    */
   side?: "e" | "w";
+  /**
+   * KIỂU biển.
+   *
+   *   · `"post"` (mặc định) — tấm ván cắm trên một ô lối đi, chữ nép sang
+   *     `side`. Đúng cho lô ruộng, giếng, bãi đậu: những chỗ không có gì để
+   *     gắn chữ lên.
+   *   · `"facade"` — BIỂN HIỆU gắn thẳng lên mặt tiền một công trình, chữ
+   *     nằm giữa bề ngang của nó. Không có cái cột nào cả.
+   *
+   * Vì sao cần kiểu thứ hai: ngôi nhà rộng tám ô, cái kho rộng sáu ô, mà tên
+   * chúng lại nằm trên một tấm ván 16px cắm nép bên cạnh — nhìn ra là "có một
+   * cái biển ở đây", không phải "toà nhà này tên gì". Cửa hàng ngoài đời viết
+   * tên lên mặt tiền, và ở cỡ 430px thì đó cũng là cách duy nhất đọc được.
+   */
+  style?: "post" | "facade";
+  /** `facade`: bề ngang công trình, tính bằng ô. Chữ căn giữa trên ngần này ô. */
+  w?: number;
 }
 
 /**
