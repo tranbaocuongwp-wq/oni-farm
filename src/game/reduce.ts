@@ -34,6 +34,7 @@ import {
   portalAt,
   tileCenterX,
   tileCenterY,
+  waterSpotForBox,
 } from "./world.ts";
 import { feedPond, pourBest, pourSpotIn } from "./pen.ts";
 
@@ -375,7 +376,23 @@ export function reduce(state: GameState, action: Action, content: Content): Game
          còn hơn người chơi mất tiền mà không nhận được gì. */
       const xe = sendVehicle(d, content, "truck", { kind: "drop", animal: action.def });
       if (xe === null) {
-        const id = spawnEntity(d, content, { def: action.def, map: drop.map, x: cx, y: cy });
+        /* Thả thẳng thì vẫn phải thả ĐÚNG MÔI TRƯỜNG. Điểm giao là mặt đường
+           trước cửa kho: thả con cá xuống đó là con cá nằm trên đường nhựa —
+           bất biến vỡ ngay dispatch kế tiếp, và người chơi vừa trả tiền để
+           nhận một ván chơi đỏ. Nhánh này chỉ chạy khi đội xe đã kín chuyến,
+           nên nó hiếm, và hiếm là đúng lý do nó lọt qua tới giờ. */
+        let px = cx;
+        let py = cy;
+        if (def.housing === "water") {
+          const ao = waterSpotForBox(d.s, content, def.box, drop.x, drop.y);
+          if (!ao) {
+            toastText(d, `Chưa có ao để thả ${def.name}.`, "bad");
+            return commit(d);
+          }
+          px = tileCenterX(ao.x);
+          py = tileCenterY(ao.y);
+        }
+        const id = spawnEntity(d, content, { def: action.def, map: drop.map, x: px, y: py });
         if (id === null) {
           toastKey(d, content, "tooMany", "bad");
           return commit(d);

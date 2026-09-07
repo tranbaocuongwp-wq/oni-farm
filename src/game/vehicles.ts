@@ -25,7 +25,7 @@ import { dEntity, randInt, toastText, touch } from "./state.ts";
 import { setStore } from "./storage.ts";
 import { removeEntity } from "./entities.ts";
 import { sellPriceOf, sellable } from "./items.ts";
-import { TILE, idx, nearestWaterTile, tileAt } from "./world.ts";
+import { TILE, idx, nearestWaterTile, tileAt, waterSpotForBox } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { LEASH_TILES, MAX_PATH_VEHICLE, spawnEntity } from "./entities.ts";
 
@@ -358,8 +358,8 @@ function doErrand(d: Draft, content: Content, index: number): void {
          giao (trước cửa kho) thì con cá rơi xuống ao ở đầu kia bản đồ, mà đó
          chính là cú dịch chuyển vừa bỏ công đi tránh. */
       const ao =
-        nearestWaterTile(d.s, content, Math.floor(e.x / TILE), Math.floor(e.y / TILE), 6) ??
-        nearestWaterTile(d.s, content, drop.x, drop.y);
+        waterSpotForBox(d.s, content, def.box, Math.floor(e.x / TILE), Math.floor(e.y / TILE), 6) ??
+        waterSpotForBox(d.s, content, def.box, drop.x, drop.y);
       if (!ao) {
         toastText(d, "Chưa có ao để thả cá — hàng bị trả lại.", "bad");
         return;

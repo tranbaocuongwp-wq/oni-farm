@@ -604,6 +604,44 @@ export function nearestWaterTile(
   return null;
 }
 
+/**
+ * Ô nước gần (x,y) nhất mà con vật CÓ HỘP `box` nằm gọn trong đó.
+ *
+ * Khác `nearestWaterTile` ở đúng một chỗ, và chỗ đó quan trọng: nó kiểm CẢ HỘP
+ * VA CHẠM chứ không chỉ tâm ô. Một vũng nước rộng đúng một ô có tâm hợp lệ,
+ * nhưng thân con cá vẫn thò sang bờ — và bất biến bắt đúng cái đó ở dispatch
+ * ngay sau, tức là ván chơi đỏ vì một con cá vừa được thả hợp lệ.
+ *
+ * Trả TOẠ ĐỘ Ô (không phải world px), cùng khuôn với `nearestWaterTile`.
+ *
+ * `maxR` mặc định phủ HẾT bản đồ, không phải một hằng 30 như `nearestWaterTile`.
+ * Nông trại rộng 48 ô mà điểm giao nằm ở x=41, còn cái ao lớn ở x=2..7: bán
+ * kính 30 không với tới, nên câu trả lời là "chưa có ao" trong khi cái ao nằm
+ * ngay đó. Ô nước gần đó vẫn tìm ra trước vì vòng quét toả từ trong ra.
+ */
+export function waterSpotForBox(
+  state: GameState,
+  content: Content,
+  box: { w: number; h: number },
+  x: number,
+  y: number,
+  maxR = Math.max(state.w, state.h),
+): { x: number; y: number } | null {
+  for (let r = 0; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const tx = x + dx;
+        const ty = y + dy;
+        if (!tileOkFor(tileAt(state, tx, ty), content, true)) continue;
+        if (blockedForActor(state, content, tx * TILE + TILE / 2, ty * TILE + TILE / 2, box.w, box.h, true))
+          continue;
+        return { x: tx, y: ty };
+      }
+  }
+  return null;
+}
+
 /** Hộp va chạm KÍCH THƯỚC BẤT KỲ tại (cx,cy) có đè lên ô đặc nào không.
  *  Xe tải rộng hơn người, con gà hẹp hơn — dùng chung một hộp cố định thì xe
  *  sẽ tìm ra đường mà thân nó không lọt. */

@@ -13,8 +13,8 @@ import { createStore } from "../src/core/store.ts";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
-import { findPath, PATH_STATS } from "../src/game/pathfind.ts";
-import { driveable, pondDock } from "../src/game/vehicles.ts";
+import { findPath, PATH_STATS, walkableTile, stepSpeed } from "../src/game/pathfind.ts";
+import { driveable, pondDock, MAX_VEHICLES } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM } from "../src/game/pen.ts";
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
@@ -23,7 +23,7 @@ import { penWander } from "../src/game/pen.ts";
 import { MAX_ENTITIES } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
-import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/game/world.ts";
+import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor, waterSpotForBox, tileCenterX, tileCenterY, maxSpeedMul } from "../src/game/world.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
 import { sellSlots } from "../src/game/inventory.ts";
@@ -8862,6 +8862,379 @@ test("133. CHỢ và QUẦY THU MUA đứng hai đầu — không ô nào bấm 
     const pl = st2.getState().player;
     eq(Math.floor(pl.x / TILE), o.x, `đi tới được chỗ đứng của ${ten} (x)`);
     eq(Math.floor(pl.y / TILE), o.y, `đi tới được chỗ đứng của ${ten} (y)`);
+  }
+});
+
+test("137. CÁ luôn xuống NƯỚC — kể cả khi hết xe và phải thả thẳng", () => {
+  /* Ba đường thả một con vật xuống bản đồ, và cả ba phải tôn trọng môi
+     trường sống:
+       · xe giao hàng tới nơi     → `doErrand`
+       · hết xe, mua thẳng        → `BUY_ANIMAL` nhánh dự phòng
+       · bảng gỡ lỗi, hết xe      → `DEBUG spawnAnimal` nhánh dự phòng
+
+     Chỉ đường thứ nhất từng biết tới nước. Hai nhánh dự phòng thả con cá
+     xuống ĐIỂM GIAO (mặt đường trước cửa kho) và xuống ô cạnh nhân vật —
+     hai chỗ khô ráo — nên con cá nằm trên cạn và bất biến vỡ ở dispatch ngay
+     sau. Nhánh dự phòng chỉ chạy khi đội xe đã kín chuyến, nên nó hiếm; và
+     hiếm chính là lý do nó lọt qua mười bốn đợt. */
+  const fishIds = Object.keys(content.animals).filter((id) => content.animals[id].housing === "water");
+  ok(fishIds.length > 0, "content phải có ít nhất một loài dưới nước để kiểm");
+  const fish = fishIds[0];
+  const fdef = content.animals[fish];
+
+  /** Mọi con cá trong `s` có đang nằm trong nước không. */
+  const caTrenCan = (s) =>
+    s.entities
+      .filter((e) => e.def === fish)
+      .filter((e) => !tileOkFor(tileAt(s, Math.floor(e.x / TILE), Math.floor(e.y / TILE)), content, true));
+
+  /* --- 1. Đội xe KÍN CHUYẾN rồi mới mua: đi thẳng vào nhánh dự phòng --- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 99999;
+    });
+    // Lấp sạch chỗ xe: gọi đủ MAX_VEHICLES chiếc rồi giữ chúng ở đó.
+    for (let i = 0; i < MAX_VEHICLES; i++) store.dispatch({ t: "DEBUG", op: "callBuyer" });
+    eq(
+      store.getState().entities.filter((e) => e.kind === "vehicle").length,
+      MAX_VEHICLES,
+      "phải kín chuyến trước khi mua, nếu không kịch bản này không chạm vào nhánh cần kiểm",
+    );
+
+    const truoc = store.getState().entities.length;
+    store.dispatch({ t: "BUY_ANIMAL", def: fish });
+    const s = store.getState();
+    ok(s.entities.length > truoc, "mua rồi thì phải có thêm một thực thể — không có xe cũng vẫn giao");
+    deepEq(caTrenCan(s), [], `con cá mua khi hết xe phải nằm trong NƯỚC`);
+    eq(checkInvariants(s, content).length, 0, "bất biến phải sạch ngay sau khi mua");
+  }
+
+  /* --- 2. Bảng gỡ lỗi, cũng lúc kín chuyến ---------------------------- */
+  {
+    const store = mkStore();
+    for (let i = 0; i < MAX_VEHICLES; i++) store.dispatch({ t: "DEBUG", op: "callBuyer" });
+    const list = content.animalOrder.filter((id) => content.animals[id]?.job !== "pest");
+    const k = list.indexOf(fish);
+    ok(k >= 0, "cá phải nằm trong danh sách vật nuôi thả được của bảng gỡ lỗi");
+    store.dispatch({ t: "DEBUG", op: "spawnAnimal", n: k });
+    const s = store.getState();
+    eq(s.entities.filter((e) => e.def === fish).length, 1, "bảng gỡ lỗi phải thả được đúng một con cá");
+    deepEq(caTrenCan(s), [], "con cá bảng gỡ lỗi thả phải nằm trong NƯỚC");
+    eq(checkInvariants(s, content).length, 0, "bất biến phải sạch sau lệnh gỡ lỗi");
+  }
+
+  /* --- 3. Chạy dài: thả NHIỀU con vật liên tiếp, cá xen giữa ----------
+     Đây là hình dạng thật của lỗi Cường gặp: bấm "+ Vật nuôi" hai mươi tư
+     lần thì đội xe bão hoà từ giữa chừng, và mỗi con cá sau đó rơi xuống
+     đúng một ô đường nhựa. Ba con cá chồng lên nhau ở (17,4). */
+  {
+    const store = mkStore();
+    store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+    for (let i = 0; i < 24; i++) {
+      store.dispatch({ t: "DEBUG", op: "spawnAnimal", n: i });
+      for (let k = 0; k < 400; k++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    }
+    const s = store.getState();
+    ok(
+      s.entities.filter((e) => e.def === fish).length >= 2,
+      "phải thả được từ hai con cá trở lên, nếu không thì không chạm tới nhánh dự phòng",
+    );
+    deepEq(caTrenCan(s), [], "sau 24 lượt thả, không con cá nào được nằm trên cạn");
+    eq(checkInvariants(s, content).length, 0, "bất biến phải sạch sau cả loạt thả");
+  }
+
+  /* --- 4. Không có ao thì TỪ CHỐI, đừng thả bừa lên bờ ---------------- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 99999;
+      for (const t of s.tiles) if (t.g === "water") t.g = "grass";
+    });
+    for (let i = 0; i < MAX_VEHICLES; i++) store.dispatch({ t: "DEBUG", op: "callBuyer" });
+    const truoc = store.getState().entities.length;
+    const tienTruoc = store.getState().money;
+    store.dispatch({ t: "BUY_ANIMAL", def: fish });
+    const s = store.getState();
+    eq(s.entities.length, truoc, "nông trại không còn ao thì KHÔNG được thả con cá nào xuống");
+    eq(s.money, tienTruoc, "từ chối thì cũng không được trừ tiền");
+    eq(checkInvariants(s, content).length, 0, "bất biến vẫn sạch khi từ chối");
+  }
+
+  /* --- 5. Loài bơi THÂN RỘNG: một ô nước lẻ không đủ chỗ -------------
+     Con cá hiện tại có hộp 8×6, gọn trong một ô 16px, nên tâm ô hợp lệ là
+     thân nó cũng hợp lệ — phép kiểm hộp không bao giờ đổi câu trả lời. Nhưng
+     content sửa được qua OTA, và một con cá to là thứ hoàn toàn hợp lệ để
+     thêm. Với hộp 20px thì ô nước ở MÉP ao có tâm hợp lệ mà thân thò lên bờ:
+     hỏi bằng tâm ô là thả con vật vào đúng chỗ bất biến bắt. */
+  {
+    const raw = rawPack();
+    raw.actors = {
+      ...raw.actors,
+      animals: raw.actors.animals.map((a) => (a.id === fish ? { ...a, box: { w: 20, h: 20 } } : a)),
+    };
+    const wide = buildContent(raw);
+    eq(wide.animals[fish].box.w, 20, "content thử phải thật sự có con cá thân rộng");
+
+    /* Nông trại có HAI vùng nước khác nhau, và đó là điều làm ca này có
+       nghĩa: một con lạch rộng đúng một ô chạy dọc gần điểm giao, và một cái
+       ao rộng ở góc trên-trái. Ô lạch có TÂM hợp lệ nhưng thân con cá 20px
+       thò lên cả hai bờ; chỉ cái ao mới chứa nổi nó. */
+    const s0 = createNewGame(wide, 4242);
+    const drop = wide.tiles.dropoff ?? wide.tiles.spawn;
+    const gan = nearestWaterTile(s0, wide, drop.x, drop.y);
+    ok(!!gan, "phải có ô nước nào đó gần điểm giao, nếu không ca này không kiểm gì");
+    ok(
+      blockedForActor(s0, wide, tileCenterX(gan.x), tileCenterY(gan.y), 20, 20, true),
+      `ô nước gần điểm giao nhất (${gan.x},${gan.y}) phải QUÁ HẸP cho thân 20px — ` +
+        "chọn bằng tâm ô mà vẫn lọt thì ca này không phân biệt được đúng với sai",
+    );
+
+    const store = createStore(s0, wide, { validate: true, strict: true });
+    store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+    for (let i = 0; i < MAX_VEHICLES; i++) store.dispatch({ t: "DEBUG", op: "callBuyer" });
+    store.dispatch({ t: "BUY_ANIMAL", def: fish });
+    const s = store.getState();
+    const con = s.entities.filter((e) => e.def === fish);
+    eq(con.length, 1, "cá thân rộng vẫn phải giao được — cái ao góc trên-trái đủ chỗ cho nó");
+    /* Phép kiểm thật nằm ở đây: `blockedForActor` xét CẢ HỘP, còn
+       `nearestWaterTile` chỉ xét TÂM Ô. Hỏi bằng tâm ô thì con cá rơi xuống
+       con lạch một ô, thân thò lên hai bờ, và dòng này đỏ. */
+    ok(
+      !blockedForActor(s, wide, con[0].x, con[0].y, 20, 20, true),
+      `thân con cá rộng 20px phải nằm GỌN trong nước, đang ở (${(con[0].x / TILE).toFixed(2)}, ${(con[0].y / TILE).toFixed(2)})`,
+    );
+    eq(checkInvariants(s, wide).length, 0, "bất biến sạch với loài bơi thân rộng");
+
+    /* Và ĐƯỜNG CHÍNH: giao bằng xe thật. Ba ca trên đều đi nhánh dự phòng
+       (đội xe kín chuyến), nên `doErrand` — chỗ thả hàng thường ngày — chưa
+       được chạm tới lần nào. Xe chở cá đậu ở BỜ AO rồi thả xuống từ đó, và
+       nó cũng phải hỏi bằng cả hộp chứ không phải bằng tâm ô. */
+    const st2 = createStore(createNewGame(wide, 4242), wide, { validate: true, strict: true });
+    st2.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+    st2.dispatch({ t: "BUY_ANIMAL", def: fish });
+    eq(
+      st2.getState().entities.filter((e) => e.kind === "vehicle").length,
+      1,
+      "phải có xe chở tới — ca này kiểm đường giao THƯỜNG NGÀY, không phải nhánh dự phòng",
+    );
+    for (let i = 0; i < 20000 && !st2.getState().entities.some((e) => e.def === fish); i++)
+      st2.dispatch({ t: "TICK", dt: 1 / 60 });
+    const s2 = st2.getState();
+    const giao = s2.entities.filter((e) => e.def === fish);
+    eq(giao.length, 1, "xe phải thả được con cá thân rộng xuống ao");
+    ok(
+      !blockedForActor(s2, wide, giao[0].x, giao[0].y, 20, 20, true),
+      `xe thả cá thân rộng phải xuống chỗ NGẬP HẲN, đang ở (${(giao[0].x / TILE).toFixed(2)}, ${(giao[0].y / TILE).toFixed(2)})`,
+    );
+    eq(checkInvariants(s2, wide).length, 0, "bất biến sạch sau khi xe thả cá");
+  }
+
+  /* --- 6. Loài TRÊN CẠN không bị nhánh mới đụng tới ------------------- */
+  {
+    const land = content.animalOrder.find(
+      (id) => content.animals[id]?.job !== "pest" && content.animals[id]?.housing !== "water",
+    );
+    ok(!!land, "phải có ít nhất một loài trên cạn để đối chứng");
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 99999;
+    });
+    for (let i = 0; i < MAX_VEHICLES; i++) store.dispatch({ t: "DEBUG", op: "callBuyer" });
+    const truoc = store.getState().entities.length;
+    store.dispatch({ t: "BUY_ANIMAL", def: land });
+    const s = store.getState();
+    ok(s.entities.length > truoc, "loài trên cạn vẫn phải giao được khi hết xe");
+    eq(checkInvariants(s, content).length, 0, "bất biến sạch với loài trên cạn");
+  }
+});
+
+test("138. A* tối ưu trả về ĐÚNG TỪNG Ô như bản tham chiếu chậm", () => {
+  /* Đợt 15 viết lại ruột A*: `Map` khoá số nguyên và heap object thành mảng
+     định kiểu dùng lại, và ba phép hỏi địa hình (`walkableTile`,
+     `blockedForActor`, `stepSpeed`) được GHI NHỚ theo ô trong mỗi lần tìm.
+     Đo được 1,338 ms → 0,468 ms một lần gọi, tức 8,0% → 2,8% ngân sách khung
+     hình 60fps.
+
+     Cái phải canh không phải tốc độ mà là: đường đi KHÔNG ĐƯỢC ĐỔI MỘT Ô NÀO.
+     Toàn bộ trò chơi dựa trên "cùng seed + cùng chuỗi action = cùng state"
+     (kịch bản 9), nên A* trả về đường khác là save cũ replay ra thế giới khác.
+
+     Ba thứ dễ hỏng nhất, và kịch bản này đỏ với cả ba:
+       · dấu phiên `ky` không tăng → lần tìm sau đọc ghi nhớ của lần trước;
+       · bit "hộp lọt" lẫn với bit "đi được ở mức ô";
+       · phá hoà đổi thứ tự → hai nút cùng `f` ra thứ tự khác.
+
+     Bản tham chiếu dưới đây viết cho DỄ ĐỌC, không cho nhanh: quét tuyến tính
+     tìm nút nhỏ nhất, `Map` cho mọi thứ, hỏi lại địa hình mỗi lần. Nó chính là
+     ruột A* trước Đợt 15, chép nguyên. */
+  const thamChieu = (state, x0, y0, goals, opts = {}) => {
+    const w = state.w;
+    const box = opts.box ?? { w: 10, h: 8 };
+    const swims = opts.swims === true;
+    const avoidFarm = opts.avoidFarm === true;
+    const maxNodes = opts.maxNodes ?? 4000;
+    const leash = opts.leash;
+    const pass = opts.pass;
+    const start = idx(w, x0, y0);
+    if (goals.has(start)) return [];
+    const invMax = 1 / maxSpeedMul(content);
+    const heur = (i) => {
+      const x = i % w;
+      const y = (i / w) | 0;
+      let best = Infinity;
+      for (const g of goals) {
+        const dx = Math.abs(x - (g % w));
+        const dy = Math.abs(y - ((g / w) | 0));
+        const d = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+        if (d < best) best = d;
+      }
+      return best * invMax;
+    };
+    const gScore = new Map([[start, 0]]);
+    const cameFrom = new Map();
+    const open = [{ i: start, f: heur(start) }];
+    const truoc = (a, b) => (a.f !== b.f ? a.f < b.f : a.i < b.i);
+    let expanded = 0;
+    while (open.length && expanded < maxNodes) {
+      // quét tuyến tính, đúng luật phá hoà của heap
+      let k = 0;
+      for (let j = 1; j < open.length; j++) if (truoc(open[j], open[k])) k = j;
+      const cur = open.splice(k, 1)[0].i;
+      expanded++;
+      if (goals.has(cur)) {
+        const path = [];
+        let node = cur;
+        while (node !== undefined && node !== start) {
+          path.push(node);
+          node = cameFrom.get(node);
+        }
+        path.reverse();
+        return path;
+      }
+      const cx = cur % w;
+      const cy = (cur / w) | 0;
+      const g0 = gScore.get(cur) ?? 0;
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (leash && (Math.abs(nx - leash.x) > leash.r || Math.abs(ny - leash.y) > leash.r)) continue;
+          if (!walkableTile(state, content, nx, ny, swims)) continue;
+          if (pass && !pass(nx, ny)) continue;
+          if (avoidFarm && tileAt(state, nx, ny)?.tilled) continue;
+          if (blockedForActor(state, content, nx * TILE + TILE / 2, ny * TILE + TILE / 2, box.w, box.h, swims))
+            continue;
+          if (dx !== 0 && dy !== 0) {
+            if (!walkableTile(state, content, cx + dx, cy, swims)) continue;
+            if (!walkableTile(state, content, cx, cy + dy, swims)) continue;
+            if (pass && (!pass(cx + dx, cy) || !pass(cx, cy + dy))) continue;
+          }
+          const ni = idx(w, nx, ny);
+          const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
+          const g1 = g0 + step / stepSpeed(state, content, nx, ny);
+          if (g1 >= (gScore.get(ni) ?? Infinity)) continue;
+          gScore.set(ni, g1);
+          cameFrom.set(ni, cur);
+          open.push({ i: ni, f: g1 + heur(ni) });
+        }
+    }
+    return null;
+  };
+
+  /* Nông trại đã CÓ NGƯỜI Ở: cày, gieo, xây, thả vật nuôi. Bản đồ trống thì
+     mọi đường đều là đường thẳng và không phép kiểm nào phân biệt được gì. */
+  const store = mkStore(4242);
+  store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+  store.dispatch({ t: "DEBUG", op: "tillMap" });
+  store.dispatch({ t: "DEBUG", op: "plantMap" });
+  for (let i = 0; i < 6; i++) {
+    store.dispatch({ t: "DEBUG", op: "spawnAnimal", n: i });
+    for (let k = 0; k < 300; k++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  }
+  const s = store.getState();
+
+  /* Rút điểm đầu/đích tất định trên MỌI ô đi được — không phải ngẫu nhiên, để
+     ván đỏ luôn đỏ lại y hệt. */
+  const diDuoc = [];
+  for (let y = 0; y < s.h; y++)
+    for (let x = 0; x < s.w; x++)
+      if (walkableTile(s, content, x, y, false) && !blockedForActor(s, content, x * TILE + TILE / 2, y * TILE + TILE / 2, 10, 8, false))
+        diDuoc.push({ x, y });
+  ok(diDuoc.length > 300, `phải có nhiều ô đi được để bốc cặp, đang có ${diDuoc.length}`);
+
+  const bienThe = [
+    { ten: "thường", opts: {} },
+    { ten: "hộp to (xe)", opts: { box: { w: 22, h: 16 } } },
+    { ten: "tránh ruộng", opts: { avoidFarm: true } },
+    { ten: "dây xích hẹp", opts: (a) => ({ leash: { x: a.x, y: a.y, r: 8 } }) },
+    { ten: "trần nút thấp", opts: { maxNodes: 300 } },
+    { ten: "lọc riêng (chỉ đường)", opts: { pass: (x, y) => driveable(s, content, x, y) } },
+  ];
+
+  let soSanh = 0;
+  let coDuong = 0;
+  for (const bt of bienThe) {
+    for (let k = 0; k < 24; k++) {
+      // bước nhảy nguyên tố để cặp trải khắp bản đồ mà vẫn tất định
+      const a = diDuoc[(k * 61) % diDuoc.length];
+      const b = diDuoc[(k * 157 + 11) % diDuoc.length];
+      if (a.x === b.x && a.y === b.y) continue;
+      const opts = typeof bt.opts === "function" ? bt.opts(a) : bt.opts;
+      const dich = new Set([idx(s.w, b.x, b.y)]);
+      const nhanh = findPath(s, content, a.x, a.y, dich, opts);
+      const cham = thamChieu(s, a.x, a.y, dich, opts);
+      deepEq(
+        nhanh,
+        cham,
+        `[${bt.ten}] (${a.x},${a.y}) → (${b.x},${b.y}): A* nhanh phải trả về đúng đường của bản tham chiếu`,
+      );
+      soSanh++;
+      if (nhanh && nhanh.length) coDuong++;
+    }
+  }
+  ok(soSanh >= 130, `phải so đủ nhiều cặp, mới so ${soSanh}`);
+  ok(coDuong >= 60, `đa số cặp phải RA ĐƯỜNG, nếu không thì chỉ đang so hai lần null (${coDuong}/${soSanh})`);
+
+  /* --- ĐÍCH NHIỀU Ô: heuristic lấy min trên mọi đích, và Đợt 15 rút toạ độ
+         đích ra mảng một lần thay vì duyệt Set trong mỗi lần gọi heur. */
+  {
+    const a = diDuoc[7];
+    const nhieu = new Set([80, 200, 320, 440].map((k) => idx(s.w, diDuoc[k % diDuoc.length].x, diDuoc[k % diDuoc.length].y)));
+    deepEq(
+      findPath(s, content, a.x, a.y, nhieu, {}),
+      thamChieu(s, a.x, a.y, nhieu, {}),
+      "đích nhiều ô: đường phải y hệt bản tham chiếu",
+    );
+  }
+
+  /* --- GỌI LIÊN TIẾP: ghi nhớ theo ô chỉ được sống trong MỘT lần tìm. Quên
+         tăng dấu phiên thì lần thứ hai đọc lại kết quả của lần đầu — và vì hai
+         lần thường cùng bản đồ nên nó vẫn "trông đúng" cho tới khi bản đồ đổi
+         giữa chừng. Nên: đổi bản đồ giữa hai lần gọi rồi so lại. */
+  {
+    const a = diDuoc[3];
+    const b = diDuoc[Math.floor(diDuoc.length / 2)];
+    const dich = new Set([idx(s.w, b.x, b.y)]);
+    findPath(s, content, a.x, a.y, dich, {});
+
+    // xây một bức tường thật cắt ngang, rồi hỏi lại trên state MỚI
+    const st2 = clone(s);
+    let xay = 0;
+    for (let y = 0; y < st2.h; y++) {
+      const t = st2.tiles[idx(st2.w, Math.floor(st2.w / 2), y)];
+      if (t && !t.prop && !t.b) {
+        t.prop = "rock";
+        xay++;
+      }
+    }
+    ok(xay > 10, `phải dựng được một bức tường đủ dài, mới đặt ${xay} ô`);
+    deepEq(
+      findPath(st2, content, a.x, a.y, dich, {}),
+      thamChieu(st2, a.x, a.y, dich, {}),
+      "đổi bản đồ giữa hai lần gọi: ghi nhớ của lần trước không được rớt sang lần sau",
+    );
   }
 });
 

@@ -34,9 +34,10 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | Hơn 100 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 138 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
+| `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
 | `npm run icons` | Sinh lại icon PNG |
 | `npm run deploy` | Build + deploy toàn bộ site lên Cloudflare Pages |
 | `npm run deploy:content` | **Chỉ** đẩy content pack mới — không đụng bundle web |
@@ -985,6 +986,125 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 15: A* nhanh gấp ba, cá thôi nằm trên đường, và ba chỗ HUD lệch (core 1.41)
+
+Đợt này bắt đầu bằng một câu hỏi mở — "game có chậm không" — nên việc đầu tiên là
+**đo**, không phải sửa.
+
+#### Đo trước đã: chậm ở đâu
+
+Đợt 9 đo bằng tay rồi số liệu trôi mất theo phiên làm việc, nên Đợt 15 mở lại đúng
+câu hỏi ấy mà không có gì để so. Giờ có `npm run bench` — cùng một cảnh dựng theo
+cùng một hạt, chạy lại được bất cứ lúc nào, nên hai lần đo cách nhau nửa năm vẫn
+nói chuyện được với nhau.
+
+Cảnh đo: 1.776 ô · 360 cây · 27 thực thể (đông hơn hẳn lối chơi bình thường).
+
+| | Trước | Sau | % ngân sách 60fps |
+|---|---|---|---|
+| TICK trọn vẹn (một khung hình) | 0,0278 ms | 0,0281 | 0,2% |
+| · catchUpEntities | 0,0027 | 0,0028 | 0,0% |
+| · growCrops | 0,0198 | 0,0200 | 0,1% |
+| · moveActors | 0,0023 | 0,0024 | 0,0% |
+| · runActorSteps | 0,0001 | 0,0001 | 0,0% |
+| autoJob | 0,0031 | 0,0033 | 0,0% |
+| **findPath** | **1,3382** | **0,4680** | **8,0% → 2,8%** |
+
+Kết quả đọc ra ngay từ dòng đầu: **cả phần mô phỏng gộp lại tốn 0,2% một khung
+hình**, còn **một lần gọi A* tốn gấp năm mươi lần tất cả những thứ đó cộng lại**.
+Mọi thứ khác trong bảng là nhiễu. Nên đợt này chỉ có đúng một chỗ đáng đụng vào.
+
+#### A*: 1,34 ms → 0,47 ms
+
+Ruột A* vốn đã viết tốt — heap nhị phân, phá hoà tất định, heuristic chia đúng hệ
+số tốc độ lớn nhất. Hai thay đổi:
+
+* **`Map` khoá số nguyên và heap object → mảng định kiểu dùng lại.** Hết cấp phát
+  sau lần đầu. Đo được: 1,338 → 1,296 ms. **Gần như không ăn thua** — và đó là số
+  liệu đáng giá nhất của cả đợt, vì nó chỉ đúng chỗ còn lại.
+* **Ghi nhớ tính chất ô trong mỗi lần tìm.** Ba phép hỏi địa hình —
+  `walkableTile`, `blockedForActor`, `stepSpeed` — mới là chỗ tốn. Mỗi ô bị hỏi
+  lại một lần cho MỖI hướng dẫn tới nó (tới tám lần), cộng hai lần nữa mỗi khi có
+  ai đi chéo qua góc nó. Mà câu trả lời không đổi trong suốt một lần tìm: cả ba
+  chỉ phụ thuộc (state, content, ô, hộp, bơi). Hỏi một lần rồi ghi lại: 1,296 →
+  **0,468 ms, nhanh gấp 2,9 lần.**
+
+Dấu phiên (`ky`) tăng mỗi lần gọi thay cho việc xoá 1.776 ô, nên ghi nhớ không
+sống quá một lần tìm.
+
+**Kịch bản 138 canh đúng cái phải canh, và nó không phải tốc độ.** Cả trò chơi dựa
+trên "cùng seed + cùng chuỗi action = cùng state", nên A* trả về đường khác một ô
+là save cũ replay ra một thế giới khác. Kịch bản giữ nguyên **bản A* tham chiếu
+chậm** — chép nguyên ruột trước Đợt 15, quét tuyến tính, `Map` cho mọi thứ — rồi so
+từng ô trên 144 cặp điểm qua sáu biến thể (hộp xe tải, tránh ruộng, dây xích hẹp,
+trần nút thấp, lọc chỉ-đường, đích nhiều ô). Bốn đột biến đã cấy và thấy đỏ: quên
+tăng dấu phiên (25 kịch bản đỏ), lẫn bit "hộp lọt" với bit "đi được", đổi chiều phá
+hoà, và dùng chung dấu phiên cho hai bảng ghi nhớ khác nhau.
+
+#### Thứ ĐÃ THỬ rồi bỏ đi
+
+Đợt 9 để lại ba việc "chưa làm", đứng đầu là *"renderer vẫn cấp phát một object +
+một closure cho mỗi thứ vẽ mỗi khung (100–400 closure/khung)"*. Đợt này làm thật:
+gom hết vào một **bể dùng lại**, closure chỉ giữ cho vài chục ca phức tạp.
+
+Rồi đo A/B trên đúng một trạng thái ghim: **y hệt nhau.** Gắn đồng hồ vào từng
+chặng của `draw` thì rõ vì sao — chặng gom vật thể (chỗ cấp phát) chỉ tốn 67 ms
+trong tổng 1.971 ms, tức 3,4%; chi phí nằm ở chính các lệnh `drawImage`.
+
+Nên bể dùng lại đã bị **gỡ bỏ**. Một tái cấu trúc không dời được kim thì chỉ là
+thêm phức tạp, và ghi lại việc đã thử thì lần sau khỏi thử lại.
+
+Hai việc còn lại của Đợt 9 (`catchUpEntities` chép sâu mỗi khung, `growCropsIn`
+quét 1.776 ô mỗi khung) giờ có số đo: 0,0028 ms và 0,0200 ms — cộng lại 0,14%
+ngân sách. **Đóng lại, không đáng.**
+
+#### Cá thôi nằm trên mặt đường
+
+Có ba đường thả một con vật xuống bản đồ, và chỉ đường thứ nhất biết tới nước:
+
+| Đường | Khi nào | Trước |
+|---|---|---|
+| xe giao hàng tới nơi (`doErrand`) | thường ngày | ✓ thả xuống ao |
+| hết xe, mua thẳng (`BUY_ANIMAL`) | đội xe kín chuyến | ✗ thả xuống **điểm giao** |
+| bảng gỡ lỗi, hết xe | — | ✗ thả **cạnh nhân vật** |
+
+Điểm giao là mặt đường trước cửa kho. Mua một con cá đúng lúc ba chiếc xe đang bận
+là con cá nằm trên đường nhựa, bất biến vỡ ở dispatch ngay sau, và ván chơi đỏ mỗi
+khung hình cho tới hết đời. Nhánh dự phòng hiếm chạy — và hiếm chính là lý do nó
+lọt qua mười bốn đợt.
+
+Thêm `waterSpotForBox`, và nó khác `nearestWaterTile` ở hai chỗ:
+
+* **Xét cả hộp va chạm**, không chỉ tâm ô. Con cá hiện tại rộng 8px nên luôn lọt
+  trong một ô 16px — nhưng content sửa được qua OTA, và một con cá to là thứ hoàn
+  toàn hợp lệ để thêm. Với thân 20px thì ô ở mép lạch có tâm hợp lệ mà thân thò
+  lên hai bờ.
+* **Bán kính phủ hết bản đồ.** Hằng 30 của `nearestWaterTile` không với tới: nông
+  trại rộng 48 ô, điểm giao ở x=41, ao lớn ở x=2–7. Cách nhau 38 ô — nên câu trả
+  lời là "chưa có ao" trong khi cái ao nằm ngay đó.
+
+Kịch bản 137 đi cả ba đường cộng ca "hai mươi tư lượt thả liên tiếp" (chính hình
+dạng thật của lỗi: đội xe bão hoà từ giữa chừng, ba con cá chồng lên nhau ở ô
+(17,4)). Bốn đột biến đã cấy và thấy đỏ.
+
+#### Ba chỗ HUD lệch
+
+Cả ba đều ở khổ hẹp, và cả ba đều là "nhìn thấy ngay mà đọc mã thì không thấy".
+
+* **Nút ☰ chui xuống dưới thanh số liệu.** Chỗ chừa cho nó ràng vào
+  `body:not([data-input="kbm"])`, nên ở chế độ bàn phím + chuột `padding-right`
+  về 0 và thanh số liệu giãn hết bề ngang. Mà `#sysbtn` là nút chạm DUY NHẤT
+  không bao giờ tắt — kbm giấu joystick, cụm hình thoi và D-pad, nhưng vẫn để ☰
+  lại vì không có phím nào thay được nó. Chừa theo cái nút, không theo chế độ nhập.
+* **Nút ☰ treo lệch khỏi hàng.** Nó neo theo `10px` cứng còn thanh số liệu neo
+  theo `--hud-gap`, nên hai mép trên không bao giờ trùng. Rõ nhất khi thanh xuống
+  hai dòng và hai hộp cao khác hẳn nhau. Giờ cả hai đo từ cùng một gốc.
+* **Một chấm tròn lơ lửng dưới thanh số liệu.** Đó là icon dự báo ngày mai.
+  `.ic` là `inline-grid` + `place-items: center`, nên `::before { content: "›" }`
+  không phải chữ trang trí mà là THÊM MỘT Ô LƯỚI: chevron chiếm hàng trên, canvas
+  bị đẩy xuống hàng dưới, tụt khỏi hộp 1.5em và lòi ra ngoài đáy thanh. Xếp hàng
+  ngang thì chevron về đúng chỗ bên cạnh icon.
 
 ### Đợt 14: thức ăn tính bằng ĐIỂM, chó biết đi tuần, và tách hai cái quầy (core 1.40 · content 1.42)
 

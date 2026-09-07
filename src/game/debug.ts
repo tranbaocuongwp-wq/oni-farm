@@ -24,6 +24,9 @@ import {
   playerOverlapsTile,
   playerTile,
   saplingProp,
+  tileCenterX,
+  tileCenterY,
+  waterSpotForBox,
   weedProp,
 } from "./world.ts";
 import { removeEntity, spawnEntity } from "./entities.ts";
@@ -364,9 +367,22 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
         return;
       }
 
-      const spot = spotNear(d, content, def.box);
+      /* Loài dưới nước thả xuống AO, không phải cạnh nhân vật: `spotNear` hỏi
+         `blockedAtBox`, tức luật của loài ĐI BỘ — với nó mặt nước là ô đặc và
+         mặt đường là ô trống, nên nó luôn chọn đúng cái chỗ giết con cá. */
+      const p = playerTile(d.s);
+      const nuoc =
+        def.housing === "water" ? waterSpotForBox(d.s, content, def.box, p.x, p.y) : null;
+      const spot =
+        def.housing === "water"
+          ? nuoc && { x: tileCenterX(nuoc.x), y: tileCenterY(nuoc.y) }
+          : spotNear(d, content, def.box);
       if (!spot) {
-        toastText(d, "[debug] không có chỗ trống để thả", "bad");
+        toastText(
+          d,
+          def.housing === "water" ? "[debug] chưa có ao để thả" : "[debug] không có chỗ trống để thả",
+          "bad",
+        );
         return;
       }
       const eid = spawnEntity(d, content, { def: id, map: d.s.mapId, x: spot.x, y: spot.y });

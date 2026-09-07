@@ -121,51 +121,146 @@ export function lineOfSightBox(
 }
 
 /* ------------------------------------------------------------------ heap ---
-   Heap nhị phân tối thiểu. Cố ý viết tay thay vì dùng thư viện: `src/game/`
-   không có phụ thuộc ngoài nào, và đây là 30 dòng.
+   Heap nhị phân tối thiểu, nằm trên MẢNG ĐỊNH KIỂU dùng lại qua các lần gọi.
+
+   Cố ý viết tay thay vì dùng thư viện: `src/game/` không có phụ thuộc ngoài
+   nào, và đây là 40 dòng.
+
    Tie-break theo CHỈ SỐ Ô để kết quả tất định — hai nút cùng `f` phải luôn ra
    cùng một thứ tự, nếu không hai lần replay cùng chuỗi action sẽ cho hai đường
-   khác nhau.
+   khác nhau. Đó là luật xương sống của cả trò chơi này, nên nó không được đổi
+   một ly khi đổi cách chứa.
+
+   VÌ SAO đổi từ `Node[]` sang hai mảng song song: bench đo được A* là thứ đắt
+   nhất trong cả phần mô phỏng — 1,34 ms một lần gọi, tức 8% ngân sách một khung
+   hình 60fps, trong khi cả TICK còn lại chỉ 0,03 ms. Hai phần ba chi phí ấy là
+   `Map` khoá số nguyên (băm một số rồi tra bảng) và một object `{i,f}` mới cho
+   mỗi nút đẩy vào heap — vài nghìn object mỗi lần tìm đường. Mảng định kiểu bỏ
+   được cả hai, và vì chúng dùng lại qua các lần gọi nên không cấp phát gì sau
+   lần đầu.
 --------------------------------------------------------------------------- */
 
-interface Node {
-  i: number;
-  f: number;
+/* ---- bộ nhớ nháp dùng chung, cấp phát một lần rồi lớn dần theo bản đồ ----
+
+   AN TOÀN: `findPath` KHÔNG được gọi lồng nhau — một lần gọi bên trong một lần
+   gọi khác sẽ giẫm lên nháp của nhau. Hôm nay không chỗ nào làm vậy (`opts.pass`
+   chỉ hỏi địa hình), và `dangTim` bên dưới canh đúng điều đó. */
+let nhapO = 0;
+/** g của từng ô. Chỉ có nghĩa khi `dau[i] === ky`. */
+let gArr = new Float64Array(0);
+/** Ô liền trước trên đường đi. −1 = chưa có. */
+let truocArr = new Int32Array(0);
+/** Dấu phiên: thay vì xoá hai mảng trên mỗi lần gọi (1.776 ô × mỗi lần), chỉ
+ *  tăng số phiên lên một. */
+let dauArr = new Int32Array(0);
+let ky = 0;
+
+/** f của từng nút trong heap. */
+let heapF = new Float64Array(1024);
+/** chỉ số ô của từng nút trong heap. */
+let heapI = new Int32Array(1024);
+let heapN = 0;
+
+/** Đang có một lần tìm đường chạy dở hay không — canh việc gọi lồng nhau. */
+let dangTim = false;
+
+/* ---- ghi nhớ TÍNH CHẤT Ô trong MỘT lần tìm đường -------------------------
+
+   Ba phép hỏi địa hình — `walkableTile`, `blockedForActor`, `stepSpeed` — là
+   chỗ thật sự tốn thời gian của A*, chứ không phải hàng đợi. Mỗi ô bị hỏi lại
+   một lần cho MỖI hướng dẫn tới nó (tới tám lần), cộng thêm hai lần nữa mỗi
+   khi có ai đi chéo qua góc của nó. Mà câu trả lời thì không đổi trong suốt
+   một lần tìm đường: cả ba chỉ phụ thuộc (state, content, ô, box, swims), và
+   không có gì trong số đó nhúc nhích giữa chừng.
+
+   Nên hỏi một lần, ghi lại, dùng cho mọi lần sau. Dùng chung `ky` với `dauArr`
+   nên không phải xoá gì. */
+/** bit 0 = đã tính, bit 1 = đi được ở mức ô, bit 2 = hộp va chạm lọt. */
+let oCoArr = new Uint8Array(0);
+let oDauArr = new Int32Array(0);
+let oTocDoArr = new Float64Array(0);
+let oTocDoDauArr = new Int32Array(0);
+
+function chuanBiNhap(o: number): void {
+  if (o > nhapO) {
+    nhapO = o;
+    gArr = new Float64Array(o);
+    truocArr = new Int32Array(o);
+    dauArr = new Int32Array(o);
+    oCoArr = new Uint8Array(o);
+    oDauArr = new Int32Array(o);
+    oTocDoArr = new Float64Array(o);
+    oTocDoDauArr = new Int32Array(o);
+    ky = 0;
+  }
+  ky++;
+  /* `ky` tràn số nguyên 32 bit thì mọi ô lại trông như "đã thăm ở phiên này".
+     Sau hơn hai tỉ lần tìm đường mới xảy ra, nhưng xử lý nó tốn đúng ba dòng. */
+  if (ky === 0x7fffffff) {
+    dauArr.fill(0);
+    oDauArr.fill(0);
+    oTocDoDauArr.fill(0);
+    ky = 1;
+  }
 }
 
-function less(a: Node, b: Node): boolean {
-  return a.f !== b.f ? a.f < b.f : a.i < b.i;
+function heapLon(o: number): void {
+  if (o <= heapF.length) return;
+  let n = heapF.length;
+  while (n < o) n *= 2;
+  const f = new Float64Array(n);
+  const i = new Int32Array(n);
+  f.set(heapF);
+  i.set(heapI);
+  heapF = f;
+  heapI = i;
 }
 
-function heapPush(h: Node[], n: Node): void {
-  h.push(n);
-  let c = h.length - 1;
+/** a đứng trước b không. Đúng cùng luật với bản cũ: f trước, rồi tới chỉ số ô. */
+function truocHon(fa: number, ia: number, fb: number, ib: number): boolean {
+  return fa !== fb ? fa < fb : ia < ib;
+}
+
+function heapPush(f: number, i: number): void {
+  heapLon(heapN + 1);
+  let c = heapN++;
+  heapF[c] = f;
+  heapI[c] = i;
   while (c > 0) {
     const p = (c - 1) >> 1;
-    if (!less(h[c]!, h[p]!)) break;
-    const t = h[c]!;
-    h[c] = h[p]!;
-    h[p] = t;
+    if (!truocHon(heapF[c]!, heapI[c]!, heapF[p]!, heapI[p]!)) break;
+    const tf = heapF[c]!;
+    const ti = heapI[c]!;
+    heapF[c] = heapF[p]!;
+    heapI[c] = heapI[p]!;
+    heapF[p] = tf;
+    heapI[p] = ti;
     c = p;
   }
 }
 
-function heapPop(h: Node[]): Node | undefined {
-  const top = h[0];
-  const last = h.pop();
-  if (h.length && last !== undefined) {
-    h[0] = last;
+/** Lấy nút nhỏ nhất ra. Trả chỉ số ô, hoặc −1 khi heap rỗng. */
+function heapPop(): number {
+  if (heapN === 0) return -1;
+  const top = heapI[0]!;
+  heapN--;
+  if (heapN > 0) {
+    heapF[0] = heapF[heapN]!;
+    heapI[0] = heapI[heapN]!;
     let p = 0;
     for (;;) {
       const l = p * 2 + 1;
       const r = l + 1;
       let m = p;
-      if (l < h.length && less(h[l]!, h[m]!)) m = l;
-      if (r < h.length && less(h[r]!, h[m]!)) m = r;
+      if (l < heapN && truocHon(heapF[l]!, heapI[l]!, heapF[m]!, heapI[m]!)) m = l;
+      if (r < heapN && truocHon(heapF[r]!, heapI[r]!, heapF[m]!, heapI[m]!)) m = r;
       if (m === p) break;
-      const t = h[p]!;
-      h[p] = h[m]!;
-      h[m] = t;
+      const tf = heapF[p]!;
+      const ti = heapI[p]!;
+      heapF[p] = heapF[m]!;
+      heapI[p] = heapI[m]!;
+      heapF[m] = tf;
+      heapI[m] = ti;
       p = m;
     }
   }
@@ -212,79 +307,130 @@ export function findPath(
   // nó và duyệt mọi nền + mọi công trình ở MỖI lần tìm đường.
   const invMax = 1 / maxSpeedMul(content);
 
-  const gScore = new Map<number, number>();
-  const cameFrom = new Map<number, number>();
-  const open: Node[] = [];
+  /* Gọi lồng nhau sẽ giẫm lên nháp dùng chung. Không chỗ nào làm vậy, nhưng
+     nếu một ngày `opts.pass` gọi lại A* thì thà hỏng to và thấy ngay còn hơn
+     trả về một đường sai âm thầm. */
+  if (dangTim) throw new Error("findPath gọi lồng nhau — nháp dùng chung sẽ hỏng");
+  dangTim = true;
+  try {
+    chuanBiNhap(state.w * state.h);
+    heapN = 0;
 
-  const heur = (i: number): number => {
-    const x = i % w;
-    const y = (i / w) | 0;
-    let best = Infinity;
-    for (const g of goals) {
-      const gx = g % w;
-      const gy = (g / w) | 0;
-      const dx = Math.abs(x - gx);
-      const dy = Math.abs(y - gy);
-      const d = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
-      if (d < best) best = d;
-    }
-    return best * invMax;
-  };
-
-  gScore.set(start, 0);
-  heapPush(open, { i: start, f: heur(start) });
-
-  let expanded = 0;
-  while (open.length && expanded < maxNodes) {
-    const cur = heapPop(open)!.i;
-    expanded++;
-
-    if (goals.has(cur)) {
-      const path: number[] = [];
-      let node: number | undefined = cur;
-      while (node !== undefined && node !== start) {
-        path.push(node);
-        node = cameFrom.get(node);
+    /* Toạ độ ĐÍCH lấy ra một lần. `heur` chạy cho mỗi nút được đẩy vào heap —
+       vài nghìn lần mỗi lần tìm đường — nên duyệt thẳng `Set` ở trong đó là
+       dựng vài nghìn iterator cho cùng một dữ liệu không đổi. */
+    const nG = goals.size;
+    const gx = new Int32Array(nG);
+    const gy = new Int32Array(nG);
+    {
+      let k = 0;
+      for (const g of goals) {
+        gx[k] = g % w;
+        gy[k] = (g / w) | 0;
+        k++;
       }
-      path.reverse();
-      return path;
     }
 
-    const cx = cur % w;
-    const cy = (cur / w) | 0;
-    const g0 = gScore.get(cur) ?? 0;
+    /* Ba phép hỏi địa hình, mỗi ô đúng một lần cho cả lần tìm đường. Ô ngoài
+       bản đồ trả về "không đi được" mà không đụng mảng — chỉ số của nó không
+       nằm trong lưới. */
+    const tinhO = (x: number, y: number, i: number): number => {
+      if (oDauArr[i] === ky) return oCoArr[i]!;
+      let co = 1;
+      if (walkableTile(state, content, x, y, swims)) {
+        co |= 2;
+        if (!blockedForActor(state, content, x * TILE + TILE / 2, y * TILE + TILE / 2, box.w, box.h, swims))
+          co |= 4;
+      }
+      oCoArr[i] = co;
+      oDauArr[i] = ky;
+      return co;
+    };
+    /** Đi được ở mức Ô. Ngoài biên là không. */
+    const oDiDuoc = (x: number, y: number): boolean => {
+      if (x < 0 || y < 0 || x >= w || y >= state.h) return false;
+      return (tinhO(x, y, idx(w, x, y)) & 2) !== 0;
+    };
+    const oTocDo = (x: number, y: number, i: number): number => {
+      if (oTocDoDauArr[i] === ky) return oTocDoArr[i]!;
+      const v = stepSpeed(state, content, x, y);
+      oTocDoArr[i] = v;
+      oTocDoDauArr[i] = ky;
+      return v;
+    };
 
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (leash && (Math.abs(nx - leash.x) > leash.r || Math.abs(ny - leash.y) > leash.r))
-          continue;
-        if (!walkableTile(state, content, nx, ny, swims)) continue;
-        if (pass && !pass(nx, ny)) continue;
-        if (avoidFarm && tileAt(state, nx, ny)?.tilled) continue;
-        // Hộp va chạm rộng hơn một điểm: ô đi được ở mức Ô vẫn có thể không lọt.
-        if (
-          blockedForActor(state, content, nx * TILE + TILE / 2, ny * TILE + TILE / 2, box.w, box.h, swims)
-        )
-          continue;
-        // Cấm cắt góc: đi chéo thì hai ô kề cũng phải trống, nếu không thân
-        // thực thể sẽ kẹt cứng ở góc tường.
-        if (dx !== 0 && dy !== 0) {
-          if (!walkableTile(state, content, cx + dx, cy, swims)) continue;
-          if (!walkableTile(state, content, cx, cy + dy, swims)) continue;
-          if (pass && (!pass(cx + dx, cy) || !pass(cx, cy + dy))) continue;
+    const heur = (i: number): number => {
+      const x = i % w;
+      const y = (i / w) | 0;
+      let best = Infinity;
+      for (let k = 0; k < nG; k++) {
+        const dx = Math.abs(x - gx[k]!);
+        const dy = Math.abs(y - gy[k]!);
+        const d = Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+        if (d < best) best = d;
+      }
+      return best * invMax;
+    };
+
+    gArr[start] = 0;
+    truocArr[start] = -1;
+    dauArr[start] = ky;
+    heapPush(heur(start), start);
+
+    let expanded = 0;
+    while (heapN > 0 && expanded < maxNodes) {
+      const cur = heapPop();
+      expanded++;
+
+      if (goals.has(cur)) {
+        const path: number[] = [];
+        let node = cur;
+        while (node !== -1 && node !== start) {
+          path.push(node);
+          node = truocArr[node]!;
         }
-        const ni = idx(w, nx, ny);
-        const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
-        const g1 = g0 + step / stepSpeed(state, content, nx, ny);
-        if (g1 >= (gScore.get(ni) ?? Infinity)) continue;
-        gScore.set(ni, g1);
-        cameFrom.set(ni, cur);
-        heapPush(open, { i: ni, f: g1 + heur(ni) });
+        path.reverse();
+        return path;
+      }
+
+      const cx = cur % w;
+      const cy = (cur / w) | 0;
+      const g0 = gArr[cur]!;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (leash && (Math.abs(nx - leash.x) > leash.r || Math.abs(ny - leash.y) > leash.r))
+            continue;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= state.h) continue;
+          const ni = idx(w, nx, ny);
+          const co = tinhO(nx, ny, ni);
+          if ((co & 2) === 0) continue;
+          if (pass && !pass(nx, ny)) continue;
+          if (avoidFarm && tileAt(state, nx, ny)?.tilled) continue;
+          // Hộp va chạm rộng hơn một điểm: ô đi được ở mức Ô vẫn có thể không lọt.
+          if ((co & 4) === 0) continue;
+          // Cấm cắt góc: đi chéo thì hai ô kề cũng phải trống, nếu không thân
+          // thực thể sẽ kẹt cứng ở góc tường.
+          if (dx !== 0 && dy !== 0) {
+            if (!oDiDuoc(cx + dx, cy)) continue;
+            if (!oDiDuoc(cx, cy + dy)) continue;
+            if (pass && (!pass(cx + dx, cy) || !pass(cx, cy + dy))) continue;
+          }
+          const step = dx !== 0 && dy !== 0 ? Math.SQRT2 : 1;
+          const g1 = g0 + step / oTocDo(nx, ny, ni);
+          if (dauArr[ni] === ky && g1 >= gArr[ni]!) continue;
+          gArr[ni] = g1;
+          truocArr[ni] = cur;
+          dauArr[ni] = ky;
+          heapPush(g1 + heur(ni), ni);
+        }
       }
     }
+    return null;
+  } finally {
+    dangTim = false;
   }
-  return null;
 }

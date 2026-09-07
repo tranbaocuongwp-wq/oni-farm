@@ -15,11 +15,15 @@ cuối là biết còn gì phải làm.
    giao diện hoặc hành vi nhìn thấy được.
 4. Lên mạng xong thì poll asset của Cloudflare tới khi nó trả về JavaScript thật,
    rồi `cmp` từng byte với `dist/`.
+5. Đợt nào đụng tới tốc độ thì **đo trước, sửa sau**: `npm run bench` in bảng chi
+   phí phần mô phỏng trên một cảnh nặng dựng theo hạt cố định. Sửa mà bảng không
+   nhúc nhích thì gỡ bản sửa ra và ghi lại là đã thử — xem Đợt 15.
 
 ## Đã lên mạng
 
 | Đợt | Core | Content | Nội dung | Kịch bản mới | Đột biến đã cấy |
 |---|---|---|---|---|---|
+| 15 | 1.41.0 | 1.42.0 | A* nhanh gấp 2,9 lần (1,338 → 0,468 ms: mảng định kiểu dùng lại + ghi nhớ tính chất ô trong mỗi lần tìm); `npm run bench` đo lại được; cá thôi bị thả xuống mặt đường ở hai nhánh dự phòng, và bán kính tìm ao phủ hết bản đồ; ba chỗ HUD lệch ở khổ hẹp (nút ☰ chui xuống thanh số liệu ở chế độ kbm, nút ☰ neo lệch gốc, icon dự báo rớt khỏi ô lưới thành một chấm lơ lửng) | 137–138 | 8 |
 | 14 | 1.40.0 | 1.42.0 | Máng là một BỂ ĐIỂM (món nào cũng đổ, trộn chung, giá cao no lâu, trần 60, `SAVE_VERSION` 10); chó đi tuần thật và tối thì về nhà nằm; Chợ và Quầy thu mua tách ra hai đầu nông trại; đứng trong chuồng thì nút phụ mở BẢNG KHU; bảng khu vẽ lại (thanh mức + "còn ~N ngày", từng con bấm được, đổ máng không cần cầm sẵn) | 133–136 | 5 |
 | 13 | 1.39.0 | 1.41.0 | Người làm tự lo mọi việc (cày, gieo, tưới, thu, chữa, đổ máng, rảnh thì kiếm gỗ đá); `doWork` chạy đúng việc được giao; phối hợp không giẫm chân; menu cửa hàng đồng bộ | 129–132 | 9 |
 | 12 | 1.38.0 | 1.41.0 | Thức ăn chỉ vào bằng máng hoặc rắc hồ (bỏ cho ăn trực tiếp); nhà cho chó; người làm đổ máng lấy cám từ kho | 127–128 + 69(d) | 3 |
@@ -35,13 +39,15 @@ cuối là biết còn gì phải làm.
 Theo thứ tự Cường chốt. Mỗi đợt đã khảo sát xong, sẽ chi tiết hoá ngay trước khi
 bắt tay.
 
-- **Đợt 15 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
+- **Đợt 16 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
   game nên gỡ được sạch; `discovered` ghi ở một chỗ duy nhất trong `commit()`.
-- **Đợt 16 · Bản đồ cao gấp đôi · sông · cầu và bè · giãn công trình.** Nối thêm
+  (Vốn là Đợt 15; Cường chuyển Đợt 15 sang tối ưu hiệu năng, nên cả danh sách
+  dời xuống một bậc.)
+- **Đợt 17 · Bản đồ cao gấp đôi · sông · cầu và bè · giãn công trình.** Nối thêm
   xuống dưới để save cũ không mất gì; cơ chế cầu đã có sẵn.
-- **Đợt 17 · Mua bán bằng xe thật.** Trả tiền lúc đặt, xe đậu rồi tự bốc vào kho.
+- **Đợt 18 · Mua bán bằng xe thật.** Trả tiền lúc đặt, xe đậu rồi tự bốc vào kho.
   Xe vẽ to hai ô, có người bốc xếp.
-- **Đợt 18 · Diễn hoạt.** Cửa rộng và cao, đi vào là chuyển bản đồ luôn; giường;
+- **Đợt 19 · Diễn hoạt.** Cửa rộng và cao, đi vào là chuyển bản đồ luôn; giường;
   khung riêng cho từng việc.
-- **Đợt 19 · Hệ sinh thái rừng.** Thú hoang, cỏ cây, dương xỉ.
-- **Đợt 20 · Mỏ quặng hiếm** xuất hiện theo xác suất mỗi đêm.
+- **Đợt 20 · Hệ sinh thái rừng.** Thú hoang, cỏ cây, dương xỉ.
+- **Đợt 21 · Mỏ quặng hiếm** xuất hiện theo xác suất mỗi đêm.
