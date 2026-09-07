@@ -99,7 +99,8 @@ trang chơi được offline thì không nên chờ mạng để hiện chữ.
 | `.grid` + `.card` | ba–bốn ý ngang hàng, mỗi ý một thẻ có `h3` |
 | `.note` | một câu phụ chú dưới cùng một mục |
 | `table.luat` | bảng hai cột "điều gì / ra sao" |
-| `.chips` + `.chip` | nhãn ngắn xếp hàng |
+| `.chips` + `.chip` | nhãn ngắn xếp hàng; `a.chip` là chip bấm được |
+| `table.so-sanh` | bảng nhiều cột số, tiêu đề dính khi cuộn, số căn phải |
 | `.table-wrap` | bọc mọi bảng rộng để nó cuộn ngang trong khung riêng |
 | `.sp` (`<canvas data-sprite>`) | ô chờ sprite, `src/site/sprites.ts` vẽ vào |
 
@@ -150,8 +151,16 @@ Danh sách gõ tay ở đó là bản sao thứ hai của danh sách trang trong
 thêm một trang mà quên một trong hai chỗ thì trang đó hoặc không được build, hoặc
 build ra mà không ai tới được.
 
-Builder còn **tự soát**: mọi mục trong `NAV` phải có một trang thật được sinh ra,
-nếu không build đỏ — chứ không phải người dùng bấm vào rồi gặp 404.
+Builder còn **tự soát** hai chuyện, và cả hai đều đã cấy lỗi để chắc nó đỏ được:
+
+* Mọi mục trong `NAV` phải có một trang thật được sinh ra — chứ không phải người
+  dùng bấm vào rồi gặp 404.
+* Mọi việc trong `UseKind` (đọc thẳng từ `src/game/actions.ts`) phải có một mục
+  trên trang **Hành động**. Trang ấy từng dạy một nút *"CHO ĂN — đứng cạnh con
+  vật và bấm"* suốt ba đợt **sau khi** cho ăn trực tiếp đã bị gỡ khỏi game, và
+  thiếu hẳn ba việc có thật (đổ máng, rắc hồ, nhấc/đặt). Danh sách là chữ viết
+  tay, `UseKind` là mã — không có gì buộc hai thứ phải khớp, cho tới khi có dòng
+  soát này.
 
 ---
 

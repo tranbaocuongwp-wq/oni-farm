@@ -893,3 +893,79 @@ table.luat tr:last-child td {
     margin-bottom: var(--k1);
   }
 }
+
+/* ---- BẢNG SO SÁNH: 61 cây trên một màn hình ------------------------------
+   Khác `table.luat` (hai cột "điều gì / ra sao") ở chỗ nó có nhiều cột SỐ và
+   người đọc quét dọc để so. Nên: số căn PHẢI (chữ số thẳng hàng thì mắt so
+   được), hàng tiêu đề DÍNH lại khi cuộn (bảng dài 61 dòng, cuộn tới giữa mà
+   mất tiêu đề cột là bảng vô dụng), và tên cây là liên kết tới thẻ đầy đủ. */
+table.so-sanh {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+table.so-sanh th,
+table.so-sanh td {
+  padding: var(--k2) var(--k3);
+  border-bottom: 1px solid var(--panel-2);
+  text-align: left;
+  white-space: nowrap;
+}
+table.so-sanh thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  color: var(--gold);
+  font-size: var(--chu-nho);
+  border-bottom: 2px solid var(--edge);
+}
+table.so-sanh tbody th {
+  font-weight: 700;
+}
+table.so-sanh tbody th a {
+  color: var(--ink);
+  text-decoration: none;
+}
+table.so-sanh tbody th a:hover {
+  color: var(--gold);
+  text-decoration: underline;
+}
+table.so-sanh .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+table.so-sanh tbody tr:nth-child(2n) {
+  background: rgba(255, 255, 255, 0.022);
+}
+table.so-sanh .up {
+  color: var(--green);
+}
+table.so-sanh .down {
+  color: var(--red);
+}
+
+/* ---- MỤC THEO MÙA: chip trỏ tới thẻ đầy đủ ----
+   Mùa không còn vẽ lại trọn cái thẻ nữa (xem `cropsPage`), chỉ còn là một bảng
+   mục — nên mỗi mùa là một khối chip gọn. */
+.mua-muc {
+  margin-top: var(--k5);
+  scroll-margin-top: var(--k5);
+}
+.mua-muc h3 {
+  margin: 0 0 var(--k3);
+}
+.mua-muc h3 b {
+  color: var(--gold);
+  font-weight: 700;
+}
+a.chip {
+  text-decoration: none;
+}
+a.chip:hover {
+  border-color: var(--edge-hi);
+  color: var(--ink);
+}
+.ent {
+  scroll-margin-top: var(--k5);
+}

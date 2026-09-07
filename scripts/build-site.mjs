@@ -243,8 +243,52 @@ function cropCard(c) {
         </article>`;
 }
 
+/**
+ * Lãi MỖI NGÀY ở nhịp ổn định — con số trả lời đúng câu người chơi hỏi.
+ *
+ * "Lãi 520đ" tự nó không nói gì: 520đ sau năm ngày khác hẳn 520đ sau mười hai
+ * ngày, mà trên cùng một mảnh đất thì thứ khan hiếm là NGÀY chứ không phải ô
+ * đất. Nên chia cho số ngày.
+ *
+ * Hai công thức, vì hai loại cây khác nhau thật sự:
+ *   · cây thu MỘT lần → (tiền bán − tiền hạt) / tổng số ngày lớn;
+ *   · cây thu NHIỀU lần → tiền bán / nhịp thu lại, KHÔNG trừ tiền hạt.
+ *
+ * Chỗ thứ hai là chỗ dễ sai và tôi đã sai một lần: trừ tiền hạt ở mỗi lứa thì
+ * cây thu nhiều lần bị tính thiệt, trong khi cả điểm mạnh của nó là gieo một
+ * lần rồi hái mãi. Vụ ĐẦU vẫn tốn hạt và vẫn mất trọn `tongNgay` ngày — ghi rõ
+ * dưới bảng, chứ không giấu vào một con số trung bình.
+ */
+function laiMoiNgay(c) {
+  if (c.regrowDays > 0) return (c.sellPrice * c.yieldMin) / c.regrowDays;
+  const n = tongNgay(c);
+  return n > 0 ? lai(c) / n : 0;
+}
+
+/** Một hàng trong bảng so sánh. */
+function cropRow(c) {
+  const l = lai(c);
+  const ld = laiMoiNgay(c);
+  return `<tr>
+    <th scope="row"><a href="#cay-${esc(c.id)}">${esc(c.name)}</a></th>
+    <td>${c.seasons.map((x) => esc(seasonName(x))).join(", ")}</td>
+    <td class="num">${ngay(tongNgay(c))}</td>
+    <td class="num">${tien(c.seedPrice)}đ</td>
+    <td class="num">${tien(c.sellPrice)}đ</td>
+    <td class="num ${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${tien(l)}đ</td>
+    <td class="num ${ld >= 0 ? "up" : "down"}"><b>${ld >= 0 ? "+" : ""}${tien(Math.round(ld))}đ</b></td>
+  </tr>`;
+}
+
 function cropsPage() {
   const list = content.cropOrder.map((id) => content.crops[id]).filter(Boolean);
+
+  /* MỘT thẻ cho MỘT cây.
+     Bản cũ nhóm theo mùa rồi vẽ trọn cái thẻ trong TỪNG mùa cây đó hợp — hành
+     là bốn mùa nên hành hiện bốn lần. Ra 120 thẻ cho 61 cây, trang nặng 174 KB,
+     và tệ hơn cả: bốn thẻ cùng mang `id="cay-scallion"`, tức HTML sai và mọi
+     liên kết `#cay-scallion` trở thành mơ hồ. Giờ mùa chỉ còn là một BẢNG MỤC
+     trỏ tới thẻ duy nhất của cây đó. */
   const theoMua = content.seasonOrder.map((s) => ({
     id: s,
     name: seasonName(s),
@@ -253,31 +297,74 @@ function cropsPage() {
 
   const muc = theoMua
     .map((m) => `<a class="jump" href="#mua-${m.id}">${esc(m.name)} <b>${m.cay.length}</b></a>`)
-    .join("");
+    .join("") + `<a class="jump" href="#bang-lai">Lãi nhất</a>`;
 
-  const sections = theoMua
+  const mucMua = theoMua
     .map(
-      (m) => `    <section id="mua-${m.id}">
-      <div class="wrap">
-        <h2>Trồng được vào mùa ${esc(m.name)}</h2>
-        <p class="lead">${m.cay.length} loại. Gieo trái mùa thì cây vẫn mọc nhưng chậm hơn hẳn — cửa hàng có ghi rõ mùa của từng gói hạt.</p>
-        <div class="ents">
-${m.cay.map(cropCard).join("\n")}
-        </div>
-      </div>
-    </section>`,
+      (m) => `        <div class="mua-muc" id="mua-${m.id}">
+          <h3>${esc(m.name)} <b>${m.cay.length}</b></h3>
+          <div class="chips">
+            ${m.cay.map((c) => `<a class="chip" href="#cay-${esc(c.id)}">${esc(c.name)}</a>`).join("")}
+          </div>
+        </div>`,
     )
+    .join("\n");
+
+  /* Bảng so sánh, sắp theo LÃI MỖI NGÀY. Cây thu nhiều lần lên đầu là đúng —
+     đó chính là điều làm chúng đáng trồng, và nhìn bảng là thấy ngay. */
+  const bang = list
+    .slice()
+    .sort((a, b) => laiMoiNgay(b) - laiMoiNgay(a) || a.name.localeCompare(b.name, "vi"))
+    .map(cropRow)
     .join("\n");
 
   return page({
     title: "Thư viện cây trồng — OniFarm",
-    desc: `Chi tiết ${list.length} loại cây trong OniFarm: trồng mấy ngày, thu được bao nhiêu, bán được bao nhiêu, hợp mùa nào.`,
+    desc: `Chi tiết ${list.length} loại cây trong OniFarm: trồng mấy ngày, thu được bao nhiêu, bán được bao nhiêu, lãi mỗi ngày, hợp mùa nào.`,
     url: "/thu-vien/",
     h1: "CÂY TRỒNG",
-    tag: `Toàn bộ ${list.length} loại cây, kèm số ngày lớn, sản lượng và tiền lãi. Số lấy thẳng từ game nên không bao giờ lệch.`,
+    tag: `Toàn bộ ${list.length} loại cây, kèm số ngày lớn, sản lượng và lãi mỗi ngày. Số lấy thẳng từ game nên không bao giờ lệch.`,
     wide: true,
     body: `    <section class="jump-bar"><div class="wrap"><div class="jumps">${muc}</div></div></section>
-${sections}`,
+
+    <section>
+      <div class="wrap">
+        <h2>Mùa nào trồng được gì</h2>
+        <p class="lead">Gieo trái mùa thì <b>không gieo được</b> — và cửa hàng cũng không bày bán hạt trái mùa, nên không có cách nào lỡ mua nhầm. Sàn <b>nhà kính</b> là ngoại lệ duy nhất: trên đó trồng gì cũng được, quanh năm.</p>
+${mucMua}
+        <p class="note">Sang mùa mà cây <b>chưa chín</b> và trái mùa thì héo. Cây <b>đã chín</b> thì không bao giờ mất — vụ đang chờ gặt luôn an toàn.</p>
+      </div>
+    </section>
+
+    <section class="alt" id="bang-lai">
+      <div class="wrap">
+        <h2>Cây nào lãi nhất</h2>
+        <p class="lead">Sắp theo <b>lãi mỗi ngày</b>, không phải lãi một vụ — trên cùng một mảnh đất thì thứ khan hiếm là ngày chứ không phải ô đất.</p>
+        <div class="table-wrap">
+          <table class="so-sanh">
+            <thead><tr>
+              <th scope="col">Cây</th><th scope="col">Mùa</th><th scope="col">Ngày</th>
+              <th scope="col">Hạt</th><th scope="col">Bán</th><th scope="col">Lãi một vụ</th><th scope="col">Lãi mỗi ngày</th>
+            </tr></thead>
+            <tbody>
+${bang}
+            </tbody>
+          </table>
+        </div>
+        <p class="note">Lãi tính theo sản lượng <b>thấp nhất</b> — con số chắc chắn thu được, không phải con số may mắn.
+        Cây <b>thu nhiều lần</b> tính ở nhịp ổn định: gieo một lần rồi hái mãi, nên không trừ tiền hạt.
+        Vụ <b>đầu</b> của chúng vẫn tốn tiền hạt và vẫn phải chờ trọn số ngày ở cột “Ngày”.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Từng loại một</h2>
+        <div class="ents">
+${list.map(cropCard).join("\n")}
+        </div>
+      </div>
+    </section>`,
   });
 }
 
@@ -353,7 +440,8 @@ function animalsPage() {
     body: `    <section>
       <div class="wrap">
         <h2>Nuôi được</h2>
-        <p class="lead">Mua ở cửa hàng, xe sẽ chở tới điểm giao gần quầy bán rồi con vật tự đi vào chuồng. Đứng cạnh con vật là nút hành động đổi thành <span class="btn-pill">CHO ĂN</span> hoặc <span class="btn-pill">THU</span>.</p>
+        <p class="lead">Mua ở cửa hàng rồi có <b>xe thật</b> chạy từ cổng vào, đậu ở kho và thả hàng xuống; con vật tự đi về khu của nó. Loài <b>dưới nước</b> thì xe đậu ở <b>bờ ao</b> và thả thẳng xuống nước — không có chuyện con cá xuất hiện giữa sân rồi tự bơi qua đất.</p>
+        <p>Đứng cạnh con vật là nút hành động đổi thành <span class="btn-pill">THU</span>; còn cho ăn thì <b>đổ vào máng</b> chứ không đút tận miệng — xem mục dưới.</p>
         <div class="ents">
 ${nuoi.map(animalCard).join("\n")}
         </div>
@@ -443,7 +531,8 @@ ${content.materialOrder
     <section>
       <div class="wrap">
         <h2>Kẻ phá hoại</h2>
-        <p class="lead">Ban đêm chúng mò tới ruộng có cây chín và ăn mất một phần. Nuôi một con chó là xong chuyện: chó đi tuần cả ngày lẫn đêm, thấy là đuổi.</p>
+        <p class="lead">Chúng sinh ra <b>về đêm</b>, và càng nhiều cây chín bỏ ngoài ruộng thì càng nhiều con — ruộng trống thì không có con nào. Đó là lý do nên thu hoạch trước khi đi ngủ.</p>
+        <p>Con <b>chó</b> là câu trả lời: ban ngày nó <b>đi tuần</b> qua từng lô ruộng và từng chuồng, gặp là bắt. Tối thì nó <b>về nhà nằm</b> — nên chó không canh hộ bạn qua đêm, nó dọn sạch vào sáng hôm sau.</p>
         <div class="ents">
 ${pha.map(animalCard).join("\n")}
         </div>
@@ -579,11 +668,25 @@ const HANH_DONG = [
     meo: "Nâng cấp bình tưới và rìu sớm — chúng tiết kiệm sức mỗi ngày, càng dùng lâu càng lời.",
   },
   {
-    nut: "CHO ĂN",
-    ten: "Cho vật nuôi ăn",
+    nut: "ĐỔ MÁNG",
+    ten: "Đổ thức ăn vào máng",
     can: null,
-    y: "Đứng cạnh con vật và bấm. Đói thì nó không lớn, không cho sữa trứng, và nhịn lâu quá thì chết.",
-    meo: "Gà và vịt tự kiếm ăn quanh sân, không cần cho ăn tay.",
+    y: "Cầm thức ăn, đứng cạnh cái MÁNG của khu rồi bấm. Không có kiểu đút tận miệng từng con — thức ăn vào chuồng bằng đúng một cửa là cái máng.",
+    meo: "Máng là một bể chung: món nào đổ cũng được và trộn lẫn, món đắt thì no lâu hơn. Nhờ vậy đi vắng vài ngày đàn vẫn có cái ăn. Bò, dê và cừu cùng ăn rơm nên dùng chung một máng.",
+  },
+  {
+    nut: "RẮC HỒ",
+    ten: "Rắc thức ăn xuống ao",
+    can: null,
+    y: "Cá không có máng — đứng ở bờ, cầm thức ăn của chúng rồi bấm là rắc xuống mặt nước.",
+    meo: "Gà và vịt thì không cần cả hai: chúng mổ sâu trên cỏ, nên khu của chúng cố ý không có máng.",
+  },
+  {
+    nut: "NHẤC",
+    ten: "Nhấc một vật lên vác",
+    can: null,
+    y: "Tay không, đứng cạnh khúc gỗ hay hòn đá rồi bấm là vác lên. Đang vác thì nút đổi thành ĐẶT để hạ xuống một ô trống.",
+    meo: "Vác là cách dọn một vật ra khỏi chỗ nó đang chắn đường, mà không phải đập vỡ nó. Không đặt xuống được ô nào sẽ tự nhốt mình — game chặn trước, không cho đặt.",
   },
   {
     nut: "VÀO",
@@ -927,6 +1030,44 @@ const outs = [
   write("thu-vien/vat-nuoi", animalsPage()),
   write("thu-vien/hanh-dong", actionsPage()),
 ];
+
+/* ---- soát: trang HÀNH ĐỘNG phải khớp với mã, không phải với trí nhớ -------
+
+   Trang này từng dạy một nút "CHO ĂN — đứng cạnh con vật và bấm" suốt ba đợt
+   SAU KHI cho ăn trực tiếp đã bị gỡ khỏi game (Đợt 12 đưa thức ăn về đúng một
+   cửa là cái máng). Không ai nói dối: danh sách hành động là chữ viết tay,
+   còn `UseKind` là mã — hai thứ không có gì buộc phải khớp nhau.
+
+   Giờ có: đọc `UseKind` thẳng từ `src/game/actions.ts` và đòi mọi việc LÀM
+   TRÊN MỘT Ô đều có mặt trên trang. Thêm một hành động vào game mà quên viết
+   cho nó một mục thì build đỏ.
+
+   `putdown` cố ý không đòi riêng: nó là mặt kia của `lift` (đang vác thì nút
+   đổi thành ĐẶT) và mục NHẤC đã kể cả hai. */
+const VIEC_TREN_O = (() => {
+  const src = readFileSync(resolve(ROOT, "src/game/actions.ts"), "utf8");
+  const khoi = src.slice(src.indexOf("export type UseKind ="));
+  const het = khoi.indexOf("null;");
+  return [...khoi.slice(0, het).matchAll(/"(\w+)"/g)].map((m) => m[1]);
+})();
+
+/** Việc trong mã → nút trên trang. Sửa mã mà quên trang thì build đỏ ở dưới. */
+const NUT_CUA_VIEC = {
+  till: "CÀY", plant: "GIEO", water: "TƯỚI", harvest: "THU", cure: "CHỮA",
+  pull: "NHỔ", chop: "CHẶT", mine: "ĐẬP", build: "XÂY",
+  pour: "ĐỔ MÁNG", feedpond: "RẮC HỒ", lift: "NHẤC", putdown: "NHẤC",
+};
+
+{
+  const coTrenTrang = new Set(HANH_DONG.map((h) => h.nut));
+  const thieu = VIEC_TREN_O.filter((v) => !coTrenTrang.has(NUT_CUA_VIEC[v]));
+  if (thieu.length) {
+    throw new Error(
+      `src/game/actions.ts có việc ${thieu.join(", ")} mà trang Hành động không kể tới — ` +
+        "thêm mục cho nó trong HANH_DONG, hoặc ánh xạ nó trong NUT_CUA_VIEC",
+    );
+  }
+}
 
 /* Mọi mục trong NAV phải có trang thật — thêm mục mà quên sinh trang thì đây
    là chỗ bắt được, chứ không phải người dùng bấm vào rồi gặp 404. */
