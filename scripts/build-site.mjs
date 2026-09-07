@@ -734,7 +734,7 @@ function hubPage() {
 
 function bangLuat(hang) {
   return (
-    `<div class="bang-cuon"><table class="luat"><tbody>` +
+    `<div class="table-wrap"><table class="luat"><tbody>` +
     hang.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join("") +
     `</tbody></table></div>`
   );

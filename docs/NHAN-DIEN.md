@@ -100,7 +100,7 @@ trang chơi được offline thì không nên chờ mạng để hiện chữ.
 | `.note` | một câu phụ chú dưới cùng một mục |
 | `table.luat` | bảng hai cột "điều gì / ra sao" |
 | `.chips` + `.chip` | nhãn ngắn xếp hàng |
-| `.bang-cuon` | bọc mọi bảng rộng để nó cuộn ngang trong khung riêng |
+| `.table-wrap` | bọc mọi bảng rộng để nó cuộn ngang trong khung riêng |
 | `.sp` (`<canvas data-sprite>`) | ô chờ sprite, `src/site/sprites.ts` vẽ vào |
 
 `table.luat` dùng `<th scope="row">` chứ không phải `<td>` in đậm — trình đọc màn

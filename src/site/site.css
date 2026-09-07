@@ -860,8 +860,17 @@ table.luat tr:last-child td {
   border-bottom: 0;
 }
 /* Màn hẹp: hai cột cạnh nhau thì cột phải chỉ còn vài chữ mỗi dòng — xếp
-   chồng, nhãn nằm trên giá trị. */
+   chồng, nhãn nằm trên giá trị.
+
+   `min-width: 0` trên khung cuộn là bắt buộc: `.table-wrap` sinh ra để bảng
+   RỘNG cuộn ngang trong khung riêng, nhưng bảng này thì xếp chồng nên không
+   bao giờ cần cuộn — thiếu dòng đó thì nó vẫn giữ bề rộng nội dung và đẩy cả
+   trang tràn ngang 10px. */
 @media (max-width: 520px) {
+  .table-wrap:has(table.luat) {
+    overflow-x: visible;
+    min-width: 0;
+  }
   table.luat,
   table.luat tbody,
   table.luat tr,
