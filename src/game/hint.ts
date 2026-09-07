@@ -570,10 +570,18 @@ export function penAction(
   if (!khu) return null;
   const tt = penSummary(state, content, khu);
 
-  // Cầm đúng thức ăn mà máng còn chỗ → đổ máng, đích là chính cái máng.
+  /* Cầm đúng thức ăn mà chỗ chứa còn chỗ → đổ, đích là chính chỗ chứa.
+
+     HỒ CÁ nói khác: ở đó KHÔNG CÓ cái máng nào, thức ăn rắc thẳng xuống mặt
+     nước. Nhãn "ĐỔ MÁNG" đứng trước một mặt hồ là một câu nói dối nhỏ mà hậu
+     quả không nhỏ — người chơi đọc "máng", nhìn quanh không thấy máng, rồi kết
+     luận là chưa cho cá ăn được. Thao tác thì vẫn chạy đúng từ đầu; chỉ mỗi
+     cái nhãn sai. */
   const cam = selectedItemId(state.inv, state.sel);
-  if (tt.mang && cam && tt.feeds.includes(cam) && tt.mang.n < tt.mang.max)
-    return { kind: "pour", label: LABEL.pour, at: { x: tt.mang.x, y: tt.mang.y } };
+  if (tt.mang && cam && tt.feeds.includes(cam) && tt.mang.n < tt.mang.max) {
+    const kind = khu.swim ? "feedpond" : "pour";
+    return { kind, label: LABEL[kind], at: { x: tt.mang.x, y: tt.mang.y } };
+  }
 
   // Có con tới lứa → thu, đích là con gần nhất trong khu.
   if (tt.toiLua > 0) {

@@ -235,32 +235,68 @@ export function pourBest(d: Draft, content: Content, x: number, y: number): numb
  * Giờ họ làm ĐÚNG việc người chơi làm: xúc cám từ kho, đổ vào máng, rồi con vật
  * tự tới ăn. Trả về số phần đã đổ.
  */
+/**
+ * Ô CHỨA THỨC ĂN của một khu — cái máng trên cạn, hoặc MẶT NƯỚC ở hồ cá.
+ *
+ * Hồ cá cố ý không có máng: thức ăn rắc thẳng xuống nước (xem `feedPond`). Nên
+ * mọi phép hỏi "đổ được vào đây không" phải nhận cả hai kiểu, nếu không thì
+ * người làm thuê đổ đầy được mọi cái máng trên nông trại mà đàn cá thì chết
+ * đói ngay cạnh một kho đầy cám — đúng cảnh Cường gặp.
+ */
+function khuCuaOChua(state: GameState, content: Content, x: number, y: number): PenDef | null {
+  const pen = penAt(state, content, x, y);
+  if (!pen) return null;
+  if (pen.swim) return tileAt(state, x, y)?.g === "water" ? pen : null;
+  return tileAt(state, x, y)?.prop === "trough" ? pen : null;
+}
+
+/**
+ * Món trong KHO mà khu này ăn được, RẺ NHẤT theo điểm.
+ *
+ * Rẻ nhất trước vì cỏ khô và cám sinh ra để làm việc này, còn cà phê trong kho
+ * là hàng để bán. Không xếp thứ tự thì người làm sẽ đổ thứ đắt nhất vào máng
+ * ngay lần đầu — một quyết định người chơi không hề ra, và không hoàn tác được.
+ *
+ * Lọc theo `pen.feeds` chứ không nhận mọi thứ có điểm: đàn cá không ăn cỏ khô,
+ * và đổ cỏ khô xuống hồ là vừa phí kho vừa lấp mất chỗ của cám cá.
+ */
+function monReNhatTrongKho(
+  state: GameState,
+  content: Content,
+  pen: PenDef,
+  x: number,
+  y: number,
+): number {
+  /* Đang có món gì trong đó thì ĐỔ THÊM ĐÚNG MÓN ẤY — bể điểm chỉ ghi được một
+     tên món, trộn vào là cái tên kia biến mất khỏi thẻ khu. */
+  const dang = troughItem(state, x, y);
+  const nhan = dang !== null ? [dang] : (pen.feeds ?? []);
+  let at = -1;
+  let re = Infinity;
+  for (let i = 0; i < state.store.length; i++) {
+    const v = state.store[i];
+    if (!v || !nhan.includes(v.id)) continue;
+    const dm = diemThucAn(v.id, content);
+    if (dm <= 0 || dm >= re) continue;
+    re = dm;
+    at = i;
+  }
+  return at;
+}
+
 export function canPourFromStore(state: GameState, content: Content, x: number, y: number): boolean {
-  if (tileAt(state, x, y)?.prop !== "trough") return false;
-  if (!penAt(state, content, x, y)) return false;
+  const pen = khuCuaOChua(state, content, x, y);
+  if (!pen) return false;
   if (troughStock(state, x, y) >= troughMax(content)) return false;
-  return state.store.some((v) => v && diemThucAn(v.id, content) > 0);
+  return monReNhatTrongKho(state, content, pen, x, y) >= 0;
 }
 
 export function pourFromStore(d: Draft, content: Content, x: number, y: number): number {
+  const pen = khuCuaOChua(d.s, content, x, y);
+  if (!pen) return 0;
   const cho = troughMax(content) - troughStock(d.s, x, y);
   if (cho <= 0) return 0;
-  /* Lấy món RẺ NHẤT theo điểm trước: cỏ khô và cám sinh ra để làm việc này,
-     còn cà phê trong kho là hàng để bán. Không xếp thứ tự thì người làm sẽ đổ
-     thứ đắt nhất vào máng ngay lần đầu — một quyết định người chơi không hề
-     ra, và không hoàn tác được. */
-  let at = -1;
-  let re = Infinity;
-  for (let i = 0; i < d.s.store.length; i++) {
-    const v = d.s.store[i];
-    if (!v) continue;
-    const dm = diemThucAn(v.id, content);
-    if (dm <= 0) continue;
-    if (dm < re) {
-      re = dm;
-      at = i;
-    }
-  }
+  const at = monReNhatTrongKho(d.s, content, pen, x, y);
   if (at < 0) return 0;
   const o = d.s.store[at]!;
   const moi = diemThucAn(o.id, content);

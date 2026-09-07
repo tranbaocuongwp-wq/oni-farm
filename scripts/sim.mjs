@@ -15,7 +15,7 @@ import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
 import { findPath, PATH_STATS, walkableTile, stepSpeed } from "../src/game/pathfind.ts";
 import { driveable, pondDock, MAX_VEHICLES } from "../src/game/vehicles.ts";
-import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM } from "../src/game/pen.ts";
+import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM , canPourFromStore } from "../src/game/pen.ts";
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
@@ -9517,6 +9517,164 @@ test("140. CÔNG TRÌNH NHIỀU Ô: chợ và quầy là một dãy, bấm ở �
     const p = st.getState().player;
     eq(Math.floor(p.x / TILE), at.x, `đi bộ tới được chỗ đứng của ${ten} (x)`);
     eq(Math.floor(p.y / TILE), at.y, `đi bộ tới được chỗ đứng của ${ten} (y)`);
+  }
+});
+
+test("141. HỒ CÁ: nút gọi đúng tên, và người làm tự lấy cám từ KHO đem ra rắc", () => {
+  /* Hai lỗi cùng nằm ở chỗ "hồ cá không có cái máng nào".
+
+     (a) Nút ngữ cảnh đứng ở bờ ao ghi "ĐỔ MÁNG". Thao tác thì CHẠY ĐÚNG từ
+         đầu — bấm vào là cám xuống nước thật. Nhưng người chơi đọc "máng",
+         nhìn quanh hồ không thấy cái máng nào, rồi kết luận là chưa cho cá ăn
+         được. Một cái nhãn sai đắt ngang một tính năng hỏng.
+
+     (b) `canPourFromStore` đòi ô phải có `prop === "trough"`, mà mặt nước thì
+         không bao giờ có. Nên người làm thuê đổ đầy được MỌI cái máng trên
+         nông trại trong khi đàn cá chết đói ngay cạnh một cái kho đầy cám. */
+
+  const ao = (content.tiles.pens ?? []).find((p) => p.swim);
+  ok(!!ao, "content phải có một khu BƠI để kiểm");
+  const canCa = (ao.feeds ?? [])[0];
+  ok(!!canCa, "khu bơi phải khai ăn được món gì");
+
+  /** Ô nước đầu tiên trong hồ, và một ô đứng được ngay cạnh nó. */
+  const s00 = mkStore().getState();
+  let onuoc = null;
+  let bo = null;
+  for (let y = ao.y; y < ao.y + ao.h && !bo; y++)
+    for (let x = ao.x; x < ao.x + ao.w; x++) {
+      if (tileAt(s00, x, y)?.g !== "water") continue;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const bx = x + dx;
+        const by = y + dy;
+        if (tileAt(s00, bx, by) && !isSolid(s00, content, bx, by)) {
+          onuoc = { x, y };
+          bo = { x: bx, y: by };
+          break;
+        }
+      }
+      if (bo) break;
+    }
+  ok(!!onuoc && !!bo, "phải tìm được một ô nước có bờ đứng được");
+
+  /* --- (a) NÚT gọi đúng tên ------------------------------------------- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.inv[5] = { id: canCa, n: 10 };
+      s.sel = 5;
+      s.player.x = bo.x * TILE + 8;
+      s.player.y = bo.y * TILE + 8;
+    });
+    const ca = contextAction(store.getState(), content, bo.x, bo.y);
+    eq(ca?.kind, "feedpond", `đứng bờ ao cầm ${canCa} thì nút phải là CHO CÁ ĂN, đang là ${ca?.kind}`);
+    ok(!/máng/i.test(ca?.label ?? ""), `nhãn không được nhắc tới "máng" ở hồ cá, đang là "${ca?.label}"`);
+
+    /* …và bấm vào thì cám xuống nước thật. */
+    const truoc = troughStock(store.getState(), ca.at.x, ca.at.y);
+    store.dispatch({ t: "USE", x: ca.at.x, y: ca.at.y });
+    for (let i = 0; i < 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    ok(
+      troughStock(store.getState(), ca.at.x, ca.at.y) > truoc,
+      "bấm nút thì mặt nước phải có thức ăn",
+    );
+  }
+
+  /* --- Khu TRÊN CẠN vẫn phải nói "ĐỔ MÁNG" ---------------------------- */
+  {
+    const can = (content.tiles.pens ?? []).find((p) => !p.swim && (p.feeds ?? []).length);
+    ok(!!can, "phải có một khu trên cạn để đối chứng");
+    const s0 = mkStore().getState();
+    let mang = null;
+    for (let y = can.y; y < can.y + can.h && !mang; y++)
+      for (let x = can.x; x < can.x + can.w; x++)
+        if (tileAt(s0, x, y)?.prop === "trough") {
+          mang = { x, y };
+          break;
+        }
+    ok(!!mang, `khu ${can.name} phải có máng`);
+    const store = mkStore();
+    setState(store, (s) => {
+      s.inv[5] = { id: can.feeds[0], n: 10 };
+      s.sel = 5;
+      s.player.x = mang.x * TILE + 8;
+      s.player.y = (mang.y + 1) * TILE + 8;
+    });
+    const ca = contextAction(store.getState(), content, mang.x, mang.y + 1);
+    eq(ca?.kind, "pour", "khu trên cạn vẫn phải là ĐỔ MÁNG — sửa hồ cá không được đụng tới nó");
+  }
+
+  /* --- (b) NGƯỜI LÀM tự lấy cám từ KHO đem ra hồ ---------------------- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 99999;
+      // KHO đầy cám cá, TÚI rỗng — người làm buộc phải đi lấy từ kho
+      s.store = s.store.map(() => null);
+      s.store[0] = { id: canCa, n: 40 };
+      s.inv = s.inv.map((o, i) => (i < 2 ? o : null));
+    });
+    store.dispatch({ t: "DEBUG", op: "spawnWorker" });
+    store.dispatch({ t: "DEBUG", op: "spawnWorker" });
+    ok(
+      store.getState().entities.some((e) => e.kind === "worker"),
+      "phải thuê được người làm",
+    );
+
+    /* Thả vài con cá xuống ao cho ĐÓI — không có con nào thì không việc gì
+       phải cho ăn, và kịch bản sẽ xanh vì lý do sai. */
+    const loaiCa = content.animalOrder.find((id) => content.animals[id]?.housing === "water");
+    ok(!!loaiCa, "phải có loài bơi");
+    for (let i = 0; i < 3; i++) store.dispatch({ t: "BUY_ANIMAL", def: loaiCa });
+    for (let k = 0; k < 3000; k++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    setState(store, (s) => {
+      for (const e of s.entities) if (e.def === loaiCa) e.animal.fed = 1; // đói meo
+    });
+    eq(
+      store.getState().entities.filter((e) => e.def === loaiCa).length,
+      3,
+      "ba con cá phải có mặt trong ao",
+    );
+
+    const mucBanDau = (s) => {
+      let n = 0;
+      for (let y = ao.y; y < ao.y + ao.h; y++)
+        for (let x = ao.x; x < ao.x + ao.w; x++) n += troughStock(s, x, y);
+      return n;
+    };
+    eq(mucBanDau(store.getState()), 0, "ao phải đang trống trước khi người làm ra tay");
+
+    for (let k = 0; k < 60000 && mucBanDau(store.getState()) === 0; k++)
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+
+    const s = store.getState();
+    ok(
+      mucBanDau(s) > 0,
+      "người làm phải TỰ lấy cám từ kho đem ra rắc xuống ao — kho đầy mà cá đói là lỗi",
+    );
+    ok(
+      (s.store[0]?.n ?? 0) < 40,
+      "…và phải trừ đúng vào kho, không phải sinh cám từ hư không",
+    );
+  }
+
+  /* --- Không đổ món khu KHÔNG ăn được -------------------------------- */
+  {
+    const khongAn = Object.keys(content.materials).find(
+      (k) => diemThucAn(`item:${k}`, content) > 0 && !(ao.feeds ?? []).includes(`item:${k}`),
+    );
+    if (khongAn) {
+      const store = mkStore();
+      setState(store, (s) => {
+        s.store = s.store.map(() => null);
+        s.store[0] = { id: `item:${khongAn}`, n: 40 };
+      });
+      const s = store.getState();
+      ok(
+        !canPourFromStore(s, content, onuoc.x, onuoc.y),
+        `kho chỉ có ${khongAn} — thứ đàn cá không ăn — thì KHÔNG được đổ xuống ao`,
+      );
+    }
   }
 });
 
