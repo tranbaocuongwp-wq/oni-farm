@@ -37,7 +37,13 @@ HOUSE = (15, 2, 22, 3)        # x0,y0,x1,y1
 DOOR = (18, 3)
 BENCH = (21, 5)
 WELL = (13, 3)
-SHOP, COUNTER = (26, 3), (28, 3)
+SHOP = (26, 3)
+# QUẦY THU MUA dời khỏi sân chợ. Trước đây hai cái đứng cách nhau ĐÚNG HAI Ô ở
+# (26,3) và (28,3): một cú chạm trên điện thoại phủ cả hai, nên người chơi định
+# mở cửa hàng hạt giống thì trúng bảng bán nông sản. Nay nó đứng cạnh BÃI GIAO
+# NHẬN trước cửa kho — chỗ xe tải tới lấy hàng, đúng vai của nó — và cách cái
+# chợ 14 ô, không cách nào bấm nhầm được nữa.
+COUNTER = (40, 5)
 WARE = (39, 2, 44, 4)
 STORE_DOOR = (41, 4)
 SPUR_Y, SPUR_X0, SPUR_X1 = 6, 30, 45
@@ -117,9 +123,10 @@ box(*HOUSE, "H"); g[DOOR[1]][DOOR[0]] = "D"
 g[BENCH[1]][BENCH[0]] = "C"
 g[WELL[1]][WELL[0]] = "G"
 box(25, 2, 29, 5, ":")           # sân chợ
-g[SHOP[1]][SHOP[0]] = "S"; g[COUNTER[1]][COUNTER[0]] = "B"
+g[SHOP[1]][SHOP[0]] = "S"
 box(*WARE, "K"); g[STORE_DOOR[1]][STORE_DOOR[0]] = "k"
 box(39, 5, 45, 5, ":")           # lối trước kho (dừng ở mép sân sau)
+g[COUNTER[1]][COUNTER[0]] = "B"  # quầy thu mua — ĐẶT SAU khi lát lối, không thì bị lấp
 # Sân sau: khoảnh đất trống DUY NHẤT còn lại sau khi cả bản đồ đã chia lô.
 # Cao 5 hàng chứ không 3, vì mỗi lô ruộng đã mất ô góc cho tấm biển tên lô,
 # nên trong ruộng không còn khối 6×5 nào sạch — sân sau phải gánh chỗ đó.
@@ -240,8 +247,11 @@ for ri, (ly0, ly1) in enumerate(LOT_ROWS):
         cam(lx0, ly0, f"Lô {'ABCD'[ri]}{ci + 1}")
 cam(DOOR[0] - 3, DOOR[1] + 1, "Nhà")
 cam(SHOP[0] - 1, SHOP[1] + 1, "Chợ")
+cam(COUNTER[0] - 1, COUNTER[1], "Quầy thu mua", "w")  # chữ vẽ sang TRÁI, không đè lên cái quầy
 cam(WELL[0], WELL[1] + 1, "Giếng", "w")
-cam(STORE_DOOR[0] - 2, STORE_DOOR[1] + 1, "Kho")
+# Biển KHO lùi lên mép sân sau: ô (39,5) trên lối trước kho nay là biển của
+# QUẦY THU MUA, mà một ô chỉ mang được một tấm.
+cam(STORE_DOOR[0] - 3, STORE_DOOR[1], "Kho")
 # Trên LỐI ĐI trước kho, không phải trên mặt bãi đậu: bãi đậu là asphalt.
 cam(PARKING[2][0] + 1, 5, "Bãi giao nhận", "w")  # bãi nằm bên TRÁI tấm biển
 cam(YARD[0], YARD[1], "Sân sau")

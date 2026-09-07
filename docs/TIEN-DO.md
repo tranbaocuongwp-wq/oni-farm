@@ -20,6 +20,7 @@ cuối là biết còn gì phải làm.
 
 | Đợt | Core | Content | Nội dung | Kịch bản mới | Đột biến đã cấy |
 |---|---|---|---|---|---|
+| 14 | 1.40.0 | 1.42.0 | Máng là một BỂ ĐIỂM (món nào cũng đổ, trộn chung, giá cao no lâu, trần 60, `SAVE_VERSION` 10); chó đi tuần thật và tối thì về nhà nằm; Chợ và Quầy thu mua tách ra hai đầu nông trại; đứng trong chuồng thì nút phụ mở BẢNG KHU; bảng khu vẽ lại (thanh mức + "còn ~N ngày", từng con bấm được, đổ máng không cần cầm sẵn) | 133–136 | 5 |
 | 13 | 1.39.0 | 1.41.0 | Người làm tự lo mọi việc (cày, gieo, tưới, thu, chữa, đổ máng, rảnh thì kiếm gỗ đá); `doWork` chạy đúng việc được giao; phối hợp không giẫm chân; menu cửa hàng đồng bộ | 129–132 | 9 |
 | 12 | 1.38.0 | 1.41.0 | Thức ăn chỉ vào bằng máng hoặc rắc hồ (bỏ cho ăn trực tiếp); nhà cho chó; người làm đổ máng lấy cám từ kho | 127–128 + 69(d) | 3 |
 | 11 | 1.37.0 | 1.40.0 | Con vật hết đứng đói cả ngày sau khi ngủ; một lúc chỉ một chế độ điều khiển | 123–126 | 8 |
@@ -34,11 +35,6 @@ cuối là biết còn gì phải làm.
 Theo thứ tự Cường chốt. Mỗi đợt đã khảo sát xong, sẽ chi tiết hoá ngay trước khi
 bắt tay.
 
-- **Đợt 14 · Thức ăn tính bằng ĐIỂM, chó biết tuần tra, tách hai cái quầy.**
-  Máng đếm điểm thay vì phần, món nào cũng đổ được và đổ chung được, giá càng cao
-  no càng lâu, trần máng 12 → 60. Chó đi tuần thật và tự về nhà khi đói hoặc khi
-  tối. Chợ và Quầy thu mua tách ra hai đầu nông trại. Gần chuồng thì nút XEM ưu
-  tiên BẢNG KHU. Bảng khu vẽ lại cho dễ nhìn.
 - **Đợt 15 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
   game nên gỡ được sạch; `discovered` ghi ở một chỗ duy nhất trong `commit()`.
 - **Đợt 16 · Bản đồ cao gấp đôi · sông · cầu và bè · giãn công trình.** Nối thêm

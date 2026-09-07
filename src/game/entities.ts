@@ -97,6 +97,29 @@ export function dangNghi(minutes: number, planAt: number): boolean {
   return qua >= 0 && qua < REPLAN_COOLDOWN;
 }
 
+/** Giờ này đã là ĐÊM chưa — cùng mốc với `animalMood` bên animals.ts. */
+function dem(s: GameState, content: Content): boolean {
+  return s.minutes >= 20 * 60 || s.minutes < (content.balance.dayStartMinutes ?? 360);
+}
+
+/**
+ * VÒNG TUẦN của con chó: tâm mỗi khu đáng canh trên bản đồ đang chơi.
+ *
+ * Lô ruộng và khu chăn nuôi — đúng những chỗ sâu bọ tìm tới. Thứ tự lấy theo
+ * thứ tự khai trong content nên nó cố định, và cả vòng tính lại mỗi lần chứ
+ * không nhớ: content đổi qua OTA thì chặng mới có hiệu lực ngay.
+ */
+function vongTuan(s: GameState, content: Content): { x: number; y: number }[] {
+  const ra: { x: number; y: number }[] = [];
+  for (const z of content.tiles.zones ?? [])
+    if (z.map === s.mapId && z.kind === "farm")
+      ra.push({ x: Math.floor(z.x + z.w / 2), y: Math.floor(z.y + z.h / 2) });
+  for (const p of content.tiles.pens ?? [])
+    if (p.map === s.mapId && !p.swim)
+      ra.push({ x: Math.floor(p.x + p.w / 2), y: Math.floor(p.y + p.h / 2) });
+  return ra;
+}
+
 export function animalDef(content: Content, id: string): AnimalDef | null {
   return content.animals[id] ?? null;
 }
@@ -524,6 +547,30 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
         if (dd < bestD) {
           bestD = dd;
           g = { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) };
+        }
+      }
+      /* HẾT SÂU BỌ THÌ VẪN LÀ ĐI TUẦN, không phải lang thang.
+
+         Trước đây `job: "patrol"` chỉ có nghĩa "nhắm thẳng con sâu gần nhất";
+         không có con nào thì con chó rơi xuống `wanderGoal` bán kính 4 và đi
+         loanh quanh y hệt con gà. Cường nói đúng: "chó tự đi tuần tra xung
+         quanh". Một con chó canh nhà thì phải ĐI QUA những chỗ đáng canh.
+
+         Vòng tuần = tâm của từng KHU đáng canh (lô ruộng, chuồng, nhà chó),
+         theo thứ tự cố định trong content, mỗi lần một chặng. Chọn chặng bằng
+         `actStep` chứ không bằng ngẫu nhiên: cùng seed thì cùng lộ trình, và
+         đó là điều kiện để kịch bản kiểm được nó.
+
+         BAN ĐÊM thì thôi tuần, về nằm ở nhà mình — `penGoal` lo phần đường về;
+         ở đây chỉ cần KHÔNG nhận chặng tuần mới. */
+      if (!g && !dem(s, content)) {
+        const chang = vongTuan(s, content);
+        if (chang.length) {
+          const k2 = Math.abs((s.actStep / 40) | 0) % chang.length;
+          const t2 = chang[k2]!;
+          // Đang đứng ngay tại chặng này rồi thì đi tiếp chặng sau.
+          const tai = Math.abs(t2.x - cur.x / TILE) < 2 && Math.abs(t2.y - cur.y / TILE) < 2;
+          g = tai ? (chang[(k2 + 1) % chang.length] ?? t2) : t2;
         }
       }
     }

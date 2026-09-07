@@ -254,7 +254,31 @@ function nangCap(state: GameState): GameState | null {
     s = { ...s, save: 9, entities: [], entSeq: 0, actStep: 0, planCursor: 0, stats: st };
   }
 
+  /* v9 → v10: MÁNG ĐỔI ĐƠN VỊ — từ "phần" sang "điểm".
+     Cùng một trường `tile.trough`, cùng kiểu số, nhưng nghĩa đổi hẳn: một phần
+     cũ làm no HẲN, còn một điểm mới chỉ là một phần nhỏ của bữa. Không quy đổi
+     thì cái máng đầy của người chơi cũ (12 phần) đọc ra thành 12 điểm — ba bữa,
+     tức mất 80 % chỗ thức ăn họ đã trả tiền mua.
+
+     Hệ số 5 = trần mới 60 chia trần cũ 12: máng đầy vẫn là máng đầy. */
+  if (s.save === 9) {
+    const tiles = Array.isArray(s.tiles) ? s.tiles.map(doiMang) : s.tiles;
+    const maps: GameState["maps"] = {};
+    for (const [k, m] of Object.entries(s.maps ?? {}))
+      maps[k] = m && Array.isArray(m.tiles) ? { ...m, tiles: m.tiles.map(doiMang) } : m;
+    s = { ...s, save: 10, tiles, maps };
+  }
+
   return s.save === SAVE_VERSION ? s : null;
+}
+
+/** Một ô của save v9 → v10: `trough` phần → điểm. */
+function doiMang<T>(t: T): T {
+  if (!t || typeof t !== "object") return t;
+  const o = t as { trough?: unknown };
+  const n = Number(o.trough);
+  if (!Number.isFinite(n) || n <= 0) return t;
+  return { ...t, trough: Math.round(n * 5) };
 }
 
 /* ---------------------------------------------------------------------------

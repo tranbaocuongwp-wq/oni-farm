@@ -428,6 +428,12 @@ async function boot() {
     buyAnimal: (def) => store.dispatch({ t: "BUY_ANIMAL", def }),
     penGather: (pen) => store.dispatch({ t: "PEN_GATHER", pen }),
     penPour: (pen) => store.dispatch({ t: "PEN_POUR", pen }),
+    /* Bảng khu → thẻ MỘT CON: đóng menu rồi mở thẻ. Thẻ vẽ đè lên mặt sân chứ
+       không nằm trong menu, nên hai thứ không chồng lên nhau được. */
+    showAnimal: (id) => {
+      menus.close();
+      cardAnimal = id;
+    },
     hire: (job) => store.dispatch({ t: "HIRE", job }),
     fire: (id) => store.dispatch({ t: "FIRE", id }),
     openBuild: (id) => buildUI.open(id),

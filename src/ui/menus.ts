@@ -28,6 +28,7 @@ import { PAD_MAP, type PadBind } from "../core/input.ts";
 import { fromAnimals, sellPriceOf } from "../game/items.ts";
 import { sellSlots } from "../game/inventory.ts";
 import { penSummary } from "../game/animals.ts";
+import { diemThucAn } from "../game/pen.ts";
 import { khoaNgoai } from "./inert.ts";
 import { energyOf } from "../game/actions.ts";
 import { requirementProgress, statValue } from "../game/progression.ts";
@@ -55,8 +56,10 @@ export interface MenuHandlers {
   buyAnimal(def: string): void;
   /** Thu HẾT sản phẩm tới lứa trong một khu. */
   penGather(pen: string): void;
-  /** Đổ thức ăn đang cầm vào máng của một khu. */
+  /** Đổ thức ăn vào máng của một khu — tự lấy từ tay, túi, rồi kho. */
   penPour(pen: string): void;
+  /** Đóng menu và mở THẺ của đúng một con vật. */
+  showAnimal(id: number): void;
   hire(job: "crops" | "livestock" | "any"): void;
   /** Vào chế độ quy hoạch với công trình này chọn sẵn. */
   openBuild(id: string): void;
@@ -751,42 +754,91 @@ export function createMenus(
       return;
     }
     const tt = penSummary(s, c, pen);
-    const camId = s.inv[s.sel]?.id ?? null;
-    const doDuoc = !!tt.mang && !!camId && tt.feeds.includes(camId) && tt.mang.n < tt.mang.max;
+    const conNao = (id: string) => c.animals[id]?.name ?? id;
 
+    /* PHỤ ĐỀ nói VIỆC, không nói kiểm kê. "12 con" là một con số không dẫn tới
+       thao tác nào; "3 đang đói" thì dẫn thẳng tới cái nút ngay bên dưới. */
     const { body, foot } = shell(
       tt.name,
       tt.n === 0
         ? "Chưa có con nào"
-        : `${tt.n} con${tt.doi ? ` · ${tt.doi} đang đói` : ""}${tt.toiLua ? ` · ${tt.toiLua} tới lứa` : ""}`,
-      "sheet",
+        : [`${tt.n} con`, tt.doi ? `${tt.doi} đang đói` : "", tt.toiLua ? `${tt.toiLua} tới lứa` : ""]
+            .filter(Boolean)
+            .join(" · "),
+      "sheet pen-sheet",
     );
 
+    /* ---- MÁNG: một dòng LỚN, một thanh mức, và câu người chơi thật sự cần --
+       "còn ~2 ngày" là con số quyết định có phải đổ hôm nay không. Trước đây
+       bảng chỉ ghi "42/60 phần" — muốn biết còn được mấy ngày thì phải tự nhẩm
+       số con nhân mức ăn, tức là phải biết cả hai hằng số trong mã. */
     if (tt.mang) {
-      const day = tt.mang.n >= tt.mang.max;
-      body.appendChild(
-        note(
-          `Máng: ${tt.mang.n}/${tt.mang.max} phần` +
-            (day ? " — đã đầy" : doDuoc ? "" : ` · cầm ${tt.feeds.map((f: string) => itemLabel(f, c)).join(" / ")} để đổ`),
-        ),
-      );
+      const box = document.createElement("div");
+      box.className = "mang";
+      const p = tt.mang.max > 0 ? Math.max(0, Math.min(1, tt.mang.n / tt.mang.max)) : 0;
+      const big = document.createElement("div");
+      big.className = "big";
+      big.textContent = `Máng ${tt.mang.n}/${tt.mang.max} điểm`;
+      const con = document.createElement("div");
+      con.className = "con";
+      con.textContent =
+        tt.mang.n <= 0
+          ? "Máng cạn — cả đàn đang nhịn"
+          : tt.ngay === null
+            ? "Chưa có con nào ăn"
+            : tt.ngay >= 1
+              ? `còn ~${Math.floor(tt.ngay)} ngày nữa mới phải đổ`
+              : "hết trong hôm nay";
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const fill = document.createElement("i");
+      fill.style.width = `${Math.round(p * 100)}%`;
+      if (p <= 0.2) fill.className = "low";
+      bar.appendChild(fill);
+      box.append(big, bar, con);
+      body.appendChild(box);
+
+      /* Máng nhận món gì: HÀNG ICON, không phải một dòng chữ dài. Danh sách
+         thức ăn của một chuồng có tới năm sáu món; viết ra chữ thì nó chiếm
+         hai dòng và vẫn phải đọc từng chữ mới biết mình có món nào. */
+      if (tt.feeds.length) {
+        const hang = document.createElement("div");
+        hang.className = "feeds";
+        hang.appendChild(note("Ăn:", "lbl"));
+        for (const f of tt.feeds) {
+          const w = document.createElement("span");
+          w.className = "f";
+          w.title = itemLabel(f, c);
+          w.appendChild(icon(f, 14));
+          hang.appendChild(w);
+        }
+        hang.appendChild(note("…và mọi nông sản khác", "lbl"));
+        body.appendChild(hang);
+      }
     } else if (tt.swim) {
       body.appendChild(
         note(`Ao không có máng — đứng bờ, cầm ${tt.feeds.map((f: string) => itemLabel(f, c)).join(" / ")} rồi rắc xuống nước.`),
       );
     }
 
+    /* ---- HAI NÚT TO, mỗi nút một vai --------------------------------------
+       ĐỔ MÁNG không còn bắt cầm sẵn thức ăn: reducer tự lấy từ tay → túi →
+       kho. Trước đây mở bảng ra là gặp một cái nút xám kèm câu "cầm cỏ khô để
+       đổ", tức là cái bảng bắt người chơi đóng nó lại, đi tìm món, rồi mở lại. */
+    const coAn =
+      s.inv.some((o) => o && diemThucAn(o.id, c) > 0) || s.store.some((o) => o && diemThucAn(o.id, c) > 0);
+    const conCho = !!tt.mang && tt.mang.n < tt.mang.max;
     const g = document.createElement("div");
     g.className = "grid2";
     if (tt.mang)
       g.appendChild(
         mkBtn(
-          "Đổ máng",
+          conCho ? "Đổ máng" : "Máng đã đầy",
           () => {
             h.penPour(id);
             openPen(id);
           },
-          doDuoc ? "primary" : "dim",
+          conCho && coAn ? "primary" : "dim",
         ),
       );
     g.appendChild(
@@ -800,29 +852,47 @@ export function createMenus(
       ),
     );
     body.appendChild(g);
+    if (tt.mang && conCho && !coAn)
+      body.appendChild(note("Hết thức ăn — mua cỏ khô/cám ở chợ, hoặc cất nông sản vào kho."));
 
-    if (tt.loai.length === 0) body.appendChild(note("Mua vật nuôi ở cửa hàng — xe sẽ chở tới tận nơi."));
-    for (const l of tt.loai) {
-      const row = document.createElement("div");
-      row.className = "row";
-      const left = document.createElement("div");
-      left.className = "info";
-      const ic = c.animals[l.def];
-      left.innerHTML =
-        `<div class="name">${l.name} ×${l.n}</div>` +
-        `<div class="desc">` +
-        [
-          l.toiLua ? `${l.toiLua} tới lứa` : "",
-          l.doi ? `${l.doi} đói` : "",
-          l.chuaLon ? `${l.chuaLon} chưa lớn` : "",
-          !l.toiLua && !l.doi && !l.chuaLon ? "đang khoẻ" : "",
+    /* ---- TỪNG CON, không chỉ gộp theo loài --------------------------------
+       Bảng cũ gộp "Bò ×4 · 1 đói" và dừng ở đó: biết có một con đói mà không
+       biết CON NÀO, nên vẫn phải đi tìm bằng mắt. Mỗi dòng ở đây là một con,
+       bấm vào là mở thẳng thẻ của nó. */
+    if (tt.n === 0) {
+      body.appendChild(note("Mua vật nuôi ở cửa hàng — xe sẽ chở tới tận nơi."));
+    } else {
+      body.appendChild(note("TỪNG CON — bấm để mở thẻ"));
+      for (const a of tt.con) {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "row con-row";
+        el.appendChild(icon(`animal:${a.def}`, 14));
+        const info = document.createElement("div");
+        info.className = "info";
+        const nm = document.createElement("div");
+        nm.className = "name";
+        nm.textContent = `${conNao(a.def)} · ${a.ageDays} ngày tuổi`;
+        const de = document.createElement("div");
+        de.className = "desc";
+        de.textContent = [
+          a.hungry ? "ĐANG ĐÓI" : `no ${Math.round(a.fed * 100)}%`,
+          a.toiLua ? "tới lứa" : "",
+          a.mature ? "" : "chưa lớn",
         ]
           .filter(Boolean)
-          .join(" · ") +
-        (ic?.products.length ? ` · cho ${ic.products.map((q) => itemLabel(q.id, c)).join(", ")}` : "") +
-        `</div>`;
-      row.appendChild(left);
-      body.appendChild(row);
+          .join(" · ");
+        info.append(nm, de);
+        el.appendChild(info);
+        if (a.hungry || a.toiLua) {
+          const ch = document.createElement("div");
+          ch.className = `cham ${a.hungry ? "doi" : "lua"}`;
+          ch.textContent = a.hungry ? "đói" : "thu";
+          el.appendChild(ch);
+        }
+        el.addEventListener("click", () => h.showAnimal(a.id));
+        body.appendChild(el);
+      }
     }
 
     foot.appendChild(mkBtn("Đóng", close, "dim"));

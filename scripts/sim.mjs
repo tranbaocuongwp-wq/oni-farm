@@ -15,8 +15,8 @@ import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
 import { findPath, PATH_STATS } from "../src/game/pathfind.ts";
 import { driveable, pondDock } from "../src/game/vehicles.ts";
-import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn } from "../src/game/pen.ts";
-import { penSummary } from "../src/game/animals.ts";
+import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM } from "../src/game/pen.ts";
+import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
@@ -27,7 +27,7 @@ import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor } from "../src/g
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals } from "../src/game/items.ts";
 import { sellSlots } from "../src/game/inventory.ts";
-import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN } from "../src/game/hint.ts";
+import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import { cropInSeason } from "../src/game/season.ts";
@@ -428,8 +428,11 @@ const COUNTER = timVatThe("counter");
 const DOOR = timVatThe("door");
 const AT_WELL = standBy("well");
 const AT_DOOR = standBy("door");
-/* Quầy bán và quầy thu mua nằm hai bên MỘT ô sân: đứng đó bấm được cả hai. */
-const AT_SHOP = { x: (SHOP.x + COUNTER.x) / 2, y: SHOP.y };
+/* Chợ và quầy thu mua nay ở HAI ĐẦU nông trại — chợ ở sân trước nhà, quầy ở
+   bãi giao nhận trước cửa kho. Mỗi cái một chỗ đứng riêng; không còn một ô nào
+   bấm được cả hai, và đó chính là điều kịch bản 15b đo. */
+const AT_SHOP = standBy("shop");
+const AT_COUNTER = standBy("counter");
 
 /* Chỗ đứng làm ruộng trong các kịch bản: ĐỨNG TRÊN NGÕ giữa hai lô, hai bên là
    hai lô khác nhau. Sáu ô quanh nó là sáu ô cuốc được, và chỉ sáu (hai ô trên
@@ -1024,6 +1027,7 @@ test("15. INTERACT: cửa hàng/quầy không đổi state, cửa nhà DỊCH CH
   store.dispatch({ t: "INTERACT", x: SHOP.x, y: SHOP.y }); // 'S' — cửa hàng
   eq(store.getState(), before, "INTERACT SHOP không đổi state");
 
+  walkTo(store, AT_COUNTER.x, AT_COUNTER.y);
   before = store.getState();
   store.dispatch({ t: "INTERACT", x: COUNTER.x, y: COUNTER.y }); // 'B' — quầy thu mua
   eq(store.getState(), before, "INTERACT SELL không đổi state");
@@ -4173,7 +4177,14 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
   selectItem(store, monBo);
   eq(canUseAt(store.getState(), content, m.x, m.y), "pour", "cầm đúng thức ăn → nút ĐỔ MÁNG");
   use(store, m.x, m.y);
-  eq(troughStock(store.getState(), m.x, m.y), 5, "đổ hết 5 phần trong một lần bấm");
+  /* Máng tính bằng ĐIỂM từ core 1.40: năm bó cỏ khô × điểm của nó. Không chép
+     tay con số điểm vào đây — hỏi đúng cái hàm mà game dùng, để chỉnh giá qua
+     OTA không làm đỏ một kịch bản chẳng liên quan gì tới giá. */
+  eq(
+    troughStock(store.getState(), m.x, m.y),
+    5 * diemThucAn(monBo, content),
+    "đổ hết 5 đơn vị trong một lần bấm, quy ra điểm",
+  );
   eq(countInv(store, monBo), 0, "…và trừ đúng 5 khỏi túi");
 
   // cầm thứ khác thì không đổ được, và nút nói đúng lý do
@@ -4213,8 +4224,12 @@ test("67. khu chuồng dựng sẵn: rào kín, máng đổ được, con vật 
     if (d.changed) store.replace(d.s);
   }
   ok(an, "đứng sát máng còn thức ăn thì con bò ăn được");
-  eq(troughStock(store.getState(), m.x, m.y), truoc - 1, "máng vơi đúng một phần");
-  eq(store.getState().entities[0].animal.fed, content.animals.cow.fedMinutes, "ăn máng thì no HẲN");
+  eq(troughStock(store.getState(), m.x, m.y), truoc - DIEM_MOT_BUA, "máng vơi đúng MỘT BỮA");
+  eq(
+    store.getState().entities[0].animal.fed,
+    Math.min(content.animals.cow.fedMinutes, DIEM_MOT_BUA * PHUT_MOI_DIEM),
+    "ăn máng thì no theo đúng số điểm của bữa",
+  );
 
   /* ---- (f) máng CẠN thì đừng gọi con vật về chuồng chết đói ----------- */
   setState(store, (s) => {
@@ -4482,9 +4497,13 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
      thấy con cá bơi tới, không thấy nó ăn. Giờ hồ dùng CHUNG luật với cái máng
      — mẻ cám nằm lại trên mặt nước, con cá tự bơi tới ăn dần. */
   const oAn = tile(st2, oNuoc.x, oNuoc.y);
-  ok(oAn.trough > 0, `cám NẰM LẠI trên mặt nước: ${oAn.trough} phần`);
-  eq(oAn.troughId, monCa, "…và ô nước nhớ đúng món đã rắc");
-  eq(countInv(st2, monCa), tui0 - oAn.trough, "trừ trong túi đúng bằng số phần đã rắc");
+  ok(oAn.trough > 0, `cám NẰM LẠI trên mặt nước: ${oAn.trough} điểm`);
+  eq(oAn.troughId, monCa, "…và ô nước nhớ đúng món đã rắc (để VẼ)");
+  eq(
+    countInv(st2, monCa),
+    tui0 - oAn.trough / diemThucAn(monCa, content),
+    "trừ trong túi đúng số đơn vị đã rắc",
+  );
   eq(st2.getState().entities[0].animal.fed, 0, "con cá CHƯA no — nó phải bơi tới đã");
 
   // …rồi nó bơi tới và ăn thật.
@@ -4496,7 +4515,11 @@ test("69. cho ăn: mỗi loài nhiều món, mua được ở cửa hàng, và c
   ok(boiToi >= 0, `con cá bơi tới mẻ cám rồi ăn (sau ${boiToi} khung hình)`);
   const noCa = st2.getState().entities[0].animal.fed;
   const dayCa = content.animals.fish.fedMinutes;
-  ok(noCa > dayCa - 60 && noCa <= dayCa, `ăn xong thì no: ${noCa.toFixed(0)}/${dayCa}`);
+  /* No theo ĐIỂM ăn được, không phải no hẳn: một bữa là `DIEM_MOT_BUA` điểm. */
+  ok(
+    noCa === Math.min(dayCa, DIEM_MOT_BUA * PHUT_MOI_DIEM),
+    `ăn xong no đúng một bữa: ${noCa.toFixed(0)}/${dayCa}`,
+  );
   ok(
     tile(st2, oNuoc.x, oNuoc.y).trough < oAn.trough,
     "…và mẻ cám VƠI ĐI đúng phần nó vừa ăn",
@@ -5709,9 +5732,15 @@ test("80. con vật đi đúng tốc độ dù người đứng sát; nút bám 
   const py = Math.floor(store.getState().player.y / TILE);
   const caQuay = contextAction(store.getState(), content, px, py);
   eq(caQuay?.kind, "sell", "đứng CHÉO góc quầy thu mua vẫn bấm bán được");
-  /* Và đó là việc của nút CHÍNH, không phải nút phụ: nút phụ chỉ ĐỌC. */
+  /* Và đó là việc của nút CHÍNH, không phải nút phụ: nút phụ chỉ ĐỌC.
+     Quầy nay đứng trước cửa kho, cách nhà chó bốn ô — nên ở đây nút phụ chào
+     BẢNG KHU của nhà chó, và đó là câu trả lời đúng. Điều kịch bản này khoá là
+     nút phụ KHÔNG BAO GIỜ là cái bảng bán: bán là việc của nút chính. */
   const ih = interactHint(store.getState(), content, px, py);
-  ok(ih === null || ih.what === "tile", "nút phụ không mở bảng bán, cùng lắm là thẻ ô");
+  ok(
+    ih === null || ih.what === "tile" || ih.what === "pen",
+    `nút phụ chỉ TRA CỨU, không mở bảng bán (đang là ${ih?.what})`,
+  );
 
   /* --- NÚT CHÍNH bám theo địa hình quanh chân --------------------------- */
   const store2 = mkStore(607);
@@ -6027,17 +6056,29 @@ test("86. cò phải KHÔNG còn là nút Dùng", () => {
 });
 
 
-test("87. máng NHỚ MÓN đang có, và không trộn hai món vào một máng", () => {
-  /* Trước đây máng chỉ là một con SỐ. Hệ quả người chơi thấy: máng cạn và máng
-     đầy vẽ ra y hệt nhau, nên không có cách nào biết vì sao đàn bò đang đói —
-     đúng câu Cường hỏi. Và con vật thì hỏi khu "nhận những món gì" chứ không
-     hỏi "món đang nằm đó là gì", nên con heo vẫn nhắm vào cái máng đầy rơm. */
+test("87. máng là một BỂ ĐIỂM: trộn được nhiều món, món mắc cho nhiều điểm hơn", () => {
+  /* Đổi luật ở core 1.40, theo đúng câu Cường đặt: "thức ăn gì cũng được, càng
+     mắc thì no càng lâu, quản lý bằng điểm; nhiều loại, cho vào chung máng cũng
+     được, tăng dung lượng máng lên."
+
+     Bản cũ đếm PHẦN, một phần làm no HẲN bất kể là bó rơm hay cân cám đắt gấp
+     đôi — nên chọn thức ăn không phải một quyết định. Và máng chỉ chứa MỘT món,
+     nên đổ nhầm là phải chờ đàn ăn hết mới đổ tiếp được. */
   const store = mkStore(1201);
   const khu = content.tiles.pens.find((p) => p.id === "cattle");
   const m = pourSpotIn(store.getState(), content, khu);
   ok(!!m, "khu gia súc có chỗ đổ");
   eq(tile(store, m.x, m.y).prop, "trough", "…và đó là cái máng");
-  eq(troughItem(store.getState(), m.x, m.y), null, "ván mới: máng TRỐNG");
+  eq(troughStock(store.getState(), m.x, m.y), 0, "ván mới: máng TRỐNG");
+
+  // MÓN MẮC CHO NHIỀU ĐIỂM HƠN — luật trung tâm của cả hệ.
+  const dRom = diemThucAn("item:hay", content);
+  const dCam = diemThucAn("item:feedmix", content);
+  ok(dRom > 0 && dCam > 0, "cỏ khô và cám đều là thức ăn");
+  ok(dCam > dRom, `cám (mua ${content.materials.feedmix.buyPrice}đ, ${dCam} điểm) phải hơn cỏ khô (${content.materials.hay.buyPrice}đ, ${dRom} điểm)`);
+  eq(diemThucAn("item:wood", content), 0, "gỗ KHÔNG phải thức ăn");
+  eq(diemThucAn("item:stone", content), 0, "đá cũng không");
+  ok(diemThucAn("crop:lettuce", content) > 0, "nông sản thì ăn được — 'thức ăn gì cũng được'");
 
   giveItem(store, "item:hay", 5);
   selectItem(store, "item:hay");
@@ -6047,24 +6088,30 @@ test("87. máng NHỚ MÓN đang có, và không trộn hai món vào một mán
     s.player.x = m.x * TILE + TILE / 2;
     s.player.y = (m.y + 1) * TILE + TILE / 2;
   });
-  ok(canPourInto(store.getState(), content, m.x, m.y), "cầm rơm thì đổ được");
+  ok(canPourInto(store.getState(), content, m.x, m.y), "cầm cỏ khô thì đổ được");
   use(store, m.x, m.y);
-  eq(troughItem(store.getState(), m.x, m.y), "item:hay", "máng nhớ đúng món đã đổ");
-  eq(troughStock(store.getState(), m.x, m.y), 5, "…và đúng số phần");
+  eq(troughStock(store.getState(), m.x, m.y), 5 * dRom, "năm bó cỏ khô quy ra đúng số điểm");
+  eq(troughItem(store.getState(), m.x, m.y), "item:hay", "máng nhớ món đổ gần nhất — để VẼ");
 
-  // món KHÁC vào máng đang có đồ: bị từ chối, không trộn
-  giveItem(store, "item:fodder", 3);
-  selectItem(store, "item:fodder");
-  eq(canPourInto(store.getState(), content, m.x, m.y), false, "máng đang có rơm thì không đổ cỏ khô vào");
-  eq(countInv(store, "item:fodder"), 3, "…và không mất gì trong túi");
-  eq(troughItem(store.getState(), m.x, m.y), "item:hay", "…máng vẫn là rơm");
+  // MÓN KHÁC vào máng đang có đồ: nhận, và CỘNG DỒN điểm.
+  const truoc = troughStock(store.getState(), m.x, m.y);
+  giveItem(store, "item:feedmix", 3);
+  selectItem(store, "item:feedmix");
+  ok(canPourInto(store.getState(), content, m.x, m.y), "máng đang có cỏ khô vẫn đổ cám vào được");
+  use(store, m.x, m.y);
+  eq(troughStock(store.getState(), m.x, m.y), truoc + 3 * dCam, "điểm CỘNG DỒN, không thay thế");
+  eq(troughItem(store.getState(), m.x, m.y), "item:feedmix", "hình cái máng theo món đổ gần nhất");
+  eq(countInv(store, "item:feedmix"), 0, "…và trừ đúng ba đơn vị trong túi");
 
-  // ăn hết thì máng trở lại TRỐNG, cả số lẫn tên món
+  // GỖ thì không đổ được — máng không phải thùng rác.
+  giveItem(store, "item:wood", 4);
+  selectItem(store, "item:wood");
+  eq(canPourInto(store.getState(), content, m.x, m.y), false, "gỗ không đổ vào máng được");
+  eq(countInv(store, "item:wood"), 4, "…và không mất gì");
+
+  // ĂN theo ĐIỂM: một bữa lấy `DIEM_MOT_BUA`, no theo đúng số điểm lấy được.
   setState(store, (s) => {
-    const t = s.tiles[idx(s.w, m.x, m.y)];
-    t.trough = 1;
-  });
-  setState(store, (s) => {
+    s.tiles[idx(s.w, m.x, m.y)].trough = DIEM_MOT_BUA;
     s.entSeq = 1;
     s.entities = [{
       id: 1, kind: "animal", def: "cow", map: "farm",
@@ -6079,9 +6126,36 @@ test("87. máng NHỚ MÓN đang có, và không trộn hai món vào một mán
     store.dispatch({ t: "TICK", dt: 1 / 60 });
     an = store.getState().entities[0].animal.fed > 0;
   }
-  ok(an, "con bò tới máng ăn phần cuối cùng");
+  ok(an, "con bò tới máng ăn bữa cuối cùng");
+  eq(
+    store.getState().entities[0].animal.fed,
+    Math.min(content.animals.cow.fedMinutes, DIEM_MOT_BUA * PHUT_MOI_DIEM),
+    "no ĐÚNG theo số điểm ăn được",
+  );
   eq(troughStock(store.getState(), m.x, m.y), 0, "máng cạn");
   eq(troughItem(store.getState(), m.x, m.y), null, "…và quên luôn tên món, nên hình vẽ về đúng 'trống'");
+
+  // MÁNG GẦN CẠN thì bữa NHỎ HƠN, và no ít hơn theo đúng tỉ lệ.
+  const st2 = mkStore(1203);
+  setState(st2, (s) => {
+    s.tiles[idx(s.w, m.x, m.y)].trough = 1;
+    s.tiles[idx(s.w, m.x, m.y)].troughId = "item:hay";
+    s.entSeq = 1;
+    s.entities = [{
+      id: 1, kind: "animal", def: "cow", map: "farm",
+      x: m.x * TILE + 8, y: (m.y + 1) * TILE + 8,
+      dir: "down", anim: 0, seed: 2,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 99, fed: 0, hungryDays: 0, prod: [0] },
+    }];
+  });
+  let an2 = false;
+  for (let k = 0; k < 900 && !an2; k++) {
+    st2.dispatch({ t: "TICK", dt: 1 / 60 });
+    an2 = st2.getState().entities[0].animal.fed > 0;
+  }
+  ok(an2, "vét được chút đáy máng");
+  eq(st2.getState().entities[0].animal.fed, PHUT_MOI_DIEM, "một điểm thì no đúng một điểm — không no hẳn");
 });
 
 test("88. rắc/đổ xong đứng ngay đó xem thì con vật vẫn tới ăn", () => {
@@ -6168,29 +6242,31 @@ test("90. chế độ TỰ ĐỘNG LÀM: đổ máng đứng đầu bảng ưu t
   const m = pourSpotIn(store.getState(), content, coop);
   ok(!!m, "khu gia cầm có máng");
 
-  /* Món CHỈ khu gia cầm nhận. `item:feedmix` thì cả ba khu cạn đều nhận, nên
-     nút ngữ cảnh sẽ đúng đắn đi tới cái máng GẦN NHẤT nhận nó — đúng hành vi,
-     nhưng không kiểm được "tìm đúng khu gà". Bắp thì chỉ khu gia cầm ăn. */
-  const rieng = coop.feeds.filter(
-    (f) => (content.tiles.pens ?? []).filter((q) => (q.feeds ?? []).includes(f)).length === 1,
-  );
-  ok(rieng.length > 0, "khu gia cầm có ít nhất một món riêng");
-  const mon = rieng[0];
-  walkTo(store, HOME.x, HOME.y);
-  giveItem(store, mon, 8);
+  /* Từ core 1.40 MỌI máng nhận MỌI thức ăn (xem kịch bản 87), nên không còn
+     "món riêng của khu gà" để nhắm nữa — và cũng không nên có. Thứ còn phải
+     đúng là: đổ máng vẫn đứng đầu bảng ưu tiên, và nó nhắm vào cái máng GẦN
+     NHẤT còn chỗ. Đặt nhân vật ngay cạnh khu gia cầm để "gần nhất" là nó. */
+  const mon = coop.feeds[0];
+  setState(store, (s) => {
+    s.player.x = (m.x - 3) * TILE + TILE / 2;
+    s.player.y = m.y * TILE + TILE / 2;
+  });
+  giveItem(store, mon, 6);
   selectItem(store, mon);
 
-  const xa = Math.hypot(
-    m.x - Math.floor(store.getState().player.x / TILE),
-    m.y - Math.floor(store.getState().player.y / TILE),
-  );
-  ok(xa > 6, `cái máng ở XA, ngoài mọi tầm với: ${xa.toFixed(0)} ô`);
-
   const viec = autoJob(store.getState(), content, Math.max(store.getState().w, store.getState().h));
-  ok(!!viec, "nút ngữ cảnh tìm ra việc dù nó ở tận đầu kia sân");
+  ok(!!viec, "chế độ tự động tìm ra việc");
   eq(viec.kind, "pour", "…và việc đó là ĐỔ MÁNG");
-  eq(viec.x, m.x, "đúng cột của cái máng");
-  eq(viec.y, m.y, "đúng hàng của cái máng");
+  const mangKhac = (content.tiles.pens ?? [])
+    .map((q) => pourSpotIn(store.getState(), content, q))
+    .filter(Boolean);
+  const gan = mangKhac.reduce(
+    (a, b) =>
+      Math.abs(b.x - (m.x - 3)) + Math.abs(b.y - m.y) < Math.abs(a.x - (m.x - 3)) + Math.abs(a.y - m.y)
+        ? b
+        : a,
+  );
+  eq(`${viec.x},${viec.y}`, `${gan.x},${gan.y}`, "nhắm vào cái máng GẦN NHẤT");
   eq(store.getState().inv[viec.slot].id, mon, "…và nó biết phải cầm ô hotbar nào");
 
   // Cầm CUỐC thì không còn việc đổ máng nào — bảng ưu tiên không tự bịa ra việc
@@ -7801,7 +7877,7 @@ test("123. NGỦ DẬY LÀ ĂN: đồng hồ AI về sáng theo đồng hồ ng�
   }
   eq(an, 3, "cả ba con phải ăn được trong vòng 60 giây thật sau khi ngủ dậy");
   ok(khi < 60 * 30, `và phải nhanh, không phải chờ hết ngày (mất ${(khi / 60).toFixed(1)}s)`);
-  eq(troughStock(store.getState(), m.x, m.y), 9, "mỗi con ăn đúng một phần");
+  eq(troughStock(store.getState(), m.x, m.y), 12 - 3 * DIEM_MOT_BUA, "mỗi con ăn đúng một bữa");
   const viTri1 = store.getState().entities.filter((e) => ids.includes(e.id)).map((e) => `${e.x},${e.y}`);
   ok(viTri1.some((v, i) => v !== viTri0[i]), "và chúng có DI CHUYỂN, không đứng chết một chỗ");
 
@@ -8148,7 +8224,7 @@ test("127. NHÀ CHÓ là một khu thật: có máng, có biển, con chó về 
     if (store.getState().entities.find((e) => e.id === id).animal.fed > 0) khi = i;
   }
   ok(khi > 0, "con chó đói phải về máng nhà nó mà ăn");
-  eq(troughStock(store.getState(), mang.x, mang.y), 5, "và ăn đúng một phần");
+  eq(troughStock(store.getState(), mang.x, mang.y), 6 - DIEM_MOT_BUA, "và ăn đúng một bữa");
 });
 
 test("128. NGƯỜI LÀM đi ĐỔ MÁNG lấy cám từ kho — không bơm thức ăn thẳng vào con vật", () => {
@@ -8211,7 +8287,19 @@ test("128. NGƯỜI LÀM đi ĐỔ MÁNG lấy cám từ kho — không bơm th�
     an = store.getState().entities.filter((e) => ids.includes(e.id) && e.animal.fed > 0).length;
   }
   eq(an, 3, "cả ba con bò tự tới máng ăn");
-  ok(troughStock(store.getState(), m.x, m.y) < 12, "máng phải vơi đi — chúng ăn từ ĐÓ");
+  /* Máng phải VƠI vì chúng ăn từ đó. Đo cho sạch: DỪNG nguồn tiếp tế (kho
+     rỗng thì người làm không đổ thêm được), cho ba con đói lại, rồi xem mức
+     máng có tụt không. Không làm vậy thì người làm cứ đổ bù và mức máng đứng
+     yên — đúng, nhưng không chứng minh được điều đang cần chứng minh. */
+  setState(store, (s) => {
+    s.store = s.store.map(() => null);
+    for (const e of s.entities) if (ids.includes(e.id)) e.animal.fed = 0;
+  });
+  const truocAn = troughStock(store.getState(), m.x, m.y);
+  ok(truocAn > 0, "máng còn thức ăn để thử");
+  for (let i = 0; i < 60 * 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  const sauAn = troughStock(store.getState(), m.x, m.y);
+  ok(truocAn - sauAn >= DIEM_MOT_BUA, `máng phải vơi vì chúng ăn từ ĐÓ (${truocAn} → ${sauAn})`);
 
   // KHO RỖNG thì không nhận việc, chứ không đứng đổ máng bằng tay không.
   const st2 = mkStore();
@@ -8484,6 +8572,297 @@ test("132. ĐỔ MÁNG không bị con vật đứng cạnh chặn — doWork ch
   }
   ok(khi > 0, "người làm phải đổ được máng dù bò vây kín quanh nó");
   ok(countStore(store, cam) < 20, `cám lấy từ kho (còn ${countStore(store, cam)}/20)`);
+});
+
+test("134. CON CHÓ ĐI TUẦN THẬT: ban ngày qua từng khu, tối thì về nhà nằm", () => {
+  const khu = content.tiles.pens.find((p) => p.id === "doghouse");
+  const trongNha = (e) => {
+    const x = Math.floor(e.x / TILE);
+    const y = Math.floor(e.y / TILE);
+    return x >= khu.x - 1 && x < khu.x + khu.w + 1 && y >= khu.y - 1 && y < khu.y + khu.h + 1;
+  };
+  /* Thả con chó ở ĐẦU KIA nông trại, no bụng, và KHÔNG có con sâu bọ nào — đúng
+     tình huống Cường mô tả: con chó chẳng có việc gì, và bản cũ để nó đứng
+     loanh quanh một góc ruộng cả ngày. */
+  const thaCho = (phut) => {
+    const store = mkStore();
+    let id = 0;
+    setState(store, (s) => {
+      s.minutes = phut;
+      s.entities = s.entities.filter((e) => e.kind !== "animal");
+      id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: "dog", map: "farm",
+        x: 4 * TILE + 8, y: 24 * TILE + 8,
+        dir: "down", anim: 0, seed: 11,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: content.animals.dog.fedMinutes, hungryDays: 0, prod: [] },
+      });
+      s.player.x = 20 * TILE;
+      s.player.y = 20 * TILE;
+    });
+    return { store, id, cho: () => store.getState().entities.find((e) => e.id === id) };
+  };
+
+  /* --- BAN NGÀY: nó đi QUA CÁC KHU, không quẩn một chỗ ------------------
+     Vòng tuần là tâm từng lô ruộng và từng chuồng. Đo bằng số CHẶNG chạm được,
+     không đo bằng quãng đường: đi lung tung xa vẫn là đi lung tung. */
+  /* Chỉ đếm chặng LÔ RUỘNG, cố ý bỏ các chuồng và cả nhà chó ra ngoài: nhà chó
+     là chỗ con chó về nằm dù có vòng tuần hay không, nên đếm nó vào là tự cho
+     điểm. Cấy lỗi (bỏ hẳn vòng tuần) thì con chó về nằm nhà, và số lô nó chạm
+     rơi xuống đúng cái lô nó đang đứng — đó là điều kiện làm kịch bản này đỏ. */
+  const chang = [];
+  for (const z of content.tiles.zones ?? [])
+    if (z.map === "farm" && z.kind === "farm")
+      chang.push({ x: Math.floor(z.x + z.w / 2), y: Math.floor(z.y + z.h / 2) });
+  ok(chang.length >= 4, `vòng tuần phải có nhiều chặng (đang có ${chang.length})`);
+
+  {
+    const { store, cho } = thaCho(8 * 60); // 8 giờ sáng
+    /* HAI CHẶNG ĐO, và chỉ chặng sau tính điểm.
+
+       Chặng đầu (8h→12h) là để con chó ĐI XONG cái chuyến đầu tiên của nó, dù
+       chuyến ấy là gì. Bỏ qua nó là điều làm kịch bản này có răng: một con chó
+       KHÔNG biết tuần vẫn băng chéo qua ba bốn cái lô trên đường về nhà nằm —
+       đếm cả chặng đầu thì cấy lỗi vào mã vẫn thấy xanh, đúng như lần thử đầu.
+       Chặng sau (12h→18h) mới hỏi câu thật: giữa trưa nắng, KHÔNG có sâu bọ,
+       con chó này còn đi qua mấy cái lô nữa? Nằm nhà thì đáp số là 0. */
+    for (let i = 0; i < 60 * 600; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (store.getState().minutes >= 12 * 60) break;
+    }
+    const chamDuoc = new Set();
+    let xaNhat = 0;
+    const x0 = cho().x;
+    const y0 = cho().y;
+    for (let i = 0; i < 60 * 600; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      const e = cho();
+      const cx = e.x / TILE;
+      const cy = e.y / TILE;
+      xaNhat = Math.max(xaNhat, Math.hypot(e.x - x0, e.y - y0) / TILE);
+      for (let k = 0; k < chang.length; k++)
+        if (Math.abs(chang[k].x - cx) <= 2 && Math.abs(chang[k].y - cy) <= 2) chamDuoc.add(k);
+      if (store.getState().minutes >= 18 * 60) break; // đừng chạy sang đêm
+    }
+    ok(
+      chamDuoc.size >= 2,
+      `từ trưa tới chiều con chó vẫn phải đi qua ÍT NHẤT hai lô nữa (chạm ${chamDuoc.size})`,
+    );
+    ok(xaNhat >= 8, `và nó đi XA thật, không quẩn tại chỗ (xa nhất ${xaNhat.toFixed(1)} ô)`);
+  }
+
+  /* --- BAN ĐÊM: thôi tuần, về nhà mình nằm ------------------------------- */
+  {
+    const { store, cho } = thaCho(20 * 60 + 30); // 20:30, đã qua giờ tuần
+    let ve = -1;
+    for (let i = 1; i <= 60 * 300 && ve < 0; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (store.getState().minutes < 20 * 60) break; // sang ngày mới thì thôi đo
+      if (trongNha(cho())) ve = i;
+    }
+    ok(ve > 0, "tối là con chó phải về tới nhà chó");
+    // …và NẰM LẠI đó, không lại lang thang ra ruộng ngay sau đó.
+    let ngoai = 0;
+    for (let i = 0; i < 60 * 60; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (store.getState().minutes < 20 * 60) break;
+      if (!trongNha(cho())) ngoai++;
+    }
+    ok(ngoai < 60 * 20, `về rồi thì nằm lại (ra ngoài ${(ngoai / 60).toFixed(0)}s)`);
+  }
+});
+
+test("135. ĐỨNG TRONG CHUỒNG thì nút phụ mở BẢNG KHU, không phải thẻ một con bò", () => {
+  const store = mkStore();
+  const khu = content.tiles.pens.find((p) => p.id === "cattle");
+
+  /* Ô đứng: giữa ruột chuồng, và ĐẶT MỘT CON BÒ NGAY ĐÓ. Đây chính là cảnh
+     Cường gặp — trong chuồng thì chỗ nào cũng có một con bò trong tầm, nên nút
+     phụ luôn ghi "XEM BÒ" của đúng một con, còn câu anh hỏi khi bước vào là
+     "cái chuồng này thế nào". */
+  const px = khu.x + 1;
+  const py = khu.y + 1;
+  let id = 0;
+  setState(store, (s) => {
+    s.entities = s.entities.filter((e) => e.kind !== "animal");
+    id = ++s.entSeq;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: "farm",
+      x: px * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 3,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: content.animals.cow.fedMinutes, hungryDays: 0, prod: content.animals.cow.products.map(() => 0) },
+    });
+  });
+  ok(!!animalNear(store.getState(), px, py), "dựng cảnh: có con bò ngay ô đang đứng");
+
+  const ih = interactHint(store.getState(), content, px, py);
+  eq(ih?.what, "pen", "trong chuồng thì nút phụ mở BẢNG KHU");
+  eq(ih?.id, "cattle", "…và là bảng của ĐÚNG cái chuồng đang đứng");
+
+  /* --- NGƯỢC LẠI: con vật XỔNG ra ngoài, xa mọi khu → vẫn xem TỪNG CON ----
+     Đây là nửa kia của luật, và là dây bẫy chống "đảo thứ tự cho xong": đảo
+     tuyệt đối thì một con bò lạc đứng giữa ruộng cũng không bấm xem được nữa. */
+  const ngoai = { x: 12, y: 17 };   // giữa dải ruộng, cách mọi khu chuồng
+  ok(!penNear(store.getState(), content, ngoai.x, ngoai.y, PEN_MARGIN), "dựng cảnh: chỗ này ngoài mọi khu");
+  setState(store, (s) => {
+    const e = s.entities.find((z) => z.id === id);
+    e.x = ngoai.x * TILE + 8;
+    e.y = ngoai.y * TILE + 8;
+  });
+  const ih2 = interactHint(store.getState(), content, ngoai.x, ngoai.y);
+  eq(ih2?.what, "animal", "con vật lạc ngoài khu thì vẫn xem được từng con");
+  eq(ih2?.id, id, "…đúng con đang đứng đó");
+
+  /* --- Và ĐI NGANG QUA chuồng (không con nào trong tầm) vẫn đọc được bảng --- */
+  const canh = { x: khu.x - 1, y: khu.y + khu.h + 1 };
+  ok(!animalNear(store.getState(), canh.x, canh.y), "dựng cảnh: không con nào ở cạnh");
+  const ih3 = interactHint(store.getState(), content, canh.x, canh.y);
+  eq(ih3?.what, "pen", "đi ngang chuồng vẫn mở được bảng khu");
+});
+
+test("136. BẢNG KHU trả lời được ba câu: máng còn mấy ngày, con nào đói, đổ máng không cần cầm", () => {
+  const store = mkStore();
+  khoaNac(store);
+  unlockAll(store);
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  const cam = pen.feeds[0];
+
+  /* Dựng cảnh: hai con bò, một no một đói, máng cạn, và người chơi đứng trong
+     chuồng CẦM CÁI CUỐC — đúng cảnh mở bảng khu ra để xem có việc gì. */
+  let m = null;
+  {
+    const s0 = store.getState();
+    outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++)
+        if (tileAt(s0, x, y).prop === "trough") { m = { x, y }; break outer; }
+  }
+  ok(m, "chuồng bò có máng");
+  let idDoi = 0;
+  let idNo = 0;
+  setState(store, (s) => {
+    setTile(s, m.x, m.y, { trough: 0, troughId: null });
+    s.entities = s.entities.filter((e) => e.kind !== "animal");
+    for (const doi of [true, false]) {
+      const id = ++s.entSeq;
+      if (doi) idDoi = id; else idNo = id;
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: (pen.x + (doi ? 1 : 2)) * TILE + 8, y: (pen.y + 1) * TILE + 8,
+        dir: "down", anim: 0, seed: id,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: doi ? 0 : content.animals.cow.fedMinutes, hungryDays: 0, prod: [0, 0] },
+      });
+    }
+    s.player.x = (pen.x + 1) * TILE + 8;
+    s.player.y = (pen.y + 1) * TILE + 8;
+  });
+
+  /* --- CÂU 1: máng còn nuôi được mấy ngày ------------------------------- */
+  let tt = penSummary(store.getState(), content, pen);
+  eq(tt.mang.n, 0, "dựng cảnh: máng cạn");
+  eq(tt.ngay, 0, "máng cạn thì 'còn 0 ngày' — không phải null, không phải vô cực");
+  const moiNgay = diemMoiNgay(content);
+  ok(moiNgay > 0, `mức ăn mỗi con mỗi ngày phải dương (${moiNgay})`);
+
+  /* --- CÂU 2: CON NÀO đói, không chỉ 'có mấy con đói' -------------------- */
+  eq(tt.con.length, 2, "bảng liệt kê TỪNG con");
+  eq(tt.con[0].id, idDoi, "con ĐÓI xếp lên đầu — dòng đáng bấm không được nằm giữa bảng");
+  eq(tt.con[0].hungry, true, "…và nó được đánh dấu đói");
+  eq(tt.con[1].id, idNo, "con no xếp sau");
+  ok(tt.con.every((a) => a.name && a.ageDays >= 0), "mỗi dòng có tên và tuổi");
+
+  /* --- CÂU 3: ĐỔ MÁNG mà KHÔNG cầm sẵn thức ăn --------------------------
+     Đây là dây bẫy chính. Trước đây nút chỉ đổ được món ĐANG CẦM, nên mở bảng
+     ra là gặp một cái nút xám: cái bảng bắt người chơi đóng nó lại, đi tìm
+     đúng món, rồi mở lại. Ở đây tay đang cầm cuốc, thức ăn nằm trong TÚI. */
+  giveItem(store, cam, 10);
+  selectItem(store, "tool:hoe");
+  ok(
+    !(store.getState().inv[store.getState().sel]?.id === cam),
+    "dựng cảnh: tay KHÔNG cầm thức ăn",
+  );
+  store.dispatch({ t: "PEN_POUR", pen: "cattle" });
+  tt = penSummary(store.getState(), content, pen);
+  ok(tt.mang.n > 0, `đổ được máng dù tay cầm cuốc (máng ${tt.mang.n} điểm)`);
+  ok(countInv(store, cam) < 10, "…và thức ăn bị trừ đúng từ trong túi");
+  ok(tt.ngay > 0, `giờ máng nuôi được ${tt.ngay.toFixed(2)} ngày`);
+
+  /* --- Và khi túi cũng hết thì LẤY TỪ KHO ------------------------------- */
+  const store2 = mkStore();
+  khoaNac(store2);
+  unlockAll(store2);
+  setState(store2, (s) => {
+    setTile(s, m.x, m.y, { trough: 0, troughId: null });
+    // Dọn sạch TÚI (giữ hai ô công cụ — bất biến đòi chúng luôn có mặt).
+    s.inv = s.inv.map((o, i) => (i < 2 ? o : null));
+    s.store = s.store.map(() => null);
+    s.store[0] = { id: cam, n: 20 };
+    s.player.x = (pen.x + 1) * TILE + 8;
+    s.player.y = (pen.y + 1) * TILE + 8;
+  });
+  store2.dispatch({ t: "PEN_POUR", pen: "cattle" });
+  ok(
+    troughStock(store2.getState(), m.x, m.y) > 0,
+    "túi rỗng thì nút vẫn đổ được — lấy từ KHO",
+  );
+  ok(countStore(store2, cam) < 20, "…và trừ đúng vào kho");
+});
+
+test("133. CHỢ và QUẦY THU MUA đứng hai đầu — không ô nào bấm trúng cả hai", () => {
+  const store = mkStore();
+
+  /* Ảnh Cường gửi: hai cái quầy cách nhau ĐÚNG HAI Ô ở sân chợ. Trên màn hình
+     430 px một ngón tay phủ trọn cả ba ô ấy, nên định mở cửa hàng hạt giống là
+     bật ra bảng bán nông sản — "gần quá bấm loạn hết cả lên". */
+  const xa = Math.max(Math.abs(SHOP.x - COUNTER.x), Math.abs(SHOP.y - COUNTER.y));
+  ok(xa >= 10, `chợ (${SHOP.x},${SHOP.y}) và quầy (${COUNTER.x},${COUNTER.y}) cách nhau ${xa} ô`);
+
+  /* --- DÂY BẪY THẬT: KHÔNG Ô NÀO trên bản đồ chào cả hai --------------
+     Khoảng cách chỉ là con số; điều thật sự phải đúng là không tồn tại một chỗ
+     đứng nào mà `interactNear` bắt được cả cửa hàng lẫn quầy. Quét CẢ bản đồ,
+     không quét vài ô chọn sẵn — chọn sẵn thì bỏ sót đúng cái ô gây lỗi. */
+  const s0 = store.getState();
+  let doi = 0;
+  for (let y = 0; y < s0.h; y++)
+    for (let x = 0; x < s0.w; x++) {
+      const dS = Math.max(Math.abs(x - SHOP.x), Math.abs(y - SHOP.y));
+      const dB = Math.max(Math.abs(x - COUNTER.x), Math.abs(y - COUNTER.y));
+      if (dS <= INTERACT_SCAN && dB <= INTERACT_SCAN) doi++;
+    }
+  eq(doi, 0, "không ô đứng nào nằm trong tầm bấm của CẢ cửa hàng lẫn quầy");
+
+  /* --- Mỗi cái vẫn phải BẤM ĐƯỢC từ chỗ đứng của nó ------------------- */
+  walkTo(store, AT_SHOP.x, AT_SHOP.y);
+  let p = store.getState().player;
+  let ca = contextAction(store.getState(), content, Math.floor(p.x / TILE), Math.floor(p.y / TILE));
+  eq(ca?.kind, "shop", "đứng cạnh chợ thì nút chính mở CỬA HÀNG");
+
+  walkTo(store, AT_COUNTER.x, AT_COUNTER.y);
+  p = store.getState().player;
+  ca = contextAction(store.getState(), content, Math.floor(p.x / TILE), Math.floor(p.y / TILE));
+  eq(ca?.kind, "sell", "đứng cạnh quầy thì nút chính mở QUẦY THU MUA");
+
+  /* --- Quầy đứng ĐÚNG CHỖ: sát bãi giao nhận, nơi xe tới lấy hàng ----- */
+  const drop = content.tiles.dropoff;
+  ok(
+    Math.abs(COUNTER.x - drop.x) + Math.abs(COUNTER.y - drop.y) <= 3,
+    `quầy thu mua phải đứng cạnh điểm giao (${drop.x},${drop.y}), đang cách ${
+      Math.abs(COUNTER.x - drop.x) + Math.abs(COUNTER.y - drop.y)
+    } ô`,
+  );
+
+  /* --- Và cả hai đều còn ĐƯỜNG TỚI: một cái quầy bị bịt là một cái quầy
+         không tồn tại. Dời quầy lên lối trước kho là đặt một ô ĐẶC giữa lối
+         đi — nếu ô ấy cắt đôi con lối thì phải thấy ngay ở đây. */
+  for (const [ten, o] of [["chợ", AT_SHOP], ["quầy", AT_COUNTER]]) {
+    const st2 = mkStore();
+    walkTo(st2, o.x, o.y);
+    const pl = st2.getState().player;
+    eq(Math.floor(pl.x / TILE), o.x, `đi tới được chỗ đứng của ${ten} (x)`);
+    eq(Math.floor(pl.y / TILE), o.y, `đi tới được chỗ đứng của ${ten} (y)`);
+  }
 });
 
 /* ------------------------------------------------------------------ tổng kết */

@@ -2763,3 +2763,90 @@ body[data-motion="reduce"] .selname.fade {
     display: none;
   }
 }
+
+/* ============================================================ BẢNG KHU
+   Cường: "chỉnh UI menu xem bảng khu lại thân thiện đi".
+
+   Ba khối, theo đúng thứ tự câu hỏi người chơi hỏi khi bước vào chuồng:
+   máng còn bao nhiêu (và còn được mấy ngày) → hai nút phải bấm → từng con
+   nào đang cần gì. Bảng cũ chỉ có một dòng chữ nhỏ và một danh sách gộp
+   theo loài, nên câu hỏi thứ ba không trả lời được mà phải đi tìm bằng mắt. */
+.pen-sheet .mang {
+  flex: none;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: var(--radius-sm);
+}
+.pen-sheet .mang .big {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--ink);
+}
+.pen-sheet .mang .con {
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+}
+/* THANH MỨC. Một con số phải đọc rồi mới so; một thanh thì liếc là biết. */
+.pen-sheet .mang .bar {
+  height: 10px;
+  margin-top: 6px;
+  background: #1b140e;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.pen-sheet .mang .bar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.pen-sheet .mang .bar i.low {
+  background: var(--red);
+}
+/* HÀNG ICON các món ăn được — thay cho một dòng chữ liệt kê năm sáu cái tên. */
+.pen-sheet .feeds {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pen-sheet .feeds .lbl {
+  font-size: var(--fs-sm);
+  color: var(--ink-mute);
+}
+.pen-sheet .feeds .f {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 2px solid #1b140e;
+  border-radius: var(--radius-sm);
+}
+/* MỘT DÒNG = MỘT CON, và cả dòng là nút. */
+.pen-sheet .con-row {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pen-sheet .con-row:hover,
+.pen-sheet .con-row:focus-visible {
+  border-color: var(--edge-hi);
+}
+.pen-sheet .con-row .cham {
+  flex: none;
+  padding: 2px 7px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+}
+.pen-sheet .con-row .cham.doi {
+  background: var(--red-dark);
+  color: var(--ink);
+}
+.pen-sheet .con-row .cham.lua {
+  background: var(--gold-dark);
+  color: #1b140e;
+}

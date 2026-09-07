@@ -281,16 +281,30 @@ export function interactHint(
   x: number,
   y: number,
 ): InfoHint | null {
+  /* Ở TRONG (hoặc sát vách) một khu thì BẢNG KHU thắng con vật đứng cạnh.
+
+     Cường: "gần chuồng là ưu tiên nút Xem bảng khu". Trước đây thứ tự ngược
+     lại, và hệ quả là đứng GIỮA chuồng bò — chỗ lúc nào cũng có một con bò
+     trong tầm — thì nút phụ luôn ghi "XEM BÒ" của đúng một con ngẫu nhiên,
+     trong khi câu người chơi hỏi khi bước vào chuồng là "cái chuồng này thế
+     nào". Muốn xem từng con thì vẫn còn nút vai / `cycleAnimal`.
+
+     Lề ở đây HẸP (`PEN_INSIDE` = 1) chứ không phải `PEN_MARGIN` = 4: đứng
+     trong chuồng, hoặc ngay ngoài rào, mới là "đang ở chỗ cái chuồng". Bốn ô
+     thì một con bò xổng chuồng đứng ngay dưới chân vẫn thua cái chuồng ở đằng
+     kia — mà lúc ấy người chơi rõ ràng đang hỏi về con bò. */
+  const trongKhu = penNear(state, content, x, y, PEN_INSIDE);
+  if (trongKhu) return { what: "pen", label: "BẢNG KHU", id: trongKhu.id };
+
   const an = animalNear(state, x, y);
   if (an) {
     const ten = content.animals[an.def]?.name;
     return { what: "animal", label: ten ? `XEM ${ten.toUpperCase()}` : "XEM", id: an.id };
   }
 
-  /* KHU CHUỒNG / AO: đứng ở chỗ cái khu mà không chỉ vào con nào thì mở BẢNG
-     KHU. Trước đây muốn biết "chuồng này có việc gì phải làm không" thì phải
-     đi tới bấm từng con một — mà đó chính là câu hỏi duy nhất người chơi hỏi
-     khi đi ngang qua nó. */
+  /* Xa hơn một chút mà không có con nào để chỉ vào: vẫn là BẢNG KHU. Đây là
+     lề rộng `PEN_MARGIN`, cùng con số nút CHÍNH dùng — đi ngang qua chuồng là
+     đọc được tình hình chuồng, không phải đi tới tận nơi. */
   const khu = penNear(state, content, x, y, PEN_MARGIN);
   if (khu) return { what: "pen", label: "BẢNG KHU", id: khu.id };
 
@@ -319,13 +333,13 @@ export function tileInfo(
   if (t.prop === "trough") {
     const con = troughStock(state, x, y);
     const mon = t.troughId ? ` · ${itemName(t.troughId, content)}` : "";
-    return `Máng: ${con}/${troughMax(content)} phần${mon}`;
+    return `Máng: ${con}/${troughMax(content)} điểm${mon}`;
   }
 
   const ao = pondAt(state, content, x, y);
   if (ao) {
     const noi = t.trough ?? 0;
-    return noi > 0 ? `${ao.name}: ${noi} phần cám đang nổi` : `${ao.name}`;
+    return noi > 0 ? `${ao.name}: ${noi} điểm thức ăn đang nổi` : `${ao.name}`;
   }
 
   if (t.crop) {
@@ -495,6 +509,14 @@ export const CTX_RADIUS = 6;
  * đó: "rõ ràng là tôi đang ở gần chuồng gà".
  */
 export const PEN_MARGIN = 4;
+
+/**
+ * Lề HẸP: bấy nhiêu ô quanh khu vẫn tính là "tôi đang ĐỨNG TRONG cái khu này".
+ *
+ * Một ô — tức là trong ruột khu, hoặc đúng cái vòng ô ngay ngoài rào. Đây là
+ * ranh giới `interactHint` dùng để cho BẢNG KHU thắng một con vật đứng cạnh.
+ */
+export const PEN_INSIDE = 1;
 
 /**
  * Việc này CÓ ĐƯỢC LÀ NHỜ MÓN ĐANG CẦM, hay nó vốn vẫn làm được?

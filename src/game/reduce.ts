@@ -35,7 +35,7 @@ import {
   tileCenterX,
   tileCenterY,
 } from "./world.ts";
-import { feedPond, pourIntoTrough, pourSpotIn } from "./pen.ts";
+import { feedPond, pourBest, pourSpotIn } from "./pen.ts";
 
 /** Người chơi có đang ĐỨNG Ở CHỖ cái khu này không (trong hoặc sát ngoài rào). */
 function penInReach(state: GameState, content: Content, penId: string): boolean {
@@ -418,8 +418,12 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       if (!m) return tuChoi(state, "Khu này không có máng.");
       // Hồ thì RẮC xuống nước, khu cạn thì ĐỔ vào máng — hai cái tên khác nhau
       // vì hai hình ảnh khác nhau, nhưng cùng để lại thức ăn thật ở một chỗ.
+      /* Nút của BẢNG KHU tự đi tìm thức ăn (cầm → túi → kho). Nút DÙNG trên
+         chính cái máng thì vẫn đổ đúng món đang cầm — ở đó người chơi đã chỉ
+         thẳng vào máng với một món trên tay, đổi món giúp họ là nuốt mất ý
+         định ấy. */
       if (pen.swim) feedPond(d, content, m.x, m.y);
-      else pourIntoTrough(d, content, m.x, m.y);
+      else pourBest(d, content, m.x, m.y);
       return commit(d);
     }
 

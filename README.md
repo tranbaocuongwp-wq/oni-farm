@@ -986,6 +986,49 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 14: thức ăn tính bằng ĐIỂM, chó biết đi tuần, và tách hai cái quầy (core 1.40 · content 1.42)
+
+Năm việc từ một lượt chơi thật.
+
+**Máng thôi đếm PHẦN, bắt đầu đếm ĐIỂM.** Luật cũ: mỗi phần làm no HẲN, bất kể đó là bó rơm hay
+cân cám đắt gấp năm; và một máng chỉ chứa được một món, nên muốn đổi món phải chờ cả đàn ăn hết.
+Cường nói gọn: *"thức ăn j cũng dc, thức ăn càng mắc thì no càng lâu, quản lý thức ăn bằng điểm;
+nhiều loại, cho vào chung máng cũng ec"*. Nay `Tile.trough` là số ĐIỂM, `diemThucAn(id)` suy giá
+trị dinh dưỡng từ giá bán (kẹp 1..20), một bữa lấy tối đa `DIEM_MOT_BUA` điểm và làm no đúng
+`điểm × PHUT_MOI_DIEM` phút — nên món mắc no lâu hơn theo đúng tỉ lệ tiền, không phải theo một
+bảng tra tay. Trần máng 12 → **60 điểm**, và `troughId` chỉ còn để VẼ (món đổ gần nhất quyết định
+hình cái máng) chứ không còn là khoá của luật ăn. `SAVE_VERSION` lên 10 với một bước nhân máng cũ
+×5, giữ nguyên tỉ lệ no của save đang chơi dở.
+
+Máng gần cạn thì bữa nhỏ hơn, và no ít hơn theo đúng tỉ lệ — đó là câu hỏi mà hệ "phần" không
+trả lời nổi: một cái máng còn đúng một phần thì con vật ăn xong no bao nhiêu?
+
+**Con chó đi tuần thật.** `job: "patrol"` trước đây chỉ có nghĩa "nhắm thẳng con sâu bọ gần
+nhất"; không có sâu thì nó rơi xuống `wanderGoal` bán kính 4 và loanh quanh y hệt con gà. Nay hết
+sâu bọ thì nó đi một VÒNG TUẦN — tâm từng lô ruộng và từng chuồng, thứ tự lấy từ content nên cố
+định và kiểm được. Sau 20:00 thì thôi nhận chặng mới và về nằm ở nhà chó. Đói thì vẫn về máng
+nhà mình như mọi con khác.
+
+**Chợ và Quầy thu mua tách ra hai đầu.** Ảnh Cường gửi: hai cái đứng cách nhau ĐÚNG HAI Ô ở
+(26,3) và (28,3) — trên màn hình 430 px một ngón tay phủ trọn cả ba ô, nên định mở cửa hàng hạt
+giống là bật ra bảng bán nông sản. Quầy dời sang **(40,5)**, cạnh bãi giao nhận trước cửa kho —
+hợp lý cả về chuyện bán hàng là chỗ xe tải tới lấy. Kịch bản 133 quét CẢ bản đồ để khoá điều
+thật sự phải đúng: không tồn tại ô đứng nào bấm trúng cả hai.
+
+**Đứng trong chuồng thì nút phụ mở BẢNG KHU.** `interactHint` hỏi con vật trước, khu sau — mà
+trong chuồng thì chỗ nào cũng có một con bò trong tầm, nên nút luôn ghi "XEM BÒ" của đúng một
+con ngẫu nhiên, trong khi câu người chơi hỏi khi bước vào là "cái chuồng này thế nào". Nay lề
+HẸP (`PEN_INSIDE` = 1) hỏi trước: ở trong hoặc sát vách thì bảng khu thắng. Ra ngoài khu mà đứng
+cạnh một con lạc thì vẫn "XEM BÒ" — nửa kia của luật, và là dây bẫy chống đảo thứ tự cho xong.
+
+**Bảng khu vẽ lại.** Ba khối theo đúng thứ tự câu hỏi: *máng còn bao nhiêu* (dòng lớn "Máng
+26/60 điểm" + thanh mức + **"còn ~2 ngày"** suy từ số con × mức ăn, chứ không bắt người chơi
+nhẩm hai hằng số trong mã) → *hai nút phải bấm* → *từng con nào đang cần gì*. Danh sách nay là
+TỪNG CON, con đói xếp lên đầu, bấm một dòng là mở thẳng thẻ của nó. Món ăn được hiện thành hàng
+icon thay cho một dòng chữ liệt kê năm sáu cái tên. Và nút **Đổ máng** thôi bắt cầm sẵn thức ăn:
+`pourBest` lấy từ tay → túi → kho. Trước đây mở bảng ra là gặp một cái nút xám kèm câu "cầm cỏ
+khô để đổ" — tức là cái bảng bắt người chơi đóng nó lại, đi tìm đúng món, rồi mở lại.
+
 ### Đợt 13: người làm tự lo mọi việc, và cửa hàng thôi nói sai (core 1.39)
 
 Cường gửi ảnh màn hình kèm ba chữ: *"npc k tự làm gì hết"*, và *"menu và chợ công trình chưa

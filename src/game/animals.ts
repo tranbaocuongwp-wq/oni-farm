@@ -23,7 +23,7 @@ import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
 import { grazeNight } from "./graze.ts";
-import { eatFromTroughNight, pourSpotIn, troughMax, troughStock } from "./pen.ts";
+import { PHUT_MOI_DIEM, eatFromTroughNight, pourSpotIn, troughMax, troughStock } from "./pen.ts";
 
 /**
  * Một NGÀY GAME dài bao nhiêu phút.
@@ -563,6 +563,21 @@ export interface PenLine {
   chuaLon: number;
 }
 
+/** Một CON trong bảng khu — người chơi bấm vào để mở thẻ của đúng con đó. */
+export interface PenAnimal {
+  id: number;
+  def: string;
+  name: string;
+  ageDays: number;
+  /** 0..1 — độ no. */
+  fed: number;
+  hungry: boolean;
+  mature: boolean;
+  toiLua: boolean;
+  x: number;
+  y: number;
+}
+
 export interface PenSummary {
   id: string;
   name: string;
@@ -571,9 +586,25 @@ export interface PenSummary {
   doi: number;
   toiLua: number;
   loai: PenLine[];
+  /** Từng con, xếp việc-gấp-trước: đói → tới lứa → còn lại. */
+  con: PenAnimal[];
   /** Máng của khu, hoặc null (ao và khu không khai `feeds` thì không có). */
   mang: { x: number; y: number; n: number; max: number } | null;
+  /** Máng còn nuôi được cả đàn bao nhiêu NGÀY, hoặc null (không máng / không con). */
+  ngay: number | null;
   feeds: string[];
+}
+
+/**
+ * Một con ăn hết bao nhiêu ĐIỂM một ngày.
+ *
+ * Suy thẳng từ luật ăn, không phải một hằng số đoán: một điểm làm no
+ * `PHUT_MOI_DIEM` phút, nên một ngày game cần đúng `dayMinutes / PHUT_MOI_DIEM`
+ * điểm. Đổi `PHUT_MOI_DIEM` hay độ dài ngày qua OTA thì con số "còn ~N ngày"
+ * trên bảng khu tự đúng theo, không phải sửa ở hai nơi.
+ */
+export function diemMoiNgay(content: Content): number {
+  return dayMinutes(content) / PHUT_MOI_DIEM;
 }
 
 /**
@@ -585,6 +616,7 @@ export interface PenSummary {
  */
 export function penSummary(state: GameState, content: Content, pen: PenDef): PenSummary {
   const gom = new Map<string, PenLine>();
+  const con: PenAnimal[] = [];
   let n = 0;
   let doi = 0;
   let toiLua = 0;
@@ -608,8 +640,26 @@ export function penSummary(state: GameState, content: Content, pen: PenDef): Pen
       toiLua++;
     }
     if (!isMature(e, content)) row.chuaLon++;
+    con.push({
+      id: e.id,
+      def: e.def,
+      name: def.name,
+      ageDays: e.animal.age,
+      fed: def.fedMinutes > 0 ? Math.max(0, Math.min(1, e.animal.fed / def.fedMinutes)) : 1,
+      hungry: isHungry(e),
+      mature: isMature(e, content),
+      toiLua: readyProduct(e, content) >= 0,
+      x: Math.floor(e.x / TILE),
+      y: Math.floor(e.y / TILE),
+    });
   }
   const m = pourSpotIn(state, content, pen);
+  const mang = m ? { x: m.x, y: m.y, n: troughStock(state, m.x, m.y), max: troughMax(content) } : null;
+  /* Xếp theo VIỆC PHẢI LÀM, không theo thứ tự sinh ra: con đói lên đầu, rồi con
+     tới lứa. Bảng dài ba mươi dòng mà dòng đáng bấm nằm ở giữa thì nó không
+     khác gì bảng cũ. */
+  const hang = (a: PenAnimal) => (a.hungry ? 0 : a.toiLua ? 1 : a.mature ? 2 : 3);
+  con.sort((a, b) => hang(a) - hang(b) || a.id - b.id);
   return {
     id: pen.id,
     name: pen.name,
@@ -618,7 +668,9 @@ export function penSummary(state: GameState, content: Content, pen: PenDef): Pen
     doi,
     toiLua,
     loai: [...gom.values()].sort((a, b) => b.n - a.n),
-    mang: m ? { x: m.x, y: m.y, n: troughStock(state, m.x, m.y), max: troughMax(content) } : null,
+    con,
+    mang,
+    ngay: mang && n > 0 ? mang.n / (n * diemMoiNgay(content)) : null,
     feeds: pen.feeds ?? [],
   };
 }

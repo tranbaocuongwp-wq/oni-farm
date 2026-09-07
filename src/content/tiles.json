@@ -486,6 +486,13 @@
     },
     {
       "map": "farm",
+      "x": 39,
+      "y": 5,
+      "text": "Quầy thu mua",
+      "side": "w"
+    },
+    {
+      "map": "farm",
       "x": 13,
       "y": 4,
       "text": "Giếng",
@@ -493,8 +500,8 @@
     },
     {
       "map": "farm",
-      "x": 39,
-      "y": 5,
+      "x": 38,
+      "y": 4,
       "text": "Kho",
       "side": "e"
     },
