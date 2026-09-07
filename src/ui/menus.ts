@@ -31,6 +31,7 @@ import { penSummary } from "../game/animals.ts";
 import { khoaNgoai } from "./inert.ts";
 import { energyOf } from "../game/actions.ts";
 import { requirementProgress, statValue } from "../game/progression.ts";
+import { workerCard } from "../game/workers.ts";
 
 export interface MenuHandlers {
   buy(id: string, n: number): void;
@@ -56,9 +57,10 @@ export interface MenuHandlers {
   penGather(pen: string): void;
   /** Đổ thức ăn đang cầm vào máng của một khu. */
   penPour(pen: string): void;
-  hire(job: "crops" | "livestock"): void;
+  hire(job: "crops" | "livestock" | "any"): void;
+  /** Vào chế độ quy hoạch với công trình này chọn sẵn. */
+  openBuild(id: string): void;
   fire(id: number): void;
-  assign(id: number, job: "crops" | "livestock"): void;
   sell(id: string, n: number): void;
   sellAll(): void;
   save(): void;
@@ -482,11 +484,17 @@ export function createMenus(
     current = openShop;
     const s = getState();
     const c = getContent();
-    const { body, foot } = shell(
-      c.strings.ui["shop"] ?? "Cửa hàng",
-      `Bạn có ${money(s.money)}`,
-      "sheet",
-    );
+    /* TIÊU ĐỀ THEO TAB. Trước đây mọi tab đều đội chữ "Cửa hàng hạt giống" —
+       kể cả tab Thợ, nơi không có hạt nào. Cái tiêu đề nói sai chỗ mình đang
+       đứng là thứ đọc ra ngay mà không ai ngờ tới lúc thêm tab thứ hai. */
+    const TEN_TAB: Record<typeof shopTab, string> = {
+      seed: "Cửa hàng hạt giống",
+      feed: "Cửa hàng vật tư",
+      build: "Bảng giá công trình",
+      animal: "Chợ vật nuôi",
+      worker: "Nhà môi giới việc làm",
+    };
+    const { body, foot } = shell(TEN_TAB[shopTab], `Bạn có ${money(s.money)}`, "sheet");
 
     const tabs = document.createElement("div");
     tabs.className = "tabs";
@@ -602,15 +610,13 @@ export function createMenus(
             `Không đủ tiền trả lương thì họ nghỉ việc.`,
         ),
       );
-      const grid = document.createElement("div");
-      grid.className = "grid2";
-      grid.append(
-        mkBtn("Thuê — chăm cây", () => { h.hire("crops"); openShop(); },
-          s.money >= cfg.hireFee ? "primary" : "dim"),
-        mkBtn("Thuê — chăn nuôi", () => { h.hire("livestock"); openShop(); },
-          s.money >= cfg.hireFee ? "primary" : "dim"),
+      /* MỘT nút. Vai "chăm cây" / "chăn nuôi" đã bỏ ở core 1.39: người làm nào
+         cũng làm mọi việc và tự chia nhau. Giữ hai nút thì người chơi phải chọn
+         một thứ không còn ý nghĩa gì. */
+      body.appendChild(
+        mkBtn("Thuê người làm", () => { h.hire("any"); openShop(); },
+          s.money >= cfg.hireFee ? "primary wide" : "dim wide"),
       );
-      body.appendChild(grid);
 
       body.appendChild(note(dsach.length ? `Đang thuê ${dsach.length} người` : "Chưa thuê ai."));
       const gw = cardGrid();
@@ -622,19 +628,12 @@ export function createMenus(
             art: `worker:${e.id}`,
             name: w.name,
             subs: [
-              w.job === "crops" ? "chăm cây" : "chăn nuôi",
+              workerCard(e, c)?.doing ?? "đang tìm việc",
               `sức ${Math.round(w.energy)}/${cfg.energyMax}`,
               `đeo ${deo}/${cfg.carryMax}`,
               `lương ngày ${w.paidDay + cfg.wageEveryDays}`,
             ],
             buttons: [
-              {
-                label: "Đổi việc",
-                onClick: () => {
-                  h.assign(e.id, w.job === "crops" ? "livestock" : "crops");
-                  openShop();
-                },
-              },
               {
                 label: "Cho nghỉ",
                 cls: "dim",
@@ -705,17 +704,22 @@ export function createMenus(
             // giá trông rối. Đoạn mô tả đầy đủ nằm ở trang Thư viện.
             subs: [tomTatCongTrinh(b)],
             price: `${money(b.price)}/ô`,
-            disabled: true,
-            onClick: () => {},
+            /* BẤM ĐƯỢC. Bảng giá mà không bấm được thì người chơi bấm thử,
+               không thấy gì xảy ra, rồi tự đi tìm chế độ xây ở đâu đó — đúng
+               chỗ Cường nói "chợ công trình chưa đồng bộ". Giờ bấm một cái là
+               vào thẳng chế độ quy hoạch với đúng công trình ấy đã chọn sẵn. */
+            onClick: () => {
+              close();
+              h.openBuild(id);
+            },
           }),
         );
       }
       body.appendChild(gb);
       foot.appendChild(
         note(
-          "Đây là BẢNG GIÁ. Công trình xây trong CHẾ ĐỘ XÂY DỰNG (ô Xây dựng trong menu " +
-            "Tạm dừng, hoặc cầm công trình rồi bấm nút chính): thời gian dừng lại, ấn rồi rê để kéo " +
-            "cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu. ",
+          "Bấm một công trình để vào thẳng CHẾ ĐỘ XÂY DỰNG với nó: thời gian dừng lại, " +
+            "ấn rồi rê để kéo cả một đoạn, vẽ bao nhiêu ô thì trả tiền bấy nhiêu.",
         ),
       );
     }

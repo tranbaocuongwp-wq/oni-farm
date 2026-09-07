@@ -30,6 +30,7 @@ import { sellSlots } from "../src/game/inventory.ts";
 import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN } from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
+import { cropInSeason } from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
 import { createNavigator } from "../src/core/navigate.ts";
 import * as migrateApi from "../src/core/save.ts";
@@ -336,6 +337,12 @@ function giveItem(store, id, n = 1) {
     ok(at >= 0, "hết ô hotbar trống để đặt " + id);
     s.inv[at] = { id, n };
   });
+}
+
+function countStore(store, id) {
+  let n = 0;
+  for (const v of store.getState().store) if (v && v.id === id) n += v.n;
+  return n;
 }
 
 function countInv(store, id) {
@@ -8237,6 +8244,246 @@ test("128. NGƯỜI LÀM đi ĐỔ MÁNG lấy cám từ kho — không bơm th�
     bo.animal.fed < content.animals.cow.fedMinutes,
     `không ai bơm thức ăn: con bò không được no HẲN (fed = ${bo.animal.fed.toFixed(0)}/${content.animals.cow.fedMinutes})`,
   );
+});
+
+/* -------------------------------- Đợt 13: người làm tự lo mọi việc, và tự chia nhau */
+
+/** Dựng một nông trại rỗng có N người làm và kho theo ý. */
+function nongTraiCoTho(n, kho, sua) {
+  const store = mkStore(4242);
+  khoaNac(store);
+  unlockAll(store);
+  for (let i = 0; i < n; i++) store.dispatch({ t: "HIRE", job: "any" });
+  setState(store, (s) => {
+    s.store = s.store.map(() => null);
+    kho.forEach((v, i) => { s.store[i] = v; });
+    if (sua) sua(s);
+  });
+  return store;
+}
+
+test("129. người làm tự CÀY và tự GIEO trong lô ruộng — và chỉ trong lô", () => {
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const store = nongTraiCoTho(2, [{ id: "seed:lettuce", n: 40 }], (s) => {
+    // Mọi lô: đất trống, chưa cày.
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: false, wet: false, crop: null, b: null });
+  });
+  const dem = () => {
+    const s = store.getState();
+    let cay = 0, gieo = 0;
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) {
+          const t = tileAt(s, x, y);
+          if (t.tilled) cay++;
+          if (t.crop) gieo++;
+        }
+    return { cay, gieo };
+  };
+  eq(dem().cay, 0, "bắt đầu chưa cày ô nào");
+  for (let i = 0; i < 60 * 90; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  const d = dem();
+  ok(d.cay > 10, `người làm phải tự cày (cày được ${d.cay} ô)`);
+  ok(d.gieo > 5, `…và tự gieo bằng hạt trong kho (gieo ${d.gieo} ô)`);
+  ok(
+    countStore(store, "seed:lettuce") < 40,
+    `hạt phải lấy TỪ KHO (còn ${countStore(store, "seed:lettuce")}/40)`,
+  );
+
+  // NGOÀI lô thì không được cày một ô nào — đó là bố cục của người chơi.
+  const s1 = store.getState();
+  let ngoai = 0;
+  for (let y = 0; y < s1.h; y++)
+    for (let x = 0; x < s1.w; x++)
+      if (tileAt(s1, x, y).tilled && !inZone(s1, content, "farm", x, y)) ngoai++;
+  eq(ngoai, 0, "không cày một ô nào ngoài lô ruộng");
+
+  // Hạt TRÁI MÙA thì không gieo — không ai gieo ra một luống chắc chắn héo.
+  const traiMua = content.cropOrder.find((id) => !cropInSeason(id, 1, content));
+  ok(traiMua, "phải có ít nhất một cây trái mùa để thử");
+  /* Hai lớp cùng canh chuyện này, nên phải thử được TỪNG lớp:
+       · `pickTask` không được nhận việc GIEO khi kho chỉ có hạt trái mùa;
+       · `doWork` không được lấy hạt trái mùa khi kho có cả hai loại. */
+  const st2 = nongTraiCoTho(1, [{ id: `seed:${traiMua}`, n: 20 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: true, wet: true, crop: null, b: null });
+  });
+  let nhanGieo = 0;
+  for (let i = 0; i < 60 * 60; i++) {
+    st2.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (st2.getState().entities.some((e) => e.kind === "worker" && e.ai.job === "plant")) nhanGieo++;
+  }
+  eq(countStore(st2, `seed:${traiMua}`), 20, "hạt trái mùa nằm nguyên trong kho");
+  eq(nhanGieo, 0, "…và người làm không bao giờ NHẬN việc gieo khi kho chỉ có hạt trái mùa");
+
+  const dungMua = content.cropOrder.find((id) => cropInSeason(id, 1, content));
+  const st3 = nongTraiCoTho(1, [{ id: `seed:${traiMua}`, n: 20 }, { id: `seed:${dungMua}`, n: 20 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: true, wet: true, crop: null, b: null });
+  });
+  for (let i = 0; i < 60 * 60; i++) st3.dispatch({ t: "TICK", dt: 1 / 60 });
+  ok(countStore(st3, `seed:${dungMua}`) < 20, "kho có cả hai loại thì gieo hạt ĐÚNG MÙA");
+  eq(countStore(st3, `seed:${traiMua}`), 20, "…và không đụng tới hạt trái mùa");
+});
+
+test("130. RẢNH VIỆC thì đi kiếm gỗ đá — chỉ trong RỪNG, không đụng cảnh quan người chơi", () => {
+  const store = nongTraiCoTho(2, [], (s) => {
+    // Không còn việc nào: lô đã cày, đã tưới, cây đang lớn; kho rỗng; không con vật.
+    for (const z of content.tiles.zones.filter((q) => q.kind === "farm"))
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, {
+            prop: null, tilled: true, wet: true, b: null,
+            crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
+          });
+    s.entities = s.entities.filter((e) => e.kind === "worker");
+  });
+  const demProp = (trongRung) => {
+    const s = store.getState();
+    let n = 0;
+    for (let y = 0; y < s.h; y++)
+      for (let x = 0; x < s.w; x++) {
+        const t = tileAt(s, x, y);
+        const d = t.prop ? content.props[t.prop] : null;
+        if (!d?.hits || !d.drops?.length) continue;
+        if (inZone(s, content, "forest", x, y) === trongRung) n++;
+      }
+    return n;
+  };
+  const rung0 = demProp(true);
+  const ngoai0 = demProp(false);
+  ok(rung0 > 20 && ngoai0 > 10, `phải có cả cây trong rừng (${rung0}) lẫn ngoài rừng (${ngoai0})`);
+  const goDa = () =>
+    store.getState().store.reduce((n, v) => n + (v && (v.id === "item:wood" || v.id === "item:stone") ? v.n : 0), 0);
+
+  for (let i = 0; i < 60 * 150; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  ok(demProp(true) < rung0, `phải chặt trong rừng (${rung0} → ${demProp(true)})`);
+  ok(goDa() > 0, `và mang gỗ/đá về kho (${goDa()})`);
+  eq(demProp(false), ngoai0, "KHÔNG đụng một cây/tảng đá nào ngoài rừng");
+});
+
+test("131. hai người làm KHÔNG giẫm chân nhau: mỗi người một ô, một con vật", () => {
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const store = nongTraiCoTho(3, [{ id: "seed:lettuce", n: 60 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: false, wet: false, crop: null, b: null });
+  });
+  let trung = 0;
+  let dem = 0;
+  for (let i = 0; i < 60 * 90; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (i % 30 !== 0) continue;
+    const tho = store.getState().entities.filter((e) => e.kind === "worker");
+    const o = tho.filter((e) => e.ai.tx >= 0).map((e) => `${e.ai.tx},${e.ai.ty}`);
+    const ent = tho.map((e) => e.ai.ent).filter((v) => v !== undefined);
+    if (new Set(o).size !== o.length) trung++;
+    if (new Set(ent).size !== ent.length) trung++;
+    dem++;
+  }
+  ok(dem > 100, "phải lấy đủ mẫu");
+  eq(trung, 0, `không lần nào hai người cùng nhận một ô hay một con vật (${trung}/${dem} lần đo)`);
+
+  // Và ba người làm được NHIỀU HƠN một người trong cùng khoảng thời gian.
+  const mot = nongTraiCoTho(1, [{ id: "seed:lettuce", n: 60 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: false, wet: false, crop: null, b: null });
+  });
+  for (let i = 0; i < 60 * 90; i++) mot.dispatch({ t: "TICK", dt: 1 / 60 });
+  const dCay = (st) => {
+    const s = st.getState();
+    let n = 0;
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) if (tileAt(s, x, y).tilled) n++;
+    return n;
+  };
+  ok(
+    dCay(store) > dCay(mot),
+    `ba người phải làm được nhiều hơn một người (${dCay(store)} so với ${dCay(mot)} ô cày)`,
+  );
+
+  /* Và phối hợp phải THẬT SỰ tiết kiệm lượt.
+     `tileTakenBy` từ lâu đã chặn hai người cùng đứng một ô — nhưng nó chặn SAU
+     khi đã chọn xong, và người thứ hai đứng phí nguyên lượt. Tập "đã có người
+     nhận" lọc ngay trong vòng chấm điểm, nên họ nhận VIỆC KẾ TIẾP. Đo được:
+     ba người rảnh 12,4 % số lượt khi có tập, 26,3 % khi bỏ nó. Ngưỡng 20 %
+     nằm gọn giữa hai con số. */
+  let phi = 0;
+  let mau = 0;
+  const st4 = nongTraiCoTho(3, [{ id: "seed:lettuce", n: 60 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: false, wet: false, crop: null, b: null });
+  });
+  for (let i = 0; i < 60 * 90; i++) {
+    st4.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (i % 30 !== 0) continue;
+    const tho = st4.getState().entities.filter((e) => e.kind === "worker");
+    phi += tho.filter((e) => e.ai.phase === "idle" && e.ai.tx < 0).length;
+    mau += tho.length;
+  }
+  const tiLe = (100 * phi) / mau;
+  ok(tiLe < 20, `ba người không được đứng không quá nhiều (rảnh ${tiLe.toFixed(1)} % số lượt)`);
+});
+
+test("132. ĐỔ MÁNG không bị con vật đứng cạnh chặn — doWork chạy đúng việc được giao", () => {
+  const pen = content.tiles.pens.find((p) => p.id === "cattle");
+  let m = null;
+  {
+    const s0 = mkStore().getState();
+    outer: for (let y = pen.y; y < pen.y + pen.h; y++)
+      for (let x = pen.x; x < pen.x + pen.w; x++)
+        if (tileAt(s0, x, y).prop === "trough") { m = { x, y }; break outer; }
+  }
+  const cam = pen.feeds[0];
+  /* VÂY KÍN cái máng bằng bò đói: mọi ô kề máng đều có một con đứng.
+     Bản cũ suy loại việc từ ô đích, mà nhánh "có con vật ở gần" đứng trước và
+     thoát sớm — nên chuyến đi đổ máng nào cũng về tay không, mãi mãi. */
+  const store = nongTraiCoTho(1, [{ id: cam, n: 20 }], (s) => {
+    const t = s.tiles[idx(s.w, m.x, m.y)];
+    delete t.trough;
+    delete t.troughId;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = m.x + dx, y = m.y + dy;
+      if (x < pen.x || y < pen.y || x >= pen.x + pen.w || y >= pen.y + pen.h) continue;
+      const id = ++s.entSeq;
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: x * TILE + 8, y: y * TILE + 8, dir: "down", anim: 0, seed: 90 + id,
+        ai: { phase: "idle", until: 9999, tx: -1, ty: -1, path: [], planAt: 0 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+    }
+    // Ruộng không còn việc để người làm chỉ có mỗi cái máng mà lo.
+    for (const z of content.tiles.zones.filter((q) => q.kind === "farm"))
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          setTile(s, x, y, { prop: null, tilled: true, wet: true, b: null,
+            crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+  });
+  ok(
+    store.getState().entities.filter((e) => e.kind === "animal").length >= 5,
+    "phải vây được máng bằng nhiều con",
+  );
+  let khi = -1;
+  for (let i = 1; i <= 60 * 120 && khi < 0; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (troughStock(store.getState(), m.x, m.y) > 0) khi = i;
+  }
+  ok(khi > 0, "người làm phải đổ được máng dù bò vây kín quanh nó");
+  ok(countStore(store, cam) < 20, `cám lấy từ kho (còn ${countStore(store, cam)}/20)`);
 });
 
 /* ------------------------------------------------------------------ tổng kết */

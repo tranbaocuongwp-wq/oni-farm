@@ -986,6 +986,49 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 13: người làm tự lo mọi việc, và cửa hàng thôi nói sai (core 1.39)
+
+Cường gửi ảnh màn hình kèm ba chữ: *"npc k tự làm gì hết"*, và *"menu và chợ công trình chưa
+đồng bộ"*.
+
+**Vì sao họ đứng không: họ bị cấm gần hết mọi việc.** Người làm chỉ được thu hoạch, chữa cây và
+tưới. Không cày, không gieo — luật cũ, và lý do khi ấy đúng: cày chỗ nào gieo chỗ nào là quyết
+định bố cục, người làm tự ý thì người chơi mất quyền quy hoạch. Nhưng luật ấy viết hồi cả bản đồ
+đều cày được. Từ khi có VÙNG, cuốc chỉ ăn trong `zones` loại `farm`, và mấy cái lô ấy sinh ra
+đúng để trồng trọt. Trên một nông trại đã tưới xong và chưa tới vụ thì họ thật sự **không còn
+việc nào hợp lệ** — đứng im là đúng luật, và luật sai.
+
+Giờ một thang duy nhất: thu sản phẩm → đổ máng → thu hoạch → chữa → tưới → **gieo** → **cày** →
+về kho → **rảnh thì vào rừng kiếm gỗ đá**. Hạt lấy từ kho và phải đúng mùa (hai lớp canh: một ở
+`pickTask` để không nhận việc, một ở `doWork` để không nhặt nhầm hạt). Cày chỉ trong lô, không
+đụng sàn chuồng. Kiếm tài nguyên **chỉ trong rừng** — không có ràng buộc ấy thì họ dọn sạch mấy
+cái cây người chơi cố ý chừa lại quanh sân, và không có nút hoàn tác nào cho chuyện đó.
+
+**Và một lỗi thật sự làm họ đứng đơ.** `doWork` không biết mình được giao việc gì — nó SUY LẠI từ
+ô đích, và nhánh "có con vật ở gần" đứng trước rồi thoát sớm. Cái máng nằm giữa chuồng, quanh
+máng lúc nào cũng có con vật, nên **mọi chuyến đi đổ máng đều về tay không**. Giờ `pickTask` ghi
+loại việc vào `ai.job` và `doWork` chạy đúng việc ấy; kịch bản 132 vây kín cái máng bằng bò đói
+và bắt họ vẫn đổ được.
+
+**Phối hợp.** Tập "đã có người nhận" — cả ô lẫn con vật — dựng một lần ở đầu và lọc ngay trong
+vòng chấm điểm, nên người thứ hai nhận **việc kế tiếp** thay vì đứng phí một lượt. Đo được: ba
+người rảnh 12,4 % số lượt khi có tập, 26,3 % khi bỏ nó.
+
+**Vai "chăm cây" / "chăn nuôi" biến mất** (đã bắt đầu ở Đợt 12, nay xong cả UI). Một nút "Thuê
+người làm", không còn "Đổi việc", và thẻ người làm nói **việc đang làm** — "đang đi đổ máng",
+"đang đi kiếm gỗ đá" — thay vì một cái vai không còn nghĩa gì, hay một toạ độ ô chỉ người viết
+code đọc được.
+
+**Cửa hàng.** Tiêu đề đổi theo tab: tab Thợ từng đội chữ "Cửa hàng hạt giống". Và bảng giá công
+trình **bấm được**: bấm một công trình là vào thẳng chế độ quy hoạch với đúng nó đã chọn sẵn —
+trước đây thẻ bị vô hiệu hoá, người chơi bấm thử không thấy gì rồi tự đi tìm chế độ xây ở chỗ
+khác.
+
+Kịch bản 129–132 mới; chín đột biến đều đỏ đúng chỗ. Trình duyệt thật: hai người làm cày 42 ô và
+gieo hết 40 hạt trong hai phút, không ai giẫm chân ai.
+
+Tiến độ của cả lộ trình theo dõi ở [`docs/TIEN-DO.md`](docs/TIEN-DO.md).
+
 ### Đợt 12: máng là cửa duy nhất, và con chó có nhà (core 1.38 · content 1.41)
 
 Ba yêu cầu của Cường, và chúng hoá ra là **một** luật.

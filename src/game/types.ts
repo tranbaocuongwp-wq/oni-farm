@@ -939,6 +939,17 @@ export interface AiState {
   /** phút game của lần tính đường gần nhất — để nguội replan */
   planAt: number;
   /**
+   * LOẠI VIỆC người làm đang nhận, đúng như `pickTask` đã chọn.
+   *
+   * Trước đây `doWork` tự SUY LẠI việc từ ô đích, và suy sai: nhánh "có con vật
+   * ở gần" đứng trước và thoát sớm, nên người làm đi tới cái máng trong chuồng
+   * — chỗ lúc nào cũng có con vật đứng quanh — rồi quay về tay không, mãi mãi.
+   * Nhìn từ ngoài đúng là "npc không tự làm gì hết".
+   *
+   * Tuỳ chọn: save cũ không có, chỗ đọc phải chịu được `undefined`.
+   */
+  job?: string;
+  /**
    * Những ô người làm vừa KHÔNG TỚI ĐƯỢC, giữ theo chỉ số ô.
    *
    * Không có danh sách này thì họ đứng đơ: `pickTask` luôn trả về đúng cái ô
@@ -974,7 +985,14 @@ export interface AnimalState {
 }
 
 /** Việc được giao cho một người làm. */
-export type WorkerJob = "crops" | "livestock";
+/**
+ * Vai của người làm.
+ *
+ * `any` là vai DUY NHẤT còn ý nghĩa từ core 1.39: mọi người làm cùng một thang
+ * việc và tự chia nhau. Hai giá trị cũ giữ lại để save cũ nạp được — chúng
+ * không còn gate cái gì nữa.
+ */
+export type WorkerJob = "crops" | "livestock" | "any";
 
 export interface WorkerState {
   name: string;

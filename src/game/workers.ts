@@ -27,6 +27,8 @@ import { TILE, tileIndexAt, idx } from "./world.ts";
 import { animalDef, entityAt } from "./entities.ts";
 import { readyProduct } from "./animals.ts";
 import { pourSpotIn, troughItem, troughMax, troughStock } from "./pen.ts";
+import { cropInSeason } from "./season.ts";
+import { isTillable } from "./world.ts";
 
 /** Tên gọi cho vui — không ảnh hưởng luật chơi, chỉ để người chơi phân biệt. */
 const NAMES = ["Tư", "Bảy", "Hùng", "Lan", "Sáu", "Mai", "Dũng", "Hạnh", "Tí", "Nga"];
@@ -244,7 +246,7 @@ export function restWorkers(d: Draft, content: Content): void {
 
 /* ------------------------------------------------------------- chọn việc */
 
-export type TaskKind = "use" | "gather" | "pour" | "dump";
+export type TaskKind = "use" | "gather" | "pour" | "dump" | "till" | "plant" | "break";
 
 export interface Task {
   kind: TaskKind;
@@ -268,8 +270,23 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
      người làm đứng đơ: hàm này luôn trả về ô gần nhất, A* không tìm ra đường
      tới nó, lượt sau lại trả về đúng ô đó. Nhìn từ ngoài y hệt treo máy. */
   const bad = e.ai.bad;
+  /* ĐÃ CÓ NGƯỜI NHẬN — dựng MỘT LẦN, rồi lọc ngay TRONG vòng chấm điểm.
+
+     Trước đây chỗ này chỉ so ô, so SAU khi đã chọn xong, và người thứ hai gặp
+     trùng thì đứng phí nguyên một lượt (`e.ai.until = 1`) thay vì nhận việc kế
+     tiếp. Hai người làm cạnh nhau thành ra chỉ có một người làm việc. Và nó
+     không so CON VẬT, nên hai người vẫn cùng đuổi theo một con bò khi nó đi
+     khỏi cái ô đã ghi. */
+  const oNhan = new Set<number>();
+  const conNhan = new Set<number>();
+  for (const o of s.entities) {
+    if (o.id === e.id || o.kind !== "worker" || !o.worker) continue;
+    if (o.ai.tx >= 0) oNhan.add(idx(s.w, o.ai.tx, o.ai.ty));
+    if (o.ai.ent !== undefined) conNhan.add(o.ai.ent);
+  }
+  if (s.pending) oNhan.add(idx(s.w, s.pending.x, s.pending.y));
   const xau = (x: number, y: number): boolean =>
-    !!bad?.length && bad.includes(idx(s.w, x, y));
+    (!!bad?.length && bad.includes(idx(s.w, x, y))) || oNhan.has(idx(s.w, x, y));
 
   const cho = Math.max(0, content.workers.carryMax - carried(w));
 
@@ -334,7 +351,7 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
       const pi = readyProduct(a, content);
       const kind: TaskKind | null = pi >= 0 ? "gather" : null;
       if (!kind) continue;
-      if (xau(ax, ay)) continue;
+      if (xau(ax, ay) || conNhan.has(a.id)) continue;
       /* Không đủ chỗ cho MỨC SẢN LƯỢNG CAO NHẤT thì đừng nhận việc thu.
          `giveToWorker` kẹp theo `carryMax` và trả về số THẬT SỰ nhận, nhưng
          `doWork` vẫn reset `prod` / xoá cây bất kể — nên ở mức `carryMax − 1`,
@@ -388,11 +405,46 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
 
   // Việc trên RUỘNG. Dùng chính bộ chấm điểm của `nearestTarget` nhưng đo từ vị
   // trí NGƯỜI LÀM chứ không phải từ người chơi, nên phải tự quét ở đây.
-  const job = cropTask(s, content, cx, cy, R, xau, cho) ?? cropTask(s, content, cx, cy, RX, xau, cho);
+  const job =
+    cropTask(s, content, cx, cy, R, xau, cho, content.tiles.pens) ??
+    cropTask(s, content, cx, cy, RX, xau, cho, content.tiles.pens);
   if (job) return job;
 
-  // Hết việc mà tay còn hàng thì tranh thủ về kho đổ.
-  return veKho();
+  // Tay còn hàng thì về kho đổ trước khi đi kiếm thêm.
+  const kho = veKho();
+  if (kho) return kho;
+
+  /* RẢNH VIỆC THÌ ĐI KIẾM TÀI NGUYÊN — gỗ và đá.
+
+     Ràng buộc là phần quan trọng nhất: CHỈ TRONG RỪNG. Không có nó thì người
+     làm sẽ dọn sạch mấy cái cây và tảng đá người chơi cố ý chừa lại quanh sân,
+     và không có nút hoàn tác nào cho chuyện đó. Rừng thì mọc lại mỗi đêm, nên
+     lấy ở đó là lấy từ thứ tự tái tạo. */
+  {
+    let best: Task | null = null;
+    let bestD = Infinity;
+    for (const z of content.tiles.zones ?? []) {
+      if (z.kind !== "forest" || z.map !== s.mapId) continue;
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) {
+          const t = s.tiles[y * s.w + x];
+          if (!t?.prop) continue;
+          const def = content.props[t.prop];
+          // Có ĐẬP ĐƯỢC và có ĐỒ RƠI RA. Cái giếng, cái biển thì không.
+          if (!def?.hits || !def.drops?.length || def.interact) continue;
+          if (cho < 2) continue;
+          if (xau(x, y)) continue;
+          const dist = Math.abs(x - cx) + Math.abs(y - cy);
+          if (dist < bestD) {
+            bestD = dist;
+            best = { kind: "break", tx: x, ty: y };
+          }
+        }
+    }
+    if (best) return best;
+  }
+
+  return null;
 }
 
 /** Ô kho gần nhất trên bản đồ đang chơi. */
@@ -409,9 +461,16 @@ export function findStoreTile(s: GameState, content: Content): { x: number; y: n
 /**
  * Việc đồng áng gần nhất: thu cây chín → chữa cây bệnh → tưới ô khô.
  *
- * KHÔNG cày và KHÔNG gieo: cả hai đều tiêu vật phẩm của người chơi (hạt giống)
- * và đều là quyết định về BỐ CỤC nông trại. Người làm thuê tự ý cày chỗ này
- * gieo chỗ kia thì người chơi mất quyền quy hoạch ruộng của chính mình.
+ * CÀY VÀ GIEO: nay CÓ, nhưng chỉ TRONG LÔ RUỘNG.
+ *
+ * Luật cũ cấm hẳn, và lý do khi ấy đúng: cày chỗ nào gieo chỗ nào là quyết định
+ * bố cục, người làm tự ý thì người chơi mất quyền quy hoạch. Nhưng luật ấy viết
+ * hồi cả bản đồ đều cày được. Từ khi có VÙNG, cuốc chỉ ăn trong `zones` loại
+ * `farm`, và mấy cái lô ấy sinh ra đúng để trồng trọt — cày trong lô không cướp
+ * quyền của ai, còn để đất lô nằm không mới là bỏ phí người mình đang trả lương.
+ *
+ * Hạt lấy từ KHO và phải ĐÚNG MÙA (xem `doWork`): người làm không đi chợ, và
+ * không gieo ra một luống chắc chắn héo.
  */
 function cropTask(
   s: GameState,
@@ -424,7 +483,16 @@ function cropTask(
   /** Chỗ trống còn lại trên tay. Cùng lý do với nhánh chăn nuôi: thu một luống
    *  mà tay chỉ còn một chỗ thì phần thừa BỐC HƠI, chứ không nằm lại trên cây. */
   cho: number,
+  pens: readonly { map: string; x: number; y: number; w: number; h: number }[] | undefined,
 ): Task | null {
+  // Kho có hạt ĐÚNG MÙA nào không — không có thì đừng nhận việc gieo.
+  const coHat = s.store.some(
+    (v) => v && v.id.startsWith("seed:") && cropInSeason(v.id.slice(5), s.day, content),
+  );
+  const trongChuong = (x: number, y: number): boolean =>
+    (pens ?? []).some(
+      (p) => p.map === s.mapId && x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h,
+    );
   let best: Task | null = null;
   let bestScore = Infinity;
   for (let y = Math.max(0, cy - R); y <= Math.min(s.h - 1, cy + R); y++) {
@@ -432,12 +500,26 @@ function cropTask(
       const t = s.tiles[y * s.w + x];
       if (!t) continue;
       let uu = -1;
+      let kind: TaskKind = "use";
       if (t.crop) {
         const cd = content.crops[t.crop.id];
         if (cd && t.crop.stage >= cd.growthDays.length) uu = 0; // chín
         else if (t.crop.sick) uu = 1; // bệnh
         else if (t.tilled && !t.wet) uu = 2; // khô
-      } else if (t.tilled && !t.wet) uu = 2;
+      } else if (t.tilled && !t.wet) {
+        uu = 2; // luống khô, chưa gieo
+      } else if (t.tilled && !t.prop && !t.b) {
+        // Luống trống đã ẩm: GIEO.
+        if (coHat) {
+          uu = 3;
+          kind = "plant";
+        }
+      } else if (!t.prop && !t.b && !t.crop && isTillable(s, content, x, y) && !trongChuong(x, y)) {
+        // Đất lô chưa cày: CÀY. `isTillable` đã kẹp trong vùng ruộng; chặn thêm
+        // khu chuồng cho chắc — sàn chuồng không phải chỗ trồng trọt.
+        uu = 4;
+        kind = "till";
+      }
       if (uu < 0) continue;
       if (xau(x, y)) continue;
       // Thu hoạch mà không đủ chỗ cho `yieldMax` thì để đó, về kho đổ đã.
@@ -448,7 +530,7 @@ function cropTask(
       const score = uu * 1000 + Math.abs(x - cx) + Math.abs(y - cy);
       if (score < bestScore) {
         bestScore = score;
-        best = { kind: "use", tx: x, ty: y };
+        best = { kind, tx: x, ty: y };
       }
     }
   }
@@ -488,20 +570,32 @@ export function workerCard(e: Entity, content: Content): WorkerCard | null {
   if (!w) return null;
   const cfg = content.workers;
   const deo = carried(w);
+  /* NÓI RA VIỆC ĐANG LÀM, không nói toạ độ.
+     "Đang đi tới ô 36,11" là thứ chỉ người viết code đọc được; người chơi cần
+     biết anh ta đang đi ĐỔ MÁNG hay đi CHẶT CÂY. Từ khi bỏ vai, đây là chỗ
+     duy nhất trả lời câu "người này đang làm gì cho tôi". */
+  const ten: Record<string, string> = {
+    dump: "về kho đổ hàng",
+    pour: "đi đổ máng",
+    gather: "đi thu sản phẩm",
+    use: "làm việc trên ruộng",
+    till: "đi cày",
+    plant: "đi gieo hạt",
+    break: "đi kiếm gỗ đá",
+  };
+  const viec = e.ai.job ? (ten[e.ai.job] ?? "làm việc") : null;
   const doing =
     e.ai.phase === "rest"
       ? "Đang nghỉ lấy sức"
-      : e.ai.phase === "work"
-        ? "Đang làm việc"
-        : e.ai.phase === "walk"
-          ? `Đang đi tới ô ${e.ai.tx},${e.ai.ty}`
-          : deo >= cfg.carryMax
-            ? "Tay đầy — đang về kho"
-            : "Đang tìm việc";
+      : viec
+        ? (e.ai.phase === "walk" ? `Đang ${viec}` : `Đang ${viec}`)
+        : deo >= cfg.carryMax
+          ? "Tay đầy — đang về kho"
+          : "Đang tìm việc";
   return {
     kind: "worker",
     name: w.name,
-    job: w.job === "crops" ? "chăm cây" : "chăn nuôi",
+    job: viec ? viec.replace(/^đi /, "") : "đang tìm việc",
     doing,
     energy: cfg.energyMax > 0 ? Math.max(0, Math.min(1, w.energy / cfg.energyMax)) : 1,
     carry: cfg.carryMax > 0 ? Math.max(0, Math.min(1, deo / cfg.carryMax)) : 0,

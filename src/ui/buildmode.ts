@@ -34,7 +34,8 @@ export interface BuildMode {
   /** Công trình đang chọn để vẽ, hoặc null. */
   picked(): string | null;
   isOpen(): boolean;
-  open(): void;
+  /** Mở chế độ quy hoạch. `id` = chọn sẵn công trình đó (bấm từ bảng giá). */
+  open(id?: string): void;
   close(): void;
   toggle(): void;
   /** Gọi mỗi khung hình khi đang mở — vẽ lại bảng chọn nếu túi đổi. */
@@ -90,9 +91,16 @@ export function createBuildMode(
       h.select(sel);
       last = ""; // ép vẽ lại để ô mới sáng lên ngay khung này
     },
-    open() {
+    open(id) {
       open = true;
       host.hidden = false;
+      /* Vào thẳng với ĐÚNG công trình vừa bấm ở bảng giá. Không có dòng này thì
+         bấm "Vòi tưới" rồi vào chế độ xây với "Hàng rào" đang chọn — một cú
+         chuyển cảnh nói sai điều người chơi vừa yêu cầu. */
+      if (id && thuTu.includes(id)) {
+        sel = id;
+        h.select(id);
+      }
       last = "";
     },
     close() {

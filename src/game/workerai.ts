@@ -34,6 +34,8 @@ import {
 } from "./workers.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 import { canPourFromStore, pourFromStore } from "./pen.ts";
+import { cropInSeason, tileAllSeason } from "./season.ts";
+import { isTillable } from "./world.ts";
 
 /** Mỗi việc làm xong tốn ngần này PHÚT GAME — người làm không phải cái máy. */
 const WORK_MINUTES = 1.5;
@@ -127,6 +129,7 @@ export function workerStep(
     e.ai.tx = task.tx;
     e.ai.ty = task.ty;
     e.ai.ent = task.ent;
+    e.ai.job = task.kind;
     e.ai.phase = "work";
     e.ai.until = WORK_MINUTES;
     return true;
@@ -157,6 +160,7 @@ export function workerStep(
   e.ai.tx = task.tx;
   e.ai.ty = task.ty;
   e.ai.ent = task.ent;
+  e.ai.job = task.kind;
   e.ai.phase = "walk";
 
   const cx = Math.floor(e.x / TILE);
@@ -240,70 +244,113 @@ function doWork(d: Draft, content: Content, index: number): void {
   const w = e.worker;
   const cfg = content.workers;
   const { tx, ty } = e.ai;
+  /* LOẠI VIỆC do `pickTask` giao, không phải do đây suy lại.
+
+     Suy lại từ ô đích là cách cũ, và nó sai ở đúng chỗ đắt nhất: cái máng nằm
+     giữa chuồng, quanh máng lúc nào cũng có con vật, nên nhánh "có con vật ở
+     gần" nuốt mất mọi chuyến đi đổ máng. Save cũ không có trường này — rơi về
+     lối suy cũ để họ vẫn làm được việc ngay khung hình đầu. */
+  const viec = e.ai.job ?? null;
 
   const tieuSuc = () => {
     w.energy = Math.max(0, w.energy - cfg.energyPerTask);
   };
+  const xong = () => {
+    e.ai.job = undefined;
+  };
 
   // ---- đổ hàng vào kho ---------------------------------------------------
   const kho = findStoreTile(d.s, content);
-  if (kho && kho.x === tx && kho.y === ty && carried(w) > 0) {
+  if ((viec === "dump" || viec === null) && kho && kho.x === tx && kho.y === ty && carried(w) > 0) {
     dumpToStore(d, content, d.s.entities[index]!);
+    xong();
     return;
   }
 
-  /* ---- chăn nuôi ---------------------------------------------------------
-     Tra theo ID TRƯỚC. Con vật đã đi khỏi ô lúc `pickTask` ghi lại — hỏi
-     "ô này có con nào không" với tầm 1,4 ô thì thường là không, và cả chuyến đi
-     thành công cốc. Bán kính 2 ô cho lần tra theo id: đủ để bắt kịp một con vừa
-     nhích đi, đủ hẹp để không vơ nhầm con khác. */
-  const theoId =
-    e.ai.ent !== undefined
-      ? (d.s.entities.find((v) => v.id === e.ai.ent && v.map === d.s.mapId) ?? null)
-      : null;
-  const gan =
-    theoId && Math.hypot(theoId.x - e.x, theoId.y - e.y) <= 2 * TILE ? theoId : null;
-  const an = gan ?? animalNear(d.s, tx, ty);
-  if (an) {
-    const def = content.animals[an.def];
-    const pi = def ? readyProduct(an, content) : -1;
-    if (def && pi >= 0) {
-      const p = def.products[pi]!;
-      const r = randInt(d.s.seed, p.min, p.max);
-      touch(d).seed = r.seed;
-      /* Chỉ reset đồng hồ sản phẩm theo số THẬT SỰ nhận được.
-         `giveToWorker` kẹp theo `carryMax`; bỏ giá trị trả về rồi vẫn reset là
-         cách làm bốc hơi phần thừa. `pickTask` đã chặn từ trước bằng cách không
-         nhận việc khi chỗ trống < `p.max`, nên tới đây gần như luôn nhận đủ —
-         dòng này là lớp chắn thứ hai, cho trường hợp tay đầy giữa chừng. */
-      const nhan = giveToWorker(d, content, index, p.id, Math.max(1, r.v));
-      if (nhan <= 0) return; // không cầm được gì thì đừng cướp mất lứa sữa
-      const ai = d.s.entities.indexOf(an);
-      const m = dEntity(d, ai);
-      if (m) m.animal.prod[pi] = 0;
+  // ---- ĐỔ MÁNG (xúc cám từ kho) ------------------------------------------
+  if (viec === "pour" || (viec === null && canPourFromStore(d.s, content, tx, ty))) {
+    if (canPourFromStore(d.s, content, tx, ty) && pourFromStore(d, content, tx, ty) > 0) tieuSuc();
+    xong();
+    return;
+  }
+
+  // ---- THU SẢN PHẨM của con vật ------------------------------------------
+  if (viec === "gather" || viec === null) {
+    /* Tra theo ID TRƯỚC. Con vật đã đi khỏi ô lúc `pickTask` ghi lại — hỏi
+       "ô này có con nào không" với tầm 1,4 ô thì thường là không, và cả chuyến
+       đi thành công cốc. Bán kính 2 ô cho lần tra theo id: đủ để bắt kịp một
+       con vừa nhích đi, đủ hẹp để không vơ nhầm con khác. */
+    const theoId =
+      e.ai.ent !== undefined
+        ? (d.s.entities.find((v) => v.id === e.ai.ent && v.map === d.s.mapId) ?? null)
+        : null;
+    const gan = theoId && Math.hypot(theoId.x - e.x, theoId.y - e.y) <= 2 * TILE ? theoId : null;
+    const an = gan ?? animalNear(d.s, tx, ty);
+    if (an) {
+      const def = content.animals[an.def];
+      const pi = def ? readyProduct(an, content) : -1;
+      if (def && pi >= 0) {
+        const p = def.products[pi]!;
+        const r = randInt(d.s.seed, p.min, p.max);
+        touch(d).seed = r.seed;
+        /* Chỉ reset đồng hồ sản phẩm theo số THẬT SỰ nhận được. `giveToWorker`
+           kẹp theo `carryMax`; bỏ giá trị trả về rồi vẫn reset là cách làm bốc
+           hơi phần thừa. */
+        const nhan = giveToWorker(d, content, index, p.id, Math.max(1, r.v));
+        if (nhan <= 0) return; // không cầm được gì thì đừng cướp mất lứa sữa
+        const ai = d.s.entities.indexOf(an);
+        const m = dEntity(d, ai);
+        if (m) m.animal.prod[pi] = 0;
+        tieuSuc();
+      }
+      xong();
+      return;
+    }
+    if (viec === "gather") {
+      xong();
+      return;
+    }
+  }
+
+  // ---- việc trên MỘT Ô ---------------------------------------------------
+  const ti = tileIndexAt(d.s, tx, ty);
+  if (ti < 0) {
+    xong();
+    return;
+  }
+  const t = d.s.tiles[ti];
+  if (!t) {
+    xong();
+    return;
+  }
+  xong();
+
+  // KIẾM TÀI NGUYÊN: chặt cây, đập đá — chỉ trong rừng, xem `pickTask`.
+  if (viec === "break") {
+    const def = t.prop ? content.props[t.prop] : null;
+    if (!def?.hits) return;
+    const m = dTile(d, ti);
+    if (!m) return;
+    const hp = (m.hp ?? def.hits) - 1;
+    if (hp > 0) {
+      m.hp = hp;
       tieuSuc();
       return;
     }
-    /* CHO ĂN TRỰC TIẾP: đã bỏ (core 1.38). Người làm giờ đi ĐỔ MÁNG như người
-       chơi — xem nhánh `pour` bên dưới. Bơm thẳng `fed` vào con vật là một
-       đường tắt đi vòng qua cả hệ thống máng, và nó làm hai cách cho ăn kể hai
-       câu chuyện khác nhau về cùng một đàn. */
+    for (const dr of def.drops ?? []) {
+      const r = randInt(d.s.seed, dr.min, dr.max);
+      touch(d).seed = r.seed;
+      if (r.v > 0) giveToWorker(d, content, index, dr.id, r.v);
+    }
+    const m2 = dTile(d, ti);
+    if (m2) {
+      const sau = def.becomes ? (content.props[def.becomes] ?? null) : null;
+      m2.prop = sau ? sau.id : null;
+      m2.hp = sau ? Math.max(0, Math.floor(sau.hits ?? 0)) : 0;
+    }
+    tieuSuc();
     return;
   }
-
-  /* ---- ĐỔ MÁNG ----------------------------------------------------------
-     Xúc cám từ kho đổ vào máng, rồi con vật tự tới ăn. Đây là việc giữ cả đàn
-     sống qua đêm, và cho tới nay người làm chưa từng làm được nó. */
-  if (canPourFromStore(d.s, content, tx, ty)) {
-    if (pourFromStore(d, content, tx, ty) > 0) tieuSuc();
-    return;
-  }
-
-  // ---- việc trên ruộng ---------------------------------------------------
-  const ti = tileIndexAt(d.s, tx, ty);
-  if (ti < 0) return;
-  const t = d.s.tiles[ti];
-  if (!t) return;
 
   // thu cây chín
   if (t.crop) {
@@ -352,5 +399,43 @@ function doWork(d: Draft, content: Content, index: number): void {
     const m = dTile(d, ti);
     if (m) m.wet = true;
     tieuSuc();
+    return;
+  }
+
+  /* CÀY trong lô ruộng. Luật cũ cấm hẳn, vì "cày chỗ nào là quyết định bố cục
+     của người chơi". Luật ấy đúng khi cả bản đồ đều cày được — nhưng từ khi có
+     VÙNG, cuốc chỉ ăn trong `zones kind:"farm"`, và mấy cái lô ấy sinh ra chính
+     là để trồng trọt. Cày trong lô không cướp quyền quy hoạch của ai cả; để đất
+     lô nằm không mới là bỏ phí. Ngoài lô thì `isTillable` vẫn chặn. */
+  if (viec === "till") {
+    if (!isTillable(d.s, content, tx, ty)) return;
+    const m = dTile(d, ti);
+    if (!m) return;
+    m.tilled = true;
+    tieuSuc();
+    return;
+  }
+
+  // GIEO hạt lấy từ KHO — người làm không có túi riêng để đi mua hạt.
+  if (viec === "plant") {
+    if (!t.tilled || t.crop || t.prop || t.b) return;
+    /* Hạt phải ĐÚNG MÙA, và ô phải chịu được nó — cùng luật với người chơi
+       (`useAt`), nếu không người làm gieo ra một luống héo ngay hôm sau. */
+    const i = d.s.store.findIndex(
+      (v) =>
+        v &&
+        v.id.startsWith("seed:") &&
+        content.crops[v.id.slice(5)] &&
+        (cropInSeason(v.id.slice(5), d.s.day, content) || tileAllSeason(t, content)),
+    );
+    if (i < 0) return;
+    const store = d.s.store.slice();
+    const cur = store[i]!;
+    store[i] = cur.n > 1 ? { id: cur.id, n: cur.n - 1 } : null;
+    touch(d).store = store;
+    const m = dTile(d, ti);
+    if (m) m.crop = { id: cur.id.slice(5), stage: 0, grow: 0, regrown: false };
+    tieuSuc();
+    return;
   }
 }

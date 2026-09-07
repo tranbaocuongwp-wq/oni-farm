@@ -430,7 +430,7 @@ async function boot() {
     penPour: (pen) => store.dispatch({ t: "PEN_POUR", pen }),
     hire: (job) => store.dispatch({ t: "HIRE", job }),
     fire: (id) => store.dispatch({ t: "FIRE", id }),
-    assign: (id, job) => store.dispatch({ t: "ASSIGN", id, job }),
+    openBuild: (id) => buildUI.open(id),
     toggleDevPanel: () => devPanel.toggle(),
     canInstall: () => installPrompt !== null,
     padInfo: () => input.padInfo(),
