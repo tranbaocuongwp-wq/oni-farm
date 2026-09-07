@@ -9,9 +9,23 @@
    Bản đồ có kích thước CỐ ĐỊNH nên vẽ nó rẻ: 1 pixel = 1 ô (40×30 = 1200 pixel),
    rồi phóng to bằng CSS với image-rendering: pixelated.
 
-   Nền địa hình được CACHE và chỉ vẽ lại khi mảng ô thật sự đổi. Nhờ reducer dùng
-   copy-on-write, chỉ cần so sánh THAM CHIẾU mảng là biết — không phải quét 1200 ô
-   mỗi khung hình chỉ để phát hiện không có gì đổi.
+   Nền địa hình được CACHE, và cache đó so TỪNG Ô chứ không so tham chiếu MẢNG.
+
+   Vì sao không so mảng: bản cũ làm đúng thế (`s.tiles !== lastTiles`), và trên
+   giấy thì hợp lý — reducer dùng copy-on-write nên mảng chỉ đổi khi có gì đổi.
+   Chỗ hỏng là "có gì đổi" xảy ra ở MỌI khung hình: cây trồng cộng dồn `grow`
+   từng khung, nên chỉ cần một ô ẩm có cây là `dTiles` nhân bản cả mảng. Một
+   nông trại đã gieo thì cache KHÔNG BAO GIỜ trúng, và bản đồ nhỏ vẽ lại cả
+   1.776 ô bằng 1.776 lệnh `fillRect` mỗi khung — đo được là 59% tổng số lệnh
+   vẽ của cả trò chơi, cho một bức ảnh gần như không đổi.
+
+   So từng ô thì đúng thứ cần đúng: copy-on-write chỉ THAY object của những ô
+   thật sự đổi, nên một phép so tham chiếu cho mỗi ô (rẻ, không đụng canvas)
+   tìm ra đúng vài ô cần vẽ lại. 1.776 `fillRect` → thường là 0.
+
+   Và `grow` của cây KHÔNG đổi màu ô: màu chỉ phụ thuộc nền, đất cày, ẩm, công
+   trình, vật thể, và cây đã chín hay chưa. Nên phần lớn ô "đã đổi" vẫn vẽ lại
+   ra đúng màu cũ — vẫn rẻ hơn hẳn quét toàn bản đồ.
 ============================================================================ */
 
 import type { Content, GameState } from "../game/types.ts";
@@ -77,7 +91,10 @@ export function createMinimap(host: HTMLElement): Minimap {
   // lớp nền được cache, chỉ vẽ lại khi mảng ô đổi
   const terrain = document.createElement("canvas");
   const tg = terrain.getContext("2d")!;
-  let lastTiles: unknown = null;
+  let lastTiles: readonly unknown[] | null = null;
+  let lastContent: Content | null = null;
+  /** Màu đã vẽ của từng ô, để biết ô "vừa đổi" có thật sự đổi màu không. */
+  let mauTruoc: string[] = [];
 
   let pick: (tx: number, ty: number) => void = () => {};
   let view = { x: 0, y: 0, w: 0, h: 0 };
@@ -91,40 +108,81 @@ export function createMinimap(host: HTMLElement): Minimap {
     terrain.width = s.w;
     terrain.height = s.h;
     lastTiles = null;
+    mauTruoc = [];
     // Tỉ lệ khung do bản đồ quyết định; CSS chỉ giới hạn bề rộng.
     canvas.style.aspectRatio = `${s.w} / ${s.h}`;
     g.imageSmoothingEnabled = false;
   }
 
+  /** Màu của MỘT ô trên bản đồ nhỏ. Cố ý không phụ thuộc `crop.grow`. */
+  function mauO(t: NonNullable<GameState["tiles"][number]>, content: Content): string {
+    let c: string = C.grass;
+    if (t.g === "water") c = C.water;
+    else if (t.g === "path") c = C.path;
+    else if (t.g === "wood") c = C.wood;
+
+    if (t.tilled) c = t.wet ? C.soilWet : C.soil;
+    if (t.b) {
+      const def = content.buildings[t.b];
+      c = def?.kind === "floor" ? C.building : C.building;
+    }
+    // Cây trồng vẽ ĐÈ lên đất: người chơi cần thấy ngay chỗ nào chín để ra thu.
+    if (t.crop) {
+      const def = content.crops[t.crop.id];
+      const ripe = def ? t.crop.stage >= def.growthDays.length : false;
+      c = ripe ? C.ripe : C.crop;
+    }
+    // Màu tra theo id prop; id lạ (content mới) vẫn hiện thành chấm xám để
+    // người chơi biết chỗ đó có VẬT GÌ ĐÓ, thay vì biến mất khỏi bản đồ.
+    if (t.prop) c = (C as Record<string, string>)[t.prop] ?? "#9aa0a6";
+    return c;
+  }
+
+  /** Vẽ lại TOÀN BỘ nền. Dùng khi chưa có gì để so: lần đầu, đổi bản đồ, đổi
+   *  kích thước, hoặc content mới về qua OTA (bảng màu công trình/cây đổi). */
   function drawTerrain(s: GameState, content: Content) {
     tg.clearRect(0, 0, s.w, s.h);
-    for (let y = 0; y < s.h; y++) {
-      for (let x = 0; x < s.w; x++) {
-        const t = s.tiles[y * s.w + x];
-        if (!t) continue;
-        let c: string = C.grass;
-        if (t.g === "water") c = C.water;
-        else if (t.g === "path") c = C.path;
-        else if (t.g === "wood") c = C.wood;
-
-        if (t.tilled) c = t.wet ? C.soilWet : C.soil;
-        if (t.b) {
-          const def = content.buildings[t.b];
-          c = def?.kind === "floor" ? C.building : C.building;
-        }
-        // Cây trồng vẽ ĐÈ lên đất: người chơi cần thấy ngay chỗ nào chín để ra thu.
-        if (t.crop) {
-          const def = content.crops[t.crop.id];
-          const ripe = def ? t.crop.stage >= def.growthDays.length : false;
-          c = ripe ? C.ripe : C.crop;
-        }
-        // Màu tra theo id prop; id lạ (content mới) vẫn hiện thành chấm xám để
-        // người chơi biết chỗ đó có VẬT GÌ ĐÓ, thay vì biến mất khỏi bản đồ.
-        if (t.prop) c = (C as Record<string, string>)[t.prop] ?? "#9aa0a6";
-        tg.fillStyle = c;
-        tg.fillRect(x, y, 1, 1);
+    const n = s.w * s.h;
+    if (mauTruoc.length !== n) mauTruoc = new Array<string>(n);
+    for (let i = 0; i < n; i++) {
+      const t = s.tiles[i];
+      if (!t) {
+        mauTruoc[i] = "";
+        continue;
       }
+      const c = mauO(t, content);
+      mauTruoc[i] = c;
+      tg.fillStyle = c;
+      tg.fillRect(i % s.w, (i / s.w) | 0, 1, 1);
     }
+  }
+
+  /**
+   * Vẽ lại đúng những ô có OBJECT khác lần trước.
+   *
+   * Trả về false nếu không so được (độ dài mảng lệch — đổi bản đồ), lúc đó nơi
+   * gọi phải vẽ lại toàn bộ.
+   */
+  function veODaDoi(s: GameState, content: Content, truoc: readonly unknown[]): boolean {
+    const n = s.w * s.h;
+    if (truoc.length !== n || s.tiles.length !== n) return false;
+    if (mauTruoc.length !== n) return false;
+    for (let i = 0; i < n; i++) {
+      const t = s.tiles[i];
+      if (t === truoc[i]) continue;
+      if (!t) continue;
+      /* Ô đã đổi OBJECT chưa chắc đã đổi MÀU — và phần lớn là không. Cây trồng
+         cộng `grow` mỗi khung nên cả 360 ô ruộng đều "mới", trong khi màu của
+         chúng chỉ nhảy đúng một lần lúc chín. So màu trước khi vẽ thì 405 lệnh
+         `fillRect` mỗi khung xuống còn gần như không có lệnh nào; `mauO` chỉ là
+         vài phép so thuộc tính, rẻ hơn hẳn một lệnh canvas. */
+      const c = mauO(t, content);
+      if (c === mauTruoc[i]) continue;
+      mauTruoc[i] = c;
+      tg.fillStyle = c;
+      tg.fillRect(i % s.w, (i / s.w) | 0, 1, 1);
+    }
+    return true;
   }
 
   canvas.addEventListener("pointerdown", (e) => {
@@ -142,9 +200,16 @@ export function createMinimap(host: HTMLElement): Minimap {
     update(s, content) {
       if (!visible) return;
       ensureSize(s);
-      if (s.tiles !== lastTiles) {
+      /* Content đổi (OTA) thì bảng màu đổi theo — phải vẽ lại hết, không chỉ
+         những ô vừa đổi. */
+      if (s.tiles !== lastTiles || content !== lastContent) {
+        const veHet =
+          content !== lastContent ||
+          lastTiles === null ||
+          !veODaDoi(s, content, lastTiles as readonly unknown[]);
+        if (veHet) drawTerrain(s, content);
         lastTiles = s.tiles;
-        drawTerrain(s, content);
+        lastContent = content;
       }
 
       g.clearRect(0, 0, canvas.width, canvas.height);

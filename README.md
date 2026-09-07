@@ -34,7 +34,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 138 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 139 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -987,7 +987,7 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
-### Đợt 15: A* nhanh gấp ba, cá thôi nằm trên đường, và ba chỗ HUD lệch (core 1.41)
+### Đợt 15: bản đồ nhỏ thôi vẽ lại cả bản đồ mỗi khung, A* nhanh gấp ba (core 1.41)
 
 Đợt này bắt đầu bằng một câu hỏi mở — "game có chậm không" — nên việc đầu tiên là
 **đo**, không phải sửa.
@@ -1014,6 +1014,45 @@ Cảnh đo: 1.776 ô · 360 cây · 27 thực thể (đông hơn hẳn lối ch�
 Kết quả đọc ra ngay từ dòng đầu: **cả phần mô phỏng gộp lại tốn 0,2% một khung
 hình**, còn **một lần gọi A* tốn gấp năm mươi lần tất cả những thứ đó cộng lại**.
 Mọi thứ khác trong bảng là nhiễu. Nên đợt này chỉ có đúng một chỗ đáng đụng vào.
+
+#### Tốc độ render UI: 3.007 → 1.265 lệnh vẽ mỗi khung
+
+Đo bằng thứ không phụ thuộc lịch trình trình duyệt — **đếm lệnh vẽ**. Trên nông
+trại 360 cây + 54 thực thể ở 430×932:
+
+| | Trước | Sau |
+|---|---|---|
+| `fillRect` | **1.786** | **45** |
+| `drawImage` | 1.191 | 1.191 |
+| còn lại (save/restore/setTransform/fillText…) | 30 | 29 |
+| **tổng** | **3.007** | **1.265** |
+
+1.786 lệnh `fillRect` là gần đúng bằng số ô của bản đồ (1.776), và đó chính là
+nó: **bản đồ nhỏ vẽ lại toàn bộ địa hình, từng ô một, mỗi khung hình** — 59%
+tổng số lệnh vẽ của cả trò chơi, cho một bức ảnh gần như không đổi.
+
+Nó *có* cache. Cache hỏi `s.tiles !== lastTiles`, và trên giấy thì hợp lý:
+reducer dùng copy-on-write nên mảng chỉ đổi khi có gì đổi. Chỗ hỏng là **"có gì
+đổi" xảy ra ở MỌI khung hình** — cây trồng cộng dồn `grow` từng khung, nên chỉ
+cần một ô ẩm có cây là `dTiles` nhân bản cả mảng. Nông trại đã gieo thì cache
+không bao giờ trúng một lần nào. Một dòng đúng về mặt logic, sai về mặt thực tế,
+và im lặng suốt mười bốn đợt vì nó *trông* như đang tối ưu.
+
+Hai tầng thay cho nó:
+
+* **So TỪNG Ô, không so tham chiếu mảng.** Copy-on-write chỉ thay object của
+  những ô thật sự đổi, nên một phép so tham chiếu cho mỗi ô — rẻ, không đụng
+  canvas — tìm ra đúng vài ô cần vẽ. 1.786 → 405.
+* **Nhớ MÀU đã vẽ của từng ô.** Ô đổi object chưa chắc đổi màu, và phần lớn là
+  không: màu chỉ phụ thuộc nền, đất cày, ẩm, công trình, vật thể, và cây đã chín
+  hay chưa — `grow` không nằm trong đó. 405 → **45**.
+
+**Kịch bản 139 canh cả hai chiều**, và chiều thứ hai mới là chiều quan trọng: vẽ
+ít đi thì dễ, vẽ ít mà vẫn ĐÚNG mới khó. Nó dựng bản đồ nhỏ trên một DOM giả có
+ghi lại ảnh thật sự vẽ ra, chạy một chuỗi thay đổi thật (cây chín, đất khô, xây,
+chặt) qua nhiều khung, rồi dựng một bản đồ nhỏ **mới tinh** cho vẽ một lần trên
+state cuối — và đòi hai bức ảnh khớp **từng ô**. Một cache vẽ ít mà trôi dần thì
+tệ hơn hẳn không có cache. Bốn đột biến đã cấy và thấy đỏ.
 
 #### A*: 1,34 ms → 0,47 ms
 

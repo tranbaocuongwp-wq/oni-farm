@@ -45,6 +45,7 @@ import { createGamepad, PAD, padButtonName, setPadDead, setPadInvertY, setPadRem
 import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
+import { createMinimap } from "../src/ui/minimap.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -9235,6 +9236,193 @@ test("138. A* tối ưu trả về ĐÚNG TỪNG Ô như bản tham chiếu ch�
       thamChieu(st2, a.x, a.y, dich, {}),
       "đổi bản đồ giữa hai lần gọi: ghi nhớ của lần trước không được rớt sang lần sau",
     );
+  }
+});
+
+test("139. BẢN ĐỒ NHỎ chỉ vẽ lại ô ĐỔI MÀU, và ảnh vẽ dần luôn khớp ảnh vẽ lại từ đầu", () => {
+  /* Bản đồ nhỏ cache nền địa hình và bản cũ hỏi cache bằng `s.tiles !==
+     lastTiles`. Trên giấy thì đúng — reducer copy-on-write nên mảng chỉ đổi
+     khi có gì đổi. Chỗ hỏng là "có gì đổi" xảy ra ở MỌI khung hình: cây cộng
+     dồn `grow` từng khung, nên chỉ cần một ô ẩm có cây là cả mảng bị nhân bản.
+     Nông trại đã gieo thì cache KHÔNG BAO GIỜ trúng, và bản đồ nhỏ vẽ lại cả
+     1.776 ô bằng 1.776 lệnh `fillRect` mỗi khung.
+
+     Đo trong trình duyệt thật, nông trại 360 cây + 54 thực thể ở 430×932:
+     1.786 `fillRect` mỗi khung, tức 59% TỔNG số lệnh vẽ của cả trò chơi — cho
+     một bức ảnh gần như không đổi. Sau khi sửa: 45.
+
+     Kịch bản này canh hai điều, và điều thứ hai mới là điều quan trọng:
+       · vẽ ÍT đi (không thì sửa chẳng để làm gì);
+       · vẽ ĐÚNG — ảnh dựng dần qua nhiều khung phải khớp từng ô với ảnh vẽ
+         lại từ đầu trên cùng một state. Một cache vẽ ít mà vẽ sai thì tệ hơn
+         hẳn không có cache. */
+
+  /** Canvas giả: đếm lệnh, và ghi lại ẢNH thật sự vẽ ra. */
+  function canvasGia() {
+    const dem = { fillRect: 0, clearRect: 0, drawImage: 0, strokeRect: 0 };
+    const px = new Map(); // "x,y" → màu
+    const cv = {
+      width: 0,
+      height: 0,
+      style: {},
+      addEventListener() {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }),
+      dem,
+      px,
+    };
+    const ctx = {
+      fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 1,
+      imageSmoothingEnabled: true,
+      fillRect(x, y, w, h) {
+        dem.fillRect++;
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) px.set(`${x + i},${y + j}`, this.fillStyle);
+      },
+      clearRect() {
+        dem.clearRect++;
+        px.clear();
+      },
+      drawImage() {
+        dem.drawImage++;
+      },
+      strokeRect() {
+        dem.strokeRect++;
+      },
+    };
+    cv.getContext = () => ctx;
+    return cv;
+  }
+
+  /** Dựng một bản đồ nhỏ trên DOM giả. Trả cả canvas NỀN (cái được cache). */
+  function dungMinimap() {
+    const nen = canvasGia();
+    const man = canvasGia();
+    const cuDoc = globalThis.document;
+    globalThis.document = { createElement: () => nen };
+    try {
+      const host = { querySelector: () => man, classList: { toggle() {} } };
+      return { mm: createMinimap(host), nen, man };
+    } finally {
+      globalThis.document = cuDoc;
+    }
+  }
+
+  const store = mkStore(4242);
+  store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+  store.dispatch({ t: "DEBUG", op: "tillMap" });
+  store.dispatch({ t: "DEBUG", op: "plantMap" });
+  store.dispatch({ t: "DEBUG", op: "waterMap" });
+  const s0 = store.getState();
+  const nO = s0.w * s0.h;
+  ok(
+    s0.tiles.filter((t) => t.crop && t.wet).length > 100,
+    "phải có nhiều ô cây ĐANG ẨM — đó mới là thứ làm mảng ô bị nhân bản mỗi khung",
+  );
+
+  const A = dungMinimap();
+
+  /* --- (a) lần đầu: vẽ hết, đúng một lệnh cho mỗi ô ------------------- */
+  A.mm.update(s0, content);
+  eq(A.nen.dem.fillRect, nO, "lần vẽ đầu phải phủ đúng một lệnh cho mỗi ô");
+
+  /* --- (b) CÂY LỚN nhưng chưa chín: mảng ô đổi mỗi khung, MÀU thì không.
+             Đây là ca chiếm 59% số lệnh vẽ trước khi sửa. */
+  A.nen.dem.fillRect = 0;
+  let doiThamChieu = 0;
+  for (let i = 0; i < 40; i++) {
+    const truoc = store.getState().tiles;
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    const sau = store.getState();
+    if (sau.tiles !== truoc) doiThamChieu++;
+    A.mm.update(sau, content);
+  }
+  ok(
+    doiThamChieu >= 30,
+    `mảng ô phải bị nhân bản ở hầu hết các khung (${doiThamChieu}/40) — nếu không thì ca này ` +
+      "không chạm vào đúng cái nó định kiểm",
+  );
+  ok(
+    A.nen.dem.fillRect <= 40,
+    `40 khung cây lớn mà chưa ô nào đổi màu thì gần như không được vẽ lại gì; ` +
+      `đang vẽ ${A.nen.dem.fillRect} lệnh (bản cũ vẽ ${nO * 40})`,
+  );
+
+  /* --- (c) Ô THẬT SỰ ĐỔI MÀU thì phải vẽ lại, không được bỏ sót ------- */
+  const s1 = store.getState();
+  const oTrong = (() => {
+    for (let y = 1; y < s1.h - 1; y++)
+      for (let x = 1; x < s1.w - 1; x++) {
+        const t = s1.tiles[idx(s1.w, x, y)];
+        if (t && !t.tilled && !t.crop && !t.prop && !t.b && t.g === "grass") return { x, y };
+      }
+    return null;
+  })();
+  ok(!!oTrong, "phải tìm được một ô cỏ trống để đổi màu");
+  A.nen.dem.fillRect = 0;
+  const s2 = clone(s1);
+  setTile(s2, oTrong.x, oTrong.y, { prop: "rock" });
+  A.mm.update(s2, content);
+  ok(A.nen.dem.fillRect >= 1, "ô vừa đổi thành đá thì PHẢI được vẽ lại");
+  eq(
+    A.nen.px.get(`${oTrong.x},${oTrong.y}`),
+    "#8a8f98",
+    "và phải vẽ ra đúng màu đá — vẽ lại mà ra màu cũ thì cũng như không vẽ",
+  );
+
+  /* --- (d) PHÉP KIỂM CHÍNH: ảnh dựng dần == ảnh vẽ lại từ đầu ---------
+     Chạy một chuỗi thay đổi thật (cây chín, đất khô, xây, chặt), cập nhật dần
+     qua từng bước; rồi dựng một bản đồ nhỏ MỚI TINH và cho nó vẽ một lần trên
+     state cuối. Hai bức ảnh phải khớp từng ô. Lệch một ô là cache đã trôi. */
+  let s = store.getState();
+  const moc = [];
+  for (let b = 0; b < 6; b++) {
+    const t2 = clone(s);
+    // mỗi vòng đụng vào một nhóm ô khác nhau, đủ kiểu đổi màu
+    for (let k = 0; k < 25; k++) {
+      const x = 2 + ((b * 7 + k * 3) % (t2.w - 4));
+      const y = 2 + ((b * 5 + k * 11) % (t2.h - 4));
+      const t = t2.tiles[idx(t2.w, x, y)];
+      if (!t) continue;
+      if (b % 3 === 0) t.wet = !t.wet;
+      else if (b % 3 === 1 && t.crop) {
+        // hoá chín — đúng nấc cuối hợp lệ, không phải một số bừa làm vỡ bất biến
+        const def = content.crops[t.crop.id];
+        if (def) t.crop = { ...t.crop, stage: def.growthDays.length, grow: 0 };
+      }
+      else t.prop = t.prop ? null : "rock";
+    }
+    store.replace(t2);
+    for (let i = 0; i < 5; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    s = store.getState();
+    A.mm.update(s, content);
+    moc.push(A.nen.dem.fillRect);
+  }
+
+  const B = dungMinimap();
+  B.mm.update(s, content);
+  eq(B.nen.dem.fillRect, nO, "bản đồ nhỏ mới dựng phải vẽ đủ cả bản đồ để làm mốc so");
+
+  let lech = 0;
+  let viDu = null;
+  for (let y = 0; y < s.h; y++)
+    for (let x = 0; x < s.w; x++) {
+      const k = `${x},${y}`;
+      if (A.nen.px.get(k) !== B.nen.px.get(k)) {
+        lech++;
+        if (!viDu) viDu = `(${x},${y}) dựng dần=${A.nen.px.get(k)} vẽ lại=${B.nen.px.get(k)}`;
+      }
+    }
+  eq(lech, 0, `ảnh dựng dần phải khớp TỪNG Ô với ảnh vẽ lại từ đầu; lệch ${lech} ô, ví dụ ${viDu}`);
+
+  /* --- (e) CONTENT MỚI (OTA) đổi bảng màu → phải vẽ lại HẾT ----------- */
+  {
+    const raw = rawPack();
+    const wide = buildContent(raw);
+    ok(wide !== content, "content dựng lại phải là một object khác");
+    A.nen.dem.fillRect = 0;
+    A.mm.update(s, wide);
+    eq(A.nen.dem.fillRect, nO, "content đổi thì bảng màu đổi theo — phải vẽ lại toàn bộ, không chỉ ô vừa đổi");
   }
 });
 
