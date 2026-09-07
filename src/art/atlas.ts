@@ -1224,6 +1224,7 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "trough": return makeTrough(art, 0, "#000", "#000");
     case "sign": return makeSign(art);
     case "pier": return makePier(art);
+    case "roadbridge": return makeRoadBridge(art);
     case "wall": return makeWall(art);
     case "door_in": return makeDoorIn(art);
     case "shop": return makeShop();
@@ -2638,6 +2639,32 @@ function makeBlockTile(art: PropArt, left: boolean, right: boolean): HTMLCanvasE
 /** Khoá biến thể của một ô công trình nhiều ô: chỉ trái–phải. */
 export function blockVariantKey(left: boolean, right: boolean): string {
   return `${left ? 1 : 0}${right ? 1 : 0}`;
+}
+
+/**
+ * CẦU ĐƯỜNG qua sông: mặt nhựa nằm trên khung gỗ, có vạch kẻ như con đường.
+ *
+ * Khác cầu tàu ở chỗ nó phải ĐỌC RA LÀ ĐƯỜNG — xe tải chạy qua đây, và nếu
+ * nhìn nó giống cầu gỗ đi bộ thì người chơi không hiểu vì sao chiếc xe lại
+ * băng qua mặt nước.
+ */
+function makeRoadBridge(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const nhua = art.body;
+  const toi = art.dark;
+  const vach = art.accent;
+  // dầm gỗ nhô ra hai mép trên/dưới — cho thấy nó là một cây cầu, không phải đường
+  s.rect(0, 0, TILE, 2, shade("#6b4a2c", 1.0));
+  s.rect(0, TILE - 2, TILE, 2, shade("#6b4a2c", 1.0));
+  s.hline(0, 0, TILE, shade("#8a6238", 1.0));
+  s.hline(0, TILE - 1, TILE, shade("#4a3320", 1.0));
+  // mặt nhựa
+  s.rect(0, 2, TILE, TILE - 4, nhua);
+  s.hline(0, 2, TILE, shade(nhua, 1.18));
+  s.hline(0, TILE - 3, TILE, toi);
+  // vạch kẻ dọc, đứt quãng — cùng ngôn ngữ với mặt đường trên bờ
+  for (let y = 3; y < TILE - 3; y += 4) s.rect(TILE - 1, y, 1, 2, vach);
+  return outline(s).c;
 }
 
 function houseKey(n: Neighbors, door: boolean): string {

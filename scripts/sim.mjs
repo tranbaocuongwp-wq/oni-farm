@@ -20,7 +20,7 @@ import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animal
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
-import { MAX_ENTITIES } from "../src/game/entities.ts";
+import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE } from "../src/game/entities.ts";
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor, waterSpotForBox, tileCenterX, tileCenterY, maxSpeedMul } from "../src/game/world.ts";
@@ -9718,7 +9718,10 @@ test("142. BẢN ĐỒ CAO GẤP ĐÔI: nối thêm xuống dưới, và save c�
     return n;
   };
   ok(dem((t) => t?.g === "water") > 200, "phần mới phải có nhiều mặt nước (sông + biển)");
-  ok(dem((t) => t?.prop === "pier") >= 8, "phải có cầu bắc qua nước");
+  ok(
+    dem((t) => !!t?.prop && content.props[t.prop]?.bridge === true) >= 8,
+    "phải có cầu bắc qua nước",
+  );
 
   /* CÂY CẦU PHẢI CÓ NGHĨA — và đây là cách duy nhất đo được điều đó.
 
@@ -9730,9 +9733,14 @@ test("142. BẢN ĐỒ CAO GẤP ĐÔI: nối thêm xuống dưới, và save c�
      Phép kiểm thật: BỎ HẾT CẦU đi thì bờ nam phải KHÔNG tới được nữa. Nếu vẫn
      tới được thì ở đâu đó có lối lội vòng, và cây cầu chỉ là trang trí. */
   {
+    /* MỌI loại cầu, không chỉ `pier`: cầu tàu để đi bộ và CẦU ĐƯỜNG cho xe là
+       hai vật thể khác nhau, nhưng với câu hỏi "qua sông bằng gì" thì chúng
+       cùng một vai. Chỉ gỡ `pier` thì cây cầu đường vẫn nối hai bờ và phép
+       kiểm xanh vì lý do sai. */
+    const laCau = (t) => !!t?.prop && content.props[t.prop]?.bridge === true;
     let cauDau = null;
     for (let y = 37; y < s.h && !cauDau; y++)
-      for (let x = 0; x < s.w; x++) if (tileAt(s, x, y)?.prop === "pier") { cauDau = { x, y }; break; }
+      for (let x = 0; x < s.w; x++) if (laCau(tileAt(s, x, y))) { cauDau = { x, y }; break; }
     ok(!!cauDau, "phải có cầu ở phần mới");
 
     // ô đất liền đầu tiên NGAY DƯỚI con sông, trên cùng cột với cây cầu
@@ -9753,7 +9761,7 @@ test("142. BẢN ĐỒ CAO GẤP ĐÔI: nối thêm xuống dưới, và save c�
     /* Gỡ mọi ô cầu rồi hỏi lại. Sông cắt ngang thật thì câu trả lời là KHÔNG. */
     const khongCau = clone(s);
     for (let i = 0; i < khongCau.tiles.length; i++)
-      if (khongCau.tiles[i].prop === "pier") khongCau.tiles[i].prop = null;
+      if (laCau(khongCau.tiles[i])) khongCau.tiles[i].prop = null;
     ok(
       !findPath(khongCau, content, tu.x, tu.y, dich, { maxNodes: 20000 }),
       "BỎ cầu thì bờ nam phải không tới được — nếu vẫn tới được thì sông có lối lội vòng, và cây cầu chỉ là trang trí",
@@ -9934,7 +9942,10 @@ test("143. CỔNG nằm ở MÉP bản đồ, biển hiệu gắn lên nhà, và
     ok(hangSong > 0, "phải tìm được hàng sông");
 
     const cot = [];
-    for (let x = 0; x < s.w; x++) if (tileAt(s, x, hangSong)?.prop === "pier") cot.push(x);
+    for (let x = 0; x < s.w; x++) {
+      const t = tileAt(s, x, hangSong);
+      if (t?.prop && content.props[t.prop]?.bridge === true) cot.push(x);
+    }
     ok(cot.length >= 6, `sông phải có nhiều lối qua, đang có ${cot.length} ô cầu`);
 
     /* Gom các ô cầu liền nhau thành TỪNG CÂY CẦU, rồi đo khoảng cách xa nhất
@@ -9957,6 +9968,106 @@ test("143. CỔNG nằm ở MÉP bản đồ, biển hiệu gắn lên nhà, và
       xaNhat <= 10,
       `từ chỗ xa nhất trên bờ tới cây cầu gần nhất phải trong 10 ô, đang là ${xaNhat}`,
     );
+  }
+});
+
+test("144. XE vào từ cổng ở mép, qua CẦU ĐƯỜNG — và cầu tàu không phải mặt đường", () => {
+  /* Cường muốn xe đi vào từ mép PHẢI, vòng qua rừng Nam rồi mới lên kho. Tuyến
+     ấy dài tám mươi bước và bắt buộc phải QUA SÔNG, nên nó đụng vào ba thứ
+     từng im lặng vì tuyến cũ quá ngắn:
+
+     (a) Ô cầu có NỀN là nước, mà `driveable` chỉ nhận nhựa và lối đi — con
+         đường bị con sông cắt đôi với xe cộ, dù trên màn hình cây cầu nối liền
+         hai đầu đường. Người đi bộ qua được, chỉ mỗi chiếc xe là không.
+
+     (b) Sửa (a) bằng cách nhận MỌI vật `bridge` là mặt đường thì hỏng kiểu
+         khác, và tôi đã sập đúng bẫy đó: cái cầu tàu giữa ao cũng thành mặt
+         đường, `pondDock` liền trả về một ô nằm GIỮA HỒ, và xe chở cá không
+         bao giờ tới nơi. Cầu tàu để câu cá, cầu gỗ để đi bộ, chỉ cây cầu khai
+         `drive` mới chở nổi xe tải.
+
+     (c) Bất biến chặn `ai.path` ở 64 cho MỌI thực thể, kể cả xe — trong khi
+         `entities.ts` vốn đã cắt đường xe theo `MAX_PATH_VEHICLE` = 160. Hai
+         chỗ nói hai con số khác nhau về cùng một thứ. Tuyến cũ hơn bốn mươi
+         bước nên chưa ai thấy; tuyến mới tám mươi bước thì mọi chuyến giao
+         hàng ném lỗi bất biến. */
+
+  const s = mkStore().getState();
+  const g = content.tiles.gate;
+  const box = Object.values(content.vehicles).reduce(
+    (a, v) => (v.box.w * v.box.h > a.w * a.h ? v.box : a),
+    { w: 1, h: 1 },
+  );
+
+  /* --- (a) TUYẾN THẬT phải QUA SÔNG ------------------------------------ */
+  {
+    const o = content.tiles.parking.spots[0];
+    const p = findPath(s, content, g.x, g.y, new Set([idx(s.w, o.x, o.y)]), {
+      maxNodes: 2600,
+      box,
+      pass: (x, y) => driveable(s, content, x, y),
+      leash: { x: Math.floor((g.x + o.x) / 2), y: Math.floor((g.y + o.y) / 2), r: 34 },
+    });
+    ok(!!p, "xe phải lái được từ cổng tới bãi đậu với ĐÚNG ngân sách thật của xe");
+    ok(
+      p.some((i) => tileAt(s, i % s.w, Math.floor(i / s.w))?.g === "water"),
+      "tuyến phải BĂNG QUA SÔNG — nếu không thì cổng chưa nằm bên kia sông và ca này chưa kiểm gì",
+    );
+    ok(p.length > 60, `tuyến phải dài thật (đang ${p.length} bước) — vòng qua rừng Nam, không đi tắt`);
+  }
+
+  /* --- (b) CẦU TÀU KHÔNG phải mặt đường -------------------------------- */
+  {
+    const cauDuong = Object.values(content.props).filter((p) => p.drive === true);
+    const cauBo = Object.values(content.props).filter((p) => p.bridge === true && !p.drive);
+    ok(cauDuong.length >= 1, "phải có ít nhất một loại CẦU ĐƯỜNG (`drive: true`)");
+    ok(cauBo.length >= 1, "và ít nhất một loại cầu đi bộ — hai vai khác nhau");
+
+    /* Bến thả cá phải là một ô ĐẤT LIỀN xe tới được, không phải một ô giữa hồ. */
+    const ben = pondDock(s, content);
+    ok(!!ben, "phải có bến thả cá");
+    ok(
+      tileAt(s, ben.x, ben.y)?.g !== "water",
+      `bến thả cá (${ben.x},${ben.y}) không được nằm dưới nước — xe không đỗ giữa hồ`,
+    );
+    const p2 = findPath(s, content, g.x, g.y, new Set([idx(s.w, ben.x, ben.y)]), {
+      maxNodes: 20000,
+      box,
+      pass: (x, y) => driveable(s, content, x, y),
+    });
+    ok(!!p2, "xe chở cá phải lái được từ cổng tới bến ao");
+
+    // và không ô cầu đi bộ nào được tính là mặt đường
+    for (let y = 0; y < s.h; y++)
+      for (let x = 0; x < s.w; x++) {
+        const t = tileAt(s, x, y);
+        if (!t?.prop) continue;
+        const d = content.props[t.prop];
+        if (d?.bridge && !d.drive)
+          ok(!driveable(s, content, x, y), `cầu đi bộ ở (${x},${y}) không được là mặt đường xe`);
+      }
+  }
+
+  /* --- (c) BẤT BIẾN phải cho xe đi đường DÀI --------------------------- */
+  {
+    ok(MAX_PATH_VEHICLE > MAX_PATH, "xe phải có trần đường đi dài hơn con vật");
+    const store = mkStore();
+    store.dispatch({ t: "DEBUG", op: "money", n: 99999 });
+    const loai = content.animalOrder.find(
+      (id) => content.animals[id]?.job !== "pest" && content.animals[id]?.housing !== "water",
+    );
+    const truoc = store.getState().entities.length;
+    store.dispatch({ t: "BUY_ANIMAL", def: loai });
+
+    /* Store bật `strict` nên vỡ bất biến là NÉM ngay tại tick gây ra nó —
+       chuyến xe chạy trót lọt tức là trần đã đúng. */
+    let daGiao = false;
+    for (let k = 0; k < 60000 && !daGiao; k++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      daGiao = store.getState().entities.some((e) => e.def === loai);
+    }
+    ok(daGiao, "chuyến giao hàng phải chạy TRỌN VẸN trên tuyến dài, không vỡ bất biến giữa đường");
+    ok(store.getState().entities.length > truoc, "và con vật phải có mặt trên nông trại");
   }
 });
 

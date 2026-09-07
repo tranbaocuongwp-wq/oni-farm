@@ -64,6 +64,14 @@ export function driveable(s: GameState, content: Content, x: number, y: number):
      không thông báo gì, chỉ có `v.wait = 3` lặp lại tới hết đời. Mà chính khúc
      gỗ ấy thì người chơi đi qua được. */
   if (t.prop && content.props[t.prop]?.solid !== false) return false;
+  /* CẦU ĐƯỜNG bắc qua nước: xe chạy được, dù NỀN dưới nó là nước.
+
+     Không phải cầu nào cũng vậy, và đó là chỗ tôi làm sai một lần rồi. Nhận
+     MỌI vật `bridge` là đường xe thì cái cầu tàu giữa ao cũng thành mặt đường
+     — `pondDock` đi tìm "ô đường gần ao nhất" liền trả về một ô nằm GIỮA HỒ,
+     và chiếc xe chở cá không bao giờ tới nơi được. Cầu tàu để câu cá, cầu gỗ
+     để đi bộ, chỉ cây cầu có `drive` mới chở nổi xe tải. */
+  if (t.prop && content.props[t.prop]?.drive) return true;
   if (t.b) {
     const def = content.buildings[t.b];
     if (def && def.kind !== "floor") return false;

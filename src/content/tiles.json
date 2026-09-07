@@ -138,6 +138,10 @@
     "n": {
       "ground": "concrete",
       "prop": "kennel"
+    },
+    "R": {
+      "ground": "water",
+      "prop": "roadbridge"
     }
   },
   "spawn": {
@@ -156,7 +160,7 @@
   "gate": {
     "map": "farm",
     "x": 47,
-    "y": 26
+    "y": 56
   },
   "parking": {
     "map": "farm",

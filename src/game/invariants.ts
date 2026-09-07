@@ -31,7 +31,7 @@ import {
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { isKnownItem, parseItem } from "./items.ts";
 import { normalizeStore, storeErrors } from "./storage.ts";
-import { MAX_ENTITIES, MAX_PATH, pruneEntities, capEntities } from "./entities.ts";
+import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE, pruneEntities, capEntities } from "./entities.ts";
 
 /** Kiểm mọi ô của MỘT lưới. `where` chỉ để ghi vào thông điệp lỗi. */
 function checkGrid(tiles: Tile[], content: Content, where: string, e: string[]): void {
@@ -247,8 +247,19 @@ export function checkInvariants(state: GameState, content: Content): string[] {
       }
       if (!Array.isArray(en.ai?.path)) e.push(`thực thể ${en.id}: ai.path phải là mảng`);
       else {
-        if (en.ai.path.length > MAX_PATH)
-          e.push(`thực thể ${en.id}: ai.path dài ${en.ai.path.length}, vượt trần ${MAX_PATH}`);
+        /* XE có trần RIÊNG, dài hơn hẳn. Chúng chạy men theo đường nhựa từ
+           cổng ở mép bản đồ tới tận bãi đậu trước kho — một tuyến vòng qua
+           rừng Nam dài tám mươi điểm, trong khi con bò đi lang thang thì bốn
+           mươi đã là xa.
+
+           Chỗ này từng kiểm MỌI thực thể theo trần của con vật, kể cả xe. Nó
+           im lặng suốt vì tuyến xe cũ chỉ hơn bốn mươi điểm; đổi cổng ra mép
+           bản đồ một cái là mọi chuyến giao hàng ném lỗi bất biến. `entities.ts`
+           thì vốn đã cắt đường xe theo `MAX_PATH_VEHICLE` — tức hai chỗ nói hai
+           con số khác nhau về cùng một thứ, và chỗ này nói con số sai. */
+        const tran = en.kind === "vehicle" ? MAX_PATH_VEHICLE : MAX_PATH;
+        if (en.ai.path.length > tran)
+          e.push(`thực thể ${en.id}: ai.path dài ${en.ai.path.length}, vượt trần ${tran}`);
         for (const i of en.ai.path)
           if (!Number.isInteger(i) || i < 0)
             e.push(`thực thể ${en.id}: ai.path có chỉ số ô không hợp lệ ${i}`);

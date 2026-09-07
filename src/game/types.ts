@@ -380,6 +380,15 @@ export interface PropDef {
    */
   block?: boolean;
   /**
+   * XE CHẠY ĐƯỢC lên ô này, bất kể NỀN dưới nó là gì.
+   *
+   * Dành cho cây cầu chở đường qua sông: nền của nó là nước, mà `driveable`
+   * chỉ nhận nhựa và lối đi. Cầu tàu và cầu đi bộ KHÔNG khai cờ này — chúng
+   * là chỗ cho người, và nhận nhầm chúng là mặt đường thì mọi phép hỏi "ô
+   * đường gần nhất" sẽ trỏ ra giữa mặt nước.
+   */
+  drive?: boolean;
+  /**
    * CHỖ ĐỨNG trong ô. `tall` nói chuyện CHIỀU CAO lúc vẽ; `place` nói chuyện
    * ô có bị CHIẾM hay không — hai câu hỏi khác nhau, nên là hai trường khác
    * nhau.
