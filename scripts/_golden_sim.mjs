@@ -9,7 +9,7 @@
 
 import { loadContent, rawPack } from "./lib/load-content.mjs";
 import { buildContent } from "../src/core/content/loader.ts";
-import { createStore } from "../src/core/store.ts";
+import { createStore } from "./_golden_record.mjs";
 import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
@@ -53,6 +53,7 @@ const results = [];
 let failures = 0;
 
 function test(name, fn) {
+  globalThis.__SCEN = name;
   try {
     /* Kịch bản phải ĐỒNG BỘ. Một hàm `async` lọt vào đây thì `fn()` trả về
        promise ngay lập tức, khung này ghi ✓, rồi mọi assertion bên trong chạy
@@ -9832,4 +9833,27 @@ console.log(
     (failures ? `  \x1b[31m(${failures} lỗi)\x1b[0m` : "  \x1b[32m(tất cả xanh)\x1b[0m") +
     "\n",
 );
+__dump();
 process.exit(failures ? 1 : 0);
+
+
+/* --- do omni-farm/tools/golden/dump.mjs them vao --- */
+import { writeFileSync as __w, mkdirSync as __m } from "node:fs";
+function __dump() {
+  const OUT = "/Users/tranbaocuong/omni-farm/tests/golden";
+  __m(OUT, { recursive: true });
+  const recs = (globalThis.__GOLDEN ?? []).filter((r) => r.actions.length > 0);
+  const index = [];
+  recs.forEach((r, i) => {
+    const file = "rec-" + String(i).padStart(3, "0") + ".json";
+    __w(OUT + "/" + file, JSON.stringify(r));
+    index.push({ file, scenario: r.scenario, seed: r.seed, actions: r.actions.length });
+  });
+  __w(OUT + "/index.json", JSON.stringify({
+    note: "Sinh tu oni-farm scripts/sim.mjs boi omni-farm/tools/golden/dump.mjs. Khong sua tay, khong commit — chay lai la co.",
+    coreVersion: recs.length ? recs[0].final?.coreVersion : null,
+    count: recs.length,
+    records: index,
+  }, null, 1));
+  console.log("\ngolden: ghi " + recs.length + " ban ghi (mot file moi ban ghi)");
+}

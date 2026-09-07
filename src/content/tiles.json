@@ -383,6 +383,17 @@
       "y": 27,
       "w": 46,
       "h": 9
+    },
+    {
+      "$comment": "Rừng NAM — bên kia sông. Cùng loại `forest` nên rìu và cuốc chim ăn ở đây y như rừng bắc; không khai thì cả một vạt rừng nhìn thấy được mà chặt không ăn nhát nào.",
+      "id": "woods_south",
+      "name": "Rừng Nam",
+      "kind": "forest",
+      "map": "farm",
+      "x": 1,
+      "y": 55,
+      "w": 46,
+      "h": 8
     }
   ],
   "signs": [
@@ -490,6 +501,34 @@
       "y": 5,
       "text": "Quầy thu mua",
       "side": "e"
+    },
+    {
+      "map": "farm",
+      "x": 29,
+      "y": 43,
+      "text": "Cầu sông",
+      "side": "w"
+    },
+    {
+      "map": "farm",
+      "x": 29,
+      "y": 48,
+      "text": "Đất mới",
+      "side": "w"
+    },
+    {
+      "map": "farm",
+      "x": 29,
+      "y": 56,
+      "text": "Rừng Nam",
+      "side": "w"
+    },
+    {
+      "map": "farm",
+      "x": 29,
+      "y": 63,
+      "text": "Bến biển",
+      "side": "w"
     },
     {
       "map": "farm",

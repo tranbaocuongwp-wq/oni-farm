@@ -29,6 +29,8 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 
 | Đợt | Core | Content | Nội dung | Kịch bản mới | Đột biến đã cấy |
 |---|---|---|---|---|---|
+| 17 | 1.44.0 | 1.44.0 | **Bản đồ cao gấp đôi**: 48×37 → 48×73, nối thêm xuống DƯỚI nên save cũ giữ nguyên từng ô; sông cắt ngang có cầu gỗ; đất mới để giãn công trình; rừng Nam là khu chặt được thật; biển và cầu tàu ở đáy bản đồ | 142 | 4 |
+| 16 | 1.43.0 | 1.43.0 | Hồ cá gọi đúng tên nút (không còn "ĐỔ MÁNG" trước một mặt hồ không có máng); người làm tự lấy cám từ kho đem ra rắc cho cá; `pourFromStore` lọc theo `pen.feeds` | 141 | 3 |
 | 15 | 1.42.0 | 1.43.0 | A* nhanh gấp 2,9 lần (1,338 → 0,468 ms: mảng định kiểu dùng lại + ghi nhớ tính chất ô trong mỗi lần tìm); `npm run bench` đo lại được; cá thôi bị thả xuống mặt đường ở hai nhánh dự phòng, và bán kính tìm ao phủ hết bản đồ; ba chỗ HUD lệch ở khổ hẹp (nút ☰ chui xuống thanh số liệu ở chế độ kbm, nút ☰ neo lệch gốc, icon dự báo rớt khỏi ô lưới thành một chấm lơ lửng); **bản đồ nhỏ thôi vẽ lại cả 1.776 ô mỗi khung** — 1.786 → 45 lệnh `fillRect`, tổng lệnh vẽ 3.007 → 1.265 mỗi khung (−58%); logo thành CÂY + cả site lần đầu có favicon; viết lại toàn bộ trang tĩnh (một khuôn duy nhất, trang Luật chơi, bộ nhận diện, sáu chỗ nói sai luật, bốn bảng gõ tay thành sinh từ content); trang tĩnh thôi bị service worker giữ ở bản cũ; **chợ và quầy thành công trình NHIỀU Ô** (`prop.block`) | 137–140 | 21 |
 | 14 | 1.40.0 | 1.42.0 | Máng là một BỂ ĐIỂM (món nào cũng đổ, trộn chung, giá cao no lâu, trần 60, `SAVE_VERSION` 10); chó đi tuần thật và tối thì về nhà nằm; Chợ và Quầy thu mua tách ra hai đầu nông trại; đứng trong chuồng thì nút phụ mở BẢNG KHU; bảng khu vẽ lại (thanh mức + "còn ~N ngày", từng con bấm được, đổ máng không cần cầm sẵn) | 133–136 | 5 |
 | 13 | 1.39.0 | 1.41.0 | Người làm tự lo mọi việc (cày, gieo, tưới, thu, chữa, đổ máng, rảnh thì kiếm gỗ đá); `doWork` chạy đúng việc được giao; phối hợp không giẫm chân; menu cửa hàng đồng bộ | 129–132 | 9 |
@@ -45,15 +47,13 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 Theo thứ tự Cường chốt. Mỗi đợt đã khảo sát xong, sẽ chi tiết hoá ngay trước khi
 bắt tay.
 
-- **Đợt 16 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
+- **Đợt 18 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
   game nên gỡ được sạch; `discovered` ghi ở một chỗ duy nhất trong `commit()`.
-  (Vốn là Đợt 15; Cường chuyển Đợt 15 sang tối ưu hiệu năng, nên cả danh sách
-  dời xuống một bậc.)
-- **Đợt 17 · Bản đồ cao gấp đôi · sông · cầu và bè · giãn công trình.** Nối thêm
-  xuống dưới để save cũ không mất gì; cơ chế cầu đã có sẵn.
-- **Đợt 18 · Mua bán bằng xe thật.** Trả tiền lúc đặt, xe đậu rồi tự bốc vào kho.
+  (Vốn là Đợt 15; Cường chuyển Đợt 15 sang tối ưu hiệu năng, rồi Đợt 16 sang
+  hồ cá và Đợt 17 sang mở rộng bản đồ — nên cả danh sách dời xuống ba bậc.)
+- **Đợt 19 · Mua bán bằng xe thật.** Trả tiền lúc đặt, xe đậu rồi tự bốc vào kho.
   Xe vẽ to hai ô, có người bốc xếp.
-- **Đợt 19 · Diễn hoạt.** Cửa rộng và cao, đi vào là chuyển bản đồ luôn; giường;
+- **Đợt 20 · Diễn hoạt.** Cửa rộng và cao, đi vào là chuyển bản đồ luôn; giường;
   khung riêng cho từng việc.
-- **Đợt 20 · Hệ sinh thái rừng.** Thú hoang, cỏ cây, dương xỉ.
-- **Đợt 21 · Mỏ quặng hiếm** xuất hiện theo xác suất mỗi đêm.
+- **Đợt 21 · Hệ sinh thái rừng.** Thú hoang, cỏ cây, dương xỉ.
+- **Đợt 22 · Mỏ quặng hiếm** xuất hiện theo xác suất mỗi đêm.
