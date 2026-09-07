@@ -77,12 +77,14 @@ function page({ title, desc, url, h1, tag, body, sprites = true, wide = false })
     <meta property="og:type" content="website" />
     <title>${esc(title)}</title>
     <link rel="stylesheet" href="/site/site.css" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
 ${sprites ? '    <script type="module" src="/site/sprites.ts"></script>\n' : ""}  </head>
   <body${wide ? ' class="wide"' : ""}>
     <nav>
       <div class="wrap">
-        <a class="brand" href="/">ONI<span>FARM</span></a>
+        <a class="brand" href="/"><img src="/favicon.svg" alt="" width="22" height="22" />ONI<span>FARM</span></a>
         ${nav}
         <a class="play" href="/farm/">Chơi ngay</a>
       </div>

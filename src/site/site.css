@@ -97,6 +97,22 @@ nav .brand {
   margin-right: auto;
   font-size: 16px;
   padding-right: 12px;
+  /* Dấu cây đứng cạnh chữ, cùng một đường tâm. `inline-flex` chứ không phải
+     `img` trôi trong dòng chữ: chữ ONIFARM có `letter-spacing: 2px` nên nếu
+     để trôi thì khoảng cách giữa dấu và chữ đổi theo cỡ chữ của trình duyệt. */
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+nav .brand img {
+  /* Cùng một file với favicon và với icon PWA — sửa `make-icons.mjs` là cả ba
+     đổi theo, không có bản sao nào để trôi khỏi nhau. */
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  /* Pixel art: đừng làm mượt khi trình duyệt phóng theo mật độ màn hình. */
+  image-rendering: pixelated;
+  flex: none;
 }
 nav .brand span {
   color: var(--green);

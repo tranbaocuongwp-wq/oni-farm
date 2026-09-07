@@ -56,7 +56,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
-| `npm run icons` | Sinh lại icon PNG |
+| `npm run icons` | Sinh lại bộ logo: `favicon.svg` + bốn cỡ PNG, từ một lưới 16×16 trong mã |
 | `npm run deploy` | Build + deploy toàn bộ site lên Cloudflare Pages |
 | `npm run deploy:content` | **Chỉ** đẩy content pack mới — không đụng bundle web |
 
