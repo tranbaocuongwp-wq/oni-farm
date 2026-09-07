@@ -6,6 +6,11 @@ cuối là biết còn gì phải làm.
 
 **Chơi ngay:** <https://oni-farm.pages.dev/farm/>
 
+Spec: [`LOI-CHOI.md`](LOI-CHOI.md) (luật chơi) · [`KIEN-TRUC.md`](KIEN-TRUC.md)
+(công nghệ) · [`GIAI-THUAT.md`](GIAI-THUAT.md) (giải thuật & số đo).
+Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
+[`DEPLOY.md`](DEPLOY.md) · [`MOBILE-UX.md`](MOBILE-UX.md).
+
 ## Luật của mỗi đợt
 
 1. `npm run test:all` (sim + OTA) và `npm run build` sạch trước khi commit.

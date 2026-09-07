@@ -21,6 +21,24 @@ Nội dung game cập nhật được **OTA** mà không cần build lại bundl
 
 ---
 
+## Tài liệu
+
+Sáu tài liệu, liên kết chéo với nhau. Ba cái đầu là **spec**: đọc để hiểu hệ
+thống; ba cái sau là **vận hành**: đọc khi cần làm một việc cụ thể.
+
+| Tài liệu | Trả lời câu hỏi |
+|---|---|
+| [`docs/LOI-CHOI.md`](docs/LOI-CHOI.md) | Luật chơi là gì, và vì sao được quyết như thế |
+| [`docs/KIEN-TRUC.md`](docs/KIEN-TRUC.md) | Mã chia tầng ra sao, tất định giữ bằng cách nào |
+| [`docs/GIAI-THUAT.md`](docs/GIAI-THUAT.md) | Máy tự quyết định thế nào, và **giá** của mỗi quyết định |
+| [`docs/CONTENT.md`](docs/CONTENT.md) | Thêm/sửa cây, loài, giá, bản đồ |
+| [`docs/OTA.md`](docs/OTA.md) | Đẩy nội dung mới mà không build lại |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Đưa lên mạng, và xử lý khi hỏng |
+| [`docs/MOBILE-UX.md`](docs/MOBILE-UX.md) | Hợp đồng thiết kế lớp chạm & đồ hoạ |
+| [`docs/TIEN-DO.md`](docs/TIEN-DO.md) | Đã làm tới đâu, còn gì phải làm |
+
+---
+
 ## Chạy
 
 ```bash

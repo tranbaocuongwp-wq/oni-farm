@@ -4,6 +4,10 @@ Mục tiêu: đổi cây trồng, công trình, giá cả, bản đồ, lộ tr�
 **mà không cần người chơi cài lại gì**, đồng thời **không bao giờ** làm hỏng game
 của họ.
 
+Xem thêm: [`CONTENT.md`](CONTENT.md) (sửa nội dung) ·
+[`KIEN-TRUC.md`](KIEN-TRUC.md#8-lưu-và-cập-nhật) (save, migrate, PWA) ·
+[`DEPLOY.md`](DEPLOY.md) (đưa lên mạng).
+
 ## Năm nguyên tắc
 
 1. **Không bao giờ chặn.** Game luôn khởi động bằng content đóng kèm hoặc content đã

@@ -4,6 +4,8 @@
 Cloudflare Pages · account `992bee08…c34f` · project `oni-farm` · production branch `main`
 · chưa gắn custom domain.
 
+Xem thêm: [`KIEN-TRUC.md`](KIEN-TRUC.md#12-triển-khai) · [`OTA.md`](OTA.md) · [`TIEN-DO.md`](TIEN-DO.md).
+
 - Build: `npm run build` (chạy `content:build` rồi `vite build`)
 - Thư mục xuất bản: `dist/` ở gốc repo (xem `vite.config.ts` → `build.outDir`)
 - Node: `22` (ghi trong `.node-version`, Cloudflare Pages đọc file này)

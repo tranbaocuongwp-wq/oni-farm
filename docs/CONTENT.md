@@ -6,6 +6,10 @@ Mọi thứ trong `src/content/` là **dữ liệu thuần** — sửa xong ch�
 Đây là "làn nhanh" trong kiến trúc: thay đổi ở đây đẩy được qua OTA tới người chơi
 mà không cần phát hành lại app.
 
+Xem thêm: [`KIEN-TRUC.md`](KIEN-TRUC.md) (hai làn core/content) ·
+[`LOI-CHOI.md`](LOI-CHOI.md) (những con số này có ý nghĩa gì trong lối chơi) ·
+[`OTA.md`](OTA.md) (đẩy đi thế nào).
+
 ---
 
 ## Thêm một loại cây
