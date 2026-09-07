@@ -63,12 +63,47 @@ export default defineConfig({
       injectRegister: null,
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}"],
-        // Content pack OTA KHÔNG precache: nó có vòng đời riêng (xem docs/OTA),
-        // và bản đóng kèm trong bundle đã bảo chứng offline rồi.
-        globIgnores: ["content/**"],
+        globIgnores: [
+          // Content pack OTA KHÔNG precache: nó có vòng đời riêng (xem docs/OTA),
+          // và bản đóng kèm trong bundle đã bảo chứng offline rồi.
+          "content/**",
+          /* TRANG GIỚI THIỆU cũng không precache — chỉ GAME mới cần chạy offline.
+             Vì sao: precache phục vụ bản đã lưu TRƯỚC, và `registerType:
+             "prompt"` (cố ý, xem trên) nghĩa là bản mới chỉ được nhận khi người
+             chơi bấm "có bản mới" — mà dòng đó chỉ hiện TRONG GAME. Service
+             worker thì có phạm vi cả `/`. Hệ quả: ai từng mở game một lần rồi
+             quay lại trang chủ sẽ thấy bản CŨ, và không có nút nào để thoát ra.
+             Sửa một câu chữ trên web rồi đẩy lên, người đã ghé qua vẫn đọc câu
+             cũ — vô thời hạn.
+
+             Giờ chúng đi đường `runtimeCaching` NetworkFirst bên dưới: có mạng
+             thì luôn là bản mới nhất, mất mạng thì vẫn còn bản đã ghé. Game ở
+             `/farm/` vẫn precache nguyên vẹn, nên lời hứa "chơi offline hoàn
+             toàn" không suy suyển. */
+          "index.html",
+          "tinh-nang/**",
+          "luat-choi/**",
+          "thu-vien/**",
+          "huong-dan/**",
+          "cach-hoat-dong/**",
+          "tai-ve/**",
+          "privacy/**",
+        ],
         navigateFallback: null,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
+          {
+            /* Trang giới thiệu: MẠNG TRƯỚC, cache chỉ là lưới đỡ khi mất mạng.
+               Không đụng `/farm/` — game phải chạy được cả khi offline hẳn. */
+            urlPattern: ({ request, url }) =>
+              request.mode === "navigate" && !url.pathname.startsWith("/farm"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "oni-trang-tinh",
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
           {
             // pack OTA: luôn thử mạng trước, hỏng thì thôi — không bao giờ để
             // người chơi kẹt ở một pack cũ vì cache.

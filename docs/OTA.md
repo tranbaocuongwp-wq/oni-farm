@@ -84,3 +84,25 @@ trong `migrateSave()` (`src/core/save.ts`). Save từ bản mới hơn sẽ bị
 
 `npm run test:ota` kiểm chính cái cổng: dải semver, pack sai schema, pack sai
 `requiresCore`, và các sửa đổi hợp lệ phải được chấp nhận.
+
+## Trang tĩnh KHÔNG precache — và vì sao
+
+Service worker có phạm vi cả `/`, nhưng `registerType: "prompt"` (cố ý: người
+chơi đang giữa một ngày trong game mà trang tự tải lại thì mất phần chưa lưu)
+nghĩa là bản mới chỉ được nhận khi người chơi bấm **"có bản mới"** — mà dòng đó
+chỉ hiện **trong game**.
+
+Hệ quả trước đây: ai từng mở game một lần rồi quay lại trang chủ sẽ thấy bản
+**cũ**, và không có nút nào để thoát ra. Sửa một câu chữ trên web rồi đẩy lên,
+người đã ghé qua vẫn đọc câu cũ — vô thời hạn. Đo được: HTML lấy qua service
+worker là bản cũ, HTML lấy khi bỏ qua cache là bản mới.
+
+Giờ chia đôi theo đúng nhu cầu thật:
+
+| | Cách phục vụ | Vì sao |
+|---|---|---|
+| `/farm/` + JS/CSS/icon | **precache** | game phải chạy được khi mất mạng hẳn |
+| 10 trang giới thiệu | **NetworkFirst** | có mạng thì luôn mới nhất; mất mạng thì vẫn còn bản đã ghé |
+
+Lời hứa "chơi offline hoàn toàn" không suy suyển: `start_url` của PWA là
+`/farm/`, và toàn bộ thứ game cần vẫn nằm trong precache.
