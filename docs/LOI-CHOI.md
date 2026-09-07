@@ -6,8 +6,9 @@ quyết như thế. Con số cụ thể nằm ở content (xem [`CONTENT.md`](CO
 
 Đọc kèm: [`KIEN-TRUC.md`](KIEN-TRUC.md) (mã chạy ra sao) ·
 [`GIAI-THUAT.md`](GIAI-THUAT.md) (máy tự quyết định thế nào) ·
-[`MOBILE-UX.md`](MOBILE-UX.md) (chạm và nhìn) · [`TIEN-DO.md`](TIEN-DO.md) (đã
-làm tới đâu).
+[`MOBILE-UX.md`](MOBILE-UX.md) (chạm và nhìn) · [`NHAN-DIEN.md`](NHAN-DIEN.md)
+(trang Luật chơi trên web sinh từ chính những luật này) · [`TIEN-DO.md`](TIEN-DO.md)
+(đã làm tới đâu).
 
 ---
 

@@ -1,8 +1,30 @@
-/* Vỏ trang tĩnh: trang chủ + các trang giới thiệu. HTML+CSS thuần, không JS.
-   Dùng chung TOKEN màu với game (src/style.css) để site và game trông như một
-   sản phẩm. Thiết kế mobile-first: nav cuộn ngang, nút "Chơi ngay" luôn trong
-   tầm ngón cái, bảng cuộn ngang trong khung riêng, chữ sans hệ thống cho tiếng
-   Việt dễ đọc. */
+/* ============================================================================
+   BỘ NHẬN DIỆN — vỏ trang tĩnh, và hệ thống thiết kế dùng chung với game.
+
+   Đây là chỗ DUY NHẤT định nghĩa màu, cỡ chữ và khoảng cách của trang tĩnh.
+   Token màu dùng chung với game (`src/style.css`) để site và game trông như
+   một sản phẩm chứ không phải hai.
+
+   Ba luật của bộ nhận diện này:
+
+   1. MÀU CÓ VAI, không có tên riêng lẻ. `--gold` không phải "màu vàng" mà là
+      "màu của tiền, của thương hiệu, của việc cần chú ý"; `--green` là "màu
+      của cây, của việc làm được". Dùng đúng vai thì trang mới đọc được mà
+      không cần chú giải.
+
+   2. CHỮ chạy theo một THANG, không phải mỗi chỗ một cỡ. Xem `--chu-*`. Cỡ
+      thân bài co giãn theo bề ngang màn hình (`clamp`) nên đọc được trên điện
+      thoại mà không phải phóng to.
+
+   3. LOGO là một file, dùng lại ở mọi nơi. Dấu cây trên nav, favicon của tab
+      và icon PWA đều là `public/favicon.svg` — sinh từ lưới 16×16 trong
+      `scripts/make-icons.mjs`. Không có bản sao nào để trôi khỏi nhau.
+
+   Thiết kế mobile-first: nav cuộn ngang, nút "Chơi ngay" luôn trong tầm ngón
+   cái, bảng cuộn ngang trong khung riêng, chữ sans hệ thống cho tiếng Việt.
+
+   Tài liệu: docs/NHAN-DIEN.md
+============================================================================ */
 
 :root {
   --bg: #14100c;
@@ -27,6 +49,24 @@
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* THANG CHỮ — bốn bậc, không hơn. Thêm bậc thứ năm là mở đường cho "cỡ nào
+     cũng được", và trang sẽ trôi thành mỗi mục một cỡ. */
+  --chu-to: clamp(28px, 7vw, 44px); /* h1 trong hero */
+  --chu-muc: clamp(20px, 4.2vw, 27px); /* h2 — tên một mục */
+  --chu-the: clamp(16px, 2.9vw, 18px); /* h3 — tên một thẻ */
+  --chu-nho: 13.5px; /* chú thích, nhãn, chip */
+
+  /* KHOẢNG CÁCH — bội của 4, để mọi thứ rơi đúng lưới. */
+  --k1: 4px;
+  --k2: 8px;
+  --k3: 12px;
+  --k4: 16px;
+  --k5: 24px;
+  --k6: 40px;
+  --k7: 64px;
+
+  --bo: 10px; /* bo góc chuẩn của thẻ và nút */
   --sa-b: env(safe-area-inset-bottom, 0px);
 }
 
@@ -788,4 +828,59 @@ p.callout b {
   border-radius: 12px;
   background: rgba(43, 33, 24, 0.5);
   min-height: 72px;
+}
+
+/* ---- BẢNG LUẬT: hai cột "điều gì / ra sao" -------------------------------
+   Khác bảng số liệu của thư viện ở chỗ nó không có hàng tiêu đề: cột trái
+   CHÍNH LÀ tiêu đề của hàng đó. Dùng `<th scope="row">` chứ không phải `<td>`
+   in đậm — trình đọc màn hình đọc được "Thức dậy: 6:00" thay vì hai ô rời. */
+table.luat {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--k4);
+}
+table.luat th,
+table.luat td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--k3) var(--k4);
+  border-bottom: 1px solid var(--panel-2);
+}
+table.luat th {
+  color: var(--gold);
+  font-weight: 700;
+  white-space: nowrap;
+  width: 1%;
+}
+table.luat td {
+  color: var(--ink-dim);
+}
+table.luat tr:last-child th,
+table.luat tr:last-child td {
+  border-bottom: 0;
+}
+/* Màn hẹp: hai cột cạnh nhau thì cột phải chỉ còn vài chữ mỗi dòng — xếp
+   chồng, nhãn nằm trên giá trị. */
+@media (max-width: 520px) {
+  table.luat,
+  table.luat tbody,
+  table.luat tr,
+  table.luat th,
+  table.luat td {
+    display: block;
+    width: auto;
+  }
+  table.luat tr {
+    padding: var(--k3) 0;
+    border-bottom: 1px solid var(--panel-2);
+  }
+  table.luat th,
+  table.luat td {
+    padding: 0;
+    border: 0;
+    white-space: normal;
+  }
+  table.luat th {
+    margin-bottom: var(--k1);
+  }
 }

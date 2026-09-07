@@ -1,39 +1,3 @@
-<!doctype html>
-<html lang="vi">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#14100c" />
-    <meta name="description" content="OniFarm — game nông trại pixel chơi offline: bốn mùa, 61 loại cây, chăn nuôi, người làm thuê, chế độ xây dựng kéo thả. Chơi bằng cảm ứng, chuột hay tay cầm." />
-    <meta property="og:title" content="OniFarm — Nông trại hiện đại pixel, chơi offline trên mọi thiết bị" />
-    <meta property="og:description" content="OniFarm — game nông trại pixel chơi offline: bốn mùa, 61 loại cây, chăn nuôi, người làm thuê, chế độ xây dựng kéo thả. Chơi bằng cảm ứng, chuột hay tay cầm." />
-    <meta property="og:type" content="website" />
-    <title>OniFarm — Nông trại hiện đại pixel, chơi offline trên mọi thiết bị</title>
-    <link rel="stylesheet" href="/site/site.css" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon-32.png" sizes="32x32" />
-    <link rel="apple-touch-icon" href="/icon-180.png" />
-    <script type="module" src="/site/sprites.ts"></script>
-  </head>
-  <body class="wide">
-    <nav>
-      <div class="wrap">
-        <a class="brand" href="/"><img src="/favicon.svg" alt="" width="22" height="22" />ONI<span>FARM</span></a>
-        <a href="/tinh-nang/">Tính năng</a>
-        <a href="/luat-choi/">Luật chơi</a>
-        <a href="/thu-vien/">Thư viện</a>
-        <a href="/huong-dan/">Hướng dẫn</a>
-        <a href="/cach-hoat-dong/">Cách game vận hành</a>
-        <a href="/tai-ve/">Cài về máy</a>
-        <a class="play" href="/farm/">Chơi ngay</a>
-      </div>
-    </nav>
-    <header class="hero">
-      <div class="wrap">
-        <h1>ONI<span>FARM</span></h1>
-        <p class="tag">Cày đất, gieo hạt, tưới nước, ngủ một đêm rồi ra thu hoạch. Rồi nuôi bò, thuê người làm, kéo một con đường ra kho — và đứng nhìn nông trại tự chạy.</p>
-      </div>
-    </header>
 <section>
       <div class="wrap">
         <h2>Làm cho ngón tay cái</h2>
@@ -58,7 +22,7 @@
       <div class="wrap">
         <h2>Một vòng lặp, làm cho tử tế</h2>
         <p class="lead">
-          4 mùa, 6 kiểu thời tiết, 61 loại cây, 8 loài vật nuôi, người làm thuê và
+          {{soMua}} mùa, {{soThoiTiet}} kiểu thời tiết, {{soCay}} loại cây, {{soLoai}} loài vật nuôi, người làm thuê và
           xe cộ. Nhưng tất cả vẫn quay quanh đúng một vòng: cày, gieo, tưới, ngủ, thu.
         </p>
         <div class="grid">
@@ -140,14 +104,3 @@
         </ol>
       </div>
     </section>
-
-    <footer>
-      <div class="wrap">
-        OniFarm · game offline, save nằm trên máy bạn ·
-        <a href="/thu-vien/">Thư viện</a> ·
-        <a href="/privacy/">Quyền riêng tư</a>
-      </div>
-    </footer>
-    <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
-  </body>
-</html>

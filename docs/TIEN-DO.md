@@ -7,7 +7,8 @@ cuối là biết còn gì phải làm.
 **Chơi ngay:** <https://oni-farm.pages.dev/farm/>
 
 Spec: [`LOI-CHOI.md`](LOI-CHOI.md) (luật chơi) · [`KIEN-TRUC.md`](KIEN-TRUC.md)
-(công nghệ) · [`GIAI-THUAT.md`](GIAI-THUAT.md) (giải thuật & số đo).
+(công nghệ) · [`GIAI-THUAT.md`](GIAI-THUAT.md) (giải thuật & số đo) ·
+[`NHAN-DIEN.md`](NHAN-DIEN.md) (logo, màu, trang tĩnh).
 Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 [`DEPLOY.md`](DEPLOY.md) · [`MOBILE-UX.md`](MOBILE-UX.md).
 

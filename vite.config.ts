@@ -1,10 +1,36 @@
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readdirSync } from "node:fs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const page = (p: string) => resolve(ROOT, "src", p, "index.html");
+/**
+ * Mọi `index.html` nằm bất kỳ đâu dưới `src/` là một trang. Khoá của rollup lấy
+ * từ đường dẫn nên ổn định qua các lần build.
+ *
+ * (Cố ý KHÔNG viết mẫu glob hai sao ở đây: dấu sao-gạch chéo của nó đóng luôn
+ *  khối chú thích này, và esbuild đổ ngay ở dòng dưới.)
+ *
+ * `build-site.mjs` chạy TRƯỚC vite (xem `npm run build`), nên các trang sinh
+ * tự động đã nằm trên đĩa lúc hàm này quét.
+ */
+function trangTinh(): Record<string, string> {
+  const src = resolve(ROOT, "src");
+  const out: Record<string, string> = {};
+  const quet = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = resolve(d, e.name);
+      if (e.isDirectory()) quet(p);
+      else if (e.name === "index.html") {
+        const rel = relative(src, p).replace(/(^|[\\/])index\.html$/, "");
+        out[rel === "" ? "home" : rel.replace(/[\\/]/g, "-")] = p;
+      }
+    }
+  };
+  quet(src);
+  return out;
+}
 
 // Site NHIỀU TRANG: trang chủ + các trang tĩnh ở gốc, game ở /farm/.
 // `base: "/"` (đường dẫn tuyệt đối) để các trang con không bị lệch một cấp.
@@ -62,19 +88,13 @@ export default defineConfig({
     target: "es2022",
     sourcemap: true,
     rollupOptions: {
-      input: {
-        home: resolve(ROOT, "src/index.html"),
-        farm: page("farm"),
-        features: page("tinh-nang"),
-        guide: page("huong-dan"),
-        download: page("tai-ve"),
-        privacy: page("privacy"),
-        how: page("cach-hoat-dong"),
-        library: page("thu-vien"),
-        libCrops: page("thu-vien/cay-trong"),
-        libAnimals: page("thu-vien/vat-nuoi"),
-        libActions: page("thu-vien/hanh-dong"),
-      },
+      /* TỰ QUÉT, không liệt kê tay.
+         Danh sách gõ tay ở đây là bản sao thứ hai của danh sách trang trong
+         `scripts/build-site.mjs` — thêm một trang mà quên một trong hai chỗ
+         thì trang đó hoặc không được build, hoặc build ra mà không ai tới
+         được. Quét cây thư mục `src/` tìm mọi `index.html` thì chỉ còn một
+         nguồn sự thật, và nó là chính hệ thống tệp. */
+      input: trangTinh(),
     },
   },
 });

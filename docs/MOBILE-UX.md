@@ -4,7 +4,8 @@ Tài liệu này là **hợp đồng thiết kế** cho lớp UI/đồ hoạ: lu
 cố định, và một thay đổi phải qua những chốt nào. Xem thêm:
 [`LOI-CHOI.md`](LOI-CHOI.md) (luật chơi bên dưới lớp này) ·
 [`KIEN-TRUC.md`](KIEN-TRUC.md#9-lớp-vẽ) (renderer, camera) ·
-[`GIAI-THUAT.md`](GIAI-THUAT.md#9-lớp-vẽ--sắp-theo-chiều-sâu) (sắp lớp, autotile, chi phí vẽ). Đọc trước khi sửa bất cứ thứ gì
+[`GIAI-THUAT.md`](GIAI-THUAT.md#9-lớp-vẽ--sắp-theo-chiều-sâu) (sắp lớp, autotile, chi phí vẽ) ·
+[`NHAN-DIEN.md`](NHAN-DIEN.md) (logo, màu, trang tĩnh). Đọc trước khi sửa bất cứ thứ gì
 trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
 
 ---

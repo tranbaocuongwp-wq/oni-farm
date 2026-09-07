@@ -1,13 +1,32 @@
 /* ============================================================================
-   BUILD-SITE — sinh các trang THƯ VIỆN từ chính content của game.
+   BUILD-SITE — sinh TOÀN BỘ trang tĩnh: vỏ trang, các trang giới thiệu, và
+   thư viện tra cứu.
 
-   Vì sao sinh chứ không viết tay: thư viện có 61 cây, 10 loài vật, 7 công cụ,
-   6 công trình. Viết tay nghĩa là 84 khối HTML phải tự tay sửa mỗi lần chỉnh
-   một con số cân bằng — và chỉ cần quên một chỗ là trang tài liệu nói sai giá,
-   thứ tệ hơn hẳn so với không có trang tài liệu.
+   Hai lý do, và lý do thứ hai mới là lý do thật:
 
-   Ở đây trang đọc ĐÚNG file mà game đọc. Chỉnh giá cà rốt trong crops.json thì
-   trang cà rốt đổi theo ngay lần build sau, không phải nhớ gì cả.
+   1. THƯ VIỆN quá lớn để viết tay. 61 cây, 10 loài, 7 công cụ, 6 công trình —
+      viết tay nghĩa là 84 khối HTML phải tự sửa mỗi lần chỉnh một con số cân
+      bằng, và chỉ cần quên một chỗ là trang tài liệu nói sai giá. Ở đây trang
+      đọc ĐÚNG file mà game đọc: chỉnh giá cà rốt trong crops.json thì trang cà
+      rốt đổi theo ngay lần build sau.
+
+   2. VỎ TRANG chỉ được phép có MỘT bản. Trước đây bảy trang giới thiệu tự chép
+      lấy `<head>`, nav và chân trang của mình, còn khuôn `page()` ở đây chỉ
+      phục vụ bốn trang thư viện — tức mười một bản sao của cùng một cái vỏ.
+      Chúng đã trôi khỏi nhau đúng như phải thế: bốn trang không khai một dòng
+      `rel="icon"` nào (tab trình duyệt hiện icon mặc định suốt nhiều tháng),
+      và trang Tính năng khoe "63 kịch bản kiểm thử" trong khi con số thật đã
+      là hơn gấp đôi — ngay trên trang tự nhận "số trên trang không bao giờ
+      lệch với số trong game".
+
+      Giờ vỏ nằm ở đúng một chỗ: `page()`. Phần CHỮ của mỗi trang là một mẩu
+      HTML rời trong `src/site/noi-dung/`, và builder lồng nó vào vỏ. Sửa chữ
+      thì mở file HTML (không phải chuỗi trong JS); sửa vỏ thì sửa một chỗ và
+      cả site đổi theo.
+
+   3. MỌI CON SỐ trên site đều sinh từ nguồn, không gõ tay. Số cây, số loài, số
+      kịch bản kiểm thử, độ dài một ngày, giá, năng lượng — xem `SO_LIEU` bên
+      dưới. Một con số gõ tay là một con số sẽ sai, chỉ là chưa biết lúc nào.
 
    Hình thì `src/site/sprites.ts` lo: HTML chỉ đặt sẵn `<canvas data-sprite>`,
    trình duyệt gọi đúng hàm vẽ của game. Nên tắt JS vẫn đọc được TOÀN BỘ số
@@ -16,7 +35,7 @@
    Chạy: npm run site:build   (đã gắn vào `npm run build`)
 ============================================================================ */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadContent } from "./lib/load-content.mjs";
@@ -44,10 +63,76 @@ const ngay = (n) => `${n} ngày`;
 const cx = (key, size = 48, alt = "") =>
   `<canvas class="sp" data-sprite="${esc(key)}" data-size="${size}" role="img" aria-label="${esc(alt)}"></canvas>`;
 
+/* ---------------------------------------------------------------- số liệu ---
+
+   MỌI con số xuất hiện trên site lấy từ đây, và mọi giá trị ở đây đọc từ
+   nguồn thật — content, hoặc chính mã nguồn. Không con số nào được gõ tay vào
+   một mẩu HTML.
+
+   Vì sao gắt thế: trang Tính năng từng khoe "63 kịch bản kiểm thử" và con số
+   đó đứng yên suốt bảy đợt trong khi bộ test lớn hơn gấp đôi. Không ai nói
+   dối cả — chỉ là một con số gõ tay thì không có gì buộc nó phải đúng, còn
+   một con số đếm được thì không có cách nào sai.
+
+   Cách dùng trong file nội dung: viết `{{soCay}}`, builder thay lúc build.
+   Gõ một khoá không có thật thì build ĐỎ ngay, chứ không lặng lẽ để lại
+   `{{soKichBan}}` giữa trang. */
+
+/** Đếm kịch bản trong bộ sim — đọc chính file test, không gõ số. */
+function demKichBan() {
+  const src = readFileSync(resolve(ROOT, "scripts/sim.mjs"), "utf8");
+  return (src.match(/^test\(/gm) ?? []).length + (src.match(/^testAsync\(/gm) ?? []).length;
+}
+
+const bal = content.balance;
+const gioPhut = (m) => `${Math.floor(m / 60)}:${String(Math.round(m % 60)).padStart(2, "0")}`;
+
+const SO_LIEU = {
+  soCay: content.cropOrder.length,
+  soLoai: content.animalOrder.filter((id) => content.animals[id]?.job !== "pest").length,
+  soLoaiKeSau: content.animalOrder.length,
+  soCongThuc: Object.keys(content.recipes ?? {}).length,
+  soCongTrinh: Object.keys(content.buildings ?? {}).length,
+  soMua: content.seasonOrder?.length ?? Object.keys(content.seasons ?? {}).length,
+  soThoiTiet: Object.keys(content.weathers ?? {}).length,
+  soNac: (content.stages ?? []).length,
+  soMucTieu: (content.goals ?? []).length,
+  soKichBan: demKichBan(),
+  gioDay: gioPhut(bal.dayStartMinutes),
+  gioToi: gioPhut(bal.daylightEndMinutes),
+  gioNgat: gioPhut(bal.dayEndMinutes % 1440),
+  phutMoiNgayThat: Math.round(((bal.dayEndMinutes - bal.dayStartMinutes) / 10) * bal.realSecondsPerGameTenMinutes / 60),
+  tienDau: tien(bal.startMoney),
+  nangLuong: bal.energyMax,
+  oBalo: bal.inventorySlots,
+  oHotbar: bal.hotbarSlots,
+  ngayMoiMua: content.daysPerSeason,
+  thueNguoi: tien(content.workers?.hireFee ?? 0),
+  luongNguoi: tien(content.workers?.wage ?? 0),
+  ngayTraLuong: content.workers?.wageEveryDays ?? 0,
+};
+
+/** Thay `{{khoa}}` trong một mẩu nội dung. Khoá lạ → build ĐỎ. */
+function thaySoLieu(html, ten) {
+  return html.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+    if (!(k in SO_LIEU)) {
+      throw new Error(`src/site/noi-dung/${ten}.html dùng {{${k}}} — không có khoá đó trong SO_LIEU`);
+    }
+    return String(SO_LIEU[k]);
+  });
+}
+
+/** Đọc phần THÂN của một trang. Chữ nằm trong HTML, không nằm trong chuỗi JS. */
+function noiDung(ten) {
+  const raw = readFileSync(resolve(SRC, "site/noi-dung", `${ten}.html`), "utf8");
+  return thaySoLieu(raw, ten);
+}
+
 /* ------------------------------------------------------------------- khung */
 
 const NAV = [
   ["/tinh-nang/", "Tính năng"],
+  ["/luat-choi/", "Luật chơi"],
   ["/thu-vien/", "Thư viện"],
   ["/huong-dan/", "Hướng dẫn"],
   ["/cach-hoat-dong/", "Cách game vận hành"],
@@ -639,15 +724,219 @@ function hubPage() {
   });
 }
 
+/* ------------------------------------------------------------- luật chơi ---
+
+   Bản DÀNH CHO NGƯỜI CHƠI của `docs/LOI-CHOI.md`. Tài liệu trong `docs/` viết
+   cho người sửa mã: nó nói vì sao luật được quyết như thế. Trang này chỉ trả
+   lời "chơi thì phải biết gì", và mọi con số đọc thẳng từ content — nên không
+   có cách nào nó nói sai giờ ngủ hay sai xác suất bệnh.
+*/
+
+function bangLuat(hang) {
+  return (
+    `<div class="bang-cuon"><table class="luat"><tbody>` +
+    hang.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join("") +
+    `</tbody></table></div>`
+  );
+}
+
+function luatChoiPage() {
+  const b = content.balance;
+  const nl = b.energyCost ?? {};
+  const tenViec = {
+    till: "Cày", water: "Tưới", plant: "Gieo", harvest: "Thu hoạch",
+    build: "Xây", chop: "Chặt cây", mine: "Đập đá", cure: "Chữa bệnh", pull: "Nhổ bỏ",
+  };
+  const mua = content.seasonOrder.map((id) => content.seasons[id]?.name ?? id);
+  const thoiTiet = Object.values(content.weathers ?? {}).map((w) => w.name).filter(Boolean);
+
+  const body = `
+    <section>
+      <div class="wrap">
+        <h2>Một ngày</h2>
+        <p class="lead">Đồng hồ chạy liên tục theo thời gian thật. Một ngày trong game dài khoảng <b>${SO_LIEU.phutMoiNgayThat} phút</b> ngoài đời.</p>
+        ${bangLuat([
+          ["Thức dậy", `${SO_LIEU.gioDay}`],
+          ["Trời tối", `${SO_LIEU.gioToi} — sau giờ này cây ngừng lớn`],
+          ["Gục tại chỗ", `${SO_LIEU.gioNgat} — chưa lên giường thì ngất, mất một phần năng lượng`],
+          ["Nhịp đồng hồ", `${b.realSecondsPerGameTenMinutes} giây thật = 10 phút trong game`],
+          ["Năng lượng", `tối đa ${b.energyMax}; ngủ hồi lại đầy, ngủ muộn thì hồi ít hơn`],
+          ["Túi đồ", `${b.inventorySlots} ô, trong đó ${b.hotbarSlots} ô ngoài thanh nhanh`],
+          ["Tiền khởi đầu", `${SO_LIEU.tienDau}đ`],
+        ])}
+        <p class="note">Ngủ <b>trên giường</b> mới sang ngày — cửa nhà chỉ để đi vào. Ngủ trong nhà thì ngoài ruộng vẫn lớn, vẫn khô, vẫn mọc cỏ.</p>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <h2>Vòng lõi</h2>
+        <p class="lead">CÀY → GIEO → TƯỚI → chờ cây lớn → THU → BÁN.</p>
+        <div class="grid">
+          <div class="card"><h3>Cây lớn theo thời gian</h3>
+            <p>Ô còn <b>ẩm</b> và trời còn sáng thì cây lớn dần trông thấy trong ngày, không nhảy cóc lúc ngủ. Đi ngủ sớm vẫn được cộng nốt phần ban ngày còn lại — không bị phạt.</p></div>
+          <div class="card"><h3>Mỗi nhát tốn năng lượng</h3>
+            <p>${Object.entries(nl).map(([k, v]) => `${tenViec[k] ?? k} ${v}`).join(" · ")}. Thao tác khoá tay ${b.actionSeconds}s và chỉ ăn ở giữa nhịp — bấm loạn không nhanh hơn.</p></div>
+          <div class="card"><h3>Bỏ bê thì hoang</h3>
+            <p>Đất đã cày mà bỏ không <b>${b.tilledIdleDays} đêm</b> thì mọc cỏ và trở lại như cũ. Cỏ dại lan sang ô cỏ trống kề bên, ${Math.round((b.grassSpreadChance ?? 0) * 100)}% mỗi đêm.</p></div>
+          <div class="card"><h3>Bệnh lan theo luống</h3>
+            <p>Mỗi đêm cây đang lớn có ${Math.round((b.diseaseChance ?? 0) * 100)}% nhiễm bệnh, và <b>gấp ${b.diseaseNeighbourMul} lần</b> nếu nằm cạnh cây bệnh. Cây bệnh không lớn và chỉ thu được ${Math.round((b.sickYieldMul ?? 0) * 100)}% sản lượng.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Bốn mùa</h2>
+        <p class="lead">Mỗi mùa <b>${SO_LIEU.ngayMoiMua} ngày</b>: ${mua.join(" → ")} → rồi quay lại. ${thoiTiet.length ? `Thời tiết rút mỗi ngày một kiểu trong ${thoiTiet.length}: ${thoiTiet.join(", ")}.` : ""}</p>
+        ${bangLuat([
+          ["Trái mùa", "gieo không được"],
+          ["Sang mùa", "cây <b>chưa chín</b> mà trái mùa thì héo"],
+          ["Cây đã chín", "không bao giờ mất — vụ đang chờ gặt luôn an toàn"],
+          ["Nhà kính", "sàn nhà kính miễn nhiễm mùa, trồng gì cũng được quanh năm"],
+        ])}
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <h2>Chăn nuôi</h2>
+        <p class="lead">${SO_LIEU.soLoai} loài, mỗi loài có khu riêng dựng sẵn — không phải tự đóng rào.</p>
+        <div class="grid">
+          <div class="card"><h3>Máng là cửa duy nhất</h3>
+            <p>Không cho ăn trực tiếp. Đổ vào <b>máng</b> (trên cạn) hoặc <b>rắc xuống hồ</b> (dưới nước). Máng là một bể điểm chung, trần ${b.troughMax} phần: món nào cũng đổ được, món đắt thì no lâu hơn.</p></div>
+          <div class="card"><h3>Khu quyết định ăn gì</h3>
+            <p>Bò, dê, cừu cùng ăn rơm nên dùng <b>chung một máng</b>. Gà vịt mổ sâu trên cỏ nên khu của chúng cố ý không có máng.</p></div>
+          <div class="card"><h3>Cỏ là thức ăn thật</h3>
+            <p>Con vật đói tự tìm bụi cỏ gần nhất và <b>ăn mất bụi cỏ đó</b>. Đàn đông sẽ gặm trụi quanh chuồng — phải chừa cỏ hoặc cắt cỏ tích rơm.</p></div>
+          <div class="card"><h3>Đói quá thì chết</h3>
+            <p>Hết cỏ, hết máng thì đói tiếp, và quá số ngày chịu đói của loài đó thì chết. Thẻ từng con cho biết còn no bao lâu.</p></div>
+        </div>
+        <p class="note"><a href="/thu-vien/vat-nuoi/">Xem chi tiết từng loài →</a></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Người làm thuê</h2>
+        ${bangLuat([
+          ["Thuê", `${SO_LIEU.thueNguoi}đ một người`],
+          ["Lương", `${SO_LIEU.luongNguoi}đ mỗi ${SO_LIEU.ngayTraLuong} ngày`],
+          ["Giao việc", "chăm cây <i>hoặc</i> chăn nuôi — trong phạm vi đó họ tự chọn việc"],
+          ["Thứ tự ưu tiên", "cố định, không ngẫu nhiên — nên đoán được họ sẽ làm gì"],
+          ["Rảnh việc", "đi kiếm gỗ đá trong rừng, không đụng cây cảnh bạn trồng"],
+          ["Đầy tay", `mang về kho (${content.workers?.carryMax ?? 0} món)`],
+        ])}
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <h2>Mua bán</h2>
+        <div class="grid">
+          <div class="card"><h3>Chợ và Quầy đứng hai đầu</h3>
+            <p>Chợ để mua, Quầy thu mua để bán. Không ô nào bấm trúng cả hai.</p></div>
+          <div class="card"><h3>Không có gì bị khoá</h3>
+            <p>Cửa hàng bán mọi thứ ngay từ đầu — có tiền là mua được. ${SO_LIEU.soNac} nấc tiến trình chỉ đánh dấu chặng đường và phát thưởng, không mở khoá hàng hoá.</p></div>
+          <div class="card"><h3>Mua con vật thì có xe chở tới</h3>
+            <p>Xe chạy từ cổng vào theo đường nhựa, đậu ở kho rồi thả hàng. Mua cá thì xe đậu ở bờ ao. Không có đường thì xe không tới được.</p></div>
+          <div class="card"><h3>Xe thu mua ghé kho</h3>
+            <p>Gom sạch nông sản trong kho và trả cao hơn quầy một chút — bán buôn thì lời hơn bán lẻ.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Ba cách làm việc</h2>
+        <p class="lead">Khác nhau ở đúng một điểm: có tự đổi món đang cầm hay không.</p>
+        ${bangLuat([
+          ["Nút DÙNG", "làm đúng ô đang ngắm. Không đổi món."],
+          ["CHUYẾN", "món đang cầm quyết định việc và khu; tự đi khắp khu mà làm, làm gọn từng lô. <b>Không bao giờ</b> đổi món."],
+          ["AUTO", "tự đổi món theo bậc ưu tiên THU → CHỮA → GIEO → TƯỚI → CÀY, quanh chỗ đứng."],
+        ])}
+        <p class="note">AUTO tự tắt khi bạn cầm lái, khi quanh đó hết việc, hoặc khi 4 giây liền không có tiến triển.</p>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <h2>Còn nữa</h2>
+        <div class="grid">
+          <div class="card"><h3>${SO_LIEU.soCongThuc} công thức chế biến</h3>
+            <p>Một nguyên liệu → một món bán lãi hơn: phô mai, cuộn len, cà phê rang, mứt dâu, chả cá…</p></div>
+          <div class="card"><h3>Ăn để hồi sức</h3>
+            <p>Mọi cây và trứng/sữa đều ăn được — đầu ra thứ hai cho nông sản, và là cách gỡ khi hết năng lượng giữa đồng.</p></div>
+          <div class="card"><h3>Chế độ xây dựng</h3>
+            <p>Dừng đồng hồ lại, kéo thả để quy hoạch. Vẽ bao nhiêu tính tiền bấy nhiêu, xem trước rồi mới trả.</p></div>
+          <div class="card"><h3>Save nằm trên máy bạn</h3>
+            <p>Không tài khoản, không máy chủ. Xuất ra file để mang sang máy khác.</p></div>
+        </div>
+      </div>
+    </section>
+  `;
+
+  return page({
+    title: "Luật chơi — OniFarm",
+    desc: `Toàn bộ luật chơi OniFarm: một ngày dài bao lâu, cây lớn thế nào, ${SO_LIEU.soMua} mùa, bệnh cây, cho vật nuôi ăn, thuê người làm, mua bán. Số liệu lấy thẳng từ bản đang chơi.`,
+    url: "/luat-choi/",
+    h1: "LUẬT CHƠI",
+    tag: "Mọi thứ cần biết để chơi. Số liệu lấy thẳng từ bản đang chơi, không gõ tay.",
+    body,
+  });
+}
+
 /* --------------------------------------------------------------------- chạy */
 
+/* Sáu trang giới thiệu: vỏ ở đây, CHỮ trong `src/site/noi-dung/*.html`. */
+const GIOI_THIEU = [
+  { duong: "", ten: "trang-chu", url: "/", h1: 'ONI<span>FARM</span>',
+    title: "OniFarm — Nông trại hiện đại pixel, chơi offline trên mọi thiết bị",
+    desc: "OniFarm — game nông trại pixel chơi offline: bốn mùa, 61 loại cây, chăn nuôi, người làm thuê, chế độ xây dựng kéo thả. Chơi bằng cảm ứng, chuột hay tay cầm.",
+    tag: "Cày đất, gieo hạt, tưới nước, ngủ một đêm rồi ra thu hoạch. Rồi nuôi bò, thuê người làm, kéo một con đường ra kho — và đứng nhìn nông trại tự chạy.",
+    wide: true },
+  { duong: "tinh-nang", ten: "tinh-nang", url: "/tinh-nang/", h1: "TÍNH NĂNG",
+    title: "Tính năng — OniFarm",
+    desc: "Những gì đã có trong bản chơi được của OniFarm: chơi trên điện thoại, bốn mùa, chăn nuôi, người làm thuê, chế độ xây dựng, chơi offline.",
+    tag: "Những gì đã có trong bản chơi được hiện tại." },
+  { duong: "huong-dan", ten: "huong-dan", url: "/huong-dan/", h1: "HƯỚNG DẪN",
+    title: "Hướng dẫn chơi — OniFarm",
+    desc: "Hướng dẫn chơi OniFarm từ ngày đầu: cày gieo tưới thu, kiếm tiền, nuôi con vật đầu tiên, thuê người làm.",
+    tag: "Từ ngày đầu tới lúc nông trại tự chạy." },
+  { duong: "cach-hoat-dong", ten: "cach-hoat-dong", url: "/cach-hoat-dong/", h1: "CÁCH GAME VẬN HÀNH",
+    title: "Cách game vận hành — OniFarm",
+    desc: "Bên trong OniFarm: một cửa duy nhất cho mọi thay đổi, tính tất định, nội dung tách khỏi mã, cập nhật OTA, kiểm thử headless.",
+    tag: "Bên trong thì nó chạy thế nào." },
+  { duong: "tai-ve", ten: "tai-ve", url: "/tai-ve/", h1: "CÀI VỀ MÁY",
+    title: "Cài về máy — OniFarm",
+    desc: "Cài OniFarm về màn hình chính như một app: iPhone, Android, máy tính. Chơi offline hoàn toàn, không cần cửa hàng ứng dụng.",
+    tag: "Thêm vào màn hình chính, chơi như một app — không qua cửa hàng nào." },
+  { duong: "privacy", ten: "privacy", url: "/privacy/", h1: "QUYỀN RIÊNG TƯ",
+    title: "Quyền riêng tư — OniFarm",
+    desc: "OniFarm không thu thập gì cả: không tài khoản, không máy chủ, không quảng cáo. Toàn bộ tiến trình nằm trên máy bạn.",
+    tag: "Ngắn thôi: chúng tôi không thu thập gì cả." },
+];
+
 const outs = [
+  ...GIOI_THIEU.map((t) =>
+    write(t.duong, page({ ...t, body: noiDung(t.ten) })),
+  ),
+  write("luat-choi", luatChoiPage()),
   write("thu-vien", hubPage()),
   write("thu-vien/cay-trong", cropsPage()),
   write("thu-vien/vat-nuoi", animalsPage()),
   write("thu-vien/hanh-dong", actionsPage()),
 ];
 
+/* Mọi mục trong NAV phải có trang thật — thêm mục mà quên sinh trang thì đây
+   là chỗ bắt được, chứ không phải người dùng bấm vào rồi gặp 404. */
+for (const [href] of NAV) {
+  const d = href.replace(/^\/|\/$/g, "");
+  if (!outs.some((o) => o.endsWith(`${d}/index.html`) || (d === "" && o.endsWith("src/index.html")))) {
+    throw new Error(`NAV có mục ${href} nhưng không trang nào được sinh ra cho nó`);
+  }
+}
+
 console.log(
-  `✓ thư viện → ${outs.length} trang · ${content.cropOrder.length} cây · ${content.animalOrder.length} loài · ${HANH_DONG.length} hành động`,
+  `✓ site → ${outs.length} trang · ${content.cropOrder.length} cây · ${content.animalOrder.length} loài · ${HANH_DONG.length} hành động · ${SO_LIEU.soKichBan} kịch bản`,
 );
