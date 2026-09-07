@@ -60,8 +60,51 @@ const tien = (n) => Number(n ?? 0).toLocaleString("vi-VN");
  *  để chỗ gọi đọc như câu tiếng Việt chứ không phải phép nối chuỗi. */
 const ngay = (n) => `${n} ngày`;
 
-const cx = (key, size = 48, alt = "") =>
-  `<canvas class="sp" data-sprite="${esc(key)}" data-size="${size}" role="img" aria-label="${esc(alt)}"></canvas>`;
+/**
+ * Ô chờ sprite. `src/site/sprites.ts` sẽ vẽ vào lúc trang chạy.
+ *
+ * Khoá được KIỂM ngay tại đây. Một khoá sai không báo lỗi gì cả — nó chỉ vẽ ra
+ * một ô trống, và một ô trống giữa hàng chục ô có hình thì không ai nhận ra là
+ * thiếu. Kiểm lúc sinh thì sai một khoá là build đỏ, kèm tên khoá.
+ */
+function cx(key, size = 48, alt = "") {
+  kiemKhoaSprite(key);
+  return `<canvas class="sp" data-sprite="${esc(key)}" data-size="${size}" role="img" aria-label="${esc(alt)}"></canvas>`;
+}
+
+/** Ném lỗi nếu `key` không trỏ tới thứ có thật. Luật khớp `spriteFor`. */
+function kiemKhoaSprite(key) {
+  const hong = (vi) => {
+    throw new Error(`data-sprite="${key}" không vẽ được: ${vi}`);
+  };
+  if (key === "player") return;
+  if (key.startsWith("ui:") || key.startsWith("worker:")) return; // do atlas tự lo
+  const sau = (n) => key.slice(n);
+  if (key.startsWith("animal:")) return content.animals[sau(7)] ? undefined : hong("không có loài này");
+  if (key.startsWith("vehicle:")) return content.vehicles[sau(8)] ? undefined : hong("không có xe này");
+  if (key.startsWith("build:")) return content.buildings[sau(6)] ? undefined : hong("không có công trình này");
+  if (key.startsWith("prop:")) return content.props[sau(5)] ? undefined : hong("không có vật thể này");
+  if (key.startsWith("tool:")) return content.tools[sau(5)] ? undefined : hong("không có công cụ này");
+  if (key.startsWith("seed:")) return content.crops[sau(5)] ? undefined : hong("không có cây này");
+  if (key.startsWith("crop:")) {
+    const rest = sau(5);
+    const cut = rest.lastIndexOf(":");
+    const id = cut < 0 ? rest : rest.slice(0, cut);
+    const def = content.crops[id];
+    if (!def) return hong("không có cây này");
+    if (cut < 0) return;
+    const i = Number(rest.slice(cut + 1));
+    if (!Number.isInteger(i) || i < 0 || i > def.growthDays.length)
+      return hong(`giai đoạn ${rest.slice(cut + 1)} nằm ngoài 0..${def.growthDays.length}`);
+    return;
+  }
+  if (key.startsWith("item:")) {
+    const r = sau(5);
+    if (content.materials[r]) return;
+    return hong("không có vật liệu này");
+  }
+  return hong("không khớp tiền tố nào mà sprites.ts hiểu");
+}
 
 /* ---------------------------------------------------------------- số liệu ---
 
@@ -110,7 +153,116 @@ const SO_LIEU = {
   thueNguoi: tien(content.workers?.hireFee ?? 0),
   luongNguoi: tien(content.workers?.wage ?? 0),
   ngayTraLuong: content.workers?.wageEveryDays ?? 0,
+  get bangCayMau() {
+    return bangCayMau();
+  },
+  get bangCongTrinh() {
+    return bangCongTrinh();
+  },
+  get bangKhaiThac() {
+    return bangKhaiThac();
+  },
+  get theCheTao() {
+    return theCheTao();
+  },
 };
+
+/* ---- hai bảng của trang Tính năng, sinh từ content ------------------------
+
+   Trước đây chúng là HTML gõ tay, và cả hai đều đã sai theo kiểu khó thấy:
+   bảng công trình ghi vòi tưới "tự tưới 4 ô kề bên", trong khi `waterRadius: 1`
+   tưới cả khối 3×3 — tức TÁM ô quanh nó, gấp đôi. Con số giá thì tình cờ vẫn
+   đúng, nhưng "tình cờ vẫn đúng" không phải một tính chất đáng dựa vào. */
+
+/** Ba cây LÀM VÍ DỤ, chọn bằng dữ liệu chứ không bằng trí nhớ. */
+function bangCayMau() {
+  const list = content.cropOrder.map((id) => content.crops[id]).filter(Boolean);
+  const nhanhNhat = list.reduce((a, b) => (tongNgay(b) < tongNgay(a) ? b : a));
+  const mocLai = list.filter((c) => c.regrowDays > 0).sort((a, b) => tongNgay(a) - tongNgay(b))[0];
+  const datNhat = list.reduce((a, b) => (b.sellPrice > a.sellPrice ? b : a));
+  const ghiChu = {
+    [nhanhNhat.id]: "Nhanh nhất — cây khởi động, vòng quay ngắn",
+    [mocLai?.id]: `Thu xong mọc lại sau ${ngay(mocLai?.regrowDays ?? 0)} — gieo một lần, hái mãi`,
+    [datNhat.id]: "Bán đắt nhất — đầu tư dài, lãi lớn",
+  };
+  const chon = [...new Map([nhanhNhat, mocLai, datNhat].filter(Boolean).map((c) => [c.id, c])).values()];
+  return (
+    `<div class="table-wrap"><table>
+          <tr><th>Cây</th><th>Thời gian</th><th>Hạt</th><th>Bán</th><th>Ghi chú</th></tr>` +
+    chon
+      .map(
+        (c) =>
+          `<tr><td><b>${esc(c.name)}</b></td><td>${ngay(tongNgay(c))}</td><td>${tien(c.seedPrice)}đ</td><td>${tien(c.sellPrice)}đ</td><td>${esc(ghiChu[c.id] ?? "")}</td></tr>`,
+      )
+      .join("\n          ") +
+    `\n        </table></div>`
+  );
+}
+
+/** Mọi công trình mua được, kèm tác dụng ĐỌC TỪ `effects`. */
+function bangCongTrinh() {
+  const rows = content.buildingOrder
+    .map((id) => content.buildings[id])
+    .filter((b) => b && b.price > 0)
+    .map((b) => {
+      const e = b.effects ?? {};
+      const y = [];
+      if (e.waterRadius > 0) {
+        const canh = e.waterRadius * 2 + 1;
+        y.push(`Mỗi sáng tự tưới cả khối ${canh}×${canh} quanh nó — ${canh * canh - 1} ô kề`);
+      }
+      if (e.autoWet) y.push("Ô luôn giữ ẩm, không phải tưới");
+      if (e.allSeason) y.push("Trồng được quanh năm, không lo trái mùa");
+      if (e.speedMul) y.push(`Đi nhanh hơn ${Math.round((e.speedMul - 1) * 100)}%`);
+      return `<tr><td><b>${esc(b.name)}</b></td><td>${tien(b.price)}đ${b.kind === "floor" ? "/ô" : ""}</td><td>${y.join(" · ") || "—"}</td></tr>`;
+    });
+  return (
+    `<div class="table-wrap"><table>
+          <tr><th>Công trình</th><th>Giá</th><th>Tác dụng</th></tr>` +
+    rows.join("\n          ") +
+    `\n        </table></div>`
+  );
+}
+
+/** Địa hình khai thác được — số nhát và sản lượng đọc từ `props`. */
+function bangKhaiThac() {
+  const TEN_CONG_CU = { CHOP: "Rìu", MINE: "Cuốc chim", TILL: "Cuốc" };
+  const rows = (content.propOrder ?? Object.keys(content.props))
+    .map((id) => content.props[id])
+    .filter((p) => p && ((p.drops ?? []).length > 0 || p.interact === "REFILL"))
+    .map((p) => {
+      const can =
+        p.interact === "REFILL"
+          ? "Đứng cạnh rồi bấm"
+          : `${TEN_CONG_CU[p.tool] ?? "Tay không"}${p.hits > 1 ? ` · ${p.hits} nhát` : ""}`;
+      const ra = p.interact === "REFILL"
+        ? "Đầy bình tưới"
+        : (p.drops ?? [])
+            .map((d) => `${d.min === d.max ? d.min : `${d.min}–${d.max}`} ${esc(itemName(d.id)).toLowerCase()}`)
+            .join(", ") + (p.becomes ? `, để lại ${esc(content.props[p.becomes]?.name ?? p.becomes).toLowerCase()}` : "");
+      return `<tr><td><b>${esc(p.name)}</b></td><td>${can}</td><td>${ra}</td></tr>`;
+    });
+  return (
+    `<div class="table-wrap"><table>
+          <tr><th>Thứ</th><th>Cần gì</th><th>Ra gì</th></tr>` +
+    rows.join("\n          ") +
+    `\n        </table></div>`
+  );
+}
+
+/** Công thức chế ra CÔNG CỤ — nguyên liệu đọc từ `recipes`. */
+function theCheTao() {
+  return Object.values(content.recipes)
+    .filter((r) => r && r.out?.id?.startsWith("tool:"))
+    .map((r) => {
+      const t = content.tools[r.out.id.slice(5)];
+      const them = t?.capacity ? ` — chứa ${t.capacity} nước` : "";
+      return `<div class="card"><h3>${esc(r.name)}</h3><p>${r.in
+        .map((x) => `${x.n} ${esc(itemName(x.id)).toLowerCase()}`)
+        .join(" + ")}${them}</p></div>`;
+    })
+    .join("\n          ");
+}
 
 /** Thay `{{khoa}}` trong một mẩu nội dung. Khoá lạ → build ĐỎ. */
 function thaySoLieu(html, ten) {
@@ -581,7 +733,7 @@ const HANH_DONG = [
     ten: "Gieo hạt",
     can: null,
     y: "Cầm một gói hạt trên hotbar rồi bấm vào ô đất đã cày. Mỗi gói gieo được một ô.",
-    meo: "Gieo đúng mùa thì cây lớn nhanh nhất. Gieo trái mùa vẫn mọc, chỉ chậm hơn nhiều.",
+    meo: "Gieo trái mùa thì KHÔNG gieo được — cửa hàng cũng không bày bán hạt trái mùa, nên không có cách nào lỡ mua nhầm. Sàn nhà kính là ngoại lệ duy nhất: trên đó trồng gì cũng được, quanh năm.",
   },
   {
     nut: "TƯỚI",

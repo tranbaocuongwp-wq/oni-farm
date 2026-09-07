@@ -4,7 +4,7 @@
     {
       "id": "sprinkler",
       "name": "Vòi tưới tự động",
-      "desc": "Mỗi sáng tự tưới 4 ô kề bên. Khỏi cầm bình chạy khắp ruộng.",
+      "desc": "Mỗi sáng tự tưới cả khối 3×3 quanh nó — tám ô kề, kể cả bốn góc. Khỏi cầm bình chạy khắp ruộng.",
       "price": 350,
       "kind": "object",
       "solid": true,

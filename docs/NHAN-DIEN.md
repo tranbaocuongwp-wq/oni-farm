@@ -131,7 +131,19 @@ trình duyệt hiện icon mặc định suốt nhiều tháng mà không ai th�
 `src/site/noi-dung/<trang>.html` — không phải đi tìm dấu backtick trong một file
 JavaScript và né `${`.
 
-### Mọi con số sinh từ nguồn
+### Mọi con số — và mọi BẢNG — sinh từ nguồn
+
+Không chỉ con số lẻ: bốn cái bảng của trang Tính năng (cây làm ví dụ, công
+trình, địa hình khai thác được, công thức chế tạo) đều **sinh từ content**, kể
+cả việc *chọn* ba cây làm ví dụ (nhanh nhất · thu lại được · bán đắt nhất — lấy
+bằng dữ liệu, không bằng trí nhớ).
+
+Bản gõ tay của chúng đã sai ở bốn chỗ cùng lúc: vòi tưới ghi "4 ô kề" trong khi
+nó tưới 8, bụi cỏ ghi "1–3 sợi cỏ" trong khi nó ra 2–3 sợi **và** 1–2 gỗ, cuốc
+chim ghi "6 gỗ + 3 đá" trong khi công thức là 6 gỗ + 6 sợi cỏ, và bảng chế tạo
+bỏ sót hẳn một công cụ (cuốc chim thép).
+
+#### Khoá `{{...}}`
 
 Viết `{{soCay}}` trong file nội dung, builder thay lúc build. Gõ một khoá không
 có thật thì **build đỏ ngay**, chứ không lặng lẽ để lại `{{soKichBan}}` giữa
@@ -155,6 +167,9 @@ Builder còn **tự soát** hai chuyện, và cả hai đều đã cấy lỗi �
 
 * Mọi mục trong `NAV` phải có một trang thật được sinh ra — chứ không phải người
   dùng bấm vào rồi gặp 404.
+* Mọi khoá `data-sprite` phải trỏ tới thứ có thật trong content. Khoá sai không
+  báo lỗi gì — nó chỉ vẽ ra một ô trống, và một ô trống giữa hàng chục ô có hình
+  thì không ai nhận ra là thiếu. Kiểm ngay lúc sinh thẻ (`cx()`).
 * Mọi việc trong `UseKind` (đọc thẳng từ `src/game/actions.ts`) phải có một mục
   trên trang **Hành động**. Trang ấy từng dạy một nút *"CHO ĂN — đứng cạnh con
   vật và bấm"* suốt ba đợt **sau khi** cho ăn trực tiếp đã bị gỡ khỏi game, và
