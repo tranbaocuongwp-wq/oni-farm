@@ -36,7 +36,7 @@
       state không phải lưu thêm gì.
 ============================================================================ */
 
-import type { Content, GameState, Tile } from "../game/types.ts";
+import type { Content, Entity, GameState, Tile } from "../game/types.ts";
 import {
   ART,
   TILE_PX,
@@ -44,6 +44,15 @@ import {
   CROP_H,
   PLAYER_ACT_FRAME,
   PLAYER_RAISE_FRAME,
+  PF_CARRY,
+  PF_TIRED,
+  PF_SIT,
+  PF_WAVE,
+  PF_CHAT,
+  PF_CROUCH,
+  PF_POUR,
+  PF_WIPE,
+  PF_POINT,
   houseVariantKey,
   blockVariantKey,
   tileMaskKey,
@@ -1381,6 +1390,55 @@ export function createRenderer(
    * ĐÚNG công thức `base` (`round(y) + 5`), nên con bò đi trước mặt thì che
    * nhân vật, đi sau lưng thì bị che — không cần luật riêng nào.
    */
+  /**
+   * KHUNG HÌNH của một người làm thuê.
+   *
+   * Cường: "mấy người làm ít động tác quá, tăng thêm cho tôi đi". Trước đây chỗ
+   * này chỉ biết ba trạng thái: đang vung công cụ, đang đi, đứng yên. Nghĩa là
+   * bê đồ, nghỉ mệt, nói chuyện, trú mưa và đứng chờ việc đều ra CÙNG một khung
+   * đứng — nhìn ra nông trại thấy ba người đứng như tượng.
+   *
+   * Thứ tự nhường ở đây là thứ tự người chơi CẦN BIẾT: đang làm > mệt lả > trú
+   * mưa > bê đồ > việc xã giao > đi > đứng. Một người vừa mệt vừa đang bê thì
+   * cái đáng báo là MỆT, vì đó là thứ người chơi phải xử lý.
+   */
+  function khungNguoiLam(
+    e: Entity,
+    content: Content,
+    lamViec: boolean,
+    moving: boolean,
+    timeSec: number,
+  ): number {
+    const w = e.worker;
+    if (!w) return 0;
+    if (lamViec) {
+      /* Việc TƯỚI và việc GIEO không phải là vung cuốc: một bên nghiêng bình,
+         một bên ngồi xổm xuống đất. Dùng chung khung vung cho cả ba thì cái
+         diễn hoạt nói sai việc đang làm. */
+      const pha = workFrame(e.ai.until, WORK_MINUTES, content.balance.actionImpact ?? 0.5);
+      if (e.ai.job === "water" || e.ai.job === "pour") return PF_POUR;
+      if (e.ai.job === "plant") return pha === PLAYER_ACT_FRAME ? PF_CROUCH : PF_POUR;
+      return pha;
+    }
+    if (w.energy <= content.workers.restBelow) return e.ai.phase === "rest" ? PF_SIT : PF_TIRED;
+    if (e.ai.phase === "shelter") return PF_WIPE;
+    const dangBe = w.carry.some((v: { n: number } | null) => !!v && v.n > 0);
+    if (e.ai.job === "chat") return PF_CHAT;
+    if (e.ai.job === "pet") return PF_CROUCH;
+    if (e.ai.job === "unload") return PF_CARRY;
+    if (dangBe) return PF_CARRY;
+    if (moving) return 1 + (Math.floor(e.anim * 8) % 4);
+    /* ĐỨNG CHỜ: bốc một cử chỉ nhỏ theo (id · nhịp bốn giây). Cùng cách với
+       việc vặt của vật nuôi — tất định, không tốn một byte save, và ba người
+       đứng cạnh nhau không cùng làm một động tác. */
+    const nhip = Math.floor(timeSec / 4);
+    const r = hash2(e.id, nhip, 0x71c3) % 10;
+    if (r === 0) return PF_WAVE;
+    if (r === 1) return PF_POINT;
+    if (r === 2) return PF_WIPE;
+    return 0;
+  }
+
   function drawActors(s: GameState, content: Content, items: Item[], timeSec: number) {
     const conSong = new Set<number>();
     for (const e of s.entities) {
@@ -1424,15 +1482,7 @@ export function createRenderer(
         phaLam.set(e.id, khung);
       }
       const img = e.worker
-        ? atlas.worker(
-            e.worker.skin,
-            e.dir,
-            lamViec
-              ? workFrame(e.ai.until, WORK_MINUTES, content.balance.actionImpact ?? 0.5)
-              : moving
-                ? 1 + (Math.floor(e.anim * 8) % 4)
-                : 0,
-          )
+        ? atlas.worker(e.worker.skin, e.dir, khungNguoiLam(e, content, lamViec, moving, timeSec))
         : e.kind === "vehicle"
           ? atlas.vehicle(e.def, e.dir, moving ? Math.floor(e.anim * 8) % 2 : 0)
           : atlas.animal(e.def, e.dir, frame, mood?.pose ?? "walk");

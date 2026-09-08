@@ -42,9 +42,44 @@ export const TILE = 16;
 /** Cây được vẽ trên khung cao hơn ô để cây cao vươn lên trên viền ô. */
 export const CROP_H = 24;
 /** Nhân vật: 0 đứng · 1-4 bước đi · 5 CHẠM (vung xuống) · 6 GIƠ (công cụ trên đầu). */
-export const PLAYER_FRAMES = 7;
+/* ---------------------------------------------------------------------------
+   KHUNG HÌNH NGƯỜI — Cường: "mấy người làm ít động tác quá, tăng thêm cho tôi đi".
+
+   Bảy khung (đứng · bốn bước đi · chạm · giơ) là đủ cho NGƯỜI CHƠI, vì người
+   chơi lúc nào cũng đang làm gì đó do tay mình bấm. Nhưng người làm thuê thì
+   phần lớn thời gian đang đi, đang bê, đang nghỉ, đang nói chuyện — và cả bốn
+   việc ấy trước giờ dùng chung đúng một khung ĐỨNG. Nhìn ra nông trại thì thấy
+   ba người đứng như tượng, thỉnh thoảng trượt sang chỗ khác.
+
+   Nay mười tám khung. Mười một khung mới đều là TƯ THẾ CẢ NGƯỜI, không phải
+   thêm khung đi: thêm khung đi chỉ làm bước chân mượt hơn, còn thứ thiếu là
+   người ta ĐANG LÀM GÌ.
+--------------------------------------------------------------------------- */
+export const PLAYER_FRAMES = 18;
 export const PLAYER_ACT_FRAME = 5;
 export const PLAYER_RAISE_FRAME = 6;
+/** BÊ ĐỒ: hai tay đưa ra trước, hơi ngả người ra sau cho cân. */
+export const PF_CARRY = 7;
+/** MỆT: vai xuôi, đầu cúi, hai tay thõng. */
+export const PF_TIRED = 8;
+/** NGỒI NGHỈ: gập chân, thân thấp hẳn xuống. */
+export const PF_SIT = 9;
+/** VẪY TAY chào. */
+export const PF_WAVE = 10;
+/** NÓI CHUYỆN: một tay khoát ra. */
+export const PF_CHAT = 11;
+/** NGỒI XỔM: gieo hạt, vuốt ve con vật. */
+export const PF_CROUCH = 12;
+/** NGHIÊNG BÌNH tưới. */
+export const PF_POUR = 13;
+/** QUỆT MỒ HÔI. */
+export const PF_WIPE = 14;
+/** GIƠ HAI TAY mừng. */
+export const PF_CHEER = 15;
+/** ĐẨY/KÉO: chúi người về trước, hai tay duỗi. */
+export const PF_PUSH = 16;
+/** CHỈ TAY: một tay chỉ về phía trước. */
+export const PF_POINT = 17;
 
 /* ---------------------------------------------------------------------------
    Bảng màu. Gom một chỗ để chỉnh tông cả game bằng vài dòng.
@@ -4278,12 +4313,37 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
   const act = frame === PLAYER_ACT_FRAME;
   const raise = frame === PLAYER_RAISE_FRAME;
   // bước đi: 1 = chân trái trước, 2 = chụm (nhún), 3 = chân phải trước, 4 = chụm
-  const walk = !act && !raise && frame > 0;
+  const walk = frame >= 1 && frame <= 4;
   const step = !walk ? 0 : frame === 1 ? 1 : frame === 3 ? -1 : 0;
-  const bob = walk && (frame === 2 || frame === 4) ? Q : 0;
+
+  /* MƯỜI MỘT TƯ THẾ THÊM: mỗi tư thế là một bộ vài con số của cùng bộ xương —
+     thân hạ bao nhiêu, chúi về đâu, hai tay đặt kiểu gì, đầu cúi hay ngẩng.
+     Cùng lối với bảng `TU_THE` của vật nuôi: thêm tư thế là thêm một dòng, chứ
+     không phải vẽ thêm một người. */
+  const TAY = {
+    thuong: 0, truoc: 1, giơ: 2, mot_giơ: 3, khoat: 4, chi: 5, thong: 6, duoi: 7, quet: 8,
+  } as const;
+  type KieuTay = (typeof TAY)[keyof typeof TAY];
+  const TU: Record<number, { than: number; chui: number; tay: KieuTay; cui: number; ngoi: number }> = {
+    [PF_CARRY]:  { than: 0,    chui: -0.5, tay: TAY.truoc,   cui: 0,    ngoi: 0 },
+    [PF_TIRED]:  { than: 0.5,  chui: 0,    tay: TAY.thong,   cui: 1,    ngoi: 0 },
+    [PF_SIT]:    { than: 2.5,  chui: 0,    tay: TAY.thuong,  cui: 0.5,  ngoi: 1 },
+    [PF_WAVE]:   { than: 0,    chui: 0,    tay: TAY.mot_giơ, cui: -0.5, ngoi: 0 },
+    [PF_CHAT]:   { than: 0,    chui: 0,    tay: TAY.khoat,   cui: 0,    ngoi: 0 },
+    [PF_CROUCH]: { than: 2,    chui: 0.5,  tay: TAY.truoc,   cui: 1,    ngoi: 0.7 },
+    [PF_POUR]:   { than: 0,    chui: 0.5,  tay: TAY.duoi,    cui: 0.5,  ngoi: 0 },
+    [PF_WIPE]:   { than: 0,    chui: 0,    tay: TAY.quet,    cui: 0.5,  ngoi: 0 },
+    [PF_CHEER]:  { than: -0.5, chui: 0,    tay: TAY.giơ,     cui: -1,   ngoi: 0 },
+    [PF_PUSH]:   { than: 0,    chui: 1,    tay: TAY.duoi,    cui: 0.5,  ngoi: 0 },
+    [PF_POINT]:  { than: 0,    chui: 0,    tay: TAY.chi,     cui: 0,    ngoi: 0 },
+  };
+  const tu = TU[frame] ?? null;
+  const bob = (walk && (frame === 2 || frame === 4) ? Q : 0) + (tu ? tu.than : 0);
   // chạm: nghiêng người về hướng làm; giơ: ngả nhẹ về phía sau (lấy đà)
-  const lx = act ? (dir === "left" ? -1 : dir === "right" ? 1 : 0) : raise ? (dir === "left" ? 1 : dir === "right" ? -1 : 0) : 0;
-  const ly = act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : raise ? -1 : 0;
+  const huong = dir === "left" ? -1 : dir === "right" ? 1 : 0;
+  const lx =
+    (act ? huong : raise ? -huong : 0) + (tu ? tu.chui * huong : 0);
+  const ly = (act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : raise ? -1 : 0) + (tu ? tu.cui * 0.5 : 0);
 
   const da = P.skin;
   const daToi = P.skinDark;
@@ -4317,7 +4377,21 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
   };
 
   const legY = 12 + bob;
-  if (dir === "left" || dir === "right") {
+  if (tu && tu.ngoi > 0) {
+    /* NGỒI / NGỒI XỔM: chân gập lại, chỉ còn thấy đùi và bàn chân chìa ra
+       trước. Vẽ chân duỗi rồi hạ cả người xuống thì ra hình người lún xuống
+       đất, không ra hình người ngồi. */
+    const h = Math.max(Q, (3 - bob) * (1 - tu.ngoi * 0.62));
+    for (const kx of [5, 8.5]) {
+      for (let dy = 0; dy < h; dy += Q)
+        for (let dx = 0; dx < 2.5; dx += Q) s.dot(kx + dx, legY + dy, quan);
+      // bàn chân chìa ra trước
+      for (let dx = -Q; dx < 3; dx += Q) {
+        s.dot(kx + dx + huong * 0.5, legY + h, giay);
+        s.dot(kx + dx + huong * 0.5, legY + h + Q, giayToi);
+      }
+    }
+  } else if (dir === "left" || dir === "right") {
     const front = dir === "right" ? 8 : 5.5;
     const back = dir === "right" ? 5.5 : 8;
     chan(back, legY, false);
@@ -4368,23 +4442,66 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
   for (let x = 0; x < tw; x += Q) s.dot(tx + x, ty + 3.5, quanToi);
 
   /* TAY — có bàn tay (một đốt da sáng ở đầu) chứ không phải một que màu da. */
-  const tayDoc = (x: number, y: number, h: number) => {
+  function tayDoc(x: number, y: number, h: number) {
     for (let dy = 0; dy < h; dy += Q) {
       s.dot(x, y + dy, da);
       s.dot(x + Q, y + dy, daToi);
     }
     s.dot(x, y + h - Q, daSang);
-  };
-  const tayNgang = (x: number, y: number, w: number, huong: number) => {
+  }
+  function tayNgang(x: number, y: number, w: number, h2: number) {
     for (let dx = 0; dx < w; dx += Q) {
       s.dot(x + dx, y, da);
       s.dot(x + dx, y + Q, daToi);
     }
-    s.dot(x + (huong > 0 ? w - Q : 0), y, daSang);
-  };
+    s.dot(x + (h2 > 0 ? w - Q : 0), y, daSang);
+  }
 
   const armY = top + 6.5;
-  if (act) {
+  if (tu) {
+    const k = tu.tay;
+    const truoc = huong || (dir === "down" ? 0 : 0);
+    if (k === TAY.truoc) {
+      // hai tay đưa ra TRƯỚC, sát nhau — dáng bê một thùng đồ
+      if (huong) tayNgang(8 + huong * 2.5, armY + 1.5, 4, huong);
+      else {
+        tayDoc(4.5, armY + 1.5, 3);
+        tayDoc(10.5, armY + 1.5, 3);
+      }
+    } else if (k === TAY.giơ) {
+      tayDoc(3.5, top - 1, 7);
+      tayDoc(11.5, top - 1, 7);
+    } else if (k === TAY.mot_giơ) {
+      tayDoc(11.5, top - 1.5, 6.5);
+      tayDoc(3.5, armY, 4);
+      // bàn tay xoè ở đầu tay giơ
+      for (let dx = -Q; dx <= Q; dx += Q) s.dot(11.5 + dx, top - 2, daSang);
+    } else if (k === TAY.khoat) {
+      tayNgang(huong >= 0 ? 11 : 1.5, armY + 0.5, 4, huong || 1);
+      tayDoc(huong >= 0 ? 3.5 : 11.5, armY, 4);
+    } else if (k === TAY.chi) {
+      tayNgang(huong >= 0 ? 10.5 : 1, armY + 1, 5, huong || 1);
+      tayDoc(huong >= 0 ? 3.5 : 11.5, armY, 4);
+    } else if (k === TAY.thong) {
+      tayDoc(3.5, armY + 1, 4.5);
+      tayDoc(11.5, armY + 1, 4.5);
+    } else if (k === TAY.duoi) {
+      if (huong) tayNgang(8 + huong * 2, armY + 2.5, 5, huong);
+      else {
+        tayDoc(4.5, armY + 2, 3.5);
+        tayDoc(10.5, armY + 2, 3.5);
+      }
+    } else if (k === TAY.quet) {
+      // một tay đưa lên trán, một tay chống hông
+      tayDoc(10.5, top + 0.5, 5.5);
+      for (let dx = 0; dx < 2.5; dx += Q) s.dot(8 + dx, top + 0.5, da);
+      tayDoc(3.5, armY + 0.5, 4);
+    } else {
+      tayDoc(3.5, armY, 4);
+      tayDoc(11.5, armY, 4);
+    }
+    void truoc;
+  } else if (act) {
     if (dir === "left") {
       tayNgang(1, armY + 2, 5, -1);
       s.rect(0.5, armY + 1, 1.5, 1.5, P.metal);
