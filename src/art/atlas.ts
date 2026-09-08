@@ -2721,6 +2721,15 @@ const DEFAULT_SKIN: CharSkin = {
 /**
  * Nhân vật. `skin` cho phép người làm thuê dùng lại NGUYÊN bộ 28 khung này —
  * cả khung vung công cụ — mà chỉ tốn năm mã màu trong content.
+ *
+ * Đợt 24 vẽ lại ở nét HD. Bản cũ dựng người bằng bảy hình chữ nhật: đầu là một
+ * khối vuông, mũ là một khối vuông đè lên, thân là một khối vuông nữa. Ở cỡ 16
+ * pixel thì chừng ấy là đủ để đọc ra "một người"; ở cỡ 32 thì nó đọc ra "một
+ * chồng hộp". Nay đầu có ĐƯỜNG BAO tròn, mũ có LƯỠI TRAI cong đúng theo hướng
+ * nhìn, thân có nếp áo và dây yếm, chân có đầu gối và đế giày.
+ *
+ * Nhịp bước cũng mịn ra: cú nhún cũ cao một pixel CŨ (tức hai pixel HD) nên nó
+ * giật; nay nửa pixel cũ, đúng một pixel HD.
  */
 function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN): HTMLCanvasElement {
   const s = surface(TILE, TILE);
@@ -2729,107 +2738,239 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
   // bước đi: 1 = chân trái trước, 2 = chụm (nhún), 3 = chân phải trước, 4 = chụm
   const walk = !act && !raise && frame > 0;
   const step = !walk ? 0 : frame === 1 ? 1 : frame === 3 ? -1 : 0;
-  const bob = walk && (frame === 2 || frame === 4) ? 1 : 0;
+  const bob = walk && (frame === 2 || frame === 4) ? Q : 0;
   // chạm: nghiêng người về hướng làm; giơ: ngả nhẹ về phía sau (lấy đà)
   const lx = act ? (dir === "left" ? -1 : dir === "right" ? 1 : 0) : raise ? (dir === "left" ? 1 : dir === "right" ? -1 : 0) : 0;
   const ly = act ? (dir === "up" ? -1 : dir === "down" ? 1 : 0) : raise ? -1 : 0;
 
-  s.shadow(8, 15, 4.5, 1.6);
+  const da = P.skin;
+  const daToi = P.skinDark;
+  const daSang = lighten(P.skin);
+  const quan = skin.pants;
+  const quanToi = darken(skin.pants);
+  const ao = skin.shirt;
+  const aoToi = skin.shirtDark;
+  const giay = P.boot;
+  const giayToi = shade(P.boot, 0.7);
+
+  s.shadow(8, 15.2, 4.4, 1.5);
 
   const top = 1 + bob;
 
-  // chân
+  /* CHÂN — ống quần thon về mắt cá, đầu gối sáng hơn một nấc, đế giày là một
+     vạch tối riêng. Bản cũ là hai khối chữ nhật đặc và một vạch giày. */
+  const chan = (x: number, y: number, truoc: boolean) => {
+    const h = 3 - bob;
+    for (let dy = 0; dy < h; dy += Q) {
+      const co = dy / Math.max(Q, h); // 0 ở hông, 1 ở mắt cá
+      const w = 2.5 - co * 0.5;
+      for (let dx = 0; dx < w; dx += Q) s.dot(x + dx, y + dy, truoc ? quan : quanToi);
+      s.dot(x, y + dy, truoc ? lighten(quan) : quan);
+    }
+    // giày: mũi chìa ra nửa pixel về phía trước
+    const gy = 15 - bob;
+    for (let dx = -Q; dx < 2.5; dx += Q) s.dot(x + dx, gy, giay);
+    for (let dx = -Q; dx < 2.5; dx += Q) s.dot(x + dx, gy + Q, giayToi);
+    s.dot(x, gy, lighten(giay));
+  };
+
   const legY = 12 + bob;
   if (dir === "left" || dir === "right") {
-    const front = dir === "right" ? 8 : 5;
-    const back = dir === "right" ? 5 : 8;
-    s.rect(back + (step < 0 ? 0 : 0), legY, 3, 3 - bob, darken(skin.pants));
-    s.rect(front + step, legY - (step !== 0 ? 1 : 0), 3, 3 - bob, skin.pants);
-    s.rect(back, 15 - bob, 3, 1, P.boot);
-    s.rect(front + step, 15 - bob, 3, 1, P.boot);
+    const front = dir === "right" ? 8 : 5.5;
+    const back = dir === "right" ? 5.5 : 8;
+    chan(back, legY, false);
+    chan(front + step * 0.5, legY - (step !== 0 ? 0.5 : 0), true);
   } else {
-    s.rect(5, legY - (step > 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? skin.pants : darken(skin.pants));
-    s.rect(9, legY - (step < 0 ? 1 : 0), 3, 3 - bob, step >= 0 ? darken(skin.pants) : skin.pants);
-    s.rect(5, 15 - bob, 3, 1, P.boot);
-    s.rect(9, 15 - bob, 3, 1, P.boot);
+    chan(5, legY - (step > 0 ? 0.5 : 0), step >= 0);
+    chan(8.5, legY - (step < 0 ? 0.5 : 0), step < 0);
+    /* KHE giữa hai ống quần. Không có nó thì đứng nhìn thẳng, hai ống cùng màu
+       dính thành một cái váy bò — và bước đi mất hẳn nhịp vì mắt không thấy hai
+       chân đâu. */
+    for (let y = 0; y < 3 - bob; y += Q) s.dot(8, legY + y, shade(quan, 0.55));
   }
 
   s.g.save();
-  s.g.translate(lx, ly);
-  // thân — áo trắng + yếm quần bò
-  s.rect(5, top + 6, 7, 6, skin.shirt);
-  s.rect(5, top + 8, 7, 4, skin.pants);
-  s.vline(7, top + 6, 3, skin.pants);
-  s.vline(10, top + 6, 3, skin.pants);
-  s.px(6, top + 10, darken(skin.pants));
-  s.px(11, top + 10, darken(skin.pants));
-  s.px(5, top + 7, skin.shirtDark);
+  s.g.translate(lx * ART, ly * ART);
 
-  // tay
-  const armY = top + 7;
+  /* THÂN — áo trên, yếm quần dưới, hai dây yếm vắt qua vai và hai cúc đồng.
+     Vai xuôi chứ không vuông: bốn góc trên được vát đi một pixel HD. */
+  const tx = 4.5;
+  const tw = 7;
+  const ty = top + 5.5;
+  // áo phủ CẢ thân trước, rồi yếm quần đắp lên: như thế cái áo trắng mới thấy
+  // được ở vai và hai bên sườn, đúng cách một bộ yếm quần bò trông ngoài đời.
+  for (let y = 0; y < 6.5; y += Q) {
+    const vai = y < Q ? Q : 0; // vát vai
+    for (let x = vai; x < tw - vai; x += Q) s.dot(tx + x, ty + y, ao);
+  }
+  for (let y = Q; y < 3; y += Q) {
+    s.dot(tx + Q, ty + y, lighten(ao));
+    s.dot(tx + tw - Q * 2, ty + y, aoToi);
+  }
+  // YẾM: mảng hẹp ở giữa ngực, loe ra thành quần từ ngang hông
+  for (let y = 1.5; y < 6.5; y += Q) {
+    const hong = y >= 3.5;
+    const w = hong ? tw : 4;
+    const x0 = hong ? 0 : 1.5;
+    for (let x = x0; x < x0 + w; x += Q) s.dot(tx + x, ty + y, quan);
+    s.dot(tx + x0, ty + y, lighten(quan));
+    s.dot(tx + x0 + w - Q, ty + y, quanToi);
+  }
+  // hai dây yếm vắt lên vai + hai cúc đồng ở đầu dây
+  for (const k of [0, 1]) {
+    const dx = tx + 1.5 + k * 3.5;
+    for (let y = 0; y < 1.5; y += Q) s.dot(dx, ty + y, quan);
+    s.dot(dx, ty + 1.5, "#e0b968");
+  }
+  // đường may ngang hông
+  for (let x = 0; x < tw; x += Q) s.dot(tx + x, ty + 3.5, quanToi);
+
+  /* TAY — có bàn tay (một đốt da sáng ở đầu) chứ không phải một que màu da. */
+  const tayDoc = (x: number, y: number, h: number) => {
+    for (let dy = 0; dy < h; dy += Q) {
+      s.dot(x, y + dy, da);
+      s.dot(x + Q, y + dy, daToi);
+    }
+    s.dot(x, y + h - Q, daSang);
+  };
+  const tayNgang = (x: number, y: number, w: number, huong: number) => {
+    for (let dx = 0; dx < w; dx += Q) {
+      s.dot(x + dx, y, da);
+      s.dot(x + dx, y + Q, daToi);
+    }
+    s.dot(x + (huong > 0 ? w - Q : 0), y, daSang);
+  };
+
+  const armY = top + 6.5;
   if (act) {
     if (dir === "left") {
-      s.rect(1, armY + 2, 5, 2, P.skin);
-      s.rect(0, armY + 1, 2, 2, P.metal);
+      tayNgang(1, armY + 2, 5, -1);
+      s.rect(0.5, armY + 1, 1.5, 1.5, P.metal);
     } else if (dir === "right") {
-      s.rect(10, armY + 2, 5, 2, P.skin);
-      s.rect(14, armY + 1, 2, 2, P.metal);
+      tayNgang(10, armY + 2, 5, 1);
+      s.rect(14, armY + 1, 1.5, 1.5, P.metal);
     } else if (dir === "up") {
-      s.rect(4, top + 1, 2, 5, P.skin);
-      s.rect(10, top + 1, 2, 5, P.skin);
-      s.rect(7, top - 1, 2, 2, P.metal);
+      tayDoc(4, top + 1, 5);
+      tayDoc(10.5, top + 1, 5);
+      s.rect(7, top - 1, 2, 1.5, P.metal);
     } else {
-      s.rect(3, armY + 3, 2, 4, P.skin);
-      s.rect(12, armY + 3, 2, 4, P.skin);
-      s.rect(6, armY + 6, 4, 2, P.metal);
+      tayDoc(3.5, armY + 3, 3.5);
+      tayDoc(11.5, armY + 3, 3.5);
+      s.rect(6, armY + 6, 4, 1.5, P.metal);
     }
   } else if (raise) {
     // Hai tay giơ lên trên đầu (công cụ vẽ riêng ở renderer, chồng lên đây).
-    if (dir === "left") s.rect(4, top - 1, 2, 7, P.skin);
-    else if (dir === "right") s.rect(11, top - 1, 2, 7, P.skin);
+    if (dir === "left") tayDoc(4, top - 1, 7);
+    else if (dir === "right") tayDoc(11, top - 1, 7);
     else {
-      s.rect(3, top, 2, 6, P.skin);
-      s.rect(12, top, 2, 6, P.skin);
+      tayDoc(3, top, 6);
+      tayDoc(11.5, top, 6);
     }
-  } else if (dir === "left") {
-    s.rect(4, armY + (step > 0 ? -1 : step < 0 ? 1 : 0), 2, 4, P.skin);
-  } else if (dir === "right") {
-    s.rect(11, armY + (step > 0 ? -1 : step < 0 ? 1 : 0), 2, 4, P.skin);
   } else {
-    s.rect(3, armY - (step > 0 ? 1 : 0), 2, 4, P.skin);
-    s.rect(12, armY + (step > 0 ? 1 : 0), 2, 4, P.skin);
+    const vung = step > 0 ? -0.5 : step < 0 ? 0.5 : 0;
+    if (dir === "left") tayDoc(4, armY + vung, 4);
+    else if (dir === "right") tayDoc(11, armY + vung, 4);
+    else {
+      tayDoc(3, armY - (step > 0 ? 0.5 : 0), 4);
+      tayDoc(11.5, armY + (step > 0 ? 0.5 : 0), 4);
+    }
   }
 
-  // đầu (to hơn thân — chibi)
-  s.rect(4, top + 1, 9, 6, P.skin);
-  s.hline(4, top + 6, 9, P.skinDark);
+  /* ĐẦU — to hơn thân (chibi), nhưng có đường bao TRÒN: bốn góc vát, cằm hẹp
+     hơn thái dương. Đây là nét khác lớn nhất giữa "một cái đầu" và "một khối
+     vuông màu da". */
+  const hy = top + 1;
+  const hh = 5.5;
+  /* Đầu chỉ vát NHẸ ở hai đầu. Vát mạnh (bản đầu Đợt 24) cho ra một khuôn mặt
+     DÀI: đúng là bo tròn, nhưng bo tròn kiểu quả trứng dựng đứng chứ không phải
+     kiểu chibi, và cả nhân vật hoá ra gầy nhẳng. */
+  for (let y = 0; y < hh; y += Q) {
+    const co = y / hh;
+    const w = 4.5 - Math.abs(co - 0.5) * 1.1;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, hy + y, da);
+    s.dot(8 - w, hy + y, daToi);
+    s.dot(8 + w, hy + y, daToi);
+  }
+  // má sáng chếch trên-trái, quai hàm tối
+  for (let x = -2; x <= 0; x += Q) s.dot(8 + x, hy + 1, daSang);
+  for (let x = -3; x <= 3; x += Q) s.dot(8 + x, hy + hh - Q, daToi);
 
-  // mũ lưỡi trai — nét nhận diện chính ở kích thước nhỏ
-  s.rect(3, top - 1, 11, 3, skin.cap);
-  s.hline(4, top - 1, 9, lighten(skin.cap));
-  s.hline(3, top + 1, 11, darken(skin.cap));
-  if (dir === "down") s.rect(3, top + 2, 11, 1, darken(skin.cap));
-  else if (dir === "left") s.rect(1, top + 2, 6, 1, darken(skin.cap));
-  else if (dir === "right") s.rect(10, top + 2, 6, 1, darken(skin.cap));
+  /* MŨ LƯỠI TRAI — nét nhận diện chính ở kích thước nhỏ. Chỏm mũ cong, lưỡi
+     trai chìa ra ĐÚNG PHÍA đang nhìn và dày dần về mũi. */
+  const cy = top - 0.5;
+  const ch = 2; // chỏm THẤP: chỏm cao thành cái mũ len, không ra mũ lưỡi trai
+  for (let y = 0; y < ch; y += Q) {
+    const w = 4.8 - Math.max(0, 1 - y) * 1.4;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, cy + y, skin.cap);
+  }
+  for (let x = -3; x <= 0.5; x += Q) s.dot(8 + x, cy + Q, lighten(skin.cap));
+  for (let x = -4.8; x <= 4.8; x += Q) s.dot(8 + x, cy + ch, skin.cap);
+  const luoi = (x0: number, x1: number, y: number) => {
+    for (let x = x0; x <= x1; x += Q) {
+      s.dot(x, y, darken(skin.cap));
+      s.dot(x, y + Q, shade(skin.cap, 0.62));
+      s.dot(x, y + Q * 2, shade(skin.cap, 0.45));
+    }
+  };
+  if (dir === "down") luoi(3, 13, cy + ch + Q);
+  else if (dir === "left") luoi(1.5, 7.5, cy + ch + Q);
+  else if (dir === "right") luoi(8.5, 14.5, cy + ch + Q);
+  else {
+    // nhìn từ sau: chỉ thấy gáy mũ, không thấy lưỡi trai
+    for (let x = -4.8; x <= 4.8; x += Q) s.dot(8 + x, cy + ch + Q, darken(skin.cap));
+  }
 
-  // mặt
+  /* MẶT — mắt có tròng đen và một chấm sáng, mũi một pixel, miệng một nét.
+     Ở HD thì chừng này đủ để mặt có biểu cảm mà không thành hoạt hình. */
   if (dir === "down") {
-    s.px(6, top + 4, P.outline);
-    s.px(10, top + 4, P.outline);
-    s.px(8, top + 5, P.skinDark);
-    s.px(7, top + 5, "#e08a8a");
-    s.px(10, top + 5, "#e08a8a");
+    /* Mắt phải TO: một pixel HD làm tròng thì ở cỡ thật nó biến mất, và cái mặt
+       chỉ còn hai gò má hồng với một cái miệng — đúng cảnh bản đầu Đợt 24. Hai
+       pixel tròng cộng một chấm trắng là ngưỡng đọc được. */
+    for (const k of [-2, 1]) {
+      s.dot(8 + k, hy + 2.5, P.outline);
+      s.dot(8 + k + Q, hy + 2.5, P.outline);
+      s.dot(8 + k, hy + 3, P.outline);
+      s.dot(8 + k + Q, hy + 3, P.outline);
+      s.dot(8 + k, hy + 2.5, "#ffffff");
+    }
+    s.dot(8, hy + 3.5, daToi);       // mũi
+    s.dot(8, hy + 4, daToi);
+    for (const k of [-1, -0.5, 0, 0.5]) s.dot(8 + k, hy + 4.5, "#a4604a"); // miệng
+    s.dot(8 - 0.5, hy + 5, "#c98a72");
+    s.dot(8, hy + 5, "#c98a72");
+    s.dot(6, hy + 4, "#e08a8a");     // má ửng
+    s.dot(10, hy + 4, "#e08a8a");
   } else if (dir === "up") {
-    s.rect(4, top + 3, 9, 3, skin.hair);
-  } else if (dir === "left") {
-    s.px(5, top + 4, P.outline);
-    s.rect(9, top + 3, 4, 3, skin.hair);
+    // gáy: tóc phủ kín, chỉ chừa một viền da mỏng ở hai bên
+    for (let y = 1.5; y < 5.5; y += Q)
+      for (let x = -3.5; x <= 3.5; x += Q) s.dot(8 + x, hy + y, skin.hair);
+    for (let x = -3; x <= 3; x += Q) s.dot(8 + x, hy + 1.5, lighten(skin.hair));
+    for (let x = -2.5; x <= 2.5; x += Q) s.dot(8 + x, hy + 5.5, shade(skin.hair, 0.7));
   } else {
-    s.px(11, top + 4, P.outline);
-    s.rect(4, top + 3, 4, 3, skin.hair);
+    /* `q` = phía NHÌN TỚI (−1 là trái). Tóc phủ phía SAU gáy, tức phía −q; mắt
+       và mũi nằm phía trước, tức phía +q. Viết ngược hai dấu này thì nhân vật
+       quay lưng về hướng đang đi, và nó trông như đi giật lùi. */
+    const q = dir === "left" ? -1 : 1;
+    // tóc phủ nửa sau đầu
+    for (let y = 1; y < 5; y += Q)
+      for (let x = 0.5; x <= 3.5; x += Q) s.dot(8 - q * x, hy + y, skin.hair);
+    for (let y = 1; y < 3; y += Q) s.dot(8 - q * 1.5, hy + y, lighten(skin.hair));
+    for (let x = 0.5; x <= 3; x += Q) s.dot(8 - q * x, hy + 4.5, shade(skin.hair, 0.7));
+    // mắt nghiêng: một con, tròng đen có chấm sáng
+    const ex = 8 + q * 1.5;
+    s.dot(ex, hy + 2.5, P.outline);
+    s.dot(ex, hy + 3, P.outline);
+    s.dot(ex + q * Q, hy + 2.5, P.outline);
+    s.dot(ex - q * Q, hy + 2.5, "#ffffff");
+    // sống mũi chìa ra khỏi đường bao mặt
+    s.dot(8 + q * 3.5, hy + 3.5, da);
+    s.dot(8 + q * 4, hy + 3.5, daToi);
+    s.dot(8 + q * 3, hy + 4, daToi);
+    s.dot(8 + q * 2, hy + 4.5, "#a4604a"); // miệng
+    s.dot(8 + q * 1.5, hy + 4.5, "#a4604a");
   }
   s.g.restore();
-  return outline(s).c;
+  return outline(s, P.outline, 1).c;
 }
 
 /* ---------------------------------------------------------------------------
