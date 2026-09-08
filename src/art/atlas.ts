@@ -501,6 +501,29 @@ function makeWater(frame: number): HTMLCanvasElement {
   return s.c;
 }
 
+/* ---------------------------------------------------------------------------
+   BA LOẠI NƯỚC.
+
+   Cường: "suối chảy nước chảy thác nước, sóng biển nữa — mấy cái này rất quan
+   trọng". Đúng, và bản trước sai một cách rất dễ bỏ qua: hồ cá, con sông và cả
+   mặt biển dùng CHUNG một hình gợn lăn tăn. Nghĩa là dòng sông không chảy về
+   đâu cả, và mặt biển thì đứng im — mà nước đứng im là thứ mắt người phát hiện
+   ra ngay cả khi không gọi được tên.
+
+   Nay ba loại, và lớp vẽ tự SUY ra loại nào từ hình dạng của chính vùng nước
+   (xem `loaiNuoc` trong render/draw.ts) — không thêm một ô nào vào bản lưu, và
+   bản đồ cũ không phải sửa một ký tự:
+
+     · HỒ TĨNH — gợn lăn tăn, như cũ.
+     · SUỐI / SÔNG — vệt dòng chảy kéo dài theo hướng chảy, trôi đều mỗi khung.
+     · BIỂN — sóng lừng cuộn về phía bờ, đỉnh sóng có bọt trắng.
+
+   Hồ tĩnh vẽ bằng sprite 16×16 như cũ. Suối và biển thì KHÔNG: chúng vẽ bằng
+   một mảng lặp 64×64 tô thẳng bằng `fillRect` (xem `tamNuoc` trong
+   render/draw.ts), vì vệt nước phải chảy XUYÊN QUA ranh giới ô — vẽ bằng
+   sprite thì mọi ô nước giống hệt nhau và cả con sông ra một tấm lưới ô vuông.
+--------------------------------------------------------------------------- */
+
 /** Bọt ở bờ: dải sáng 2px ở cạnh nước giáp đất. Có nó thì ao đọc ra là AO
  *  chứ không phải một mảng xanh dán lên cỏ. 2 khung để bọt nhấp nhô. */
 /**
@@ -912,6 +935,115 @@ function makeGrassProp(art: PropArt, tall: boolean): HTMLCanvasElement {
       s.px(x, y + 1, "#b8ae6a");
     }
   return s.c;
+}
+
+/**
+ * ĐÁ RÊU — tảng đá lớn ven suối, mặt trên phủ rêu.
+ *
+ * Cường: "ghềnh đá + suối + đá rong trên đá cho chân thực vô". Cái rêu mới là
+ * phần quan trọng: một tảng đá xám trơn nằm cạnh dòng nước đọc ra là một cục
+ * bê tông, còn có vạt rêu bám mặt hướng nắng thì nó đọc ra là đá NẰM ĐÓ ĐÃ LÂU.
+ * Rêu bám mặt TRÊN và rìa hướng nước, không rải đều — rêu rải đều thành ra con
+ * đá bị sơn xanh.
+ */
+function makeBoulder(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x8e11);
+  const da = art.body;
+  const toi = art.dark;
+  const sang = lighten(art.body);
+  const reu = art.accent;
+  const reuToi = shade(art.accent, 0.68);
+
+  s.shadow(8, 14, 6, 2);
+
+  /* Khối đá: một đa giác lệch chứ không phải hình tròn. Đá tròn đều đọc ra là
+     quả trứng; đá có cạnh gãy mới đọc ra là đá. */
+  const dinh: [number, number][] = [
+    [2.5, 11.5], [3, 7.5], [5.5, 4.5], [9, 3.5], [12.5, 5.5], [13.5, 9], [13, 12.5], [8, 13.5],
+  ];
+  for (let y = 3; y <= 14; y += Q) {
+    // biên trái/phải tại độ cao này, nội suy theo đa giác
+    let tr = 99;
+    let ph = -99;
+    for (let i = 0; i < dinh.length; i++) {
+      const [ax, ay] = dinh[i]!;
+      const [bx, by] = dinh[(i + 1) % dinh.length]!;
+      if ((ay <= y && by >= y) || (by <= y && ay >= y)) {
+        const t = Math.abs(by - ay) < 1e-6 ? 0 : (y - ay) / (by - ay);
+        const x = ax + (bx - ax) * t;
+        tr = Math.min(tr, x);
+        ph = Math.max(ph, x);
+      }
+    }
+    if (ph < tr) continue;
+    for (let x = tr; x <= ph; x += Q) s.dot(x, y, da);
+    s.dot(tr, y, toi);
+    s.dot(ph, y, toi);
+    if (y < 9) s.dot(tr + Q, y, sang);
+  }
+  // hai vết nứt chéo — cạnh gãy của đá
+  for (let d = 0; d < 5; d += Q) s.dot(6 + d * 0.8, 6 + d, toi);
+  for (let d = 0; d < 3.5; d += Q) s.dot(11 - d * 0.5, 8 + d, toi);
+
+  /* RÊU: bám mặt trên và đổ xuống mép trái, thành từng vạt lởm chởm. Vẽ bằng
+     những cụm nhỏ chồng nhau nên rìa vạt rêu gợn — rìa thẳng thì nó thành một
+     vệt sơn. */
+  for (let i = 0; i < 14; i++) {
+    const cx = 4.5 + rnd() * 7;
+    const cy = 4 + rnd() * 3.4;
+    const r = 0.8 + rnd() * 1.1;
+    for (let dy = -r; dy <= r; dy += Q)
+      for (let dx = -r; dx <= r; dx += Q) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (y > 9.5 || x < 3.2 || x > 13) continue;
+        s.dot(x, y, dy < -r * 0.3 ? lighten(reu) : reu);
+      }
+  }
+  // vài sợi rêu rủ xuống khỏi vạt — cái làm nó "sống"
+  for (let i = 0; i < 6; i++) {
+    const x = 4.5 + rnd() * 7.5;
+    const h = 1 + rnd() * 2;
+    for (let d = 0; d < h; d += Q) s.dot(x, 7.5 + rnd() * 1.5 + d, reuToi);
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/**
+ * THÁC NƯỚC — phần TĨNH: gờ đá ở mép trên và hai tảng đá chẻ dòng.
+ *
+ * Phần ĐỘNG (màn nước đổ) do lớp vẽ lo bằng một mảng lặp trôi nhanh xuống dưới,
+ * cùng cách với mặt sông và mặt biển. Tách hai phần vì lý do rất thực tế: vật
+ * thể trong atlas là ẢNH TĨNH, một hình một id — muốn nó chảy thì hoặc phải
+ * dựng cả một dải khung cho riêng nó, hoặc để lớp vẽ tô đè lên. Cách thứ hai
+ * vừa mượt hơn (trôi liên tục, không giật theo khung) vừa rẻ hơn.
+ */
+function makeWaterfall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const da = art.accent;
+  const daToi = shade(art.accent, 0.62);
+  // GỜ ĐÁ ở mép trên: chỗ nước bắt đầu đổ
+  for (let x = 0; x < TILE; x += Q) {
+    const cao = 2.2 + Math.sin(x * 0.9) * 0.5 + (hash2(Math.floor(x * ART), 3, 17) % 3) * 0.25;
+    for (let y = 0; y < cao; y += Q) s.dot(x, y, y > cao - 0.6 ? daToi : da);
+    s.dot(x, 0, lighten(da));
+    // mép nước tràn qua gờ: một vệt sáng ngay dưới gờ
+    s.dot(x, cao, art.body);
+  }
+  // hai tảng đá chẻ dòng, cho màn nước không phẳng lì
+  for (const [cx, cy, r] of [
+    [4.5, 8.5, 1.8],
+    [11.5, 11.5, 1.5],
+  ] as const) {
+    s.ell(cx, cy, r, r * 0.78, daToi);
+    s.ell(cx, cy - Q, r - Q, r * 0.78 - Q, da);
+    s.ell(cx - r * 0.3, cy - r * 0.35, r * 0.35, r * 0.24, lighten(da));
+    // bọt trắng dồn phía trên tảng đá — nước đập vào đá thì bắn lên
+    for (let x = -r; x <= r; x += Q) s.dot(cx + x, cy - r * 0.82, art.body);
+  }
+  return outline(s, shade(art.dark, 0.7), 1).c;
 }
 
 function makeWell(art: PropArt): HTMLCanvasElement {
@@ -1386,6 +1518,8 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "grass_tall": return makeGrassProp(art, true);
     case "bush_small": return makeBushSmall(art);
     case "bush_big": return makeBushBig(art);
+    case "waterfall": return makeWaterfall(art);
+    case "boulder": return makeBoulder(art);
     default: {
       const s = surface(TILE, TILE);
       s.rect(2, 3, 12, 11, art.dark);

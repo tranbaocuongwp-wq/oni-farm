@@ -520,6 +520,249 @@ export function createRenderer(
   let nenMua = false;
   /** Chỉ số ô NƯỚC trong vùng đã cache — vẽ trực tiếp mỗi khung. */
   let nenNuoc: number[] = [];
+
+  /* ------------------------------------------------------- LOẠI CỦA MỘT Ô NƯỚC
+
+     Cường: "suối chảy nước chảy thác nước, sóng biển nữa — mấy cái này rất quan
+     trọng". Ba loại nước, và lớp vẽ SUY RA loại từ chính hình dạng vùng nước
+     thay vì bắt content khai báo:
+
+       · BIỂN  — vùng nước nối liền với CỔNG BIỂN (`tiles.seaGate`), tức chỗ
+                 thuyền buôn đi vào. Đây là câu trả lời do content nói ra chứ
+                 không phải một mẹo đoán hình: chỗ nào thuyền vào được từ ngoài
+                 khơi thì chỗ đó LÀ ngoài khơi. Thử đoán bằng "nước chạm mép
+                 dưới bản đồ" thì hỏng ngay ở bản đồ này — nó có một viền cây
+                 bao quanh, nên mặt biển không chạm mép nào cả và cả vịnh bị
+                 nhận nhầm thành một con suối chảy ngang.
+       · SUỐI  — vùng nước HẸP theo một trục và DÀI theo trục kia. Con sông cắt
+                 ngang nông trại rộng 38 ô mà chỉ cao 3 ô, nên nó chảy ngang.
+       · HỒ    — còn lại. Hồ cá 10×5 không đủ dài để thành dòng chảy.
+
+     Vì sao suy ra chứ không khai báo: thêm loại nền mới vào `tiles.json` thì
+     `t.g === "water"` rải khắp luật chơi (đi lại, câu cá, thuyền, múc nước, bất
+     biến) đều phải học thêm tên mới — mười mấy chỗ, mỗi chỗ một cơ hội quên.
+     Còn suy ra thì bản đồ cũ không sửa một ký tự, save không thêm một byte, và
+     người vẽ bản đồ chỉ cần vẽ nước ở đúng hình dạng của nó. */
+  const NUOC_HO = 0;
+  const NUOC_NGANG = 1;
+  const NUOC_DOC = 2;
+  const NUOC_BIEN = 3;
+  /** Vùng nước hẹp hơn ngần này ô theo một trục thì mới có thể là DÒNG CHẢY. */
+  const DONG_HEP = 4;
+  /** …và phải dài gấp ngần này lần bề ngang, nếu không nó vẫn là cái hồ.
+   *  Tỉ lệ chứ không phải số ô cố định: con suối hai ô ngang chảy bảy ô là một
+   *  dòng chảy thật, mà bảy ô thì chưa tới ngưỡng nào tính bằng ô cả. */
+  const DONG_TI_LE = 3;
+
+  let loaiTiles: Tile[] | null = null;
+  let loaiNuoc: Uint8Array = new Uint8Array(0);
+
+  /* ------------------------------------------------- MẶT NƯỚC LÀ MỘT MẢNG LẶP
+
+     Vẽ nước bằng sprite 16×16 thì mọi ô nước giống hệt nhau, và cả con sông ra
+     một tấm lưới ô vuông lặp lại — nhìn thấy ngay, nhất là khi nó ĐANG CHẢY.
+     Tệ hơn: dòng chảy chỉ nhích được từng nấc bằng số khung của sprite.
+
+     Nên dùng lại đúng mẹo của lớp mưa (Đợt 23): một tấm 64×64 tô bằng
+     `fillRect`, gốc tấm trôi liên tục theo thời gian. Vệt nước dài hơn cả ô nên
+     nó chảy XUYÊN QUA ranh giới ô, và tấm neo theo TOẠ ĐỘ THẾ GIỚI (trừ đi
+     `camera.rx/ry`) nên mặt nước đứng yên khi camera trôi — nếu neo theo màn
+     hình thì cả dòng sông trượt theo bước chân người chơi. */
+  const NUOC_O = 64;
+  /** Bước lưới HD tính bằng đơn vị thế giới — cùng nghĩa với `Q` bên atlas. */
+  const Q_DOT = 1 / ART;
+  /* Bốn tông nước, lấy đúng bảng màu của atlas để mặt sông không lệch màu với
+     mặt hồ ngay chỗ chúng gặp nhau. */
+  const NUOC_NEN = "#2d6fcf";
+  const NUOC_SANG = "#3b82e0";
+  const NUOC_TOI = "#2a5fb0";
+  const NUOC_BOT = "#a8d4ff";
+  const mangNuoc = new Map<string, CanvasPattern | null>();
+
+  function tamNuoc(loai: "ho" | "ngang" | "doc" | "bien" | "thac"): CanvasPattern | null {
+    const co = mangNuoc.get(loai);
+    if (co !== undefined) return co;
+    const c = document.createElement("canvas");
+    c.width = NUOC_O * ART;
+    c.height = NUOC_O * ART;
+    const cg = c.getContext("2d");
+    if (!cg) {
+      mangNuoc.set(loai, null);
+      return null;
+    }
+    cg.imageSmoothingEnabled = false;
+    const dot = (x: number, y: number, mau: string) => {
+      cg.fillStyle = mau;
+      cg.fillRect(
+        ((Math.floor(x * ART) % (NUOC_O * ART)) + NUOC_O * ART) % (NUOC_O * ART),
+        ((Math.floor(y * ART) % (NUOC_O * ART)) + NUOC_O * ART) % (NUOC_O * ART),
+        1,
+        1,
+      );
+    };
+    cg.fillStyle = NUOC_NEN;
+    cg.fillRect(0, 0, c.width, c.height);
+
+    if (loai === "ho") {
+      /* HỒ TĨNH: gợn lăn tăn rải trên cả tấm 64×64. Bản trước vẽ hồ bằng một
+         sprite 16×16 lặp lại — ở HD thì cái lưới ô vuông ấy hiện ra rõ mồn một,
+         và mặt hồ đọc ra là gạch men chứ không phải nước. Rải trên tấm lớn thì
+         không còn chu kỳ nào đủ ngắn để mắt bắt được. */
+      for (let i = 0; i < 150; i++) {
+        const x = (hash2(i, 21, 37) % (NUOC_O * ART)) / ART;
+        const y = (hash2(i, 22, 53) % (NUOC_O * ART)) / ART;
+        const t = hash2(i, 23, 11) % 5;
+        const dai = 1 + (hash2(i, 24, 3) % 3);
+        const mau = t === 0 ? NUOC_BOT : t < 3 ? NUOC_SANG : NUOC_TOI;
+        for (let d = 0; d < dai; d += Q_DOT) dot(x + d, y, mau);
+      }
+      // vài mảng tối rộng làm đáy sâu, cho mặt hồ có chỗ nông chỗ sâu
+      for (let i = 0; i < 26; i++) {
+        const x = (hash2(i, 31, 17) % (NUOC_O * ART)) / ART;
+        const y = (hash2(i, 32, 29) % (NUOC_O * ART)) / ART;
+        const r = 1 + (hash2(i, 33, 7) % 3) * 0.5;
+        for (let dy = -r; dy <= r; dy += Q_DOT)
+          for (let dx = -r; dx <= r; dx += Q_DOT)
+            if (dx * dx + dy * dy <= r * r) dot(x + dx, y + dy, NUOC_TOI);
+      }
+    } else if (loai === "bien") {
+      /* SÓNG LỪNG: bốn ngọn trong một tấm, mỗi ngọn là một đường sin dài 64 ô
+         nên không thấy chỗ nối. Chân sóng tối, thân sáng, đỉnh có bọt trắng
+         ĐỨT QUÃNG — bọt liền mạch thì thành một sợi chỉ trắng kẻ ngang biển. */
+      for (let k = 0; k < 4; k++) {
+        const y0 = k * (NUOC_O / 4);
+        for (let x = 0; x < NUOC_O; x += Q_DOT) {
+          const cong =
+            Math.sin((x / NUOC_O) * Math.PI * 2 + k * 1.7) * 2.2 +
+            Math.sin((x / NUOC_O) * Math.PI * 6 + k) * 0.8;
+          const y = y0 + cong;
+          for (let d = 0.5; d <= 2; d += Q_DOT) dot(x, y + d, NUOC_TOI);
+          dot(x, y, NUOC_SANG);
+          dot(x, y + Q_DOT, NUOC_SANG);
+          if ((Math.floor(x * ART) + k * 5) % 9 < 5) dot(x, y - Q_DOT, NUOC_BOT);
+        }
+      }
+    } else if (loai === "thac") {
+      /* MÀN NƯỚC ĐỔ: vệt dọc DÀY và SÁNG, dày hơn hẳn dòng chảy — nước rơi thì
+         trắng xoá chứ không còn trong. Vệt chạy suốt chiều cao tấm nên khi trôi
+         xuống nó liền một mạch, không thấy đầu cũng không thấy đuôi. */
+      for (let x = 0; x < NUOC_O; x += Q_DOT) {
+        const t = hash2(Math.floor(x * ART), 5, 23) % 5;
+        const mau = t < 2 ? NUOC_BOT : t < 4 ? "#d8ecff" : NUOC_SANG;
+        for (let y = 0; y < NUOC_O; y += Q_DOT) dot(x, y, mau);
+      }
+      // bọt vằn ngang, trôi cùng màn nước nên đọc ra được TỐC ĐỘ rơi
+      for (let i = 0; i < 26; i++) {
+        const y = (hash2(i, 9, 41) % (NUOC_O * ART)) / ART;
+        const x0 = (hash2(i, 11, 13) % (NUOC_O * ART)) / ART;
+        const dai = 2 + (hash2(i, 12, 7) % 5);
+        for (let d = 0; d < dai; d += Q_DOT) {
+          dot(x0 + d, y, "#ffffff");
+          dot(x0 + d, y + Q_DOT, NUOC_SANG);
+        }
+      }
+    } else {
+      /* DÒNG CHẢY: vệt dài mảnh theo hướng chảy, làn nào tốc nấy. Vệt phải DÀI
+         hơn một ô — chấm ngắn trôi ngang đọc ra là rác trôi, vệt dài mới đọc ra
+         là cả khối nước đang trượt. */
+      const doc = loai === "doc";
+      for (let i = 0; i < 46; i++) {
+        const lan = (hash2(i, 1, 31) % (NUOC_O * ART)) / ART;
+        const batDau = (hash2(i, 2, 57) % (NUOC_O * ART)) / ART;
+        const dai = 5 + (hash2(i, 3, 13) % 22);
+        const t = hash2(i, 4, 7) % 3;
+        const mau = t === 0 ? NUOC_BOT : t === 1 ? NUOC_SANG : NUOC_TOI;
+        for (let d = 0; d < dai; d += Q_DOT) {
+          // hai đầu vệt mảnh lại: vệt cụt hai đầu trông như bị cắt ngang
+          const mep = d < 1 || d > dai - 1;
+          const doc0 = batDau + d;
+          if (doc) {
+            dot(lan, doc0, mau);
+            if (!mep) dot(lan + Q_DOT, doc0, mau);
+          } else {
+            dot(doc0, lan, mau);
+            if (!mep) dot(doc0, lan + Q_DOT, mau);
+          }
+        }
+      }
+    }
+    const pat = g.createPattern(c, "repeat");
+    mangNuoc.set(loai, pat);
+    return pat;
+  }
+
+  /** Bảng loại nước cho CẢ bản đồ, dựng lại khi mảng ô đổi (copy-on-write). */
+  function bangLoaiNuoc(s: GameState, content: Content): Uint8Array {
+    if (loaiTiles === s.tiles && loaiNuoc.length === s.w * s.h) return loaiNuoc;
+    const n = s.w * s.h;
+    const out = new Uint8Array(n);
+    const laNuoc = (i: number) => s.tiles[i]?.g === "water";
+
+    /* BIỂN: loang từ CỔNG BIỂN ra. Mọi ô nước nối liền với chỗ thuyền buôn đi
+       vào đều là biển. Hàng đợi là một mảng chỉ số, không đệ quy — vịnh có thể
+       rộng vài trăm ô và đệ quy sẽ tràn ngăn xếp. */
+    const cong = content.tiles.seaGate;
+    if (cong && cong.map === s.mapId) {
+      const goc = cong.y * s.w + cong.x;
+      if (cong.x >= 0 && cong.x < s.w && cong.y >= 0 && cong.y < s.h && laNuoc(goc)) {
+        const hang: number[] = [goc];
+        out[goc] = NUOC_BIEN;
+        for (let h = 0; h < hang.length; h++) {
+          const i = hang[h]!;
+          const x = i % s.w;
+          const y = (i - x) / s.w;
+          const ke = [
+            x > 0 ? i - 1 : -1,
+            x < s.w - 1 ? i + 1 : -1,
+            y > 0 ? i - s.w : -1,
+            y < s.h - 1 ? i + s.w : -1,
+          ];
+          for (const j of ke) {
+            if (j < 0 || out[j] === NUOC_BIEN || !laNuoc(j)) continue;
+            out[j] = NUOC_BIEN;
+            hang.push(j);
+          }
+        }
+      }
+    }
+
+    // độ dài dải nước liên tục qua mỗi ô, theo hàng và theo cột
+    const ngang = new Uint16Array(n);
+    const doc = new Uint16Array(n);
+    for (let y = 0; y < s.h; y++) {
+      let x = 0;
+      while (x < s.w) {
+        if (!laNuoc(y * s.w + x)) { x++; continue; }
+        let e = x;
+        while (e < s.w && laNuoc(y * s.w + e)) e++;
+        for (let k = x; k < e; k++) ngang[y * s.w + k] = e - x;
+        x = e;
+      }
+    }
+    for (let x = 0; x < s.w; x++) {
+      let y = 0;
+      while (y < s.h) {
+        if (!laNuoc(y * s.w + x)) { y++; continue; }
+        let e = y;
+        while (e < s.h && laNuoc(e * s.w + x)) e++;
+        for (let k = y; k < e; k++) doc[k * s.w + x] = e - y;
+        y = e;
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      if (!laNuoc(i) || out[i] === NUOC_BIEN) continue;
+      const h = ngang[i]!;
+      const v = doc[i]!;
+      if (v <= DONG_HEP && h >= v * DONG_TI_LE) out[i] = NUOC_NGANG;
+      else if (h <= DONG_HEP && v >= h * DONG_TI_LE) out[i] = NUOC_DOC;
+      else out[i] = NUOC_HO;
+    }
+
+    loaiTiles = s.tiles;
+    loaiNuoc = out;
+    return out;
+  }
   /** Chừa mấy ô quanh khung nhìn để camera trôi một quãng mà chưa phải dựng lại. */
   const NEN_LE = 3;
 
@@ -634,6 +877,7 @@ export function createRenderer(
     x1: number,
     y1: number,
     waterFrame: number,
+    timeSec: number,
     mua: boolean,
   ) {
     const { rx, ry } = camera;
@@ -651,14 +895,64 @@ export function createRenderer(
     put(nen, nenX0 * TILE - rx, nenY0 * TILE - ry);
 
     // MẶT NƯỚC và BỌT SÓNG: động mỗi khung nên nằm ngoài cache.
-    const anhNuoc = atlas.water[waterFrame % atlas.water.length]!;
+    const loai = bangLoaiNuoc(s, content);
+    /* Gốc tấm trôi theo thời gian VÀ trừ đi vị trí camera: trừ camera thì mặt
+       nước neo vào thế giới, không trừ thì cả dòng sông trượt theo bước chân
+       người chơi. Dòng chảy đi chậm hơn sóng — sóng lừng thì cuộn, dòng chảy
+       thì trượt đều. */
+    const troi = (v: number) => ((v % NUOC_O) + NUOC_O) % NUOC_O;
+    const dat = (p: CanvasPattern | null, dx: number, dy: number) => {
+      if (!p) return false;
+      p.setTransform(new DOMMatrix().translateSelf(dx, dy).scaleSelf(Q_DOT, Q_DOT));
+      return true;
+    };
+    const pHo = tamNuoc("ho");
+    const pNgang = tamNuoc("ngang");
+    const pDoc = tamNuoc("doc");
+    const pBien = tamNuoc("bien");
+    const pThac = tamNuoc("thac");
+    // hồ tĩnh cũng trôi, nhưng RẤT chậm — mặt hồ đứng chết mới là thứ sai
+    dat(pHo, troi(-rx + timeSec * 1.2), troi(-ry + timeSec * 0.7));
+    dat(pNgang, troi(-rx + timeSec * 9), troi(-ry));
+    dat(pDoc, troi(-rx), troi(-ry + timeSec * 9));
+    dat(pBien, troi(-rx), troi(-ry - timeSec * 5));
+    // thác đổ NHANH hơn hẳn mọi dòng chảy — đó là cả cái ý của một cái thác
+    dat(pThac, troi(-rx), troi(-ry + timeSec * 64));
     for (const i of nenNuoc) {
       const x = i % s.w;
       const y = (i - x) / s.w;
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       const px = x * TILE - rx;
       const py = y * TILE - ry;
-      put(anhNuoc, px, py);
+      const k = loai[i];
+      const thac = s.tiles[i]?.prop === "waterfall";
+      const pat = thac
+        ? pThac
+        : k === NUOC_BIEN
+          ? pBien
+          : k === NUOC_NGANG
+            ? pNgang
+            : k === NUOC_DOC
+              ? pDoc
+              : pHo;
+      if (pat) {
+        g.fillStyle = pat;
+        g.fillRect(px, py, TILE, TILE);
+      }
+      /* CHÂN THÁC: ô ngay dưới một cái thác được đắp thêm một vòng bọt trắng
+         xoáy. Không có nó thì màn nước dừng đột ngột ở ranh giới ô, và cái thác
+         đọc ra là một tấm rèm trắng chứ không phải nước đang rơi xuống nước. */
+      if (!thac && y > 0 && s.tiles[i - s.w]?.prop === "waterfall") {
+        const pha = Math.floor(timeSec * 6);
+        g.fillStyle = "#e8f4ff";
+        for (let bx = 0; bx < TILE; bx += 2) {
+          const h = 1 + ((hash2(x * 7 + bx, pha, 19) % 3) as number);
+          g.fillRect(px + bx, py, 1.5, h * 0.6);
+        }
+        g.fillStyle = "#a8d4ff";
+        for (let bx = 1; bx < TILE; bx += 3)
+          g.fillRect(px + bx, py + 1.5 + (hash2(x + bx, pha, 5) % 2) * 0.5, 1, 0.5);
+      }
       // Bốn cạnh đọc thẳng, không dựng mảng bộ đôi cho MỖI ô nước MỖI khung.
       SIDES_TMP[0]![1] = at(s, x, y - 1);
       SIDES_TMP[1]![1] = at(s, x, y + 1);
@@ -1653,7 +1947,7 @@ export function createRenderer(
     const gio = opts.reduceMotion ? 0 : opts.weather.wind;
     const waterFrame = Math.max(0, Math.floor(timeSec * (4 + 4 * gio)));
     windX = opts.weather.outdoor ? gio * 40 : 0;
-    drawGround(s, content, x0, y0, x1, y1, waterFrame, opts.weather.outdoor && opts.weather.rain);
+    drawGround(s, content, x0, y0, x1, y1, waterFrame, timeSec, opts.weather.outdoor && opts.weather.rain);
 
     /* LÁ BAY: gió từ 0,5 trở lên, mỗi 0,6 giây thả hai chiếc lá từ MỘT tán cây
        trong khung hình (chọn bằng băm nhịp, nên cùng cảnh cùng lúc là cùng cây).

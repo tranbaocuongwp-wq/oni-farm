@@ -434,6 +434,37 @@
         "dark": "#2b2b31",
         "accent": "#c9a227"
       }
+    },
+    {
+      "id": "waterfall",
+      "name": "Thác nước",
+      "solid": false,
+      "art": {
+        "body": "#e8f4ff",
+        "dark": "#5aa0f0",
+        "accent": "#8a8f98"
+      },
+      "$comment": "Không SOLID: ô nước vốn đã chặn người đi bộ rồi, còn con cá thì bơi qua được — thác chỉ là một màn nước, không phải một bức tường. Đặt solid ở đây là chia đôi cái hồ và đàn cá không tới được chỗ rắc cám."
+    },
+    {
+      "id": "boulder",
+      "name": "Đá rêu",
+      "$comment": "Tảng đá lớn phủ rêu. KHÔNG portable và cần cuốc chim đập tám nhát: nó là địa hình, không phải hòn đá nhặt được — nhặt được thì cả ghềnh đá biến mất trong một buổi chiều.",
+      "solid": true,
+      "hits": 8,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 4,
+          "max": 7
+        }
+      ],
+      "art": {
+        "body": "#7e858e",
+        "dark": "#565d66",
+        "accent": "#5f9e4a"
+      }
     }
   ]
 }

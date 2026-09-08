@@ -142,6 +142,14 @@
     "R": {
       "ground": "water",
       "prop": "roadbridge"
+    },
+    "V": {
+      "ground": "water",
+      "prop": "waterfall"
+    },
+    "v": {
+      "ground": "grass",
+      "prop": "boulder"
     }
   },
   "spawn": {
