@@ -3048,12 +3048,13 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
      vuông màu da". */
   const hy = top + 1;
   const hh = 5.5;
+  /** Nửa bề ngang của đầu tại độ cao `y` tính từ đỉnh đầu. */
+  const hw = (y: number) => 4.5 - Math.abs(y / hh - 0.5) * 1.1;
   /* Đầu chỉ vát NHẸ ở hai đầu. Vát mạnh (bản đầu Đợt 24) cho ra một khuôn mặt
      DÀI: đúng là bo tròn, nhưng bo tròn kiểu quả trứng dựng đứng chứ không phải
      kiểu chibi, và cả nhân vật hoá ra gầy nhẳng. */
   for (let y = 0; y < hh; y += Q) {
-    const co = y / hh;
-    const w = 4.5 - Math.abs(co - 0.5) * 1.1;
+    const w = hw(y);
     for (let x = -w; x <= w; x += Q) s.dot(8 + x, hy + y, da);
     s.dot(8 - w, hy + y, daToi);
     s.dot(8 + w, hy + y, daToi);
@@ -3108,21 +3109,35 @@ function makePlayer(dir: PlayerDir, frame: number, skin: CharSkin = DEFAULT_SKIN
     s.dot(6, hy + 4, "#e08a8a");     // má ửng
     s.dot(10, hy + 4, "#e08a8a");
   } else if (dir === "up") {
-    // gáy: tóc phủ kín, chỉ chừa một viền da mỏng ở hai bên
-    for (let y = 1.5; y < 5.5; y += Q)
-      for (let x = -3.5; x <= 3.5; x += Q) s.dot(8 + x, hy + y, skin.hair);
-    for (let x = -3; x <= 3; x += Q) s.dot(8 + x, hy + 1.5, lighten(skin.hair));
-    for (let x = -2.5; x <= 2.5; x += Q) s.dot(8 + x, hy + 5.5, shade(skin.hair, 0.7));
+    /* GÁY: tóc phủ kín, nhưng phải ÔM THEO đường bao của cái đầu. Vẽ nó bằng
+       một hình chữ nhật (bản đầu) thì cái đầu đang tròn bỗng vuông lại ở phía
+       sau, và nhìn từ sau lưng nhân vật đội một cái hộp đen. */
+    for (let y = 0.5; y < hh; y += Q) {
+      const w = hw(y) - Q;
+      for (let x = -w; x <= w; x += Q) s.dot(8 + x, hy + y, skin.hair);
+      s.dot(8 - w, hy + y, shade(skin.hair, 0.72));
+      s.dot(8 + w, hy + y, shade(skin.hair, 0.72));
+      if (y < 1.5) s.dot(8 - w * 0.4, hy + y, lighten(skin.hair));
+    }
+    // mấy lọn tóc lởm chởm ở gáy — đường chân tóc thẳng băng trông như cái mũ
+    for (const k of [-2, -0.5, 1, 2.5]) s.dot(8 + k, hy + hh, shade(skin.hair, 0.72));
   } else {
     /* `q` = phía NHÌN TỚI (−1 là trái). Tóc phủ phía SAU gáy, tức phía −q; mắt
        và mũi nằm phía trước, tức phía +q. Viết ngược hai dấu này thì nhân vật
        quay lưng về hướng đang đi, và nó trông như đi giật lùi. */
     const q = dir === "left" ? -1 : 1;
-    // tóc phủ nửa sau đầu
-    for (let y = 1; y < 5; y += Q)
-      for (let x = 0.5; x <= 3.5; x += Q) s.dot(8 - q * x, hy + y, skin.hair);
-    for (let y = 1; y < 3; y += Q) s.dot(8 - q * 1.5, hy + y, lighten(skin.hair));
-    for (let x = 0.5; x <= 3; x += Q) s.dot(8 - q * x, hy + 4.5, shade(skin.hair, 0.7));
+    /* Tóc phủ nửa sau đầu, ÔM theo đường bao và có mái xoà xuống trán. Bản đầu
+       là một hình chữ nhật đặc — nhìn nghiêng thì nửa sau cái đầu thành một
+       khối đen vuông, và mặt người biến mất một nửa. */
+    for (let y = 0.5; y < hh - Q; y += Q) {
+      const w = hw(y) - Q;
+      // mép trước của tóc: cao thì che gần hết trán, thấp thì lùi về mang tai
+      const truoc = y < 1.6 ? -w * 0.5 : y < 2.6 ? w * 0.1 : w * 0.55;
+      for (let x = truoc; x <= w; x += Q) s.dot(8 - q * x, hy + y, skin.hair);
+      s.dot(8 - q * w, hy + y, shade(skin.hair, 0.72));
+      if (y < 2) s.dot(8 - q * (w - 0.5), hy + y, lighten(skin.hair));
+    }
+    for (const k of [1.5, 2.5, 3.5]) s.dot(8 - q * k, hy + hh - Q, shade(skin.hair, 0.72));
     // mắt nghiêng: một con, tròng đen có chấm sáng
     const ex = 8 + q * 1.5;
     s.dot(ex, hy + 2.5, P.outline);
@@ -4457,24 +4472,6 @@ const ANIMAL_FRAMES = 3;
    lệch: mọi chi tiết tự đối xứng theo, không phải nhớ đảo dấu ở mười chỗ.
 --------------------------------------------------------------------------- */
 
-/** Khối bầu ba tông: vành tối ôm mép, thân giữa, vệt nắng chếch trên-trái. */
-function khoi(
-  s: Surface,
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-  giua: string,
-  sang: string,
-  toi: string,
-): void {
-  /* Vành tối chỉ dày MỘT pixel HD. Bản cũ dày 0,8 đơn vị cũ — ở HD thành ra
-     một cái viền dày gần hai pixel bọc quanh mọi khối, và cả con vật trông như
-     được cắt dán từ bìa cứng. */
-  s.ell(cx, cy, rx, ry, toi);
-  s.ell(cx, cy - Q, Math.max(0.6, rx - Q), Math.max(0.6, ry - Q), giua);
-  s.ell(cx - rx * 0.28, cy - ry * 0.46, Math.max(0.5, rx * 0.44), Math.max(0.5, ry * 0.3), sang);
-}
 
 /* ---------------------------------------------------------------------------
    TƯ THẾ CỦA CON VẬT.
@@ -4540,6 +4537,143 @@ const TU_THE: Record<AnimalPose, PoseRig> = {
   play:    { dauX: 0.2,  dauY: -0.5, thanY: -2,  nghieng: -1.2, chan: 0.85, nham: false, taiVenh: 0.6, net: "bui" },
 };
 
+/* ============================================================================
+   VẬT NUÔI — vẽ theo TỪNG LOÀI.
+
+   Cường: "vẽ lại hết bộ ảnh tất cả động vật đi cho chân thực vô, sai nhìn kì
+   quá, tất cả các con nhé, rõ nét".
+
+   Câu ấy đúng, và chỗ sai nằm ở kiến trúc chứ không ở màu: bản trước dựng MỌI
+   con bốn chân bằng cùng một quả trứng, rồi phân biệt chúng bằng vài cờ rời rạc
+   (`patch` cho bò, `fluff` cho cừu, `snout` cho heo). Nhưng con bò khác con heo
+   ở BÓNG DÁNG chứ không ở đốm: bò lưng thẳng ngực sâu chân cao, heo thì thùng
+   tròn bụng sệ chân ngắn, cừu là một đám mây có bốn que, chó thì ngực nở bụng
+   thóp. Bốn bóng dáng ấy mà gộp làm một quả trứng thì tô màu gì cũng vẫn là bốn
+   quả trứng khác màu.
+
+   Nay mỗi loài có một HỒ SƠ HÌNH (`HINH_LOAI`) nói rõ: đường lưng và đường bụng
+   đi thế nào, cổ dài bao nhiêu, mõm kiểu gì, tai kiểu gì, đuôi kiểu gì, chân
+   cao và dày bao nhiêu. Bộ vẽ đọc hồ sơ ấy; thêm loài mới là thêm một dòng.
+
+   Vẫn giữ nguyên hai thứ của lần trước: mười lăm TƯ THẾ (bảng `TU_THE`) và bộ
+   hình dựng LƯỜI theo khoá `defId|dir|frame|pose`.
+============================================================================ */
+
+/** Tên loài cho bộ vẽ. Suy từ `art.species`, thiếu thì đoán từ các cờ cũ. */
+type GiongVat = "bo" | "de" | "heo" | "cuu" | "cho" | "ga" | "vit" | "ca" | "chuot" | "soc";
+
+interface HinhLoai {
+  /** hệ số ĐƯỜNG LƯNG theo dọc thân: u=0 mông, u=1 vai. */
+  lung: (u: number) => number;
+  /** hệ số ĐƯỜNG BỤNG theo dọc thân. */
+  bung: (u: number) => number;
+  /** lông xù phủ ngoài thân (cừu) */
+  xu: boolean;
+  /** chiều dài cổ, tính theo bán kính đầu; 0 = đầu dính thẳng vào vai */
+  co: number;
+  /** bán kính đầu, theo nửa chiều cao thân */
+  dau: number;
+  /** đầu ngẩng cao hơn vai bao nhiêu, theo bán kính đầu */
+  dauCao: number;
+  mom: "bet" | "dai" | "dia" | "nhon" | "khong";
+  tai: "cup" | "venh" | "dai" | "tron" | "khong";
+  duoi: "chum" | "xoan" | "xu" | "ngan" | "quat" | "khong";
+  /** bề ngang một cái chân, đơn vị cũ */
+  chanDay: number;
+  /** chiều dài chân, đơn vị cũ */
+  chanCao: number;
+  /** vệt bụng sáng */
+  vetBung: boolean;
+}
+
+/* Đường lưng và đường bụng là chỗ khác nhau LỚN NHẤT giữa các loài, nên chúng
+   là hàm chứ không phải hằng số: `u` chạy từ mông (0) tới vai (1). */
+const HINH_LOAI: Record<GiongVat, HinhLoai> = {
+  // BÒ: lưng thẳng, vai cao hơn mông một chút, ngực sâu, chân cao.
+  bo: {
+    lung: (u) => 0.92 + u * 0.1,
+    bung: (u) => 0.86 + Math.sin(u * Math.PI) * 0.08,
+    xu: false, co: 0.8, dau: 0.46, dauCao: 0.34,
+    mom: "bet", tai: "cup", duoi: "chum", chanDay: 1.7, chanCao: 4, vetBung: true,
+  },
+  // DÊ: nhỏ hơn bò, lưng thẳng, bụng tròn, cổ dựng cao, chân mảnh.
+  de: {
+    lung: (u) => 0.88 + u * 0.06,
+    bung: (u) => 0.9 + Math.sin(u * Math.PI) * 0.12,
+    xu: false, co: 0.95, dau: 0.5, dauCao: 0.8,
+    mom: "nhon", tai: "dai", duoi: "ngan", chanDay: 1.3, chanCao: 3.6, vetBung: true,
+  },
+  // HEO: thùng tròn, lưng cong lên, bụng SỆ xuống, gần như không cổ, chân ngắn.
+  heo: {
+    lung: (u) => 0.78 + Math.sin(u * Math.PI) * 0.3,
+    bung: (u) => 1.02 + Math.sin(u * Math.PI) * 0.1,
+    xu: false, co: 0.15, dau: 0.55, dauCao: 0.1,
+    mom: "dia", tai: "venh", duoi: "xoan", chanDay: 1.6, chanCao: 2.2, vetBung: false,
+  },
+  // CỪU: cả thân là một đám lông; đầu nhỏ và tối, chân que.
+  cuu: {
+    lung: (u) => 0.95 + Math.sin(u * Math.PI) * 0.12,
+    bung: (u) => 0.92 + Math.sin(u * Math.PI) * 0.06,
+    xu: true, co: 0.45, dau: 0.42, dauCao: 0.5,
+    mom: "bet", tai: "dai", duoi: "ngan", chanDay: 1.2, chanCao: 3.2, vetBung: false,
+  },
+  // CHÓ: ngực nở, bụng THÓP, mông tròn, cổ vươn, chân dài.
+  cho: {
+    lung: (u) => 0.82 + u * 0.16,
+    bung: (u) => 0.95 - Math.sin(Math.max(0, u - 0.1) * Math.PI * 1.15) * 0.34,
+    xu: false, co: 0.8, dau: 0.5, dauCao: 0.5,
+    mom: "dai", tai: "venh", duoi: "xu", chanDay: 1.3, chanCao: 3.8, vetBung: true,
+  },
+  // GÀ: thân quả trứng dựng, ngực nhô, đuôi quạt dựng, cổ ngắn, chân que.
+  ga: {
+    lung: (u) => 0.9 + Math.sin(u * Math.PI) * 0.16,
+    bung: (u) => 0.95 + Math.sin(u * Math.PI) * 0.14,
+    xu: false, co: 0.85, dau: 0.46, dauCao: 1.15,
+    mom: "nhon", tai: "khong", duoi: "quat", chanDay: 0.9, chanCao: 2.4, vetBung: true,
+  },
+  // VỊT: thân THUYỀN nằm ngang, ngực thấp, cổ cong, mỏ bẹt.
+  vit: {
+    lung: (u) => 0.82 + Math.sin(u * Math.PI) * 0.14,
+    bung: (u) => 1.0 + Math.sin(u * Math.PI) * 0.06,
+    xu: false, co: 1.15, dau: 0.42, dauCao: 1.05,
+    mom: "bet", tai: "khong", duoi: "ngan", chanDay: 0.9, chanCao: 1.6, vetBung: true,
+  },
+  ca: {
+    lung: (u) => 0.9 + Math.sin(u * Math.PI) * 0.1,
+    bung: (u) => 0.9 + Math.sin(u * Math.PI) * 0.1,
+    xu: false, co: 0, dau: 0, dauCao: 0,
+    mom: "khong", tai: "khong", duoi: "khong", chanDay: 0, chanCao: 0, vetBung: true,
+  },
+  // CHUỘT: thân thấp dài, mõm nhọn, tai tròn to, đuôi trần.
+  chuot: {
+    lung: (u) => 0.85 + Math.sin(u * Math.PI) * 0.12,
+    bung: () => 0.95,
+    xu: false, co: 0.2, dau: 0.6, dauCao: 0.15,
+    mom: "nhon", tai: "tron", duoi: "ngan", chanDay: 0.9, chanCao: 1.4, vetBung: true,
+  },
+  // SÓC: ngồi chồm hỗm, đuôi XÙ dựng cao — nét nhận ra từ xa.
+  soc: {
+    lung: (u) => 0.8 + Math.sin(u * Math.PI) * 0.2,
+    bung: () => 0.92,
+    xu: false, co: 0.35, dau: 0.6, dauCao: 0.45,
+    mom: "nhon", tai: "tron", duoi: "xu", chanDay: 0.9, chanCao: 1.4, vetBung: true,
+  },
+};
+
+/** Đoán loài từ các cờ cũ, để content pack chưa khai `species` vẫn ra đúng con. */
+function giongCua(art: AnimalArt): GiongVat {
+  const kh = art.species;
+  if (kh && kh in HINH_LOAI) return kh as GiongVat;
+  if (art.form === "fish") return "ca";
+  if (art.form === "bird") return art.crest ? "ga" : "vit";
+  if (art.form === "critter") return (art.w ?? 6) >= 7 ? "soc" : "chuot";
+  if (art.fluff) return "cuu";
+  if (art.tailUp) return "cho";
+  if ((art.snout ?? 0) >= 0.9) return "heo";
+  if ((art.horn ?? 0) >= 2) return "de";
+  return "bo";
+}
+
 function makeAnimal(
   art: AnimalArt,
   dir: PlayerDir,
@@ -4549,276 +4683,462 @@ function makeAnimal(
   const s = surface(TILE, TILE);
   const side = dir === "left" || dir === "right";
   const flip = dir === "left";
+  const giong = giongCua(art);
+  const L = HINH_LOAI[giong];
+
   const giua = art.body;
   const sang = lighten(art.body);
-  /* HAI tông tối, hai vai khác nhau — trộn chúng làm một là lỗi của bản trước:
+  /* HAI tông tối, hai vai khác nhau — trộn chúng làm một là lỗi của bản đầu:
      · `vien` là MẶT TỐI của chính màu thân, dùng để dựng khối. Con bò trắng có
-       mặt tối màu XÁM, không phải màu đen; lấy `bodyDark` (#2e2a26, màu đốm)
-       làm vành khối thì cả con bò viền đen kịt và đọc ra một cái sọ.
+       mặt tối màu XÁM; lấy `bodyDark` (màu đốm) làm vành khối thì cả con bò
+       viền đen kịt và đọc ra một cái sọ.
      · `toi` = `bodyDark` là màu VẬT LIỆU KHÁC: đốm, tai, đuôi, móng. */
-  const vien = shade(art.body, 0.7);
+  const vien = shade(art.body, 0.72);
   const toi = art.bodyDark;
-  /* Tông của phần Ở XA: tối hơn hẳn thân. Đây là mẹo rẻ nhất để có chiều sâu —
-     mắt đọc "cái này ở phía bên kia con vật" mà không cần thêm một pixel nào. */
-  const xa = shade(vien, 0.78);
+  /** Tông của phần Ở XA — mẹo rẻ nhất để có chiều sâu. */
+  const xa = shade(vien, 0.62);
 
-  /* Cá luôn đang bơi: mọi tư thế trên cạn quy về `walk` cho nó. */
-  const rig = TU_THE[art.form === "fish" ? "walk" : pose] ?? TU_THE.walk;
-  const nam = pose === "sleep" && art.form !== "fish";
-  const coRo = pose === "huddle" && art.form !== "fish";
-  /* Nhún theo khung. Khung 2 là lúc cả bốn chân chạm đất nên thân hạ xuống 1px;
-     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. Co ro thì hạ luôn.
-     Tư thế đứng yên nhún theo NHỊP THỞ: nửa pixel, chỉ ở khung giữa. */
-  const bob = frame === 2 || coRo ? 1 : 0;
+  const rig = TU_THE[giong === "ca" ? "walk" : pose] ?? TU_THE.walk;
+  const nam = pose === "sleep" && giong !== "ca";
+  const coRo = pose === "huddle" && giong !== "ca";
+  const bob = frame === 2 || coRo ? Q : 0;
   const tho = !nam && (pose === "idle" || pose === "look") && frame === 1 ? Q : 0;
 
-  const W = Math.max(5, Math.min(14, Math.round(art.w)));
-  const H = Math.max(4, Math.min(11, Math.round(art.h)));
-  const DAT = TILE - 1; // hàng pixel chạm đất
+  const W = Math.max(5, Math.min(14, art.w));
+  const H = Math.max(4, Math.min(11, art.h));
+  const DAT = TILE - 1.5; // hàng chạm đất
 
-  if (art.form === "fish") ve_ca();
-  else if (art.form === "bird") ve_chim(side);
-  else if (art.form === "critter") ve_thu_nho(side);
-  else ve_bon_chan(side);
+  if (giong === "ca") ve_ca();
+  else ve_thu(side);
 
   const done = outline(s, P.outline, 1);
   return flip ? latNgang(done.c, TILE, TILE) : done.c;
 
-  /* ---------------------------------------------------------------- bốn chân
-     Bò, dê, lợn, cừu, chó. Nhìn NGANG là dáng đọc được nhiều nhất nên nó được
-     đầu tư nhất; nhìn thẳng/nhìn sau thu về một khối hẹp hơn với hai chân. */
-  function ve_bon_chan(ngang: boolean) {
-    const chan = nam ? 0 : Math.max(0, Math.round(3 * rig.chan));
-    const w = ngang ? W : Math.max(4, Math.round(W * 0.66));
-    const h = nam ? Math.max(3, H - 2) : H;
-    const day = ngang ? 2 : 1; // bề ngang một cái chân
-    const bot = DAT - chan + bob;
+  /* --------------------------------------------------------------------------
+     MỘT CON THÚ — dùng chung cho cả bốn chân, chim và thú nhỏ.
+
+     Gộp làm một là chủ ý: chúng khác nhau ở HỒ SƠ HÌNH, không ở cách dựng. Ba
+     hàm riêng như bản trước thì mỗi lần sửa một nết chung (tư thế, mắt, bóng
+     đổ) phải sửa ba chỗ, và chúng đã trôi khỏi nhau đúng như thế.
+  -------------------------------------------------------------------------- */
+  function ve_thu(ngang: boolean) {
+    const gap = nam ? 0.25 : 1;
+    const chanCao = Math.max(0, L.chanCao * rig.chan * gap);
+    let w = ngang ? W : Math.max(4, W * 0.62);
+    const h = nam ? Math.max(3, H - 1.5) : H;
+    const bot = DAT - chanCao + bob;
     const cy = bot - h / 2 + rig.thanY + tho;
-    const cx = ngang ? 7.4 : 8;
+    let ry = h / 2;
+
+    /* CĂN CHO VỪA Ô. Cái đầu chìa ra TRƯỚC thân, nên bề ngang thật của con vật
+       là thân cộng phần đầu thò ra. Bản đầu đặt tâm thân ở giữa ô rồi mới gắn
+       đầu vào — kết quả là cái đầu con bò chạy ra ngoài mép canvas và bị cắt
+       cụt, nên con bò trông như một cái thân không có đầu.
+
+       Nay tính phần thò ra TRƯỚC, rồi vừa dịch tâm vừa (nếu vẫn không đủ) thu
+       thân lại. Thu thân chứ không thu đầu: con vật mất một pixel bề dài thì
+       không ai để ý, mất cái đầu thì ai cũng để ý. */
+    const hsTho = Math.max(1.9, ry * 2 * L.dau);
+    const thoRa = ngang ? hsTho * (0.35 + L.co * 0.45) + hsTho * 0.9 - w * 0.1 : 0;
+    const rong = w + Math.max(0, thoRa);
+    if (rong > TILE - 1.5) {
+      const co2 = (TILE - 1.5 - Math.max(0, thoRa)) / w;
+      w *= Math.max(0.45, co2);
+      ry *= Math.max(0.72, Math.sqrt(Math.max(0.45, co2)));
+    }
     const rx = w / 2;
-    const ry = h / 2;
+    // mép trái của cả con vật, rồi suy ra tâm thân
+    const cx = ngang ? Math.max(rx + 0.5, (TILE - (w + Math.max(0, thoRa))) / 2 + rx) : 8;
     /* NGHIÊNG: mông cao hơn vai bao nhiêu. Dương là chổng mông (ngồi, gãi), âm
-       là chúi đầu (vươn vai, chồm, gặm cỏ). Đây là thứ làm nên phần lớn mười
-       một tư thế mới mà không phải vẽ thêm một hình nào. */
-    const ngh = ngang ? rig.nghieng : rig.nghieng * 0.35;
-    const vaiY = cy + ngh * 0.5;
-    const mongY = cy - ngh * 0.5;
+       là chúi đầu (vươn vai, chồm, gặm cỏ). */
+    const ngh = ngang ? rig.nghieng : rig.nghieng * 0.3;
 
-    s.shadow(8, DAT, rx + 0.6, 1.5);
+    s.shadow(8, DAT + 0.5, rx + 0.6, 1.4);
 
-    if (ngang) {
-      /* Đuôi vẽ TRƯỚC thân: nó mọc từ mông, phía sau con vật. Chó dựng đuôi
-         lên, các loài khác thõng xuống rồi cong nhẹ ra sau. */
-      const tx = cx - rx - 0.4;
-      if (!art.tailUp) {
-        const dai = Math.max(2, h * 0.75);
-        for (let i = 0; i <= dai; i += Q) {
-          const u = i / dai;
-          const x = tx - u * u * 1.2; // cong nhẹ ra sau
-          s.dot(x, cy - ry * 0.4 + i, xa);
-          s.dot(x + Q, cy - ry * 0.4 + i, shade(xa, 1.25));
-        }
-        // chùm lông cuối đuôi
-        for (let dx = -0.75; dx <= 0.5; dx += Q)
-          for (let dy = 0; dy < 1; dy += Q)
-            s.dot(tx - 1.2 + dx, cy - ry * 0.4 + dai + dy, toi);
-      }
+    /* ĐUÔI vẽ TRƯỚC thân với những kiểu rủ xuống (nó mọc từ mông, phía sau con
+       vật), và vẽ SAU thân với những kiểu dựng lên (nó cong đè lên lưng). */
+    if (ngang && (L.duoi === "chum" || L.duoi === "ngan")) veDuoiRu(cx - rx, cy - ry * 0.5 - ngh * 0.5, ry);
 
-      // chân SAU (ở xa): tối hơn, vẽ trước nên bị thân che một phần
-      if (chan > 0)
-        chan_doi(cx - rx * 0.66, cx - rx * 0.2, bot - 1 - ngh * 0.5, chan + 1 + ngh * 0.5, xa, day, 1);
-    }
+    // ---- THÂN
+    veThan(cx, cy, rx, ry, ngh, ngang);
 
-    /* ---- thân: NGỰC và MÔNG là hai khối bầu chồng nhau, không phải một quả
-       trứng. Hai khối cho ra đường lưng có eo và cái mông tròn — và chúng lệch
-       cao thấp được, tức là con vật cúi hay chồm được. */
-    khoi(s, cx - rx * 0.3, mongY, rx * 0.74, ry * 1.02, giua, sang, vien);
-    khoi(s, cx + rx * 0.32, vaiY, rx * 0.72, ry * 0.96, giua, sang, vien);
-    khoi(s, cx, (vaiY + mongY) / 2, rx * 0.62, ry * 0.9, giua, sang, vien);
-    // Bụng sáng hẳn: ánh sáng dội từ mặt đất lên, và nó cắt hình khỏi bóng đổ.
-    // Con xù lông thì bỏ — vệt sáng trơn nằm giữa đám lông đọc ra là một vết
-    // lỗi vẽ chứ không ra cái bụng.
-    if (!art.fluff) s.ell(cx, cy + ry * 0.62, rx * 0.7, ry * 0.26, art.belly);
+    // chân SAU (ở xa) — vẽ SAU thân nhưng bằng tông xa, nên nó lùi ra phía sau
+    if (chanCao > 0.4 && ngang)
+      veChan(cx - rx * 0.72, cx - rx * 0.3, bot - ngh * 0.5, chanCao + ngh * 0.5, xa, 1);
 
-    if (art.fluff) bong_cuu(cx, cy, rx, ry);
-    if (art.patch) dom(cx, cy, rx, ry);
+    if (L.xu) veLongXu(cx, cy, rx, ry, ngh);
+    if (art.patch) veDom(cx, cy, rx, ry);
 
-    /* Đuôi DỰNG (chó) vẽ SAU thân: nó cong lên trên lưng nên phần gốc phải đè
-       lên thân, không phải bị thân đè mất. */
-    if (ngang && art.tailUp) {
-      const tx = Math.round(cx - rx + 0.5);
-      s.vline(tx, Math.round(cy - ry - 2), 4, toi);
-      s.px(tx + 1, Math.round(cy - ry - 3), toi);
-      s.px(tx + 2, Math.round(cy - ry - 3), toi);
-    }
+    if (ngang && (L.duoi === "xoan" || L.duoi === "xu" || L.duoi === "quat"))
+      veDuoiDung(cx - rx, cy - ry * 0.9 - ngh * 0.5, ry);
 
     // chân TRƯỚC (ở gần)
-    if (chan > 0) {
-      if (ngang)
-        chan_doi(cx + rx * 0.24, cx + rx * 0.68, bot - 1 + ngh * 0.5, chan + 1 - ngh * 0.5, vien, day, 0);
-      else chan_doi(cx - rx * 0.5, cx + rx * 0.5, bot - 1, chan + 1, vien, day, 0);
+    if (chanCao > 0.4) {
+      if (ngang) veChan(cx + rx * 0.28, cx + rx * 0.72, bot + ngh * 0.5, chanCao - ngh * 0.5, vien, 0);
+      else veChan(cx - rx * 0.46, cx + rx * 0.46, bot, chanCao, vien, 0);
     }
 
-    // ---- cổ và đầu
-    const hs = Math.max(2.2, h * 0.42); // bán kính đầu
+    // ---- CỔ và ĐẦU
+    const hs = hsTho;
+    const vaiY = cy + ngh * 0.5;
     let hx: number;
     let hy: number;
     if (ngang) {
-      hx = cx + rx * 0.92 + hs * 0.5 + rig.dauX * hs;
-      hy = vaiY - ry * 0.62 - hs * 0.1 + rig.dauY * hs;
-      if (nam) hy = cy - ry * 0.1;
-      // cúi sát đất thì đầu không được chui xuống dưới chân
-      hy = Math.min(hy, DAT - hs * 0.6);
+      hx = cx + rx * 0.9 + hs * (0.35 + L.co * 0.45) + rig.dauX * hs;
+      /* Đầu treo ngang tầm GIỮA thân, không phải trên đường lưng. Đặt nó cao
+         bằng lưng thì cái đầu thành một cái bướu thứ hai mọc trên vai, và con
+         bò đọc ra là một cái bao tải có sừng. */
+      hy = vaiY - ry * 0.12 - hs * L.dauCao * 0.75 + rig.dauY * hs;
+      if (nam) hy = cy - ry * 0.15;
+      hy = Math.min(hy, DAT - hs * 0.55);
     } else {
       hx = cx + rig.dauX * hs * 0.5;
-      hy = (dir === "up" ? cy - ry - hs * 0.55 : cy + ry * 0.35 + hs * 0.2) + rig.dauY * hs * 0.7;
+      hy =
+        (dir === "up" ? cy - ry - hs * 0.5 : cy + ry * 0.3 + hs * 0.15) +
+        rig.dauY * hs * 0.7 -
+        (dir === "up" ? 0 : hs * L.dauCao * 0.12);
       hy = Math.min(hy, DAT - hs * 0.5);
     }
 
-    // cổ: nối vai với đầu bằng hai khối bầu chồng lên nhau
-    if (ngang) {
-      const nx = (cx + rx * 0.7 + hx) / 2;
-      const ny = (vaiY - ry * 0.3 + hy) / 2;
-      khoi(s, nx, ny, Math.max(1.3, hs * 0.72), Math.max(1.3, hs * 0.9), giua, sang, vien);
-    }
-
-    khoi(s, hx, hy, hs, hs * 0.92, giua, sang, vien);
-
-    /* ---- mõm
-       Mõm là THỊT, không phải cái mũi: vẽ nó bằng tông thân (sáng hơn một
-       nấc) rồi mới chấm CHÓP MŨI bằng `accent`. Tô cả cái mõm bằng accent là
-       con chó có một cục đen chiếm nửa mặt — accent của nó vốn là màu mũi. */
-    const mom = art.snout ?? 0;
-    if (mom > 0) {
-      const mx = ngang ? hx + hs * 0.8 : hx;
-      const my = ngang ? hy + hs * 0.34 : hy + hs * 0.5;
-      const mr = Math.max(1, hs * (0.34 + 0.3 * mom));
-      khoi(s, mx, my, mr, mr * 0.8, sang, lighten(sang), giua);
-      // chóp mũi
-      const nx = Math.round(mx + (ngang ? mr * 0.55 : 0));
-      s.px(nx, Math.round(my - mr * 0.2), art.accent);
-      if (mom > 0.7) {
-        s.px(nx, Math.round(my - mr * 0.2) + 1, art.accent);
-        s.px(nx + (ngang ? 0 : 1), Math.round(my - mr * 0.2), art.accent);
+    // CỔ: một khối nối vai với đầu. Loài cổ ngắn (heo) thì bỏ hẳn — vẽ vào là
+    // con heo mọc thêm một cái ống giữa đầu và vai.
+    if (ngang && L.co > 0.3) {
+      const b = Math.max(0.35, L.co * 0.5);
+      for (let t = 0; t <= 1; t += Q / 4) {
+        const nx = cx + rx * 0.72 + (hx - cx - rx * 0.72) * t;
+        const ny = vaiY - ry * 0.35 + (hy - (vaiY - ry * 0.35)) * t;
+        /* Cổ THON: dày ở vai, nhỏ dần về gáy. Bản đầu để cổ dày đều gần bằng
+           cái đầu, nên con chó ra hình con lạc đà. */
+        const r = hs * (0.6 - t * 0.28) * b * 1.05;
+        s.ell(nx, ny, r * 0.85, r, vien);
+        s.ell(nx, ny - Q, r * 0.85 - Q, r - Q, giua);
+        s.dot(nx - r * 0.5, ny - r * 0.4, sang);
       }
     }
 
-    // ---- tai: nêm nhỏ ở đỉnh-sau của đầu
-    const tai = Math.max(0.8, hs * 0.5);
-    /* Tai là cái NÊM thon, không phải một vạch dọc: vạch dọc ở HD đọc ra là
-       một cái sừng nhỏ, và con bò hoá ra có bốn sừng. */
-    const veTai = (tx: number, ty: number, nghieng: number) => {
-      for (let i = 0; i <= tai; i += Q) {
-        const co = i / tai;
-        const w = (1 - co) * 0.45 + 0.2;
-        const x = tx + nghieng * i * 0.45;
-        for (let dx = -w; dx <= w; dx += Q) s.dot(x + dx, ty - i, toi);
-        s.dot(x, ty - i, shade(toi, 1.35));
-      }
-    };
-    const venh = rig.taiVenh * hs * 0.5;
-    if (ngang) veTai(hx - hs * 0.5, hy - hs * 0.7 - venh, -1 + rig.taiVenh);
-    else for (const k of [-1, 1]) veTai(hx + k * hs * 0.7, hy - hs * 0.62 - venh, k);
-
-    // ---- sừng
-    const horn = Math.max(0, Math.min(3, Math.round(art.horn ?? 0)));
-    if (horn > 0) {
-      /* Sừng VUỐT RA SAU, không dựng thẳng: sừng thẳng đứng ở 16px đọc ra là
-         cái ăng-ten. Mỗi nấc `horn` thêm một đốt lùi về sau và lên trên. */
-      const veSung = (sx0: number, sy0: number, huong: number) => {
-        const n = Math.round(horn * ART) + 2;
-        for (let i = 0; i <= n; i++) {
-          const u = i / n;
-          const x = sx0 + huong * u * (horn * 0.62 + 0.5);
-          const y = sy0 - Math.sin(u * 1.9) * (horn * 0.45 + 0.5);
-          s.dot(x, y, art.accent);
-          if (u < 0.5) s.dot(x, y + Q, shade(art.accent, 0.7));
-          else s.dot(x, y - Q, lighten(art.accent));
-        }
-      };
-      if (ngang) veSung(hx + hs * 0.2, hy - hs * 0.85, -1);
-      else for (const k of [-1, 1]) veSung(hx + k * hs * 0.45, hy - hs * 0.8, k);
-    }
-
+    veDau(hx, hy, hs, ngang);
     if (rig.nham) mat_nham(hx, hy, hs, ngang);
     else mat(hx, hy, hs, ngang);
     netPhu(cx, cy, rx, ry, hx, hy, hs);
   }
 
-  /* ------------------------------------------------------------------- chim
-     Gà và vịt chỉ khác nhau ở hai chi tiết, và đó đúng là hai chi tiết người
-     ta dùng để phân biệt chúng ngoài đời: cái MÀO và cái MỎ. `crest` bật mào
-     đỏ + yếm (gà); tắt thì mỏ bẹt ra thành mỏ vịt. */
-  function ve_chim(ngang: boolean) {
-    const chan = nam ? 0 : Math.max(0, Math.round(2 * rig.chan));
-    const w = ngang ? W : Math.max(4, Math.round(W * 0.8));
-    const h = nam ? Math.max(3, H - 2) : H;
-    const bot = DAT - chan + bob;
-    const cy = bot - h / 2 + rig.thanY + tho;
-    const cx = 7.6;
-    const rx = w / 2;
-    const ry = h / 2;
+  /* ---- THÂN theo hồ sơ loài: quét từng cột, tính mép lưng và mép bụng. */
+  function veThan(cx: number, cy: number, rx: number, ry: number, ngh: number, ngang: boolean) {
+    /* Hai đầu thân phải THON lại, nếu không con vật là một khối hộp. `bao` cho
+       1 ở giữa và tụt nhanh về 0 ở hai đầu — mũ số 3,4 giữ cho phần giữa gần
+       như thẳng, tức là con bò vẫn có cái lưng thẳng. */
+    const bao = (u: number) => Math.pow(Math.max(0, 1 - Math.pow(Math.abs(2 * u - 1), 3.4)), 0.42);
+    for (let x = -rx; x <= rx; x += Q) {
+      const u = (x + rx) / (2 * rx);
+      const k = bao(u);
+      if (k <= 0.02) continue;
+      const nghX = ngh * (0.5 - u); // mông cao / vai thấp
+      const yT = cy + nghX - ry * (ngang ? L.lung(u) : 0.95) * k;
+      const yB = cy + nghX + ry * (ngang ? L.bung(u) : 0.95) * k;
+      for (let y = yT; y <= yB; y += Q) s.dot(cx + x, y, giua);
+      s.dot(cx + x, yT, vien);
+      s.dot(cx + x, yB, vien);
+      // dải sáng dọc lưng: ánh sáng từ trên xuống
+      if (k > 0.4) s.dot(cx + x, yT + Q, sang);
+    }
+    // vành tối hai đầu thân
+    for (let y = cy - ry * 0.6; y <= cy + ry * 0.6; y += Q) {
+      s.dot(cx - rx + Q, y, vien);
+      s.dot(cx + rx - Q, y, vien);
+    }
+    /* BỤNG SÁNG: ánh sáng dội từ mặt đất lên, và nó cắt hình khỏi bóng đổ. Con
+       xù lông thì bỏ — vệt sáng trơn nằm giữa đám lông đọc ra là vết lỗi vẽ. */
+    if (L.vetBung && !L.xu)
+      s.ell(cx, cy + ry * 0.66, rx * 0.66, ry * 0.22, art.belly);
+  }
 
-    s.shadow(8, DAT, rx + 0.4, 1.3);
+  /* ---- ĐẦU: khối đầu + mõm + tai + sừng, mỗi loài một kiểu. */
+  function veDau(hx: number, hy: number, hs: number, ngang: boolean) {
+    // khối đầu: dê và chó có đầu THON về mõm, bò và heo thì đầu vuông vức
+    const thon = L.mom === "nhon" || L.mom === "dai";
+    const rw = hs * (thon ? 0.82 : 1);
+    /* Vành đầu tối HAI nấc: cái đầu nối liền vào cổ cùng màu thì nó tan vào
+       thân, và con bò ra một cái bao tải có sừng. */
+    s.ell(hx, hy, rw + Q, hs * 0.9 + Q, shade(vien, 0.78));
+    s.ell(hx, hy, rw, hs * 0.9, vien);
+    s.ell(hx, hy - Q, rw - Q, hs * 0.9 - Q, giua);
+    s.ell(hx - rw * 0.3, hy - hs * 0.42, rw * 0.4, hs * 0.26, sang);
 
-    // đuôi: nêm chếch lên phía sau
-    if (ngang) {
-      const tx = Math.round(cx - rx - 1);
-      for (let i = 0; i < 3; i++) s.vline(tx - i, Math.round(cy - ry * 0.4 - i), 2 + i, i === 0 ? vien : xa);
+    // ---- MÕM
+    const mx = ngang ? hx + rw * 0.72 : hx;
+    const my = ngang ? hy + hs * 0.3 : hy + hs * 0.42;
+    if (L.mom === "dia") {
+      // HEO: cái đĩa mũi tròn, hai lỗ mũi — nét nhận ra con heo từ xa nhất
+      const r = hs * 0.62;
+      s.ell(mx, my, r, r * 0.86, shade(art.accent, 0.8));
+      s.ell(mx, my - Q, r - Q, r * 0.86 - Q, art.accent);
+      s.dot(mx - r * 0.34, my, shade(art.accent, 0.5));
+      s.dot(mx + r * 0.34, my, shade(art.accent, 0.5));
+      s.dot(mx - r * 0.3, my - r * 0.4, lighten(art.accent));
+    } else if (L.mom === "dai") {
+      // CHÓ: mõm dài chìa hẳn ra, chóp mũi đen
+      const dai = hs * 1.05;
+      for (let d = 0; d <= dai; d += Q) {
+        const r = hs * (0.5 - (d / dai) * 0.2);
+        for (let y = -r; y <= r; y += Q) s.dot(mx + d - hs * 0.2, my + y, y > r - Q ? vien : giua);
+        s.dot(mx + d - hs * 0.2, my - r, vien);
+      }
+      for (let y = -0.5; y <= 0.5; y += Q)
+        for (let x = -0.5; x <= 0.5; x += Q) s.dot(mx + dai - hs * 0.25 + x, my + y - 0.25, art.accent);
+    } else if (L.mom === "nhon") {
+      // DÊ / GÀ / CHUỘT: mõm hoặc mỏ nhọn hình nêm
+      const dai = hs * (giong === "ga" ? 0.75 : 0.85);
+      const mau = giong === "ga" || giong === "vit" ? art.accent : giua;
+      for (let d = 0; d <= dai; d += Q) {
+        const r = Math.max(Q, hs * 0.42 * (1 - d / dai));
+        for (let y = -r; y <= r; y += Q) s.dot(mx + d, my + y, mau);
+        s.dot(mx + d, my + r, shade(mau, 0.7));
+      }
+      if (giong === "ga") {
+        // YẾM đỏ dưới mỏ
+        for (let d = 0; d < 1.2; d += Q) s.dot(mx + Q, my + hs * 0.4 + d, art.accent);
+      }
+      if (giong === "de") {
+        // RÂU CẰM — không có nó thì con dê là con cừu trọc
+        for (let d = 0; d < hs * 0.9; d += Q) s.dot(mx - hs * 0.1, my + hs * 0.45 + d, toi);
+        s.dot(mx - hs * 0.35, my + hs * 0.75, toi);
+      }
+    } else if (L.mom === "bet") {
+      if (giong === "vit") {
+        // VỊT: MỎ BẸT dài, đầu mỏ bo tròn — thứ duy nhất tách vịt khỏi gà
+        const dai = hs * 1.5;
+        for (let d = 0; d <= dai; d += Q) {
+          const r = hs * (0.3 + (d / dai) * 0.12);
+          for (let y = -r; y <= r; y += Q) s.dot(mx + d - hs * 0.3, my + y, art.accent);
+          s.dot(mx + d - hs * 0.3, my + r, shade(art.accent, 0.72));
+        }
+        s.dot(mx + dai - hs * 0.4, my - hs * 0.1, shade(art.accent, 0.55));
+      } else {
+        // BÒ / CỪU: mõm vuông, chóp mũi hồng
+        const r = hs * 0.55;
+        s.ell(mx, my, r * 0.95, r * 0.72, sang);
+        s.ell(mx, my - Q, r * 0.95 - Q, r * 0.72 - Q, lighten(sang));
+        s.dot(mx + r * 0.3, my - Q, art.accent);
+        s.dot(mx - r * 0.3, my - Q, art.accent);
+      }
     }
 
-    if (chan > 0) {
-      const cc = art.accent;
-      const c1 = Math.round(cx - rx * 0.2);
-      const c2 = Math.round(cx + rx * 0.35);
-      const l1 = frame === 1 ? chan - 1 : chan;
-      const l2 = frame === 3 ? chan - 1 : chan;
-      s.vline(c1, bot, l1, cc);
-      s.vline(c2, bot, l2, cc);
-      s.hline(c1 - 1, bot + l1 - 1, 3, cc);
-      s.hline(c2 - 1, bot + l2 - 1, 3, cc);
+    // ---- MÀO GÀ
+    if (giong === "ga") {
+      for (let i = 0; i < 3; i++) {
+        const bx = hx - hs * 0.3 + i * hs * 0.42;
+        for (let d = 0; d < 0.75 + (i === 1 ? 0.5 : 0); d += Q) s.dot(bx, hy - hs * 0.9 - d, art.accent);
+      }
     }
 
-    // thân: quả trứng, đầu to phía trước
-    khoi(s, cx, cy, rx, ry * 1.05, giua, sang, vien);
-    s.ell(cx, cy + ry * 0.6, rx * 0.62, ry * 0.3, art.belly);
-    // cánh xếp: một vòng cung tối áp vào sườn
-    s.ell(cx - rx * 0.1, cy + ry * 0.05, rx * 0.62, ry * 0.5, vien);
-    s.ell(cx - rx * 0.1, cy - ry * 0.05, rx * 0.5, ry * 0.38, giua);
-
-    // đầu
-    const hs = Math.max(2, h * 0.38);
-    let hx = (ngang ? cx + rx * 0.72 + hs * 0.5 : cx) + rig.dauX * hs;
-    let hy = cy - ry * 0.85 - hs * 0.5 + rig.dauY * hs * 1.15;
-    if (nam) hy = cy - ry * 0.5;
-    if (!ngang && dir === "down") hy = cy - ry * 0.2 + rig.dauY * hs;
-    hy = Math.min(hy, DAT - hs * 0.6);
-    khoi(s, hx, hy, hs, hs, giua, sang, vien);
-
-    // mỏ
-    const my = Math.round(hy + hs * 0.25);
-    if (art.crest) {
-      // mỏ nhọn 2px
-      const bx = Math.round(hx + hs * 0.8);
-      s.hline(ngang ? bx : Math.round(hx), my, 2, art.accent);
-      s.px(ngang ? bx + 1 : Math.round(hx) + 1, my + 1, shade(art.accent, 0.75));
-      // mào: ba bướu tròn trên đỉnh
-      const mx = Math.round(hx);
-      s.px(mx, Math.round(hy - hs) - 1, art.accent);
-      s.px(mx - 1, Math.round(hy - hs), art.accent);
-      s.px(mx + 1, Math.round(hy - hs), art.accent);
-      // yếm dưới mỏ
-      s.px(ngang ? bx : mx, my + 2, art.accent);
-    } else {
-      // mỏ VỊT: bẹt và dài, hạ thấp hơn
-      const bx = Math.round(hx + hs * 0.7);
-      s.rect(ngang ? bx : Math.round(hx - 1), my, 3, 2, art.accent);
-      s.hline(ngang ? bx : Math.round(hx - 1), my + 1, 3, shade(art.accent, 0.72));
+    // ---- TAI
+    const tv = rig.taiVenh;
+    if (L.tai === "venh") {
+      // tai nhọn dựng (chó, heo)
+      const veTai = (tx: number, huong: number) => {
+        const cao = hs * (0.85 + tv * 0.3);
+        for (let i = 0; i <= cao; i += Q) {
+          const c = i / cao;
+          const w = Math.max(Q, hs * 0.38 * (1 - c));
+          for (let d = -w; d <= w; d += Q) s.dot(tx + huong * i * 0.28 + d, hy - hs * 0.65 - i, toi);
+          if (c < 0.6) s.dot(tx + huong * i * 0.28, hy - hs * 0.65 - i, shade(toi, 1.4));
+        }
+      };
+      if (ngang) veTai(hx - hs * 0.35, -1);
+      else for (const k of [-1, 1]) veTai(hx + k * hs * 0.62, k);
+    } else if (L.tai === "dai") {
+      // tai DÀI rủ xuống hai bên (dê, cừu) — dấu nhận ra rõ nhất của con dê
+      const veTai = (tx: number, huong: number) => {
+        const dai = hs * (1.05 - tv * 0.4);
+        for (let i = 0; i <= dai; i += Q) {
+          const c = i / dai;
+          const w = Math.max(Q, hs * 0.3 * Math.sin(Math.PI * (0.25 + 0.7 * (1 - c))));
+          const x = tx + huong * (i * 0.5 + tv * i * 0.3);
+          const y = hy - hs * 0.35 + i * (0.8 - tv * 0.9);
+          for (let d = -w; d <= w; d += Q) s.dot(x + d, y, toi);
+          s.dot(x - huong * w, y, shade(toi, 1.3));
+        }
+      };
+      if (ngang) veTai(hx - hs * 0.4, -1);
+      else for (const k of [-1, 1]) veTai(hx + k * hs * 0.7, k);
+    } else if (L.tai === "cup") {
+      // tai bò: cái lá nằm ngang chìa ra hai bên
+      const veTai = (tx: number, huong: number) => {
+        const dai = hs * 0.85;
+        for (let i = 0; i <= dai; i += Q) {
+          const w = Math.max(Q, hs * 0.26 * Math.sin(Math.PI * (0.2 + 0.75 * (i / dai))));
+          const x = tx + huong * i;
+          const y = hy - hs * 0.25 - tv * hs * 0.4 + i * 0.12;
+          for (let d = -w; d <= w; d += Q) s.dot(x, y + d, toi);
+          s.dot(x, y - w, shade(toi, 1.3));
+        }
+      };
+      if (ngang) veTai(hx - hs * 0.5, -1);
+      else for (const k of [-1, 1]) veTai(hx + k * hs * 0.6, k);
+    } else if (L.tai === "tron") {
+      // tai tròn to (chuột, sóc)
+      const veTai = (tx: number) => {
+        const r = hs * 0.62;
+        s.ell(tx, hy - hs * 0.75, r, r, toi);
+        s.ell(tx, hy - hs * 0.75, r - Q, r - Q, art.accent);
+      };
+      if (ngang) veTai(hx - hs * 0.42);
+      else for (const k of [-1, 1]) veTai(hx + k * hs * 0.62);
     }
 
-    if (rig.nham) mat_nham(hx, hy, hs, ngang);
-    else mat(hx, hy, hs, ngang);
-    netPhu(cx, cy, rx, ry, hx, hy, hs);
+    // ---- SỪNG: vuốt RA SAU theo một cung, có mặt sáng mặt tối.
+    const horn = Math.max(0, Math.min(3, art.horn ?? 0));
+    /* Sừng lấy màu XƯƠNG, không lấy `accent`: `accent` của con bò là màu MŨI
+       (hồng), nên dùng nó thì con bò mọc hai cái sừng hồng. */
+    const mauSung = giong === "bo" || giong === "cuu" ? "#e6dcc4" : art.accent;
+    const mauSungToi = shade(mauSung, 0.7);
+    if (horn > 0) {
+      const veSung = (sx0: number, sy0: number, huong: number) => {
+        const n = Math.round(horn * ART) + 3;
+        for (let i = 0; i <= n; i++) {
+          const u = i / n;
+          const x = sx0 + huong * u * (horn * 0.95 + 1);
+          const y = sy0 - Math.sin(u * 2.1) * (horn * 0.7 + 0.9);
+          const day = (1 - u * 0.5) * 0.7;
+          for (let d = 0; d <= day; d += Q) s.dot(x, y + d, mauSungToi);
+          s.dot(x, y, mauSung);
+        }
+      };
+      if (ngang) veSung(hx + hs * 0.1, hy - hs * 0.8, -1);
+      else for (const k of [-1, 1]) veSung(hx + k * hs * 0.4, hy - hs * 0.75, k);
+    }
+  }
+
+  /* ---- CHÂN: một cặp, lệch pha nên khung nào cũng có chân trước chân sau. */
+  function veChan(x1: number, x2: number, top: number, len: number, mau: string, pha: number) {
+    const lift = (i: number) => (frame === 0 || frame === 2 ? 0 : (i + pha + frame) % 2) * 0.5;
+    [x1, x2].forEach((x, i) => {
+      const l = lift(i);
+      const y0 = top - l;
+      const h = len + l;
+      if (h < Q) return;
+      for (let dy = 0; dy < h; dy += Q) {
+        const co = dy / h;
+        const w = L.chanDay * (0.42 - co * 0.12);
+        for (let dx = -w; dx <= w; dx += Q) s.dot(x + dx, y0 + dy, mau);
+        s.dot(x - w, y0 + dy, lighten(mau));
+      }
+      // MÓNG / BÀN CHÂN: gà vịt có bàn chân chìa ra trước, thú có móng tối
+      const mw = L.chanDay * 0.5;
+      if (giong === "ga" || giong === "vit") {
+        for (let dx = -mw; dx <= mw + 1; dx += Q) s.dot(x + dx, y0 + h - Q, art.accent);
+        s.dot(x - mw - Q, y0 + h - Q, art.accent);
+      } else {
+        for (let dx = -mw * 1.1; dx <= mw * 1.1; dx += Q) {
+          s.dot(x + dx, y0 + h - Q, shade(mau, 0.45));
+          s.dot(x + dx, y0 + h - Q * 2, shade(mau, 0.65));
+        }
+      }
+    });
+  }
+
+  /* ---- ĐUÔI rủ xuống: bò (có chùm lông ở chót) và dê/cừu (ngắn, cụp). */
+  function veDuoiRu(tx: number, ty: number, ry: number) {
+    if (L.duoi === "khong") return;
+    const dai = L.duoi === "chum" ? ry * 1.9 : ry * 0.7;
+    for (let i = 0; i <= dai; i += Q) {
+      const u = i / dai;
+      const x = tx - 0.3 - u * u * 1.1;
+      s.dot(x, ty + i, xa);
+      s.dot(x + Q, ty + i, shade(xa, 1.25));
+    }
+    if (L.duoi === "chum")
+      for (let dx = -0.75; dx <= 0.5; dx += Q)
+        for (let dy = 0; dy < 1.2; dy += Q) s.dot(tx - 1.4 + dx, ty + dai + dy, toi);
+  }
+
+  /* ---- ĐUÔI dựng: xoắn (heo), xù (chó/sóc), quạt (gà). */
+  function veDuoiDung(tx: number, ty: number, ry: number) {
+    if (L.duoi === "xoan") {
+      /* ĐUÔI XOẮN của con heo: một vòng xoắn ốc. Nó bé tí mà là nét ai cũng
+         nhận ra, nên nó đáng cả tám pixel. */
+      const r = ry * 0.42;
+      for (let a = -0.4; a < 5.6; a += 0.12) {
+        const rr = r * (0.35 + a / 7);
+        s.dot(tx - 0.3 + Math.cos(a) * rr, ty + ry * 0.35 + Math.sin(a) * rr, toi);
+      }
+      return;
+    }
+    if (L.duoi === "xu") {
+      /* ĐUÔI XÙ: một dải cong lên trên lưng, dày dần rồi thon lại. */
+      const n = 16;
+      for (let i = 0; i <= n; i++) {
+        const u = i / n;
+        const x = tx - 0.4 - Math.sin(u * 1.5) * 1.6;
+        const y = ty + ry * 0.5 - u * ry * 2;
+        const r = 0.5 + Math.sin(u * Math.PI) * 0.85;
+        for (let dy = -r; dy <= r; dy += Q)
+          for (let dx = -r; dx <= r; dx += Q)
+            if (dx * dx + dy * dy <= r * r) s.dot(x + dx, y + dy, dx < 0 ? toi : shade(toi, 1.3));
+      }
+      return;
+    }
+    if (L.duoi === "quat") {
+      /* ĐUÔI QUẠT của con gà: ba lông vũ toả lên phía sau. */
+      for (let i = 0; i < 3; i++) {
+        const goc = -0.5 - i * 0.42;
+        const dai = ry * (1.5 - i * 0.18);
+        for (let d = 0; d <= dai; d += Q) {
+          const x = tx - 0.2 + Math.cos(Math.PI + goc) * d;
+          const y = ty + ry * 0.3 + Math.sin(Math.PI + goc) * d;
+          s.dot(x, y, i === 1 ? giua : vien);
+          s.dot(x, y + Q, vien);
+        }
+      }
+    }
+  }
+
+  /* ---- LÔNG CỪU: bướu lông phủ kín thân, rìa gợn. */
+  function veLongXu(cx: number, cy: number, rx: number, ry: number, ngh: number) {
+    const rnd = mulberry32(0x51e + Math.round((art.fluff ?? 0) * 977));
+    for (let i = 0; i < Math.round(rx * ry * 1.5); i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = Math.sqrt(rnd());
+      const x = cx + Math.cos(a) * rx * r * 0.86;
+      const y = cy + ngh * 0.3 + Math.sin(a) * ry * r * 0.86;
+      const rr = 0.5 + rnd() * 0.5;
+      for (let dy = -rr; dy <= rr; dy += Q)
+        for (let dx = -rr; dx <= rr; dx += Q)
+          if (dx * dx + dy * dy <= rr * rr) s.dot(x + dx, y + dy, dy < 0 ? art.belly : giua);
+    }
+    // bướu lông nhô khỏi đường lưng: cái làm đường bao XÙ chứ không trơn
+    for (let x = -rx + 0.5; x <= rx - 0.5; x += 1.5) {
+      const u = (x + rx) / (2 * rx);
+      const k = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(2 * u - 1), 3.4)), 0.42);
+      const y = cy + ngh * (0.5 - u) - ry * L.lung(u) * k;
+      const rr = 0.85;
+      for (let dy = -rr; dy <= rr; dy += Q)
+        for (let dx = -rr; dx <= rr; dx += Q)
+          if (dx * dx + dy * dy <= rr * rr) s.dot(x + cx + dx, y + dy, dy < 0 ? art.belly : giua);
+    }
+  }
+
+  /* ---- ĐỐM BÒ: vài MẢNG lớn, không phải mưa pixel. */
+  function veDom(cx: number, cy: number, rx: number, ry: number) {
+    const rnd = mulberry32(0x9a2 + Math.round((art.patch ?? 0) * 613));
+    /* Hai đốm là đủ, và cả hai dồn về NỬA SAU thân. Rải đều cả con thì đốm rơi
+       lên vai sẽ dính vào vành tối của đầu, và con bò đọc ra thành một cái sọ
+       đen trắng. Mặt để trắng thì con bò mới còn ra mặt. */
+    for (let i = 0; i < 2; i++) {
+      const px2 = cx - rx * (0.1 + i * 0.44) + rnd() * 0.6;
+      const py2 = cy + (i === 0 ? -ry * 0.3 : ry * 0.22) + rnd() * 0.5;
+      const pr = Math.max(1.2, rx * (0.18 + rnd() * 0.08));
+      for (let y = py2 - pr; y <= py2 + pr; y += Q)
+        for (let x = px2 - pr; x <= px2 + pr; x += Q) {
+          const ddx = (x - px2) / pr;
+          const ddy = (y - py2) / (pr * 0.8);
+          if (ddx * ddx + ddy * ddy > 1) continue;
+          const bx = (x - cx) / (rx - 0.7);
+          const by = (y - cy) / (ry - 0.7);
+          if (bx * bx + by * by > 1) continue;
+          s.dot(x, y, toi);
+        }
+    }
   }
 
   /* -------------------------------------------------------------------- cá
@@ -4827,86 +5147,48 @@ function makeAnimal(
     const w = Math.max(6, W);
     const h = Math.max(4, H);
     const cx = 8;
-    const cy = 8 + (frame % 2 === 0 ? 0 : 1) - 1;
+    const cy = 8 + (frame % 2 === 0 ? 0 : Q) - 0.5;
     const rx = w / 2;
     const ry = h / 2;
 
-    // đuôi: hai nêm toả ra sau
-    const tx = Math.round(cx - rx - 1);
-    for (let i = 0; i < 3; i++) {
-      s.px(tx - i, Math.round(cy - 1 - i), i === 0 ? toi : xa);
-      s.px(tx - i, Math.round(cy + 1 + i), i === 0 ? toi : xa);
-      s.px(tx - i, Math.round(cy), toi);
+    // ĐUÔI: hai nêm toả ra sau, xoè theo khung để nhìn ra là đang quẫy
+    const xoe = 1 + (frame % 3) * 0.28;
+    for (let i = 0; i <= 3; i += Q) {
+      const t = i / 3;
+      for (let k = -1; k <= 1; k += 2)
+        for (let d = 0; d <= t * 2.4 * xoe; d += Q) s.dot(cx - rx - i, cy + k * d, d > t * 1.9 ? toi : vien);
+      s.dot(cx - rx - i, cy, toi);
     }
-    // vây lưng
-    for (let i = 0; i < Math.max(2, Math.round(rx * 0.6)); i++)
-      s.vline(Math.round(cx - rx * 0.4) + i, Math.round(cy - ry - 1), 1 + (i % 2), toi);
-
-    // thân: hình thoi bo tròn, thon về đuôi
-    khoi(s, cx, cy, rx, ry, giua, sang, vien);
-    s.ell(cx + rx * 0.15, cy + ry * 0.55, rx * 0.6, ry * 0.34, art.belly);
-    // nắp mang
-    s.vline(Math.round(cx + rx * 0.28), Math.round(cy - ry * 0.5), Math.max(2, Math.round(ry)), toi);
-    // vây bụng
-    s.px(Math.round(cx), Math.round(cy + ry), art.accent);
-    s.px(Math.round(cx + 1), Math.round(cy + ry), art.accent);
-
-    // mắt: có tròng, nên đọc ra là mắt cá chứ không phải một chấm bẩn
-    const ex = Math.round(cx + rx * 0.62);
-    const ey = Math.round(cy - ry * 0.2);
-    s.px(ex, ey, "#ffffff");
-    s.px(ex + 1, ey, "#1b1410");
-  }
-
-  /* --------------------------------------------------------------- thú nhỏ
-     Chuột, sóc. Nét nhận diện là TAI TO và ĐUÔI DÀI — thân thì bé tí. */
-  function ve_thu_nho(ngang: boolean) {
-    const chan = nam ? 0 : Math.max(0, Math.round(2 * rig.chan));
-    const w = ngang ? W : Math.max(4, Math.round(W * 0.72));
-    const h = nam ? Math.max(3, H - 1) : H;
-    const bot = DAT - chan + bob;
-    const cy = bot - h / 2 + rig.thanY + tho;
-    const cx = 7.6;
-    const rx = w / 2;
-    const ry = h / 2;
-
-    s.shadow(8, DAT, rx + 0.4, 1.2);
-
-    // đuôi dài cong lên
-    if (ngang) {
-      const tx = Math.round(cx - rx);
-      for (let i = 0; i < 4; i++) s.px(tx - i, Math.round(cy - i * 0.9), i < 2 ? toi : xa);
-    }
-    if (chan > 0) {
-      s.vline(Math.round(cx - rx * 0.5), bot, chan, vien);
-      s.vline(Math.round(cx + rx * 0.5), bot, chan, vien);
+    // VÂY LƯNG: răng cưa dọc sống lưng
+    for (let i = 0; i < rx * 0.9; i += Q) {
+      const cao = 1 + Math.sin(i * 2.2) * 0.6;
+      for (let d = 0; d < cao; d += Q) s.dot(cx - rx * 0.35 + i, cy - ry - d, i % 1 < Q * 2 ? toi : vien);
     }
 
-    khoi(s, cx, cy, rx, ry, giua, sang, vien);
-    s.ell(cx, cy + ry * 0.6, rx * 0.6, ry * 0.28, art.belly);
-
-    const hs = Math.max(1.8, h * 0.44);
-    const hx = (ngang ? cx + rx * 0.8 + hs * 0.4 : cx) + rig.dauX * hs;
-    const hy = Math.min(cy - ry * 0.2 + rig.dauY * hs, DAT - hs * 0.5);
-    khoi(s, hx, hy, hs, hs, giua, sang, vien);
-    // tai tròn to
-    const tr = Math.max(1, Math.round(hs * 0.7));
-    s.disc(Math.round(hx - hs * 0.5), Math.round(hy - hs * 0.9), tr, toi);
-    s.disc(Math.round(hx - hs * 0.5), Math.round(hy - hs * 0.9), Math.max(0, tr - 1), art.accent);
-    // mũi nhọn
-    s.px(Math.round(hx + hs), Math.round(hy + hs * 0.3), art.accent);
-    if (rig.nham) mat_nham(hx, hy, hs, ngang);
-    else mat(hx, hy, hs, ngang);
-    netPhu(cx, cy, rx, ry, hx, hy, hs);
+    /* THÂN: hình thoi bo tròn, thon hẳn về đuôi và bầu ở vai — cá thon đều hai
+       đầu thì đọc ra là một hạt dưa. */
+    for (let x = -rx; x <= rx; x += Q) {
+      const u = (x + rx) / (2 * rx);
+      const k = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(2 * u - 1), 2.6)), 0.5);
+      const r = ry * k * (0.7 + u * 0.42);
+      for (let y = -r; y <= r; y += Q) s.dot(cx + x, cy + y, giua);
+      s.dot(cx + x, cy - r, vien);
+      s.dot(cx + x, cy + r, vien);
+      if (k > 0.5) s.dot(cx + x, cy - r + Q, sang);
+      if (k > 0.5) s.dot(cx + x, cy + r - Q, art.belly);
+    }
+    // NẮP MANG và VÂY BỤNG
+    for (let y = -ry * 0.5; y <= ry * 0.5; y += Q) s.dot(cx + rx * 0.3, cy + y, vien);
+    for (let d = 0; d < 1.6; d += Q) s.dot(cx + d, cy + ry * 0.75 + d * 0.4, art.accent);
+    // MẮT: có tròng, nên đọc ra là mắt cá chứ không phải một chấm bẩn
+    const ex = cx + rx * 0.62;
+    const ey = cy - ry * 0.22;
+    for (const dx of [0, Q]) for (const dy of [0, Q]) s.dot(ex + dx, ey + dy, "#1b1410");
+    s.dot(ex, ey, "#ffffff");
   }
 
   /* ------------------------------------------------------------- chi tiết */
 
-  /**
-   * NÉT PHỤ quanh con vật — thứ biến "một con bò đứng hơi khác" thành "con bò
-   * đang làm gì đó". Ở cỡ mười sáu pixel, cái đầu nghiêng thêm một pixel không
-   * ai đọc ra; ba vạch rung bên sườn thì đọc ra ngay.
-   */
   function netPhu(cx: number, cy: number, rx: number, ry: number, hx: number, hy: number, hs: number) {
     if (rig.net === "khong") return;
     const nhip = frame % 3;
@@ -4944,55 +5226,23 @@ function makeAnimal(
         s.dot(hx + hs * 0.6 + d, DAT - Q * i, "#8fc4e8");
   }
 
-  /** Một CẶP chân: `pha` lệch nhau nên khung nào cũng có chân trước chân sau. */
-  function chan_doi(
-    x1: number,
-    x2: number,
-    top: number,
-    len: number,
-    mau: string,
-    day: number,
-    pha: number,
-  ) {
-    const lift = (i: number) => (frame === 0 || frame === 2 ? 0 : (i + pha + frame) % 2);
-    [x1, x2].forEach((x, i) => {
-      const l = lift(i);
-      const y0 = top - l;
-      const h = len + l;
-      /* Chân THON về móng và có nét sáng dọc mép trước. Bản cũ là một hình chữ
-         nhật đặc dày hai đơn vị cũ (bốn pixel HD) tô một màu — ở HD nó đọc ra
-         bốn cái cột xi măng dưới bụng con bò, không ra bốn cái chân. */
-      for (let dy = 0; dy < h; dy += Q) {
-        const co = dy / Math.max(Q, h);
-        // `day` là bề ngang ĐẦY ĐỦ của chân, nên nửa bề ngang là `day/2`.
-        const w = day * (0.31 - co * 0.08);
-        for (let dx = -w; dx <= w; dx += Q) s.dot(x + dx, y0 + dy, mau);
-        s.dot(x - w, y0 + dy, lighten(mau));
-      }
-      // móng: hai hàng cuối tối hẳn, rộng ra một chút
-      const mw = day * 0.34;
-      for (let dx = -mw; dx <= mw; dx += Q) {
-        s.dot(x + dx, y0 + h - Q, shade(mau, 0.5));
-        s.dot(x + dx, y0 + h - Q * 2, shade(mau, 0.68));
-      }
-    });
-  }
-
-  /** Mắt có lòng trắng — chấm đen trơn ở 16px đọc ra là một lỗ thủng. */
   function mat(hx: number, hy: number, hs: number, ngang: boolean) {
     if (dir === "up") return; // quay lưng thì không có mắt sau gáy
     const ey = hy - hs * 0.08;
+    /* Cường: "rõ mặt sắc nét". Con mắt phải có đủ BA thứ mới đọc ra là mắt ở cỡ
+       này: một mí trên tối (cái làm nó có hướng nhìn), một tròng đen đặc, và
+       một chấm trắng. Thiếu mí thì nó là một lỗ thủng; thiếu chấm trắng thì nó
+       là một hạt tiêu. */
     const veMat = (ex: number) => {
-      // tròng 2×2 pixel HD + một chấm sáng: dưới ngưỡng ấy con mắt biến mất
+      for (let d = -Q; d <= Q * 2; d += Q) s.dot(ex + d, ey - Q, "#1b1410"); // mí trên
       for (const dx of [0, Q]) for (const dy of [0, Q]) s.dot(ex + dx, ey + dy, "#1b1410");
       s.dot(ex, ey, "#ffffff");
-      s.dot(ex - Q, ey + Q, shade(giua, 0.75)); // hốc mắt
+      s.dot(ex + Q, ey + Q * 2, shade(giua, 0.72)); // hốc dưới mắt
     };
     if (ngang) veMat(hx + hs * 0.3);
     else for (const k of [-1, 1]) veMat(hx + k * hs * 0.55 - (k < 0 ? Q : 0));
   }
 
-  /** Mắt nhắm: một gạch ngang. Đây là thứ đọc ra "đang ngủ" nhanh nhất. */
   function mat_nham(hx: number, hy: number, hs: number, ngang: boolean) {
     if (dir === "up") return;
     const ey = hy - hs * 0.05;
@@ -5002,51 +5252,6 @@ function makeAnimal(
     };
     if (ngang) nham(hx + hs * 0.2);
     else for (const k of [-1, 1]) nham(hx + k * hs * 0.6 - 0.75);
-  }
-
-  /** Lông cừu: viền bướu quanh mép trên + đốm xoáy trong thân. */
-  function bong_cuu(cx: number, cy: number, rx: number, ry: number) {
-    const rnd = mulberry32(0x51e + Math.round((art.fluff ?? 0) * 977));
-    for (let i = 0; i < Math.round(rx * ry * 1.1); i++) {
-      const a = rnd() * Math.PI * 2;
-      const r = Math.sqrt(rnd());
-      s.px(
-        Math.round(cx + Math.cos(a) * rx * r * 0.8),
-        Math.round(cy + Math.sin(a) * ry * r * 0.8),
-        rnd() > 0.55 ? art.belly : giua,
-      );
-    }
-    // bướu lông quanh lưng: cứ hai pixel một bướu nhô lên
-    for (let x = Math.round(cx - rx + 1); x <= Math.round(cx + rx - 1); x += 2) {
-      const dx = (x - cx) / rx;
-      const y = Math.round(cy - ry * Math.sqrt(Math.max(0, 1 - dx * dx)));
-      s.px(x, y - 1, art.belly);
-    }
-  }
-
-  /** Đốm bò: vài MẢNG lớn, không phải mưa pixel — mảng mới đọc ra là đốm. */
-  function dom(cx: number, cy: number, rx: number, ry: number) {
-    const rnd = mulberry32(0x9a2 + Math.round((art.patch ?? 0) * 613));
-    /* Hai đốm là đủ, và cả hai dồn về NỬA SAU thân. Rải đều cả con thì cái đốm
-       nào rơi lên vai sẽ dính vào vành tối của đầu, và cả con bò đọc ra thành
-       một cái sọ đen trắng. Mặt để trắng thì con bò mới còn ra mặt. */
-    const n = 2;
-    for (let i = 0; i < n; i++) {
-      const px2 = cx - rx * (0.12 + i * 0.42) + rnd() * 0.6;
-      const py2 = cy + (i === 0 ? -ry * 0.28 : ry * 0.2) + rnd() * 0.5;
-      const pr = Math.max(1.1, rx * (0.16 + rnd() * 0.08));
-      // cắt đốm theo thân: chỉ tô pixel còn nằm trong khối
-      for (let y = Math.floor(py2 - pr); y <= Math.ceil(py2 + pr); y++)
-        for (let x = Math.floor(px2 - pr); x <= Math.ceil(px2 + pr); x++) {
-          const ddx = (x + 0.5 - px2) / pr;
-          const ddy = (y + 0.5 - py2) / (pr * 0.8);
-          if (ddx * ddx + ddy * ddy > 1) continue;
-          const bx = (x + 0.5 - cx) / (rx - 0.9);
-          const by = (y + 0.5 - cy + 0.5) / (ry - 0.9);
-          if (bx * bx + by * by > 1) continue;
-          s.px(x, y, toi);
-        }
-    }
   }
 }
 

@@ -175,8 +175,28 @@ export type AnimalForm = "quadruped" | "bird" | "fish" | "critter";
 /** Ở đâu: trong hàng rào, thả rông, hay dưới nước. */
 export type Housing = "pen" | "free" | "water";
 
+/**
+ * LOÀI cho bộ vẽ — thứ quyết định BÓNG DÁNG, không phải bảng màu.
+ *
+ * Cường: "vẽ lại hết bộ ảnh tất cả động vật đi cho chân thực vô". Chỗ sai của
+ * bản trước nằm ở kiến trúc: mọi con bốn chân dựng bằng cùng một quả trứng, rồi
+ * phân biệt bằng vài cờ rời (`patch`, `fluff`, `snout`). Nhưng con bò khác con
+ * heo ở đường lưng và đường bụng chứ không ở đốm — bò lưng thẳng ngực sâu chân
+ * cao, heo thùng tròn bụng sệ chân ngắn. Gộp bốn bóng dáng ấy làm một quả trứng
+ * thì tô màu gì cũng vẫn là bốn quả trứng khác màu.
+ *
+ * Thiếu trường này thì bộ vẽ ĐOÁN từ các cờ cũ, nên content pack cũ vẫn ra đúng
+ * con vật. Thêm loài mới phải sửa `HINH_LOAI` bên art/atlas.ts — tức là việc
+ * của core, không đẩy OTA được.
+ */
+export type AnimalSpecies =
+  | "bo" | "de" | "heo" | "cuu" | "cho"
+  | "ga" | "vit" | "ca" | "chuot" | "soc";
+
 export interface AnimalArt {
   form: AnimalForm;
+  /** Loài, để bộ vẽ chọn đúng bóng dáng. Thiếu thì đoán từ `form` + các cờ. */
+  species?: AnimalSpecies;
   body: string;
   bodyDark: string;
   belly: string;

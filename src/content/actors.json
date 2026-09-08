@@ -45,7 +45,8 @@
         "h": 8,
         "patch": 0.55,
         "horn": 1,
-        "snout": 0.6
+        "snout": 0.6,
+        "species": "bo"
       }
     },
     {
@@ -91,7 +92,8 @@
         "w": 10,
         "h": 7,
         "horn": 2,
-        "snout": 0.45
+        "snout": 0.45,
+        "species": "de"
       }
     },
     {
@@ -128,7 +130,8 @@
         "accent": "#d98c96",
         "w": 11,
         "h": 7,
-        "snout": 1
+        "snout": 1,
+        "species": "heo"
       }
     },
     {
@@ -174,7 +177,8 @@
         "w": 11,
         "h": 8,
         "fluff": 1,
-        "snout": 0.3
+        "snout": 0.3,
+        "species": "cuu"
       }
     },
     {
@@ -221,7 +225,8 @@
         "accent": "#d8342a",
         "w": 7,
         "h": 7,
-        "crest": 1
+        "crest": 1,
+        "species": "ga"
       }
     },
     {
@@ -268,7 +273,8 @@
         "accent": "#f0b429",
         "w": 8,
         "h": 7,
-        "crest": 0
+        "crest": 0,
+        "species": "vit"
       }
     },
     {
@@ -303,7 +309,8 @@
         "belly": "#dcecf6",
         "accent": "#f0c05a",
         "w": 8,
-        "h": 5
+        "h": 5,
+        "species": "ca"
       }
     },
     {
@@ -335,7 +342,8 @@
         "w": 9,
         "h": 7,
         "snout": 0.55,
-        "tailUp": true
+        "tailUp": true,
+        "species": "cho"
       },
       "pen": "doghouse"
     }
@@ -365,7 +373,8 @@
         "belly": "#c3bcae",
         "accent": "#d7a0a0",
         "w": 6,
-        "h": 4
+        "h": 4,
+        "species": "chuot"
       }
     },
     {
@@ -392,7 +401,8 @@
         "belly": "#e8c8a8",
         "accent": "#3a2a1c",
         "w": 6,
-        "h": 4
+        "h": 4,
+        "species": "soc"
       }
     }
   ],
