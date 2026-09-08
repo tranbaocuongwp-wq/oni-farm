@@ -150,6 +150,34 @@
     "v": {
       "ground": "grass",
       "prop": "boulder"
+    },
+    "N": {
+      "ground": "grass",
+      "prop": "pine"
+    },
+    "Y": {
+      "ground": "grass",
+      "prop": "birch"
+    },
+    "J": {
+      "ground": "grass",
+      "prop": "palm"
+    },
+    "Q": {
+      "ground": "grass",
+      "prop": "willow"
+    },
+    "X": {
+      "ground": "grass",
+      "prop": "maple"
+    },
+    "Z": {
+      "ground": "grass",
+      "prop": "bamboo"
+    },
+    "A": {
+      "ground": "grass",
+      "prop": "deadtree"
     }
   },
   "spawn": {

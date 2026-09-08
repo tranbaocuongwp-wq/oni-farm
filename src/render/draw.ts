@@ -1081,10 +1081,10 @@ export function createRenderer(
                ngang theo sin lệch pha theo toạ độ ô. Trước Đợt 21 chỉ cây
                trồng lay còn cả rừng đứng chết — bão mà rừng im là bão giả. */
             const lay = def?.sway ?? 0;
-            const dich =
-              lay > 0 && wind > 0
-                ? Math.round(Math.sin(timeSec * 2.4 + x * 0.7 + y * 0.5) * 1.5 * wind * lay)
-                : 0;
+            /* Biên độ tính bằng ĐƠN VỊ THẾ GIỚI và KHÔNG làm tròn: từ Đợt 24
+               một pixel HD chỉ là nửa đơn vị, nên làm tròn về số nguyên là vứt
+               mất nửa dải chuyển động và cây lay theo từng nấc giật. */
+            const dich = lay > 0 && wind > 0 ? Math.sin(timeSec * 2.4 + x * 0.7 + y * 0.5) * 2.6 * wind * lay : 0;
             /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
                mép dưới.
                Vì sao: người chơi ĐỨNG ĐƯỢC lên chính cái ô đó — cầu gỗ, bụi cỏ,
@@ -1096,21 +1096,49 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            if (dich === 0) items.push({ base: lopVat, run: () => put(img, px, oy) });
+            if (Math.abs(dich) < 0.05) items.push({ base: lopVat, run: () => put(img, px, oy) });
             else {
-              /* `img.width/height` là PIXEL ẢNH; cỡ trong thế giới nhỏ hơn đúng
+              /* CÂY UỐN, không phải cây TRƯỢT.
+
+                 Cường: "mấy cây lớn nữa hành động với gió… lay". Bản trước cắt
+                 sprite làm HAI lát rồi đẩy lát trên sang ngang — cả cái tán dịch
+                 nguyên khối, tức là cái cây bị xô chứ không bị uốn. Ở một bụi cỏ
+                 cao 8 pixel thì không ai phân biệt được; ở một cây cao 32 pixel
+                 thì nhìn ra ngay.
+
+                 Nay cây CAO cắt làm bốn lát, mỗi lát dịch theo BÌNH PHƯƠNG độ
+                 cao — gốc đứng yên, ngọn đi xa nhất, và đường thân cong thành
+                 một cung. Đúng cách một thân cây chịu gió. Cây thấp (cỏ, bụi)
+                 giữ hai lát: thêm lát chỉ tốn lệnh vẽ mà không ai thấy khác.
+
+                 `img.width/height` là PIXEL ẢNH; cỡ trong thế giới nhỏ hơn đúng
                  `ART` lần. Nguồn cắt theo ảnh, đích đặt theo thế giới. */
               const wPx = img.width;
               const hPx = img.height;
               const wW = wPx / ART;
               const hW = hPx / ART;
-              const splitW = Math.max(4, hW - 8);
-              const splitPx = Math.round(splitW * ART);
+              const nLat = def?.tall ? 4 : 2;
               items.push({
                 base: lopVat,
                 run: () => {
-                  g.drawImage(img, 0, 0, wPx, splitPx, px + dich, oy, wW, splitW);
-                  g.drawImage(img, 0, splitPx, wPx, hPx - splitPx, px, oy + splitW, wW, hW - splitW);
+                  for (let i = 0; i < nLat; i++) {
+                    // lát 0 là NGỌN (trên cùng), lát cuối là GỐC
+                    const y0 = (i / nLat) * hW;
+                    const y1b = ((i + 1) / nLat) * hW;
+                    const cao = 1 - (i + 0.5) / nLat; // 1 ở ngọn, 0 ở gốc
+                    const d = dich * cao * cao;
+                    g.drawImage(
+                      img,
+                      0,
+                      Math.round(y0 * ART),
+                      wPx,
+                      Math.round((y1b - y0) * ART),
+                      px + d,
+                      oy + y0,
+                      wW,
+                      y1b - y0,
+                    );
+                  }
                 },
               });
             }

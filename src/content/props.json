@@ -465,6 +465,166 @@
         "dark": "#565d66",
         "accent": "#5f9e4a"
       }
+    },
+    {
+      "id": "pine",
+      "name": "Cây thông",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#2b6b3f",
+        "dark": "#1c4a2c",
+        "accent": "#5a4028"
+      },
+      "sway": 0.35,
+      "seasonal": true
+    },
+    {
+      "id": "birch",
+      "name": "Cây bạch dương",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#8fc45a",
+        "dark": "#5f8f38",
+        "accent": "#e8e4d8"
+      },
+      "sway": 1,
+      "seasonal": true
+    },
+    {
+      "id": "palm",
+      "name": "Cây dừa",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#3f8f4a",
+        "dark": "#27632f",
+        "accent": "#8a6a44"
+      },
+      "sway": 1,
+      "seasonal": true
+    },
+    {
+      "id": "willow",
+      "name": "Cây liễu",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#7fbf5f",
+        "dark": "#4f8a3a",
+        "accent": "#6b5232"
+      },
+      "sway": 1.4,
+      "seasonal": true
+    },
+    {
+      "id": "maple",
+      "name": "Cây phong",
+      "solid": true,
+      "tall": true,
+      "hits": 5,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#4f9e3f",
+        "dark": "#336b28",
+        "accent": "#7a4a28"
+      },
+      "sway": 1,
+      "seasonal": true
+    },
+    {
+      "id": "bamboo",
+      "name": "Bụi tre",
+      "solid": true,
+      "tall": true,
+      "hits": 3,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 4
+        }
+      ],
+      "art": {
+        "body": "#7fb84a",
+        "dark": "#4f7a2c",
+        "accent": "#b8c46a"
+      },
+      "sway": 1.4,
+      "seasonal": true
+    },
+    {
+      "id": "deadtree",
+      "name": "Cây khô",
+      "solid": true,
+      "tall": true,
+      "hits": 4,
+      "tool": "CHOP",
+      "becomes": "stump",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#8a7a64",
+        "dark": "#5c4f40",
+        "accent": "#3f362c"
+      },
+      "sway": 1
     }
   ]
 }

@@ -736,6 +736,279 @@ function makeTree(art: PropArt): HTMLCanvasElement {
   return outline(s, shade(art.dark, 0.6)).c;
 }
 
+
+/* ---------------------------------------------------------------------------
+   BẢY LOÀI CÂY RỪNG — Cường: "THÊM 5-7 loại cây rừng".
+
+   Một khu rừng chỉ có đúng một loài cây là một khu rừng trồng, không phải rừng.
+   Và ở cỡ này thì thứ phân biệt loài cây là ĐƯỜNG BAO của tán chứ không phải
+   màu lá: thông là cái nêm, bạch dương là cột trắng có tán thưa, dừa là mấy tàu
+   lá toả từ một điểm, liễu là màn lá rủ, phong là quả cầu, tre là bó cọng, cây
+   khô là mấy cành trơ. Bảy đường bao ấy nhìn từ xa vẫn tách nhau ra được.
+--------------------------------------------------------------------------- */
+
+/** THÔNG: nêm ba tầng, thân thẳng, tán cụp xuống — bóng dáng không lẫn vào đâu. */
+function makePine(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  const rnd = mulberry32(0x31a7);
+  s.shadow(8, baseY - 2, 5, 2.2);
+  voCay(s, 7, baseY - 8, 2.5, 7, P.trunk, P.trunkDark, shade(P.trunk, 1.2));
+
+  /* Ba tầng nêm, tầng dưới rộng nhất. Mép tầng vẽ RĂNG CƯA chứ không thẳng: lá
+     kim mọc thành chùm, nên đường bao của thông là một đường gãy khúc. */
+  const tang: [number, number, number][] = [
+    [baseY - 9, 6.5, 5.5],
+    [baseY - 14, 5.2, 5],
+    [baseY - 19, 3.6, 4.5],
+  ];
+  for (const [dy, rong, cao] of tang) {
+    for (let d = 0; d <= cao; d += Q) {
+      const u = d / cao;
+      const w = rong * (1 - u) + 0.6;
+      const rang = (Math.floor(d * ART) % 3 === 0 ? 0.4 : 0) + rnd() * 0.3;
+      for (let x = -w - rang; x <= w + rang; x += Q)
+        s.dot(8 + x, dy - d, Math.abs(x) > w - 0.6 ? art.dark : art.body);
+      if (u > 0.25) s.dot(8 - w * 0.45, dy - d, lighten(art.body));
+    }
+    // gờ tối dưới mỗi tầng — cái làm ba tầng tách nhau ra
+    for (let x = -rong - 0.5; x <= rong + 0.5; x += Q) s.dot(8 + x, dy + Q, shade(art.dark, 0.75));
+  }
+  // ngọn nhọn
+  for (let d = 0; d < 1.6; d += Q) s.dot(8, baseY - 24 - d, art.dark);
+  return outline(s, shade(art.dark, 0.62), 1).c;
+}
+
+/** BẠCH DƯƠNG: thân TRẮNG có vệt đen, tán thưa và cao — sáng nhất trong rừng. */
+function makeBirch(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  const rnd = mulberry32(0x9b21);
+  s.shadow(8, baseY - 2, 4.5, 2);
+
+  // thân trắng, hơi nghiêng, có mắt gỗ đen
+  const vo = art.accent;
+  for (let d = 0; d < 15; d += Q) {
+    const x = 7.5 + Math.sin(d * 0.12) * 0.5;
+    for (let w = 0; w < 1.6; w += Q) s.dot(x + w, baseY - 2 - d, vo);
+    s.dot(x, baseY - 2 - d, lighten(vo));
+    s.dot(x + 1.5, baseY - 2 - d, shade(vo, 0.78));
+  }
+  for (let i = 0; i < 6; i++) {
+    const y = baseY - 4 - rnd() * 12;
+    const x = 7.5 + Math.sin((baseY - 2 - y) * 0.12) * 0.5;
+    for (let w = 0; w < 1 + rnd(); w += Q) s.dot(x + w + 0.2, y, "#3a352e");
+  }
+  // cành chìa ra hai bên
+  for (const [by, k, len] of [[baseY - 12, -1, 3], [baseY - 15, 1, 3.5], [baseY - 9, 1, 2]] as const)
+    for (let d = 0; d < len; d += Q) s.dot(7.8 + k * d, by - d * 0.5, shade(vo, 0.7));
+
+  /* Tán THƯA: năm cụm nhỏ rời nhau, chừa nhiều trời lọt qua. Bạch dương mà tán
+     đặc thì nó chỉ là một cái cây xanh có thân trắng. */
+  const cum: [number, number, number][] = [
+    [4.5, baseY - 17, 3],
+    [11.5, baseY - 18, 3.2],
+    [8, baseY - 21, 3.6],
+    [5.5, baseY - 22.5, 2.6],
+    [11, baseY - 23, 2.4],
+  ];
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, art.body, art.dark);
+  for (const [cx, cy, r] of cum)
+    if (cx <= 8) s.ell(cx - r * 0.2, cy - r * 0.3, r * 0.45, r * 0.3, lighten(art.body));
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** DỪA: thân cong, bảy tàu lá toả từ ngọn, buồng quả dưới tán. */
+function makePalm(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  s.shadow(8, baseY - 2, 5, 2.2);
+
+  // thân CONG — cây dừa thẳng đứng thì thành cái cột điện có lá
+  const ngonX = 10;
+  const ngonY = baseY - 17;
+  const than: [number, number][] = [];
+  for (let t = 0; t <= 1; t += Q / 16) {
+    const x = 6.5 + t * t * (ngonX - 6.5);
+    const y = baseY - 2 - t * (baseY - 2 - ngonY);
+    than.push([x, y]);
+    for (let w = 0; w < 2.2 - t * 0.8; w += Q) s.dot(x + w, y, art.accent);
+    s.dot(x, y, lighten(art.accent));
+    s.dot(x + 2 - t * 0.8, y, shade(art.accent, 0.7));
+    // ngấn thân
+    if (Math.floor(y * ART) % 5 === 0) s.dot(x + 0.5, y, shade(art.accent, 0.6));
+  }
+
+  // TÀU LÁ: bảy tàu toả đều, mỗi tàu là một cung rủ có gân giữa và lá kép
+  for (let i = 0; i < 7; i++) {
+    const goc = Math.PI * (1.06 + (i / 6) * 0.88);
+    const dai = 6.2 + (i % 2) * 1.1;
+    for (let d = 0; d <= dai; d += Q) {
+      const u = d / dai;
+      const ru = u * u * 3.4; // đầu tàu rủ xuống
+      const x = ngonX + Math.cos(goc) * d;
+      const y = ngonY + Math.sin(goc) * d + ru;
+      s.dot(x, y, art.dark);
+      s.dot(x, y - Q, i % 2 ? art.body : lighten(art.body));
+      // lá kép chìa ra hai bên gân
+      if (u > 0.15 && Math.floor(d * ART) % 2 === 0) {
+        const w = (1 - u) * 1.5 + 0.4;
+        s.dot(x, y - Q * 2 - w * 0.4, art.body);
+        s.dot(x, y + Q + w * 0.3, art.dark);
+      }
+    }
+  }
+  // buồng quả dưới tán
+  for (const [dx, dy] of [[-0.5, 1.2], [0.8, 1.6], [0, 2.4]] as const) {
+    s.ell(ngonX + dx, ngonY + dy, 1, 1, shade("#8a6a2a", 0.7));
+    s.ell(ngonX + dx, ngonY + dy - Q, 1 - Q, 1 - Q, "#b8912f");
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** LIỄU: tán bè ra, và những dải lá RỦ THẲNG xuống gần chạm đất. */
+function makeWillow(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  const rnd = mulberry32(0x4c1d);
+  s.shadow(8, baseY - 2, 6, 2.4);
+  voCay(s, 6.5, baseY - 9, 3, 8, P.trunk, P.trunkDark, shade(P.trunk, 1.2));
+
+  // tán bè ngang
+  const cum: [number, number, number][] = [
+    [4, baseY - 15, 4.4],
+    [12, baseY - 15, 4.4],
+    [8, baseY - 17.5, 5],
+  ];
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, art.body, art.dark);
+  for (const [cx, cy, r] of cum)
+    if (cx <= 8) s.ell(cx - r * 0.2, cy - r * 0.35, r * 0.5, r * 0.3, lighten(art.body));
+
+  /* DẢI LÁ RỦ: mười một dải buông thẳng từ mép tán. Đây là toàn bộ cái làm nên
+     cây liễu — bỏ nó đi thì nó chỉ là một cái cây tán bè. */
+  for (let i = 0; i < 11; i++) {
+    const x = 2 + i * 1.2 + rnd() * 0.4;
+    const tren = baseY - 13 + Math.abs(x - 8) * 0.55;
+    const dai = 4 + rnd() * 5;
+    for (let d = 0; d < dai; d += Q) {
+      const lech = Math.sin(d * 0.6 + i) * 0.35;
+      s.dot(x + lech, tren + d, d < 1 ? art.dark : i % 2 ? art.body : lighten(art.body));
+      if (Math.floor(d * ART) % 3 === 0) s.dot(x + lech + Q, tren + d, art.dark);
+    }
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** PHONG: tán cầu ĐẶC và cao, thân chẻ đôi — cây rợp bóng của khu rừng. */
+function makeMaple(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  const rnd = mulberry32(0x7f52);
+  s.shadow(8, baseY - 2, 6, 2.5);
+  voCay(s, 6.5, baseY - 10, 3, 9, art.accent, shade(art.accent, 0.65), shade(art.accent, 1.25));
+  // thân CHẺ ĐÔI ở ngang ngực — nét riêng, phá thế cột thẳng
+  for (let d = 0; d < 5; d += Q) {
+    s.dot(6 - d * 0.35, baseY - 11 - d, art.accent);
+    s.dot(9.5 + d * 0.3, baseY - 11 - d, shade(art.accent, 0.7));
+  }
+
+  const cum: [number, number, number][] = [
+    [4.5, baseY - 15, 4.6],
+    [11.5, baseY - 15, 4.6],
+    [8, baseY - 14, 4.4],
+    [5.5, baseY - 19.5, 4.4],
+    [10.5, baseY - 19.5, 4.4],
+    [8, baseY - 22, 4.8],
+  ];
+  for (const [cx, cy, r] of cum) cumLa(s, cx, cy, r, art.body, art.dark);
+  for (const [cx, cy, r] of cum)
+    if (cx <= 8 && cy <= baseY - 17) s.ell(cx - r * 0.25, cy - r * 0.35, r * 0.5, r * 0.34, lighten(art.body));
+  for (let i = 0; i < 6; i++) {
+    const x = 3 + Math.floor(rnd() * 11);
+    const y = baseY - 23 + Math.floor(rnd() * 12);
+    s.dot(x, y, art.dark);
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** TRE: một BÓ cọng cao, thân có đốt, lá nhỏ ở ngọn. Cao và mảnh, không có tán. */
+function makeBamboo(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  const rnd = mulberry32(0x2ae9);
+  s.shadow(8, baseY - 2, 4.5, 2);
+
+  const cong: [number, number, number][] = [
+    [5.5, 16, -0.8],
+    [8, 21, 0.2],
+    [10.5, 18, 1],
+    [7, 13, -0.4],
+    [9.5, 12, 0.7],
+  ];
+  for (let i = 0; i < cong.length; i++) {
+    const [x0, cao, nghieng] = cong[i]!;
+    const mau = i % 2 ? art.body : lighten(art.body);
+    for (let d = 0; d < cao; d += Q) {
+      const u = d / cao;
+      const x = x0 + nghieng * u * u * 2.4;
+      for (let w = 0; w < 1; w += Q) s.dot(x + w, baseY - 2 - d, mau);
+      s.dot(x, baseY - 2 - d, lighten(mau));
+      s.dot(x + 1, baseY - 2 - d, art.dark);
+      // ĐỐT: một vòng tối cứ mỗi bốn đơn vị — cái làm cây tre ra cây tre
+      if (Math.floor(d) % 4 === 0) {
+        s.dot(x, baseY - 2 - d, art.dark);
+        s.dot(x + 0.5, baseY - 2 - d, art.dark);
+        s.dot(x + 1, baseY - 2 - d, art.dark);
+      }
+    }
+    // lá ở ngọn: ba lá mác toả ra
+    const nx = x0 + nghieng * 2.4;
+    const ny = baseY - 2 - cao;
+    for (let k = -1; k <= 1; k++) {
+      const goc = Math.PI * (1.15 + (k + 1) * 0.35);
+      for (let d = 0; d < 3.5 + rnd(); d += Q) {
+        s.dot(nx + Math.cos(goc) * d, ny + Math.sin(goc) * d + d * d * 0.06, art.dark);
+        s.dot(nx + Math.cos(goc) * d, ny + Math.sin(goc) * d + d * d * 0.06 - Q, art.body);
+      }
+    }
+  }
+  return outline(s, shade(art.dark, 0.62), 1).c;
+}
+
+/** CÂY KHÔ: chỉ còn cành trơ, xám bạc. Chỗ nghỉ mắt giữa một rừng toàn xanh. */
+function makeDeadTree(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE * 2);
+  const baseY = TILE * 2;
+  s.shadow(8, baseY - 2, 4.5, 2);
+  voCay(s, 6.5, baseY - 13, 3, 12, art.body, art.dark, lighten(art.body));
+
+  /* Cành đâm ra theo cung, nhỏ dần và chẻ nhánh ở chót. Cành thẳng đuồn đuột
+     thì cây khô trông như một cái chổi cắm ngược. */
+  const canh: [number, number, number, number][] = [
+    [baseY - 13, -1, 5, -0.55],
+    [baseY - 16, 1, 5.5, -0.6],
+    [baseY - 19, -1, 4, -0.75],
+    [baseY - 21, 1, 3.5, -0.8],
+    [baseY - 10, 1, 3, -0.35],
+  ];
+  for (const [by, k, dai, doc] of canh) {
+    let ex = 8;
+    let ey = by;
+    for (let d = 0; d < dai; d += Q) {
+      ex = 8 + k * d;
+      ey = by + doc * d;
+      s.dot(ex, ey, art.body);
+      s.dot(ex, ey + Q, art.dark);
+    }
+    // chẻ hai nhánh nhỏ ở chót cành
+    for (const k2 of [-1, 1])
+      for (let d = 0; d < 1.8; d += Q) s.dot(ex + k * d * 0.5, ey - d * (k2 > 0 ? 1 : 0.2), art.dark);
+  }
+  // ngọn gãy
+  for (let d = 0; d < 2.5; d += Q) s.dot(8, baseY - 25 - d, art.dark);
+  return outline(s, shade(art.accent, 0.85), 1).c;
+}
+
 /** Cây gỗ NHỎ: một ô, thân mảnh, tán ba cụm — chặt vài nhát là xong. */
 function makeSapling(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
@@ -1520,6 +1793,13 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "bush_big": return makeBushBig(art);
     case "waterfall": return makeWaterfall(art);
     case "boulder": return makeBoulder(art);
+    case "pine": return makePine(art);
+    case "birch": return makeBirch(art);
+    case "palm": return makePalm(art);
+    case "willow": return makeWillow(art);
+    case "maple": return makeMaple(art);
+    case "bamboo": return makeBamboo(art);
+    case "deadtree": return makeDeadTree(art);
     default: {
       const s = surface(TILE, TILE);
       s.rect(2, 3, 12, 11, art.dark);
