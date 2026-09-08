@@ -7,6 +7,7 @@
    MỌI dispatch — vỡ bất biến là ném lỗi ngay tại action gây ra nó.
 ============================================================================ */
 
+import { readFileSync } from "node:fs";
 import { loadContent, rawPack } from "./lib/load-content.mjs";
 import { buildContent } from "../src/core/content/loader.ts";
 import { createStore } from "../src/core/store.ts";
@@ -11619,6 +11620,67 @@ test("163. KHÔNG cây trồng nào trông giống hệt cây khác", () => {
   ok(
     validateCrops(xau).length > 0,
     "schema phải từ chối `fruitShape` lạ — rơi lặng lẽ về mặc định thì một lỗi gõ biến quả dưa sọc thành quả bóng trơn mà build vẫn xanh",
+  );
+});
+
+test("164. Lớp vẽ KHÔNG được gọi drawImage ba tham số", () => {
+  /* Từ Đợt 24 sprite rộng `ART` lần đơn vị thế giới, nên `g.drawImage(img, x, y)`
+     ba tham số vẽ theo cỡ PIXEL ẢNH — tức gấp đôi cỡ thật. Cỡ đích phải nói rõ,
+     và `put()` trong draw.ts là chỗ duy nhất được phép suy ra nó.
+
+     Dạng lỗi này đã lọt HAI lần trong cùng một đợt:
+       · `drawActors` neo hình bằng `img.width / 2` → mọi con vật, người làm và
+         xe đứng lệch NỬA Ô so với chỗ luật chơi nói họ đang đứng.
+       · con trỏ ô, dấu đích và khung xem trước tuyến xây vẽ to gấp đôi — Cường
+         bắt được: "con trỏ chuột to quá vậy, bằng 1 ô đất thôi".
+
+     Cả hai đều IM LẶNG với mọi phép kiểm khác: sim không có canvas nên không
+     gọi được lớp vẽ, `tsc` thấy ba tham số là hợp lệ, và build vẫn xanh. Thứ
+     duy nhất bắt được chúng là đọc mắt — nên chỗ này đọc bằng máy.
+
+     Quét nguồn chứ không chạy: đây là ràng buộc về CÁCH VIẾT, và ràng buộc về
+     cách viết thì kiểm ở dạng chữ mới đúng chỗ. Cùng lối với các guard trong
+     scripts/build-site.mjs. */
+  const nguon = readFileSync(new URL("../src/render/draw.ts", import.meta.url), "utf8");
+  /* BỎ CHÚ THÍCH trước khi quét. Không bỏ thì chính dòng tài liệu giải thích
+     luật này — "`g.drawImage(img, x, y)` ba tham số là một lỗi" — sẽ làm kịch
+     bản đỏ, và người sửa sẽ học được bài học sai: rằng cứ đừng viết tài liệu. */
+  const src = nguon.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+
+  /* `gg` (canvas cache nền) và `cg` (canvas mảng mưa) đã ở ĐỘ PHÂN GIẢI ẢNH, nên
+     ba tham số ở đó mới là đúng. Chỉ soi đúng biến `g` của khung hình. */
+  const re = /(?<![A-Za-z0-9_$])g\.drawImage\(/g;
+  const xau = [];
+  for (const m of src.matchAll(re)) {
+    let d = 1;
+    let n = 1;
+    let j = m.index + m[0].length;
+    let cuoi = j;
+    while (d > 0 && j < src.length) {
+      const c = src[j];
+      if (c === "(") d++;
+      else if (c === ")") { d--; if (d === 0) cuoi = j; }
+      else if (c === "," && d === 1) n++;
+      j++;
+    }
+    // dấu phẩy cuối trước ")" của lối viết nhiều dòng không tính là tham số
+    if (/,\s*$/.test(src.slice(m.index + m[0].length, cuoi))) n--;
+    if (n === 3) {
+      const dong = src.slice(0, m.index).split("\n").length;
+      xau.push(`dòng ${dong}`);
+    }
+  }
+  eq(
+    xau.length,
+    0,
+    `draw.ts còn ${xau.length} lệnh g.drawImage BA tham số (${xau.join(", ")}) — ` +
+      "chúng vẽ theo cỡ pixel ảnh nên to gấp ART lần; dùng put() hoặc nói rõ cỡ đích",
+  );
+
+  // và `put` phải thật sự chia cho ART, nếu không cả phép kiểm trên thành vô nghĩa
+  ok(
+    /function put\([\s\S]{0,400}?\.width \/ ART[\s\S]{0,200}?\.height \/ ART/.test(src),
+    "put() phải quy cỡ ảnh về đơn vị thế giới bằng cách chia cho ART",
   );
 });
 

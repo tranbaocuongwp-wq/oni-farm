@@ -332,6 +332,18 @@ export function createRenderer(
      không phải sửa một dòng nào. Cách còn lại (đổi hệ toạ độ của cả lớp vẽ sang
      pixel ảnh) đụng hơn trăm biểu thức, mà mỗi biểu thức là một cơ hội lệch nửa
      ô một cách âm thầm. */
+  /**
+   * Dán một sprite ở TOẠ ĐỘ THẾ GIỚI, cỡ đích suy ra từ cỡ ảnh chia cho `ART`.
+   *
+   * Từ Đợt 24 thì `g.drawImage(img, x, y)` ba tham số là một LỖI trong file này:
+   * nó vẽ theo cỡ PIXEL ẢNH, tức gấp `ART` lần cỡ thật. Nó đã lọt hai lần —
+   * một lần làm mọi thực thể lệch nửa ô, một lần làm con trỏ ô to gấp đôi
+   * (Cường bắt được: "con trỏ chuột to quá vậy, bằng 1 ô đất thôi"). Kịch bản
+   * 164 nay quét chính file này để chặn dạng gọi ấy.
+   *
+   * Ngoại lệ hợp lệ duy nhất là vẽ vào canvas phụ đã ở độ phân giải ảnh
+   * (`gg` của cache nền, `cg` của mảng mưa) — chúng dùng tên biến khác.
+   */
   function put(img: CanvasImageSource, dx: number, dy: number) {
     const w = (img as HTMLCanvasElement).width / ART;
     const h = (img as HTMLCanvasElement).height / ART;
@@ -1680,7 +1692,7 @@ export function createRenderer(
     if (cursor) {
       const pulse = opts.reduceMotion ? 0.9 : 0.72 + 0.28 * Math.sin(timeSec * 5);
       g.globalAlpha = pulse;
-      g.drawImage(
+      put(
         cursor.ok ? atlas.cursorOk : atlas.cursorNo,
         cursor.x * TILE - camera.rx,
         cursor.y * TILE - camera.ry,
@@ -1700,7 +1712,7 @@ export function createRenderer(
     // biệt "sẽ tới đó" và "sẽ làm ở đó".
     if (opts.navTarget) {
       const f = opts.reduceMotion ? 0 : Math.floor(timeSec * 6) % 3;
-      g.drawImage(
+      put(
         atlas.navMark[f]!,
         opts.navTarget.x * TILE - camera.rx,
         opts.navTarget.y * TILE - camera.ry,
@@ -1713,7 +1725,7 @@ export function createRenderer(
     if (opts.lineCells) {
       g.globalAlpha = 0.85;
       for (const c of opts.lineCells)
-        g.drawImage(
+        put(
           c.ok ? atlas.cursorOk : atlas.cursorNo,
           c.x * TILE - camera.rx,
           c.y * TILE - camera.ry,
