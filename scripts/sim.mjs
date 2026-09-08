@@ -11719,10 +11719,10 @@ test("165. Con vật rảnh phải ĐỔI VIỆC, và cái đói thắng mọi v
     thay.add(animalMood(store.getState(), content, conBo()).pose);
   }
   ok(
-    thay.size >= 6,
+    thay.size >= 9,
     `con vật rảnh chỉ làm ${thay.size} việc trong cả ngày (${[...thay].join(", ")}) — phải từ 6 trở lên`,
   );
-  ok(!thay.has("walk"), "đứng yên thì không được ra dáng ĐANG ĐI");
+  ok(!thay.has("walk") && !thay.has("run"), "đứng yên thì không được ra dáng ĐANG ĐI hay ĐANG CHẠY");
   ok(!thay.has("sleep"), "giữa ban ngày thì không được ra dáng NGỦ");
 
   // --- 2) tất định ---

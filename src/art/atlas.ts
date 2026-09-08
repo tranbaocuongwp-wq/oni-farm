@@ -4491,12 +4491,12 @@ const ANIMAL_FRAMES = 3;
 --------------------------------------------------------------------------- */
 
 export type AnimalPose =
-  /** đi | đứng thở | gặm cỏ | ăn máng | uống nước */
-  | "walk" | "idle" | "graze" | "eat" | "drink"
-  /** ngủ | co ro trong mưa | ngồi | vươn vai | rũ mình */
-  | "sleep" | "huddle" | "sit" | "stretch" | "shake"
-  /** gãi | liếm lông | ngẩng nhìn | kêu | nhảy chồm */
-  | "scratch" | "groom" | "look" | "call" | "play";
+  /** đi | chạy | đứng thở | gặm cỏ | ăn máng | uống nước */
+  | "walk" | "run" | "idle" | "graze" | "eat" | "drink"
+  /** ngủ | nằm ngửa | co ro trong mưa | ngồi | vươn vai | rũ mình */
+  | "sleep" | "roll" | "huddle" | "sit" | "stretch" | "shake"
+  /** gãi | liếm lông | hửi đất | ngẩng nhìn | kêu | nhảy chồm */
+  | "scratch" | "groom" | "sniff" | "look" | "call" | "play";
 
 /** Bộ số mô tả MỘT tư thế. Mọi đơn vị theo bán kính đầu hoặc bán kính thân. */
 interface PoseRig {
@@ -4516,6 +4516,8 @@ interface PoseRig {
   taiVenh: number;
   /** nét phụ vẽ quanh con vật */
   net: "khong" | "rung" | "am" | "bui" | "nuoc";
+  /** NẰM NGỬA: bốn chân chổng lên trời. Chỉ `roll` dùng tới. */
+  nga?: boolean;
 }
 
 const TU_THE: Record<AnimalPose, PoseRig> = {
@@ -4535,6 +4537,10 @@ const TU_THE: Record<AnimalPose, PoseRig> = {
   look:    { dauX: 0.2,  dauY: -1.1, thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0.7, net: "khong" },
   call:    { dauX: 0.3,  dauY: -1,   thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0.6, net: "am" },
   play:    { dauX: 0.2,  dauY: -0.5, thanY: -2,  nghieng: -1.2, chan: 0.85, nham: false, taiVenh: 0.6, net: "bui" },
+  // ba tư thế thêm ở lượt sau, khi Cường bảo "quá ít động tác, tăng mạnh đi"
+  run:     { dauX: 0.5,  dauY: 0.15, thanY: 0.5, nghieng: -0.5, chan: 1.15, nham: false, taiVenh: -0.5, net: "bui" },
+  roll:    { dauX: -0.3, dauY: 0.9,  thanY: 2,   nghieng: 0,    chan: 0.9,  nham: true,  taiVenh: -0.6, net: "khong", nga: true },
+  sniff:   { dauX: 0.55, dauY: 1.9,  thanY: 0,   nghieng: 0.7,  chan: 0.95, nham: false, taiVenh: 0.5, net: "bui" },
 };
 
 /* ============================================================================
@@ -4773,9 +4779,26 @@ function makeAnimal(
       veDuoiDung(cx - rx, cy - ry * 0.9 - ngh * 0.5, ry);
 
     // chân TRƯỚC (ở gần)
-    if (chanCao > 0.4) {
+    if (chanCao > 0.4 && !rig.nga) {
       if (ngang) veChan(cx + rx * 0.28, cx + rx * 0.72, bot + ngh * 0.5, chanCao - ngh * 0.5, vien, 0);
       else veChan(cx - rx * 0.46, cx + rx * 0.46, bot, chanCao, vien, 0);
+    }
+    /* NẰM NGỬA: bốn chân chổng lên trời và cái bụng phơi ra. Vẽ chân HƯỚNG LÊN
+       từ đường lưng, và gập ở khuỷu — chân duỗi thẳng đứng thì con vật trông
+       như bị lật ngược chứ không như đang lăn ra sung sướng. */
+    if (rig.nga) {
+      for (const [kx, gap] of [[-0.6, 0.6], [-0.15, 1], [0.3, 0.55], [0.72, 0.95]] as const) {
+        const x = cx + rx * kx;
+        const yTop = cy - ry * 0.85;
+        const cao = chanCao * 1.15 * gap;
+        for (let d = 0; d < cao; d += Q) {
+          const nghieng2 = d > cao * 0.55 ? (d - cao * 0.55) * 0.8 : 0;
+          for (let w = -L.chanDay * 0.35; w <= L.chanDay * 0.35; w += Q)
+            s.dot(x + w + nghieng2, yTop - d, kx < 0 ? xa : vien);
+        }
+        for (let w = -L.chanDay * 0.45; w <= L.chanDay * 0.45; w += Q)
+          s.dot(x + w + (cao - cao * 0.55) * 0.8, yTop - cao, shade(vien, 0.45));
+      }
     }
 
     // ---- CỔ và ĐẦU

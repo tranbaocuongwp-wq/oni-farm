@@ -180,9 +180,9 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
  * cả ngày chỉ làm một việc, và nông trại đứng hình dù mọi thứ khác vẫn chạy.
  */
 export type PoseName =
-  | "walk" | "idle" | "graze" | "eat" | "drink"
-  | "sleep" | "huddle" | "sit" | "stretch" | "shake"
-  | "scratch" | "groom" | "look" | "call" | "play";
+  | "walk" | "run" | "idle" | "graze" | "eat" | "drink"
+  | "sleep" | "roll" | "huddle" | "sit" | "stretch" | "shake"
+  | "scratch" | "groom" | "sniff" | "look" | "call" | "play";
 
 /**
  * VIỆC VẶT lúc rảnh, kèm trọng số. Con vật đứng yên bốc một việc trong bảng
@@ -204,6 +204,8 @@ const VIEC_RANH: readonly (readonly [PoseName, number])[] = [
   ["sit", 5],
   ["play", 4],
   ["drink", 4],
+  ["sniff", 7],
+  ["roll", 3],
 ];
 
 /** Mỗi NHỊP này (phút game) con vật rảnh bốc lại một việc. */
@@ -278,8 +280,12 @@ export function animalMood(
      máng ăn — đói là chuyện người chơi phải xử nên nó phải thắng mọi việc vặt;
      còn lại mới tới việc vặt. Nếu để việc vặt thắng cái đói thì con vật sắp
      chết đói vẫn nhởn nhơ gãi tai, và tín hiệu hỏng đúng lúc cần nhất. */
+  /* ĐI hay CHẠY: đường còn dài thì chạy. Suy từ độ dài đường đi còn lại — một
+     con số sẵn có trong state, không phải thêm trường mới. */
   const pose: PoseName = dangDi
-    ? "walk"
+    ? e.ai.path.length >= 6
+      ? "run"
+      : "walk"
     : dem
       ? "sleep"
       : troi.shelter
