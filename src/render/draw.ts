@@ -38,7 +38,9 @@
 
 import type { Content, GameState, Tile } from "../game/types.ts";
 import {
-  TILE,
+  ART,
+  TILE_PX,
+  CROP_PX,
   CROP_H,
   PLAYER_ACT_FRAME,
   PLAYER_RAISE_FRAME,
@@ -58,6 +60,7 @@ import type { Camera } from "./camera.ts";
 import type { EmoteKind } from "../art/atlas.ts";
 import { hash2 } from "../core/rng.ts";
 import { WORK_MINUTES } from "../game/workerai.ts";
+import { TILE } from "../game/world.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
 const LETTERBOX = "#0b0907";
@@ -112,9 +115,30 @@ export interface DrawOptions {
   lineCells: { x: number; y: number; ok: boolean }[] | null;
 }
 
+/**
+ * Số lệnh vẽ của MỘT khung hình — thước đo duy nhất của lớp vẽ không phụ thuộc
+ * lịch trình trình duyệt.
+ *
+ * `docs/KIEN-TRUC.md` đã muốn con số này từ lâu ("lớp vẽ không đo được trong
+ * Node… hoặc **đếm lệnh vẽ**") nhưng chưa ai viết, nên mỗi lần cần đo lại phải
+ * vá tạm `CanvasRenderingContext2D.prototype` trong console — và con số ấy chết
+ * theo phiên làm việc. Đợt 15 và Đợt 23 đều dựa vào nó để chứng minh mình đã
+ * làm gì; giờ nó thành một phần của game, ở bản DEV.
+ */
+export interface DrawStats {
+  drawImage: number;
+  fillRect: number;
+  /** số phần tử đã sắp trong lớp vật thể — thứ phình theo số ô nhìn thấy */
+  items: number;
+  /** số thực thể bị bỏ qua vì nằm ngoài khung nhìn */
+  culled: number;
+}
+
 export interface Renderer {
   /** đồng bộ backing store của canvas với viewport hiện tại của camera */
   applyViewport(): void;
+  /** Số lệnh vẽ của khung hình vừa rồi. Chỉ có ý nghĩa ở bản DEV. */
+  stats(): DrawStats;
   draw(s: GameState, content: Content, cursor: Cursor | null, timeSec: number, opts: DrawOptions): void;
   /** Bắn một cụm hạt tại tâm ô (tx,ty). Trang trí thuần tuý, không vào state. */
   burst(kind: BurstKind, tx: number, ty: number): void;
@@ -269,11 +293,49 @@ export function createRenderer(
      thực thể mỗi khung nên không rò rỉ khi người làm nghỉ việc. */
   const phaLam = new Map<number, number>();
 
+  /* ---------------------------------------------------------- ĐẾM LỆNH VẼ
+
+     Bọc `drawImage`/`fillRect` của chính ngữ cảnh này để đếm. Chỉ ở bản DEV:
+     bản chơi thật không trả một xu nào cho phép đo.
+
+     Vì sao đếm chứ không bấm giờ: thời gian một khung phụ thuộc lịch trình của
+     trình duyệt, máy đang chạy gì, và cả nhiệt độ máy — hai lần đo cách nhau
+     một phút đã lệch. Số LỆNH VẼ thì không: nó là một tính chất của mã. */
+  const dem: DrawStats = { drawImage: 0, fillRect: 0, items: 0, culled: 0 };
+  if (import.meta.env?.DEV) {
+    const oDraw = g.drawImage.bind(g);
+    const oFill = g.fillRect.bind(g);
+    (g as CanvasRenderingContext2D).drawImage = ((...a: unknown[]) => {
+      dem.drawImage++;
+      return (oDraw as (...x: unknown[]) => void)(...a);
+    }) as CanvasRenderingContext2D["drawImage"];
+    (g as CanvasRenderingContext2D).fillRect = ((...a: unknown[]) => {
+      dem.fillRect++;
+      return (oFill as (...x: unknown[]) => void)(...a);
+    }) as CanvasRenderingContext2D["fillRect"];
+  }
+
   /** Ghim một toạ độ world về đúng lưới pixel THIẾT BỊ (mịn hơn world px đúng
    *  bằng scale×dpr lần). Dùng cho những thứ DI CHUYỂN mượt: nhân vật, hạt. */
   function snapDev(v: number): number {
     const k = camera.viewport.scale * camera.viewport.dpr;
     return k > 0 ? Math.round(v * k) / k : v;
+  }
+
+  /* -------------------------------------------------------- DÁN MỘT SPRITE
+
+     Sprite nay rộng `ART` lần so với đơn vị thế giới (xem `ART` trong
+     art/atlas.ts), nên phải nói rõ CỠ ĐÍCH thay vì để canvas suy từ cỡ ảnh.
+
+     Đây là chỗ duy nhất biết chuyện đó. Nhờ vậy toàn bộ phép tính vị trí ở lớp
+     vẽ — `x * TILE - rx`, `py - 11`, `px + 4` — vẫn viết ở ĐƠN VỊ THẾ GIỚI và
+     không phải sửa một dòng nào. Cách còn lại (đổi hệ toạ độ của cả lớp vẽ sang
+     pixel ảnh) đụng hơn trăm biểu thức, mà mỗi biểu thức là một cơ hội lệch nửa
+     ô một cách âm thầm. */
+  function put(img: CanvasImageSource, dx: number, dy: number) {
+    const w = (img as HTMLCanvasElement).width / ART;
+    const h = (img as HTMLCanvasElement).height / ART;
+    g.drawImage(img, dx, dy, w, h);
   }
 
   /** Canvas phủ kín khung chứa; khung nhìn được căn giữa bên trong bằng offset. */
@@ -414,7 +476,7 @@ export function createRenderer(
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         if (x >= 0 && y >= 0 && x < s.w && y < s.h) continue;
-        g.drawImage(set[variantFor(x + 97, y + 53, set.length)]!, x * TILE - rx, y * TILE - ry);
+        put(set[variantFor(x + 97, y + 53, set.length)]!, x * TILE - rx, y * TILE - ry);
       }
     }
   }
@@ -467,14 +529,16 @@ export function createRenderer(
     nenTiles = s.tiles;
     nenMua = mua;
     nenNuoc = [];
-    const w = nenCols * TILE;
-    const h = nenRows * TILE;
+    /* Canvas cache ở ĐỘ PHÂN GIẢI ẢNH (`TILE_PX`), không phải đơn vị thế giới:
+       nó chứa sprite thật, và `put()` lo việc dán nó lại đúng cỡ. */
+    const w = nenCols * TILE_PX;
+    const h = nenRows * TILE_PX;
     if (nen.width !== w || nen.height !== h) {
       nen.width = w;
       nen.height = h;
       ng2.imageSmoothingEnabled = false;
     } else ng2.clearRect(0, 0, w, h);
-    veNenVao(ng2, s, content, nenX0, nenY0, x1b, y1b, nenX0 * TILE, nenY0 * TILE, mua, nenNuoc);
+    veNenVao(ng2, s, content, nenX0, nenY0, x1b, y1b, nenX0 * TILE_PX, nenY0 * TILE_PX, mua, nenNuoc);
   }
 
   /** Phần TĨNH của nền, vẽ vào một ngữ cảnh bất kỳ với gốc toạ độ cho trước. */
@@ -495,8 +559,8 @@ export function createRenderer(
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
         if (!t) continue;
-        const px = x * TILE - ox;
-        const py = y * TILE - oy;
+        const px = x * TILE_PX - ox;
+        const py = y * TILE_PX - oy;
 
         // Mặt nước ĐỘNG mỗi khung — ghi lại chỗ rồi vẽ sau, ngoài cache.
         if (t.g === "water") {
@@ -572,7 +636,7 @@ export function createRenderer(
       x1 <= nenX0 + nenCols - 1 &&
       y1 <= nenY0 + nenRows - 1;
     if (!hopLe) veNen(s, content, x0, y0, x1, y1, mua);
-    g.drawImage(nen, nenX0 * TILE - rx, nenY0 * TILE - ry);
+    put(nen, nenX0 * TILE - rx, nenY0 * TILE - ry);
 
     // MẶT NƯỚC và BỌT SÓNG: động mỗi khung nên nằm ngoài cache.
     const anhNuoc = atlas.water[waterFrame % atlas.water.length]!;
@@ -582,7 +646,7 @@ export function createRenderer(
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       const px = x * TILE - rx;
       const py = y * TILE - ry;
-      g.drawImage(anhNuoc, px, py);
+      put(anhNuoc, px, py);
       // Bốn cạnh đọc thẳng, không dựng mảng bộ đôi cho MỖI ô nước MỖI khung.
       SIDES_TMP[0]![1] = at(s, x, y - 1);
       SIDES_TMP[1]![1] = at(s, x, y + 1);
@@ -592,9 +656,9 @@ export function createRenderer(
       // BÓNG bờ trước, BỌT sau: bọt nằm ngay mép nước nên phải ở trên cùng,
       // còn cái bóng thì chìm xuống dưới nó.
       for (const [sd, nb] of sides)
-        if (nb && nb.g !== "water") g.drawImage(atlas.bank[sd], px, py);
+        if (nb && nb.g !== "water") put(atlas.bank[sd], px, py);
       for (const [sd, nb] of sides)
-        if (nb && nb.g !== "water") g.drawImage(atlas.shore[sd][shoreFrame]!, px, py);
+        if (nb && nb.g !== "water") put(atlas.shore[sd][shoreFrame]!, px, py);
     }
   }
 
@@ -660,7 +724,7 @@ export function createRenderer(
            mép trên ô nên con cá bơi qua vẫn vẽ đè lên nó. */
         if (t.g === "water" && (t.trough ?? 0) > 0 && t.troughId) {
           const anh = atlas.pondFeed(t.troughId, mucAn(content, t.trough ?? 0));
-          items.push({ base: y * TILE, run: () => g.drawImage(anh, px, py) });
+          items.push({ base: y * TILE, run: () => put(anh, px, py) });
         }
 
         if (t.prop && t.prop !== "house" && t.prop !== "door") {
@@ -702,7 +766,7 @@ export function createRenderer(
              lớp phủ đè lên actor. */
           if (lanCan?.down) {
             const over = atlas.propOver[t.prop];
-            if (over) items.push({ base: y * TILE + TILE + 5, run: () => g.drawImage(over, px, py) });
+            if (over) items.push({ base: y * TILE + TILE + 5, run: () => put(over, px, py) });
           }
           if (img) {
             const oy = def?.tall ? py - TILE : py;
@@ -726,15 +790,21 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            if (dich === 0) items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
+            if (dich === 0) items.push({ base: lopVat, run: () => put(img, px, oy) });
             else {
-              const h = img.height;
-              const split = Math.max(4, h - 8);
+              /* `img.width/height` là PIXEL ẢNH; cỡ trong thế giới nhỏ hơn đúng
+                 `ART` lần. Nguồn cắt theo ảnh, đích đặt theo thế giới. */
+              const wPx = img.width;
+              const hPx = img.height;
+              const wW = wPx / ART;
+              const hW = hPx / ART;
+              const splitW = Math.max(4, hW - 8);
+              const splitPx = Math.round(splitW * ART);
               items.push({
                 base: lopVat,
                 run: () => {
-                  g.drawImage(img, 0, 0, img.width, split, px + dich, oy, img.width, split);
-                  g.drawImage(img, 0, split, img.width, h - split, px, oy + split, img.width, h - split);
+                  g.drawImage(img, 0, 0, wPx, splitPx, px + dich, oy, wW, splitW);
+                  g.drawImage(img, 0, splitPx, wPx, hPx - splitPx, px, oy + splitW, wW, hW - splitW);
                 },
               });
             }
@@ -764,7 +834,7 @@ export function createRenderer(
               t.prop === "door",
             );
             const img = atlas.house.get(key);
-            if (img) items.push({ base, run: () => g.drawImage(img, px, py) });
+            if (img) items.push({ base, run: () => put(img, px, py) });
             /* KHÓI ống khói: chỉ ở NÓC (ô trên không phải nhà) và chỉ khi trong
                nhà có người — tức lúc trời đã tối hoặc trời lạnh. Một cái nhà im
                lìm suốt ngày đọc ra là nhà bỏ hoang; một sợi khói là thứ rẻ nhất
@@ -793,7 +863,7 @@ export function createRenderer(
                   base: base + 2,
                   run: () => {
                     g.globalAlpha = Math.min(1, mo);
-                    g.drawImage(anh, sx, sy);
+                    put(anh, sx, sy);
                     g.globalAlpha = 1;
                   },
                 });
@@ -823,7 +893,7 @@ export function createRenderer(
               )
             : atlas.buildings[t.b];
           if (def && img && def.kind === "object") {
-            items.push({ base, run: () => g.drawImage(img, px, py) });
+            items.push({ base, run: () => put(img, px, py) });
           }
         }
 
@@ -844,14 +914,20 @@ export function createRenderer(
             items.push({
               base,
               run: () => {
-                if (sway === 0) g.drawImage(img, px, cy);
+                if (sway === 0) put(img, px, cy);
                 else {
+                  /* Cắt hai lát: NGUỒN đo bằng pixel ẢNH (`*_PX`), ĐÍCH đo bằng
+                     đơn vị THẾ GIỚI — hai hệ khác nhau nên phải viết rõ cả hai. */
                   const split = CROP_H - 8;
-                  g.drawImage(img, 0, 0, TILE, split, px + sway, cy, TILE, split);
-                  g.drawImage(img, 0, split, TILE, CROP_H - split, px, cy + split, TILE, CROP_H - split);
+                  const splitPx = split * ART;
+                  g.drawImage(img, 0, 0, TILE_PX, splitPx, px + sway, cy, TILE, split);
+                  g.drawImage(
+                    img, 0, splitPx, TILE_PX, CROP_PX - splitPx,
+                    px, cy + split, TILE, CROP_H - split,
+                  );
                 }
-                if (wilt) g.drawImage(atlas.wiltOverlay, px, cy);
-                if (sick) g.drawImage(atlas.sickOverlay, px, cy);
+                if (wilt) put(atlas.wiltOverlay, px, cy);
+                if (sick) put(atlas.sickOverlay, px, cy);
               },
             });
           }
@@ -860,7 +936,7 @@ export function createRenderer(
           if (ripe) {
             const bx = px + 10;
             const by = py - 6;
-            items.push({ base: base + 1, run: () => g.drawImage(atlas.ripeBadge, bx, by) });
+            items.push({ base: base + 1, run: () => put(atlas.ripeBadge, bx, by) });
             if (!reduceMotion) {
               const phase = (x * 7 + y * 13) % 3;
               const f = (sparkFrame + phase) % 3;
@@ -868,7 +944,7 @@ export function createRenderer(
               if (beat) {
                 const sx = px + ((x * 5) % 6) + 1;
                 const sy = py - 2 + ((y * 3) % 5);
-                items.push({ base: base + 1, run: () => g.drawImage(atlas.sparkle[f]!, sx, sy) });
+                items.push({ base: base + 1, run: () => put(atlas.sparkle[f]!, sx, sy) });
               }
             }
           }
@@ -1044,14 +1120,14 @@ export function createRenderer(
       items.push({
         base: Math.round(e.y) + 5,
         run: () => {
-          if (cong && e.dir !== "down") g.drawImage(cong.img, cong.x, cong.y);
-          g.drawImage(img, px, py);
-          if (cong && e.dir === "down") g.drawImage(cong.img, cong.x, cong.y);
-          if (deo) g.drawImage(deo, px + img.width / 2 - 8, py - 11 + nhun);
+          if (cong && e.dir !== "down") put(cong.img, cong.x, cong.y);
+          put(img, px, py);
+          if (cong && e.dir === "down") put(cong.img, cong.x, cong.y);
+          if (deo) put(deo, px + img.width / 2 - 8, py - 11 + nhun);
           // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
           // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
-          if (doi) g.drawImage(atlas.sickOverlay, px + img.width / 2 - TILE / 2, py + img.height - TILE);
-          if (emo) g.drawImage(atlas.emote(emo), px + img.width / 2 - 4, emoY);
+          if (doi) put(atlas.sickOverlay, px + img.width / 2 - TILE / 2, py + img.height - TILE);
+          if (emo) put(atlas.emote(emo), px + img.width / 2 - 4, emoY);
         },
       });
     }
@@ -1120,20 +1196,20 @@ export function createRenderer(
     items.push({
       base: Math.round(p.y) + 5,
       run: () => {
-        if (lac) g.drawImage(atlas.emote("tired"), px + 4, py - 10);
+        if (lac) put(atlas.emote("tired"), px + 4, py - 10);
         if (nam) {
           g.save();
           g.translate(px + TILE / 2, py + 11);
           g.rotate(Math.PI / 2);
-          g.drawImage(img, -TILE / 2, -11);
+          put(img, -TILE / 2, -11);
           g.restore();
           return;
         }
         // công cụ vẽ SAU (đè lên) người khi ở trước mặt/dưới, TRƯỚC khi giơ lên phía sau
-        if (toolRef && raising && dir !== "down") g.drawImage(toolRef.img, toolRef.x, toolRef.y);
-        g.drawImage(img, px + lech, py);
-        if (toolRef && !(raising && dir !== "down")) g.drawImage(toolRef.img, toolRef.x, toolRef.y);
-        if (vac) g.drawImage(vac, px + lech, py - 11 + nhun);
+        if (toolRef && raising && dir !== "down") put(toolRef.img, toolRef.x, toolRef.y);
+        put(img, px + lech, py);
+        if (toolRef && !(raising && dir !== "down")) put(toolRef.img, toolRef.x, toolRef.y);
+        if (vac) put(vac, px + lech, py - 11 + nhun);
       },
     });
   }
@@ -1157,17 +1233,20 @@ export function createRenderer(
   let mangMua: CanvasPattern | null = null;
   function tamMua(): CanvasPattern | null {
     if (mangMua) return mangMua;
+    /* Tấm mưa dựng ở ĐỘ PHÂN GIẢI ẢNH rồi thu lại `ART` lần lúc tô (xem
+       `setTransform` bên dưới) — nếu dựng ở đơn vị thế giới thì hạt mưa 32px
+       nằm nguyên cỡ và cả màn thành những vệt to gấp đôi. */
     const c = document.createElement("canvas");
-    c.width = MUA_O;
-    c.height = MUA_O;
+    c.width = MUA_O * ART;
+    c.height = MUA_O * ART;
     const cg = c.getContext("2d");
     if (!cg) return null;
     cg.imageSmoothingEnabled = false;
     /* Rải hạt bằng hàm băm thuần của chỉ số — cùng một tấm ở mọi máy, mọi lần
        chạy. Thưa vừa đủ: mật độ thật do việc lặp tấm quyết định. */
     for (let i = 0; i < 9; i++) {
-      const x = hash2(i, 3, 11) % MUA_O;
-      const y = hash2(i, 7, 29) % MUA_O;
+      const x = (hash2(i, 3, 11) % MUA_O) * ART;
+      const y = (hash2(i, 7, 29) % MUA_O) * ART;
       cg.drawImage(atlas.rainDrop[i % 3]!, x, y);
     }
     mangMua = g.createPattern(c, "repeat");
@@ -1185,7 +1264,7 @@ export function createRenderer(
       const toc = 140 + k * 90;
       const dy = (timeSec * toc) % MUA_O;
       const dx = (-timeSec * toc * wind * 0.4 + k * 23) % MUA_O;
-      p.setTransform(new DOMMatrix().translateSelf(dx, dy));
+      p.setTransform(new DOMMatrix().translateSelf(dx, dy).scaleSelf(1 / ART, 1 / ART));
       g.globalAlpha = k === 0 ? 1 : 0.7;
       g.fillStyle = p;
       g.fillRect(0, 0, vp.viewW, vp.viewH);
@@ -1335,10 +1414,10 @@ export function createRenderer(
             g.save();
             g.translate(px + TILE, py);
             g.scale(-1, 1);
-            g.drawImage(img, 0, 0);
+            put(img, 0, 0);
             g.restore();
           } else {
-            g.drawImage(img, px, py);
+            put(img, px, py);
           }
           g.globalAlpha = 1;
         },
@@ -1497,6 +1576,10 @@ export function createRenderer(
   }
 
   function draw(s: GameState, content: Content, cursor: Cursor | null, timeSec: number, opts: DrawOptions) {
+    dem.drawImage = 0;
+    dem.fillRect = 0;
+    dem.items = 0;
+    dem.culled = 0;
     const vp = camera.viewport;
     if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
 
@@ -1605,7 +1688,7 @@ export function createRenderer(
        chơi không biết cái máng ở đâu. */
     if (opts.target) {
       g.globalAlpha = 0.55;
-      g.drawImage(atlas.cursorOk, opts.target.x * TILE - camera.rx, opts.target.y * TILE - camera.ry);
+      put(atlas.cursorOk, opts.target.x * TILE - camera.rx, opts.target.y * TILE - camera.ry);
       g.globalAlpha = 1;
     }
     // Dấu đích đang đi tới: vòng vàng co lại. Khác con trỏ để người chơi phân
@@ -1641,6 +1724,7 @@ export function createRenderer(
     drawPlayer(s, content, items, timeSec);
     lights.push({ wx: s.player.x, wy: s.player.y, r: 46, strength: 0.85 });
 
+    dem.items = items.length;
     items.sort((a, b) => a.base - b.base);
     for (const it of items) it.run();
 
@@ -1672,11 +1756,11 @@ export function createRenderer(
         if (banDem) {
           const nhay = Math.floor(timeSec * 3 + i * 1.7) % 4;
           if (nhay === 3) continue; // tắt một nhịp — đom đóm chớp chứ không sáng đều
-          g.drawImage(atlas.firefly[nhay]!, px2, py2);
+          put(atlas.firefly[nhay]!, px2, py2);
         } else {
           const mau = i % atlas.buom.length;
           const f = Math.floor(timeSec * 9 + i) % 2;
-          g.drawImage(atlas.buom[mau]![f]!, px2, py2);
+          put(atlas.buom[mau]![f]!, px2, py2);
         }
       }
     }
@@ -1707,6 +1791,7 @@ export function createRenderer(
   applyViewport();
   return {
     applyViewport,
+    stats: () => ({ ...dem }),
     draw,
     burst,
     refuse: () => {

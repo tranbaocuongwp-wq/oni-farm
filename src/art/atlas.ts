@@ -125,18 +125,50 @@ export interface Surface {
   shadow(cx: number, cy: number, rx: number, ry: number): void;
 }
 
+/* ============================================================================
+   HỆ SỐ NGHỆ THUẬT — "HD pixel art" mà không đụng một dòng luật chơi nào.
+
+   `TILE` mang HAI vai từ đầu dự án: một ô ăn 16 đơn vị THẾ GIỚI (toạ độ nằm
+   trong bản lưu, hộp va chạm, A*), và một sprite rộng 16 PIXEL. Hai vai trùng
+   giá trị nên chưa ai phải tách — cho tới lúc muốn nét đẹp hơn.
+
+   `ART` tách chúng: một ô vẫn là 16 đơn vị thế giới, nhưng sprite của nó rộng
+   `TILE * ART` pixel. Trên màn hình kích thước KHÔNG đổi một pixel nào (lớp vẽ
+   dán ảnh với cỡ đích tường minh), chỉ mật độ chi tiết gấp `ART²`.
+
+   Đo trước khi làm: ở khổ 1000×700 hệ số phóng đang là 4, tức mỗi pixel sprite
+   bị thổi thành một ô vuông 4×4 — đó chính là chỗ hình trông thô. Và HD gần như
+   miễn phí lúc chạy: sprite 32px vẽ ở hệ số 2 tô đúng ngần ấy pixel đích như
+   sprite 16px vẽ ở hệ số 4; atlas chỉ phình từ 0,59 MB lên ~2,35 MB.
+
+   Toạ độ trong các hàm vẽ vẫn viết ở đơn vị CŨ (0..16 cho một ô), nên art chưa
+   vẽ lại chạy y nguyên — nó chỉ thành khối `ART × ART`, tức trông hệt như
+   trước. Art đã vẽ lại thì dùng toạ độ LẺ: `s.px(0.5, 1.5)` cho đúng một pixel
+   HD, `s.rect(x, y, len, 0.5)` cho một đường mảnh. Không có API thứ hai và
+   không có cờ nào để quên bật.
+============================================================================ */
+export const ART = 2;
+
+/** Cỡ PIXEL của một ô sprite (khác `TILE` — thứ là đơn vị thế giới). */
+export const TILE_PX = TILE * ART;
+/** Cỡ PIXEL của một sprite cây trồng (cao hơn một ô). */
+export const CROP_PX = CROP_H * ART;
+
 function surface(w: number, h: number): Surface {
   const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
+  c.width = w * ART;
+  c.height = h * ART;
   // willReadFrequently: outline() và vài hàm vẽ tán cây đọc lại pixel bằng
   // getImageData; không bật cờ này thì trình duyệt cảnh báo và chậm.
   const g = c.getContext("2d", { willReadFrequently: true })!;
   g.imageSmoothingEnabled = false;
+  /* Một "pixel" của hàm vẽ là một ô vuông ART×ART trên canvas thật. Nhận toạ độ
+     LẺ thì ô ấy nhỏ lại đúng theo — đó là cách một sprite vẽ lại lấy được chi
+     tiết mịn mà không cần bộ bút thứ hai. */
   const px = (x: number, y: number, color: string) => {
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     g.fillStyle = color;
-    g.fillRect(Math.floor(x), Math.floor(y), 1, 1);
+    g.fillRect(Math.floor(x * ART), Math.floor(y * ART), ART, ART);
   };
   return {
     c,
@@ -144,35 +176,55 @@ function surface(w: number, h: number): Surface {
     px,
     rect(x, y, rw, rh, color) {
       g.fillStyle = color;
-      g.fillRect(Math.floor(x), Math.floor(y), Math.floor(rw), Math.floor(rh));
+      g.fillRect(
+        Math.floor(x * ART),
+        Math.floor(y * ART),
+        Math.max(1, Math.floor(rw * ART)),
+        Math.max(1, Math.floor(rh * ART)),
+      );
     },
     hline(x, y, lw, color) {
       g.fillStyle = color;
-      g.fillRect(Math.floor(x), Math.floor(y), Math.floor(lw), 1);
+      g.fillRect(Math.floor(x * ART), Math.floor(y * ART), Math.max(1, Math.floor(lw * ART)), ART);
     },
     vline(x, y, lh, color) {
       g.fillStyle = color;
-      g.fillRect(Math.floor(x), Math.floor(y), 1, Math.floor(lh));
+      g.fillRect(Math.floor(x * ART), Math.floor(y * ART), ART, Math.max(1, Math.floor(lh * ART)));
     },
+    /* `disc` và `ell` lặp trong đơn vị HD chứ không trong đơn vị cũ: lặp thô rồi
+       tô khối ART×ART thì hình tròn vẫn răng cưa y như trước, tức HD mà không
+       được gì. Ở đây mỗi pixel HD được xét riêng. */
     disc(cx, cy, r, color) {
-      for (let y = -r; y <= r; y++)
-        for (let x = -r; x <= r; x++)
-          if (x * x + y * y <= r * r + r * 0.35) px(cx + x, cy + y, color);
+      const R = r * ART;
+      const CX = cx * ART;
+      const CY = cy * ART;
+      g.fillStyle = color;
+      for (let y = -R; y <= R; y++)
+        for (let x = -R; x <= R; x++)
+          if (x * x + y * y <= R * R + R * 0.35) {
+            const hx = Math.floor(CX + x);
+            const hy = Math.floor(CY + y);
+            if (hx >= 0 && hy >= 0 && hx < c.width && hy < c.height) g.fillRect(hx, hy, 1, 1);
+          }
     },
     ell(cx, cy, rx, ry, color) {
-      const ax = Math.max(0.5, rx);
-      const ay = Math.max(0.5, ry);
-      for (let y = Math.floor(cy - ay); y <= Math.ceil(cy + ay); y++)
-        for (let x = Math.floor(cx - ax); x <= Math.ceil(cx + ax); x++) {
-          const dx = (x + 0.5 - cx) / ax;
-          const dy = (y + 0.5 - cy) / ay;
-          if (dx * dx + dy * dy <= 1) px(x, y, color);
+      const ax = Math.max(0.5, rx) * ART;
+      const ay = Math.max(0.5, ry) * ART;
+      const CX = cx * ART;
+      const CY = cy * ART;
+      g.fillStyle = color;
+      for (let y = Math.floor(CY - ay); y <= Math.ceil(CY + ay); y++)
+        for (let x = Math.floor(CX - ax); x <= Math.ceil(CX + ax); x++) {
+          const dx = (x + 0.5 - CX) / ax;
+          const dy = (y + 0.5 - CY) / ay;
+          if (dx * dx + dy * dy <= 1 && x >= 0 && y >= 0 && x < c.width && y < c.height)
+            g.fillRect(x, y, 1, 1);
         }
     },
     shadow(cx, cy, rx, ry) {
       g.fillStyle = P.shadow;
       g.beginPath();
-      g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      g.ellipse(cx * ART, cy * ART, rx * ART, ry * ART, 0, 0, Math.PI * 2);
       g.fill();
     },
   };
@@ -187,18 +239,25 @@ const pick = <T,>(arr: readonly T[], r: number): T => arr[Math.floor(r * arr.len
  * Pixel "đặc" = alpha ≥ 128 (bóng đổ mờ không tính, nên bóng không bị viền).
  * Viền vẽ đè lên pixel trong suốt/mờ kề bên theo 4 hướng.
  */
-function outline(s: Surface, color: string = P.outline): Surface {
+function outline(s: Surface, color: string = P.outline, day: number = ART): Surface {
   const w = s.c.width;
   const h = s.c.height;
   const data = s.g.getImageData(0, 0, w, h).data;
   const solid = (x: number, y: number) =>
     x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * 4 + 3]! >= 128;
+  /* `day` = bề dày viền tính bằng PIXEL HD. Mặc định `ART` giữ đúng diện mạo cũ
+     (viền dày bằng một "pixel" của hệ toạ độ cũ); sprite đã vẽ lại truyền `1`
+     để có nét mảnh kiểu pixel art độ phân giải cao. Nhờ tham số này mà việc đổi
+     sang viền mảnh đi được theo TỪNG LÔ, không phải một cú lật toàn bộ. */
+  const d = Math.max(1, Math.floor(day));
   s.g.fillStyle = color;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (solid(x, y)) continue;
-      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))
-        s.g.fillRect(x, y, 1, 1);
+      let gan = false;
+      for (let k = 1; k <= d && !gan; k++)
+        if (solid(x - k, y) || solid(x + k, y) || solid(x, y - k) || solid(x, y + k)) gan = true;
+      if (gan) s.g.fillRect(x, y, 1, 1);
     }
   }
   return s;

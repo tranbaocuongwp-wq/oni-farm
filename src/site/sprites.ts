@@ -19,7 +19,7 @@
    minh hoạ, còn số liệu nằm trong HTML do `scripts/build-site.mjs` sinh ra.
 ============================================================================ */
 
-import { buildAtlas, type Atlas } from "../art/atlas.ts";
+import { ART, buildAtlas, type Atlas } from "../art/atlas.ts";
 import { bundledContent } from "../core/content/bundled.ts";
 
 const content = bundledContent();
@@ -112,11 +112,18 @@ function paint(el: HTMLCanvasElement, src: HTMLCanvasElement, target: number): v
   // 2,67 — cắt xuống thành 2 là hình chỉ chiếm nửa ô và cả lưới trông rỗng.
   // Làm tròn lên 3 thì vừa khít ô, mà vẫn là số nguyên nên vẫn sắc.
   const t = trim(src);
-  const k = Math.max(1, Math.round(target / Math.max(t.w, t.h)));
+  /* Từ Đợt 24 sprite dày `ART` lần: `t.w/t.h` là PIXEL ẢNH, còn `target` là cỡ
+     mong muốn trên trang. Chọn hệ số theo cỡ LÔ-GIC (chia `ART`) nên bố cục
+     trang giữ y hệt trước, rồi để ĐỆM canvas ở nguyên độ phân giải ảnh và chỉ
+     thu bằng CSS. Trình duyệt thu đúng `ART` lần — một phép chia nguyên, tức
+     không có pixel nào bị méo, và hình sắc hơn hẳn trên màn hình dpr cao. */
+  const lw = t.w / ART;
+  const lh = t.h / ART;
+  const k = Math.max(1, Math.round(target / Math.max(lw, lh)));
   el.width = t.w * k;
   el.height = t.h * k;
-  el.style.width = `${el.width}px`;
-  el.style.height = `${el.height}px`;
+  el.style.width = `${Math.round(lw * k)}px`;
+  el.style.height = `${Math.round(lh * k)}px`;
   const g = el.getContext("2d");
   if (!g) return;
   g.imageSmoothingEnabled = false;

@@ -53,7 +53,8 @@ import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
 import { workFrame, heldForJob } from "../src/render/draw.ts";
-import { artTheoMua } from "../src/art/atlas.ts";
+import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
+import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
@@ -11456,6 +11457,79 @@ test("160. CÂY CỎ ĐỔI MÀU THEO MÙA — và chỉ cây cỏ", () => {
 
   // mùa lạ (content thêm mùa thứ năm) thì trả nguyên bản, không nổ
   deepEq(artTheoMua(art, 9), art, "mùa ngoài bảng thì giữ nguyên, không ném lỗi");
+});
+
+
+test("161. ĐƠN VỊ THẾ GIỚI không đổi khi ĐỒ HOẠ đổi", () => {
+  /* Đợt 24 phóng sprite lên gấp đôi. Cái sai đắt nhất có thể xảy ra là để nó
+     kéo theo ĐƠN VỊ THẾ GIỚI: toạ độ nhân vật và mọi thực thể nằm trong BẢN LƯU
+     ở world px, hộp va chạm cũng vậy. Đổi `TILE` của luật chơi là mọi bản lưu
+     đang có đọc ra sai vị trí — và nó im lặng cho tới khi ai đó đi vào tường.
+
+     Trước Đợt 24 có BA hằng `TILE` độc lập (atlas · world · camera), đều bằng
+     16, không cái nào import cái nào, và không kịch bản nào kiểm chúng khớp.
+     Đây là kịch bản ấy. */
+  eq(TILE, 16, "một ô = 16 đơn vị THẾ GIỚI — con số này nằm trong bản lưu");
+  eq(SAVE_VERSION, 10, "đổi đồ hoạ KHÔNG được đụng phiên bản bản lưu");
+  /* Kịch bản bắt được GIÁ TRỊ lệch, không bắt được "gõ tay nhưng vẫn đúng" —
+     hai hằng bằng nhau thì lúc chạy không có gì phân biệt. Nhưng cái đáng sợ là
+     chính giá trị lệch: ngày nào luật chơi đổi `TILE` mà camera không theo, ô
+     nhìn thấy sai và khung nhìn lệch — và dòng này đỏ ngay. */
+  eq(
+    DEFAULT_CAMERA_CONFIG.tile,
+    TILE,
+    "camera phải đo bằng ĐÚNG đơn vị của luật chơi",
+  );
+  eq(ART_TILE, TILE, "hệ toạ độ mà các hàm vẽ dùng vẫn là 16 — art cũ chạy y nguyên");
+  eq(TILE_PX, TILE * ART, "cỡ PIXEL của một ô = đơn vị thế giới × hệ số nghệ thuật");
+  ok(ART >= 1 && Number.isInteger(ART), `ART phải là số nguyên ≥ 1 (đang là ${ART})`);
+
+  // hộp va chạm trong content vẫn đo bằng world px, KHÔNG nhân theo đồ hoạ
+  for (const id of content.animalOrder) {
+    const b = content.animals[id]?.box;
+    if (!b) continue;
+    ok(b.w <= TILE && b.h <= TILE, `hộp của '${id}' (${b.w}×${b.h}) phải nằm trong một ô ${TILE}`);
+  }
+
+  /* Và phép thử thật: một bản lưu cũ nạp ra ĐÚNG toạ độ cũ. */
+  const store = mkStore(2401);
+  walkTo(store, HOME.x, HOME.y);
+  const truoc = store.getState().player;
+  const sau = migrateForContent(clone(store.getState()), content).state;
+  eq(sau.player.x, truoc.x, "nạp lại: toạ độ x không đổi một pixel");
+  eq(sau.player.y, truoc.y, "nạp lại: toạ độ y không đổi một pixel");
+  eq(Math.floor(sau.player.x / TILE), HOME.x, "…và vẫn quy về đúng ô cũ");
+});
+
+test("162. HỆ SỐ PHÓNG luôn chia hết cho ART — pixel không được méo", () => {
+  /* Sprite rộng `ART` lần đơn vị thế giới, nên tỉ lệ phóng thật của một pixel
+     ảnh là `scale / ART`. Số đó mà lẻ thì mỗi pixel nguồn trải ra 1,5 pixel
+     đích: ô pixel to nhỏ không đều, và HD trông XẤU HƠN bản 16px cũ.
+
+     Đây là ràng buộc quan trọng nhất của cả đợt: làm sai thì công vẽ lại 68
+     sprite đổ xuống sông. */
+  const khoMay = [
+    [1920, 1080, 1], [1920, 684, 1], [1920, 760, 1], [1440, 810, 2],
+    [2560, 1080, 1], [3440, 1000, 1], [1180, 820, 2], [820, 1180, 2],
+    [844, 390, 3], [390, 844, 3], [360, 640, 3], [932, 430, 3],
+    [1280, 800, 1], [1000, 700, 1], [640, 480, 1], [320, 568, 2],
+  ];
+  for (const [w, h, dpr] of khoMay) {
+    const cam = createCamera();
+    cam.setWorld(FARM_W * TILE, FARM_H * TILE);
+    cam.setSize(w, h, dpr);
+    const vp = cam.viewport;
+    ok(Number.isInteger(vp.scale), `${w}×${h}: hệ số phóng phải nguyên (đang ${vp.scale})`);
+    eq(
+      vp.scale % ART,
+      0,
+      `${w}×${h}: hệ số phóng ${vp.scale} phải chia hết cho ART=${ART}, nếu không pixel méo`,
+    );
+    ok(vp.scale >= ART, `${w}×${h}: không được thu nhỏ ảnh (scale ${vp.scale} < ART ${ART})`);
+    // và trần trục dài vẫn là ràng buộc CỨNG
+    const dai = Math.max(vp.viewW, vp.viewH) / TILE;
+    ok(dai <= MAX_TILES_LONG + 0.001, `${w}×${h}: trục dài ${dai.toFixed(1)} ô vượt trần ${MAX_TILES_LONG}`);
+  }
 });
 
 await Promise.all(choDoi);

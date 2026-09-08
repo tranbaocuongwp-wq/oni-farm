@@ -17,7 +17,7 @@
 
 import "./style.css";
 
-import { buildAtlas, TILE } from "./art/atlas.ts";
+import { buildAtlas } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
 import { alignedTo, createNavigator } from "./core/navigate.ts";
@@ -64,7 +64,14 @@ import { seasonIndex, currentSeason } from "./game/season.ts";
 import { animalStats } from "./game/animals.ts";
 import { itemName } from "./game/items.ts";
 import { workerCard } from "./game/workers.ts";
-import { canPlaceBuilding, inReach } from "./game/world.ts";
+/* `TILE` lấy từ TẦNG LUẬT CHƠI, không phải từ atlas.
+
+   Trước Đợt 24 chỗ này import `TILE` từ `art/atlas.ts` rồi dùng nó làm đơn vị
+   THẾ GIỚI: `camera.setWorld(w * TILE)`, `player.x / TILE`, `minimap.setView`.
+   Hai vai trùng giá trị nên không ai thấy gì — cho tới ngày cỡ ẢNH đổi mà đơn
+   vị thế giới thì không, tức đúng đợt này. Toạ độ nằm trong bản lưu, nên nguồn
+   duy nhất của nó phải là `game/world.ts`. */
+import { TILE, canPlaceBuilding, inReach } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */

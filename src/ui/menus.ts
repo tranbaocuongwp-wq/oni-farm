@@ -19,6 +19,7 @@
 ============================================================================ */
 
 import type { Content, DebugOp, GameState } from "../game/types.ts";
+import { ART } from "../art/atlas.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
@@ -211,9 +212,13 @@ export function createMenus(
     c.height = src?.height ?? 16;
     if (src) c.getContext("2d")!.drawImage(src, 0, 0);
     c.className = "icon";
-    // Giữ đúng tỉ lệ: sprite cây cao 24px chứ không vuông 16px, ép vuông là bóp
-    // méo cả cây thành một cục.
-    const k = (size * 2) / Math.max(c.width, c.height);
+    /* Giữ đúng tỉ lệ: sprite cây cao hơn một ô chứ không vuông, ép vuông là bóp
+       méo cả cây thành một cục.
+
+       `size` đo bằng ĐƠN VỊ THẾ GIỚI (một ô = 16), còn `c.width` là PIXEL ẢNH —
+       từ Đợt 24 hai thứ đó lệch nhau đúng `ART` lần. Quy về cùng một hệ trước
+       khi chia, nếu không mọi icon co lại một nửa mà không ai hiểu vì sao. */
+    const k = (size * 2 * ART) / Math.max(c.width, c.height);
     c.style.width = `${Math.round(c.width * k)}px`;
     c.style.height = `${Math.round(c.height * k)}px`;
     return c;

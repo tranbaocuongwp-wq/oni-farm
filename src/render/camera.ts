@@ -42,6 +42,9 @@
    trên cửa sổ 1920×684 nó ăn mất 192px mỗi bên. Thi hành bằng cách PHÓNG TO
    cho vừa khung: thà thấy ít ô hơn một chút còn hơn mất hẳn một phần màn hình.
 --------------------------------------------------------------------------- */
+import { TILE } from "../game/world.ts";
+import { ART } from "../art/atlas.ts";
+
 export const MIN_TILES_SHORT = 9;
 export const MAX_TILES_SHORT = 14;
 export const MAX_TILES_LONG = 32;
@@ -71,7 +74,9 @@ export interface CameraConfig {
 }
 
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
-  tile: 16,
+  /* Cùng một nguồn với luật chơi. Trước Đợt 24 đây là số 16 gõ tay — bản sao
+     thứ ba của một hằng phải bằng nhau ở ba chỗ mà không kịch bản nào kiểm. */
+  tile: TILE,
   minTilesShort: MIN_TILES_SHORT,
   maxTilesShort: MAX_TILES_SHORT,
   maxTilesLong: MAX_TILES_LONG,
@@ -177,19 +182,39 @@ function pickScale(
      nó nâng SÀN của scale lên, và nâng trước khi chọn. */
   const loDai = Math.ceil(longSide / (cfg.maxTilesLong * unit));
   const san = Math.max(lo, loDai);
-  if (hi >= san && san >= 1) return { scale: hi, integer: true };
+  /* HỆ SỐ PHẢI CHIA HẾT CHO `ART`.
+
+     Sprite nay rộng `ART` lần đơn vị thế giới (xem `ART` trong art/atlas.ts),
+     nên tỉ lệ phóng thật của một pixel ảnh là `scale / ART`. Số đó mà lẻ thì
+     mỗi pixel nguồn trải ra 1,5 pixel đích: ô pixel to nhỏ không đều, và HD
+     trông XẤU HƠN bản 16px. Nên làm tròn XUỐNG về bội của `ART`, và không bao
+     giờ xuống dưới `ART` (dưới đó là thu nhỏ ảnh, mất nét theo cách khác).
+
+     Cái giá: nấc phóng thưa hơn (2, 4, 6 thay vì 2, 3, 4, 5). Chấp nhận được —
+     nét đều quan trọng hơn một nấc phóng trung gian. */
+  /* `hi` là TRẦN nên làm tròn XUỐNG; `san` là SÀN CỨNG (trần trục dài) nên làm
+     tròn LÊN. Làm tròn xuống cả hai là cách đưa màn siêu rộng vượt trần trục
+     dài — 3440×1000 rơi từ hệ số 7 xuống 6 và thấy 35,8 ô, kịch bản 75 bắt
+     đúng chỗ ấy. */
+  const xuong = (v: number) => Math.max(ART, Math.floor(v / ART) * ART);
+  const len = (v: number) => Math.max(ART, Math.ceil(v / ART) * ART);
+  if (hi >= san && san >= 1) {
+    const k = xuong(hi);
+    // Không bội nào của ART nằm lọt trong dải → tôn trọng SÀN, bỏ trần.
+    return { scale: k >= san ? k : len(san), integer: true };
+  }
 
   /* Hai ràng buộc đá nhau: khung quá dài so với cạnh ngắn, không bội nguyên
      nào vừa cả hai. Bỏ trần "ít nhất ngần này ô" chứ KHÔNG bỏ trần trục dài —
      mất vài ô ở cạnh ngắn thì người chơi không nhận ra, còn hai dải đen thì
      nhận ra ngay. Vẫn lấy số nguyên: pixel art phóng theo hệ số lẻ có ô pixel
      to nhỏ không đều. */
-  if (san >= 1) return { scale: san, integer: true };
+  if (san >= 1) return { scale: len(san), integer: true };
 
-  // Cửa sổ tí hon: không bội nguyên nào ≥ 1 vừa. Ngắm giữa dải rồi bù độ nét
-  // bằng cách snap camera về world px nguyên.
-  const target = (cfg.minTilesShort + cfg.maxTilesShort) / 2;
-  return { scale: shortSide / (target * unit), integer: false };
+  /* Cửa sổ tí hon: không bội nào ≥ `ART` vừa cả hai ràng buộc. Vẫn lấy `ART`
+     và chịu thấy nhiều ô hơn mong muốn — pixel méo dễ thấy hơn thừa vài ô, và
+     bản trước cũng đã chọn "giữ nét, bỏ trần ô" ở nhánh ngay trên. */
+  return { scale: ART, integer: true };
 }
 
 export function createCamera(config: Partial<CameraConfig> = {}): Camera {
