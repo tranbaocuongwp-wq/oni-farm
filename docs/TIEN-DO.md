@@ -54,6 +54,28 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 Theo thứ tự Cường chốt. Mỗi đợt đã khảo sát xong, sẽ chi tiết hoá ngay trước khi
 bắt tay.
 
+- **Sáu lô sprite còn lại của HD.** Đợt 24 dựng xong hạ tầng `ART = 2` và vẽ lại
+  trọn bộ cây trồng (lô đông việc nhất, và là thứ Cường chỉ đích danh). Sáu lô
+  còn lại vẫn đang chạy ở nét cũ — trông y như trước, vì `px` tô khối `ART × ART`
+  và `outline` mặc định dày `ART`: **nền** (cỏ · lối đi · nhựa · bê tông · đất
+  cày · nước · bờ · ván, phủ 100% màn hình và đã nằm trong cache nền) · **nhân
+  vật và người làm** (28 khung, dùng chung bộ `skins`) · **cây · bụi · cỏ** (mỗi
+  hàm nhân bốn bảng màu mùa của Đợt 23) · **công trình** · **vật nuôi** · **icon
+  HUD và công cụ**. Mỗi lô một commit, mỗi lô xem trình duyệt. Cảnh giác một chỗ:
+  21 vòng `mulberry32` rải chi tiết bằng số vòng lặp CỨNG — giữ nguyên số vòng
+  trên diện tích gấp bốn thì mật độ loãng đi bốn lần, và "HD mà trông trống trải
+  hơn" là kết quả tệ nhất có thể vì nó đúng kỹ thuật mà sai mục đích.
+- **Cắt phần vẽ ngoài khung nhìn.** `drawActors` duyệt toàn bộ `s.entities` và
+  chỉ lọc theo bản đồ; đo được 0,094 ms (15%) ở ca xấu nhất, ~0% khi đứng cạnh
+  chuồng. Đáng làm thành một commit riêng để đo A/B sạch, và gỡ bỏ nếu trung
+  tính — tiền lệ Đợt 15. KHÔNG cắt phần MÔ PHỎNG: xe đi từ cổng ở rìa bản đồ
+  vào, chó bắt sâu, người làm cày ở lô bên kia, con vật đói đi ăn.
+- **Người chơi kẹt trong ô solid.** Mở game với bản lưu cũ thì console in hàng
+  trăm lần "người chơi nằm trong ô solid tại (20.50, 60.50)", và sau đủ số lỗi
+  liên tiếp thì vòng lặp tự dừng theo `MAX_CONSECUTIVE_ERRORS` — cả màn hình thế
+  giới thành đen trong khi HUD vẫn còn. Ván MỚI không dính. Giả thuyết đáng thử
+  trước: cây con mọc qua đêm (`propsMocDuoc`) mọc lên đúng ô người chơi đang
+  đứng. Tìm ra khi kiểm trình duyệt cho Đợt 24, chưa sửa.
 - **Khách ghé thăm.** Cường: "đôi lúc sẽ có vài người liên lạc hỏi thăm" — NPC
   ghé nông trại, có lời thoại. Chưa khảo sát.
 - **Người làm đi về chỗ nghỉ.** Nghỉ mệt 90 phút game (~45 giây thật) là cái đứng
