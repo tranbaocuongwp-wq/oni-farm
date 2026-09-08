@@ -18,6 +18,7 @@
     <script type="module" src="/site/sprites.ts"></script>
   </head>
   <body class="wiki">
+    <svg class="xu-def" aria-hidden="true"><symbol id="xu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#c9931a"/><circle cx="8" cy="8" r="5.6" fill="#ffd84a"/><circle cx="8" cy="8" r="3.2" fill="#e8b52c"/><path d="M4.6 5.2a4.8 4.8 0 0 1 3-2" stroke="#fff3bf" stroke-width="1.2" fill="none" stroke-linecap="round"/></symbol></svg>
     <header class="wtop">
       <a class="wlogo" href="/"><img src="/favicon.svg" alt="" width="24" height="24" /><span>ONI<b>FARM</b> WIKI</span></a>
       <a class="wplay" href="/farm/">Chơi ngay →</a>
@@ -31,7 +32,11 @@
           <a href="/cay-trong/">Cây trồng</a>
           <a href="/vat-nuoi/">Vật nuôi</a>
           <a href="/vat-pham/" aria-current="page">Vật phẩm</a>
-          <a href="/hanh-dong/">Hành động</a></div>
+          <a href="/cong-trinh/">Công trình</a>
+          <a href="/dia-hinh/">Địa hình</a>
+          <a href="/thoi-tiet/">Thời tiết</a>
+          <a href="/hanh-dong/">Hành động</a>
+          <a href="/bieu-tuong/">Biểu tượng</a></div>
         <div class="wgrp"><b>Về dự án</b>
           <a href="/tac-gia/">Tác giả</a>
           <a href="/privacy/">Quyền riêng tư</a></div>
@@ -50,144 +55,124 @@
           <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th><th></th></tr></thead>
           <tbody>
             <tr id="vp-wood">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-wood/"><canvas class="sp" data-sprite="item:wood" data-size="22" role="img" aria-label="Gỗ"></canvas><span>Gỗ</span></a></th>
-              <td>5đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-wood/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:wood" data-size="30" role="img" aria-label="Gỗ"></canvas></span><span>Gỗ</span></a></th>
+              <td><b class="tien">5</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-wood/">chi tiết</a></td>
             </tr>
             <tr id="vp-stone">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-stone/"><canvas class="sp" data-sprite="item:stone" data-size="22" role="img" aria-label="Đá"></canvas><span>Đá</span></a></th>
-              <td>8đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-stone/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:stone" data-size="30" role="img" aria-label="Đá"></canvas></span><span>Đá</span></a></th>
+              <td><b class="tien">8</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-stone/">chi tiết</a></td>
             </tr>
             <tr id="vp-fiber">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="22" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a></th>
-              <td>3đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:fiber" data-size="30" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a></th>
+              <td><b class="tien">3</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-fiber/">chi tiết</a></td>
             </tr>
             <tr id="vp-milk">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-milk/"><canvas class="sp" data-sprite="item:milk" data-size="22" role="img" aria-label="Sữa bò"></canvas><span>Sữa bò</span></a></th>
-              <td>42đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-milk/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:milk" data-size="30" role="img" aria-label="Sữa bò"></canvas></span><span>Sữa bò</span></a></th>
+              <td><b class="tien">42</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-milk/">chi tiết</a></td>
             </tr>
             <tr id="vp-goatmilk">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatmilk/"><canvas class="sp" data-sprite="item:goatmilk" data-size="22" role="img" aria-label="Sữa dê"></canvas><span>Sữa dê</span></a></th>
-              <td>58đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatmilk/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:goatmilk" data-size="30" role="img" aria-label="Sữa dê"></canvas></span><span>Sữa dê</span></a></th>
+              <td><b class="tien">58</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-goatmilk/">chi tiết</a></td>
             </tr>
             <tr id="vp-egg">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-egg/"><canvas class="sp" data-sprite="item:egg" data-size="22" role="img" aria-label="Trứng gà"></canvas><span>Trứng gà</span></a></th>
-              <td>26đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-egg/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:egg" data-size="30" role="img" aria-label="Trứng gà"></canvas></span><span>Trứng gà</span></a></th>
+              <td><b class="tien">26</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-egg/">chi tiết</a></td>
             </tr>
             <tr id="vp-duckegg">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-duckegg/"><canvas class="sp" data-sprite="item:duckegg" data-size="22" role="img" aria-label="Trứng vịt"></canvas><span>Trứng vịt</span></a></th>
-              <td>38đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-duckegg/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:duckegg" data-size="30" role="img" aria-label="Trứng vịt"></canvas></span><span>Trứng vịt</span></a></th>
+              <td><b class="tien">38</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-duckegg/">chi tiết</a></td>
             </tr>
             <tr id="vp-wool">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-wool/"><canvas class="sp" data-sprite="item:wool" data-size="22" role="img" aria-label="Lông cừu"></canvas><span>Lông cừu</span></a></th>
-              <td>70đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-wool/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:wool" data-size="30" role="img" aria-label="Lông cừu"></canvas></span><span>Lông cừu</span></a></th>
+              <td><b class="tien">70</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-wool/">chi tiết</a></td>
             </tr>
             <tr id="vp-beef">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-beef/"><canvas class="sp" data-sprite="item:beef" data-size="22" role="img" aria-label="Thịt bò"></canvas><span>Thịt bò</span></a></th>
-              <td>180đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-beef/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:beef" data-size="30" role="img" aria-label="Thịt bò"></canvas></span><span>Thịt bò</span></a></th>
+              <td><b class="tien">180</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-beef/">chi tiết</a></td>
             </tr>
             <tr id="vp-pork">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-pork/"><canvas class="sp" data-sprite="item:pork" data-size="22" role="img" aria-label="Thịt heo"></canvas><span>Thịt heo</span></a></th>
-              <td>140đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-pork/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:pork" data-size="30" role="img" aria-label="Thịt heo"></canvas></span><span>Thịt heo</span></a></th>
+              <td><b class="tien">140</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-pork/">chi tiết</a></td>
             </tr>
             <tr id="vp-chickenmeat">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-chickenmeat/"><canvas class="sp" data-sprite="item:chickenmeat" data-size="22" role="img" aria-label="Thịt gà"></canvas><span>Thịt gà</span></a></th>
-              <td>70đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-chickenmeat/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:chickenmeat" data-size="30" role="img" aria-label="Thịt gà"></canvas></span><span>Thịt gà</span></a></th>
+              <td><b class="tien">70</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-chickenmeat/">chi tiết</a></td>
             </tr>
             <tr id="vp-duckmeat">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-duckmeat/"><canvas class="sp" data-sprite="item:duckmeat" data-size="22" role="img" aria-label="Thịt vịt"></canvas><span>Thịt vịt</span></a></th>
-              <td>85đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-duckmeat/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:duckmeat" data-size="30" role="img" aria-label="Thịt vịt"></canvas></span><span>Thịt vịt</span></a></th>
+              <td><b class="tien">85</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-duckmeat/">chi tiết</a></td>
             </tr>
             <tr id="vp-mutton">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-mutton/"><canvas class="sp" data-sprite="item:mutton" data-size="22" role="img" aria-label="Thịt cừu"></canvas><span>Thịt cừu</span></a></th>
-              <td>165đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-mutton/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:mutton" data-size="30" role="img" aria-label="Thịt cừu"></canvas></span><span>Thịt cừu</span></a></th>
+              <td><b class="tien">165</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-mutton/">chi tiết</a></td>
             </tr>
             <tr id="vp-goatmeat">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatmeat/"><canvas class="sp" data-sprite="item:goatmeat" data-size="22" role="img" aria-label="Thịt dê"></canvas><span>Thịt dê</span></a></th>
-              <td>150đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatmeat/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:goatmeat" data-size="30" role="img" aria-label="Thịt dê"></canvas></span><span>Thịt dê</span></a></th>
+              <td><b class="tien">150</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-goatmeat/">chi tiết</a></td>
             </tr>
             <tr id="vp-fishmeat">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishmeat/"><canvas class="sp" data-sprite="item:fishmeat" data-size="22" role="img" aria-label="Thịt cá"></canvas><span>Thịt cá</span></a></th>
-              <td>95đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishmeat/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:fishmeat" data-size="30" role="img" aria-label="Thịt cá"></canvas></span><span>Thịt cá</span></a></th>
+              <td><b class="tien">95</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-fishmeat/">chi tiết</a></td>
             </tr>
             <tr id="vp-hay">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-hay/"><canvas class="sp" data-sprite="item:hay" data-size="22" role="img" aria-label="Rơm"></canvas><span>Rơm</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-hay/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:hay" data-size="30" role="img" aria-label="Rơm"></canvas></span><span>Rơm</span></a></th>
               <td>—</td>
-              <td>10đ</td>
+              <td><b class="tien">10</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-hay/">chi tiết</a></td>
             </tr>
             <tr id="vp-feedmix">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="22" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:feedmix" data-size="30" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a></th>
               <td>—</td>
-              <td>16đ</td>
+              <td><b class="tien">16</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-feedmix/">chi tiết</a></td>
             </tr>
             <tr id="vp-fishfeed">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishfeed/"><canvas class="sp" data-sprite="item:fishfeed" data-size="22" role="img" aria-label="Cám cá"></canvas><span>Cám cá</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishfeed/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:fishfeed" data-size="30" role="img" aria-label="Cám cá"></canvas></span><span>Cám cá</span></a></th>
               <td>—</td>
-              <td>20đ</td>
+              <td><b class="tien">20</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-fishfeed/">chi tiết</a></td>
             </tr>
             <tr id="vp-pipe">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-pipe/"><canvas class="sp" data-sprite="item:pipe" data-size="22" role="img" aria-label="Ống nước"></canvas><span>Ống nước</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-pipe/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:pipe" data-size="30" role="img" aria-label="Ống nước"></canvas></span><span>Ống nước</span></a></th>
               <td>—</td>
-              <td>120đ</td>
+              <td><b class="tien">120</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-pipe/">chi tiết</a></td>
             </tr>
             <tr id="vp-glass">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-glass/"><canvas class="sp" data-sprite="item:glass" data-size="22" role="img" aria-label="Tấm kính"></canvas><span>Tấm kính</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-glass/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:glass" data-size="30" role="img" aria-label="Tấm kính"></canvas></span><span>Tấm kính</span></a></th>
               <td>—</td>
-              <td>60đ</td>
+              <td><b class="tien">60</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-glass/">chi tiết</a></td>
             </tr>
           </tbody>
         </table>
@@ -197,74 +182,64 @@
           <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th><th></th></tr></thead>
           <tbody>
             <tr id="vp-fodder">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="22" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:fodder" data-size="30" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a></th>
               <td>—</td>
-              <td>7đ</td>
-              <td><a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="20" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a> ×4</td>
-              <td><a href="/vat-pham/vp-fodder/">chi tiết</a></td>
+              <td><b class="tien">7</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
+              <td><a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fiber" data-size="26" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a> ×4</td>
             </tr>
             <tr id="vp-medicine">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-medicine/"><canvas class="sp" data-sprite="item:medicine" data-size="22" role="img" aria-label="Thuốc trừ sâu"></canvas><span>Thuốc trừ sâu</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-medicine/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:medicine" data-size="30" role="img" aria-label="Thuốc trừ sâu"></canvas></span><span>Thuốc trừ sâu</span></a></th>
               <td>—</td>
-              <td>35đ</td>
-              <td><a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="20" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a> ×3</td>
-              <td><a href="/vat-pham/vp-medicine/">chi tiết</a></td>
+              <td><b class="tien">35</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
+              <td><a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fiber" data-size="26" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a> ×3</td>
             </tr>
             <tr id="vp-cheese">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-cheese/"><canvas class="sp" data-sprite="item:cheese" data-size="22" role="img" aria-label="Phô mai"></canvas><span>Phô mai</span></a></th>
-              <td>170đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-cheese/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:cheese" data-size="30" role="img" aria-label="Phô mai"></canvas></span><span>Phô mai</span></a></th>
+              <td><b class="tien">170</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-milk/"><canvas class="sp" data-sprite="item:milk" data-size="20" role="img" aria-label="Sữa bò"></canvas><span>Sữa bò</span></a> ×3</td>
-              <td><a href="/vat-pham/vp-cheese/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-milk/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:milk" data-size="26" role="img" aria-label="Sữa bò"></canvas></span><span>Sữa bò</span></a> ×3</td>
             </tr>
             <tr id="vp-goatcheese">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatcheese/"><canvas class="sp" data-sprite="item:goatcheese" data-size="22" role="img" aria-label="Phô mai dê"></canvas><span>Phô mai dê</span></a></th>
-              <td>230đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-goatcheese/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:goatcheese" data-size="30" role="img" aria-label="Phô mai dê"></canvas></span><span>Phô mai dê</span></a></th>
+              <td><b class="tien">230</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-goatmilk/"><canvas class="sp" data-sprite="item:goatmilk" data-size="20" role="img" aria-label="Sữa dê"></canvas><span>Sữa dê</span></a> ×3</td>
-              <td><a href="/vat-pham/vp-goatcheese/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-goatmilk/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:goatmilk" data-size="26" role="img" aria-label="Sữa dê"></canvas></span><span>Sữa dê</span></a> ×3</td>
             </tr>
             <tr id="vp-yarn">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-yarn/"><canvas class="sp" data-sprite="item:yarn" data-size="22" role="img" aria-label="Cuộn len"></canvas><span>Cuộn len</span></a></th>
-              <td>190đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-yarn/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:yarn" data-size="30" role="img" aria-label="Cuộn len"></canvas></span><span>Cuộn len</span></a></th>
+              <td><b class="tien">190</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-wool/"><canvas class="sp" data-sprite="item:wool" data-size="20" role="img" aria-label="Lông cừu"></canvas><span>Lông cừu</span></a> ×2</td>
-              <td><a href="/vat-pham/vp-yarn/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-wool/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wool" data-size="26" role="img" aria-label="Lông cừu"></canvas></span><span>Lông cừu</span></a> ×2</td>
             </tr>
             <tr id="vp-roastcoffee">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-roastcoffee/"><canvas class="sp" data-sprite="item:roastcoffee" data-size="22" role="img" aria-label="Cà phê rang"></canvas><span>Cà phê rang</span></a></th>
-              <td>1.150đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-roastcoffee/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:roastcoffee" data-size="30" role="img" aria-label="Cà phê rang"></canvas></span><span>Cà phê rang</span></a></th>
+              <td><b class="tien">1.150</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/cay-trong/coffee/"><canvas class="sp" data-sprite="crop:coffee" data-size="20" role="img" aria-label="Cà phê"></canvas><span>Cà phê</span></a> ×3</td>
-              <td><a href="/vat-pham/vp-roastcoffee/">chi tiết</a></td>
+              <td><a class="ilk" href="/cay-trong/coffee/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:coffee" data-size="26" role="img" aria-label="Cà phê"></canvas></span><span>Cà phê</span></a> ×3</td>
             </tr>
             <tr id="vp-driedtea">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-driedtea/"><canvas class="sp" data-sprite="item:driedtea" data-size="22" role="img" aria-label="Trà sấy"></canvas><span>Trà sấy</span></a></th>
-              <td>1.050đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-driedtea/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:driedtea" data-size="30" role="img" aria-label="Trà sấy"></canvas></span><span>Trà sấy</span></a></th>
+              <td><b class="tien">1.050</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/cay-trong/tea/"><canvas class="sp" data-sprite="crop:tea" data-size="20" role="img" aria-label="Trà xanh"></canvas><span>Trà xanh</span></a> ×3</td>
-              <td><a href="/vat-pham/vp-driedtea/">chi tiết</a></td>
+              <td><a class="ilk" href="/cay-trong/tea/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:tea" data-size="26" role="img" aria-label="Trà xanh"></canvas></span><span>Trà xanh</span></a> ×3</td>
             </tr>
             <tr id="vp-jam">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-jam/"><canvas class="sp" data-sprite="item:jam" data-size="22" role="img" aria-label="Mứt dâu"></canvas><span>Mứt dâu</span></a></th>
-              <td>780đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-jam/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:jam" data-size="30" role="img" aria-label="Mứt dâu"></canvas></span><span>Mứt dâu</span></a></th>
+              <td><b class="tien">780</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/cay-trong/strawberry/"><canvas class="sp" data-sprite="crop:strawberry" data-size="20" role="img" aria-label="Dâu tây"></canvas><span>Dâu tây</span></a> ×4</td>
-              <td><a href="/vat-pham/vp-jam/">chi tiết</a></td>
+              <td><a class="ilk" href="/cay-trong/strawberry/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:strawberry" data-size="26" role="img" aria-label="Dâu tây"></canvas></span><span>Dâu tây</span></a> ×4</td>
             </tr>
             <tr id="vp-fishcake">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishcake/"><canvas class="sp" data-sprite="item:fishcake" data-size="22" role="img" aria-label="Chả cá"></canvas><span>Chả cá</span></a></th>
-              <td>250đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-fishcake/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:fishcake" data-size="30" role="img" aria-label="Chả cá"></canvas></span><span>Chả cá</span></a></th>
+              <td><b class="tien">250</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-fishmeat/"><canvas class="sp" data-sprite="item:fishmeat" data-size="20" role="img" aria-label="Thịt cá"></canvas><span>Thịt cá</span></a> ×2</td>
-              <td><a href="/vat-pham/vp-fishcake/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-fishmeat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fishmeat" data-size="26" role="img" aria-label="Thịt cá"></canvas></span><span>Thịt cá</span></a> ×2</td>
             </tr>
             <tr id="vp-sausage">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-sausage/"><canvas class="sp" data-sprite="item:sausage" data-size="22" role="img" aria-label="Xúc xích"></canvas><span>Xúc xích</span></a></th>
-              <td>360đ</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-sausage/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="item:sausage" data-size="30" role="img" aria-label="Xúc xích"></canvas></span><span>Xúc xích</span></a></th>
+              <td><b class="tien">360</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-pork/"><canvas class="sp" data-sprite="item:pork" data-size="20" role="img" aria-label="Thịt heo"></canvas><span>Thịt heo</span></a> ×2</td>
-              <td><a href="/vat-pham/vp-sausage/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-pork/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:pork" data-size="26" role="img" aria-label="Thịt heo"></canvas></span><span>Thịt heo</span></a> ×2</td>
             </tr>
           </tbody>
         </table>
@@ -274,59 +249,52 @@
           <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th><th></th></tr></thead>
           <tbody>
             <tr id="vp-tool-hoe">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-hoe/"><canvas class="sp" data-sprite="tool:hoe" data-size="22" role="img" aria-label="Cuốc"></canvas><span>Cuốc</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-hoe/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:hoe" data-size="30" role="img" aria-label="Cuốc"></canvas></span><span>Cuốc</span></a></th>
               <td>—</td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-tool-hoe/">chi tiết</a></td>
             </tr>
             <tr id="vp-tool-can">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-can/"><canvas class="sp" data-sprite="tool:can" data-size="22" role="img" aria-label="Bình tưới"></canvas><span>Bình tưới</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-can/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:can" data-size="30" role="img" aria-label="Bình tưới"></canvas></span><span>Bình tưới</span></a></th>
               <td>—</td>
               <td>—</td>
               <td>—</td>
-              <td><a href="/vat-pham/vp-tool-can/">chi tiết</a></td>
             </tr>
             <tr id="vp-tool-can2">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-can2/"><canvas class="sp" data-sprite="tool:can2" data-size="22" role="img" aria-label="Bình tưới lớn"></canvas><span>Bình tưới lớn</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-can2/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:can2" data-size="30" role="img" aria-label="Bình tưới lớn"></canvas></span><span>Bình tưới lớn</span></a></th>
               <td>—</td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-tool-can/"><canvas class="sp" data-sprite="tool:can" data-size="20" role="img" aria-label="Bình tưới"></canvas><span>Bình tưới</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><canvas class="sp" data-sprite="item:stone" data-size="20" role="img" aria-label="Đá"></canvas><span>Đá</span></a> ×8 + <a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="20" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a> ×8</td>
-              <td><a href="/vat-pham/vp-tool-can2/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-tool-can/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="tool:can" data-size="26" role="img" aria-label="Bình tưới"></canvas></span><span>Bình tưới</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:stone" data-size="26" role="img" aria-label="Đá"></canvas></span><span>Đá</span></a> ×8 + <a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fiber" data-size="26" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a> ×8</td>
             </tr>
             <tr id="vp-tool-axe">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-axe/"><canvas class="sp" data-sprite="tool:axe" data-size="22" role="img" aria-label="Rìu gỗ"></canvas><span>Rìu gỗ</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-axe/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:axe" data-size="30" role="img" aria-label="Rìu gỗ"></canvas></span><span>Rìu gỗ</span></a></th>
               <td>—</td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-wood/"><canvas class="sp" data-sprite="item:wood" data-size="20" role="img" aria-label="Gỗ"></canvas><span>Gỗ</span></a> ×4 + <a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="20" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a> ×4</td>
-              <td><a href="/vat-pham/vp-tool-axe/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-wood/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wood" data-size="26" role="img" aria-label="Gỗ"></canvas></span><span>Gỗ</span></a> ×4 + <a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fiber" data-size="26" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a> ×4</td>
             </tr>
             <tr id="vp-tool-axe2">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-axe2/"><canvas class="sp" data-sprite="tool:axe2" data-size="22" role="img" aria-label="Rìu thép"></canvas><span>Rìu thép</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-axe2/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:axe2" data-size="30" role="img" aria-label="Rìu thép"></canvas></span><span>Rìu thép</span></a></th>
               <td>—</td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-tool-axe/"><canvas class="sp" data-sprite="tool:axe" data-size="20" role="img" aria-label="Rìu gỗ"></canvas><span>Rìu gỗ</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><canvas class="sp" data-sprite="item:stone" data-size="20" role="img" aria-label="Đá"></canvas><span>Đá</span></a> ×12 + <a class="ilk" href="/vat-pham/vp-wood/"><canvas class="sp" data-sprite="item:wood" data-size="20" role="img" aria-label="Gỗ"></canvas><span>Gỗ</span></a> ×6</td>
-              <td><a href="/vat-pham/vp-tool-axe2/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-tool-axe/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="tool:axe" data-size="26" role="img" aria-label="Rìu gỗ"></canvas></span><span>Rìu gỗ</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:stone" data-size="26" role="img" aria-label="Đá"></canvas></span><span>Đá</span></a> ×12 + <a class="ilk" href="/vat-pham/vp-wood/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wood" data-size="26" role="img" aria-label="Gỗ"></canvas></span><span>Gỗ</span></a> ×6</td>
             </tr>
             <tr id="vp-tool-pickaxe">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-pickaxe/"><canvas class="sp" data-sprite="tool:pickaxe" data-size="22" role="img" aria-label="Cuốc chim"></canvas><span>Cuốc chim</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-pickaxe/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:pickaxe" data-size="30" role="img" aria-label="Cuốc chim"></canvas></span><span>Cuốc chim</span></a></th>
               <td>—</td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-wood/"><canvas class="sp" data-sprite="item:wood" data-size="20" role="img" aria-label="Gỗ"></canvas><span>Gỗ</span></a> ×6 + <a class="ilk" href="/vat-pham/vp-fiber/"><canvas class="sp" data-sprite="item:fiber" data-size="20" role="img" aria-label="Sợi cỏ"></canvas><span>Sợi cỏ</span></a> ×6</td>
-              <td><a href="/vat-pham/vp-tool-pickaxe/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-wood/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wood" data-size="26" role="img" aria-label="Gỗ"></canvas></span><span>Gỗ</span></a> ×6 + <a class="ilk" href="/vat-pham/vp-fiber/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fiber" data-size="26" role="img" aria-label="Sợi cỏ"></canvas></span><span>Sợi cỏ</span></a> ×6</td>
             </tr>
             <tr id="vp-tool-pickaxe2">
-              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-pickaxe2/"><canvas class="sp" data-sprite="tool:pickaxe2" data-size="22" role="img" aria-label="Cuốc chim thép"></canvas><span>Cuốc chim thép</span></a></th>
+              <th scope="row"><a class="ilk" href="/vat-pham/vp-tool-pickaxe2/"><span class="ic" style="--s:30px"><canvas class="sp" data-sprite="tool:pickaxe2" data-size="30" role="img" aria-label="Cuốc chim thép"></canvas></span><span>Cuốc chim thép</span></a></th>
               <td>—</td>
               <td>—</td>
-              <td><a class="ilk" href="/vat-pham/vp-tool-pickaxe/"><canvas class="sp" data-sprite="tool:pickaxe" data-size="20" role="img" aria-label="Cuốc chim"></canvas><span>Cuốc chim</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><canvas class="sp" data-sprite="item:stone" data-size="20" role="img" aria-label="Đá"></canvas><span>Đá</span></a> ×14 + <a class="ilk" href="/vat-pham/vp-wood/"><canvas class="sp" data-sprite="item:wood" data-size="20" role="img" aria-label="Gỗ"></canvas><span>Gỗ</span></a> ×4</td>
-              <td><a href="/vat-pham/vp-tool-pickaxe2/">chi tiết</a></td>
+              <td><a class="ilk" href="/vat-pham/vp-tool-pickaxe/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="tool:pickaxe" data-size="26" role="img" aria-label="Cuốc chim"></canvas></span><span>Cuốc chim</span></a> ×1 + <a class="ilk" href="/vat-pham/vp-stone/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:stone" data-size="26" role="img" aria-label="Đá"></canvas></span><span>Đá</span></a> ×14 + <a class="ilk" href="/vat-pham/vp-wood/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wood" data-size="26" role="img" aria-label="Gỗ"></canvas></span><span>Gỗ</span></a> ×4</td>
             </tr>
           </tbody>
         </table>
         <div class="wcredit">
-          <b>Tác giả · story:</b> TRẦN CƯỜNG ·
-          <a href="/tac-gia/">trang tác giả</a>
+          <b>Tác giả · story:</b> TRẦN CƯỜNG · <a href="/tac-gia/">trang tác giả</a><br />
+          <b>Số liệu theo bản:</b> nội dung <b>1.53.0</b> · lõi <b>1.53.0</b>
         </div>
       </main>
     </div>

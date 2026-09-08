@@ -32,6 +32,9 @@ function spriteFor(key: string): HTMLCanvasElement | null {
   // emoji: emoji là font của hệ điều hành nên mỗi máy ra một hình khác.
   if (key.startsWith("ui:")) return atlas.ui(key.slice(3) as Parameters<Atlas["ui"]>[0]);
   if (key.startsWith("worker:")) return atlas.worker(Number(key.slice(7)) || 0, "down", 0);
+  // "weather:rain" → icon thời tiết trên HUD. Cùng bộ hình game dùng, nên trang
+  // tài liệu không bao giờ vẽ một biểu tượng mà game không có.
+  if (key.startsWith("weather:")) return atlas.weatherIcon(key.slice(8));
   if (key.startsWith("animal:")) return atlas.animal(key.slice(7), "down", 0);
   if (key.startsWith("vehicle:")) return atlas.vehicle(key.slice(8), "right");
   if (key.startsWith("build:")) return atlas.buildings[key.slice(6)] ?? null;

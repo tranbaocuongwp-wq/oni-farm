@@ -137,6 +137,26 @@ kết, không phải lý do để bỏ luôn hình minh hoạ.
 
 ---
 
+## 3c. Ghi phiên bản trên mỗi trang
+
+Cường: *"ghi chép tài liệu phiên bản cho từng loại trang"*.
+
+Mọi trang in ở chân bài: **Số liệu theo bản: nội dung `X` · lõi `Y`**. Đọc thẳng
+từ `src/content/manifest.json` và `src/core/version.ts` lúc build, nên nó không
+thể trôi khoi thứ nó mô tả.
+
+Vì sao một wiki game bắt buộc phải có: luật chơi đổi theo bản. Một trang nói "cà
+chua bán 75" mà không nói bản nào thì người đọc không có cách nào biết con số đã
+cũ hay chưa — và một con số cũ không có nhãn còn tệ hơn không có con số.
+
+| Loại trang | Số liệu đến từ |
+|---|---|
+| Cây trồng · Vật nuôi · Vật phẩm · Công trình · Địa hình · Thời tiết | content pack (`contentVersion`) |
+| Hành động · Biểu tượng | mã game (`CORE_VERSION`) |
+| Lối chơi | cả hai — luật ở content, cách bấm ở mã |
+
+---
+
 ## 4. Thành phần
 
 | Lớp | Dùng khi |

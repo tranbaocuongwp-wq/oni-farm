@@ -67,9 +67,48 @@ const ngay = (n) => `${n} ngày`;
  * một ô trống, và một ô trống giữa hàng chục ô có hình thì không ai nhận ra là
  * thiếu. Kiểm lúc sinh thì sai một khoá là build đỏ, kèm tên khoá.
  */
+/**
+ * Một hình sprite, LUÔN nằm trong một khối VUÔNG đúng `size`.
+ *
+ * Cường: "tất cả các ảnh phải đưa vô khối, kéo nó nằm trong hình vuông để nó
+ * bằng nhau, hiển thị cho nó thân thiện".
+ *
+ * Vì sao cần: sprite trong game không cùng tỉ lệ — cây cao 16×24, con vật
+ * 16×16, món đồ 16×16, và bộ đo còn cắt bỏ viền trong suốt nên hai cây cạnh
+ * nhau ra hai bề ngang khác nhau. Thả thẳng vào một dòng thì mỗi ô một cỡ, và
+ * cả lưới thành răng cưa — đúng như ảnh Cường gửi. Bọc trong một khối vuông cố
+ * định thì hình to nhỏ thế nào cũng chiếm đúng ngần ấy chỗ, và mọi thứ thẳng
+ * hàng.
+ */
 function cx(key, size = 48, alt = "") {
   kiemKhoaSprite(key);
-  return `<canvas class="sp" data-sprite="${esc(key)}" data-size="${size}" role="img" aria-label="${esc(alt)}"></canvas>`;
+  return (
+    `<span class="ic" style="--s:${size}px">` +
+    `<canvas class="sp" data-sprite="${esc(key)}" data-size="${size}" role="img" aria-label="${esc(alt)}"></canvas>` +
+    `</span>`
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   TIỀN — Cường: "không được xài đơn vị tiền tệ, phải xài biểu tượng đồng xu".
+
+   Dùng SVG nội tuyến chứ không phải một canvas sprite nữa: một trang cây có 61
+   dòng × ba cột tiền là 183 hình, mà 183 canvas thì phải chờ JS dựng atlas mới
+   hiện. Đồng xu là một hình tròn hai màu — nó không cần cả bộ atlas, và vẽ bằng
+   SVG thì nó hiện ngay cả khi JS chưa chạy hoặc bị tắt.
+
+   Một `<symbol>` khai một lần ở đầu body, mọi chỗ còn lại chỉ `<use>`.
+--------------------------------------------------------------------------- */
+const XU_SYMBOL = `<svg class="xu-def" aria-hidden="true"><symbol id="xu" viewBox="0 0 16 16">` +
+  `<circle cx="8" cy="8" r="7" fill="#c9931a"/>` +
+  `<circle cx="8" cy="8" r="5.6" fill="#ffd84a"/>` +
+  `<circle cx="8" cy="8" r="3.2" fill="#e8b52c"/>` +
+  `<path d="M4.6 5.2a4.8 4.8 0 0 1 3-2" stroke="#fff3bf" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
+  `</symbol></svg>`;
+
+/** `1.234` + đồng xu. Số in ĐẬM vì đó là thứ người ta tới đây để đọc. */
+function xu(n) {
+  return `<b class="tien">${tien(n)}</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg>`;
 }
 
 /** Ném lỗi nếu `key` không trỏ tới thứ có thật. Luật khớp `spriteFor`. */
@@ -79,6 +118,8 @@ function kiemKhoaSprite(key) {
   };
   if (key === "player") return;
   if (key.startsWith("ui:") || key.startsWith("worker:")) return; // do atlas tự lo
+  if (key.startsWith("weather:"))
+    return content.weathers[key.slice(8)] ? undefined : hong("không có kiểu thời tiết này");
   const sau = (n) => key.slice(n);
   if (key.startsWith("animal:")) return content.animals[sau(7)] ? undefined : hong("không có loài này");
   if (key.startsWith("vehicle:")) return content.vehicles[sau(8)] ? undefined : hong("không có xe này");
@@ -129,6 +170,19 @@ function demKichBan() {
 
 const bal = content.balance;
 const gioPhut = (m) => `${Math.floor(m / 60)}:${String(Math.round(m % 60)).padStart(2, "0")}`;
+
+/* PHIÊN BẢN của số liệu trên trang — Cường: "ghi chép tài liệu phiên bản cho
+   từng loại trang". Một trang tra cứu mà không nói nó chép từ bản nào thì người
+   đọc không có cách nào biết con số đã cũ hay chưa; đây là điều một cái wiki
+   game bắt buộc phải có, vì luật chơi đổi theo bản. Đọc thẳng từ mã và từ
+   content, nên nó không thể trôi khỏi thứ nó mô tả. */
+const PHIEN_BAN = {
+  core: (() => {
+    const src = readFileSync(resolve(ROOT, "src/core/version.ts"), "utf8");
+    return /CORE_VERSION\s*=\s*"([^"]+)"/.exec(src)?.[1] ?? "?";
+  })(),
+  content: JSON.parse(readFileSync(resolve(ROOT, "src/content/manifest.json"), "utf8")).contentVersion,
+};
 
 const SO_LIEU = {
   soCay: content.cropOrder.length,
@@ -192,7 +246,7 @@ function bangCayMau() {
     chon
       .map(
         (c) =>
-          `<tr><td>${nhan(`crop:${c.id}`, 20)}</td><td>${ngay(tongNgay(c))}</td><td>${tien(c.seedPrice)}đ</td><td>${tien(c.sellPrice)}đ</td><td>${esc(ghiChu[c.id] ?? "")}</td></tr>`,
+          `<tr><td>${nhan(`crop:${c.id}`, 26)}</td><td>${ngay(tongNgay(c))}</td><td>${xu(c.seedPrice)}</td><td>${xu(c.sellPrice)}</td><td>${esc(ghiChu[c.id] ?? "")}</td></tr>`,
       )
       .join("\n          ") +
     `\n        </table></div>`
@@ -214,7 +268,7 @@ function bangCongTrinh() {
       if (e.autoWet) y.push("Ô luôn giữ ẩm, không phải tưới");
       if (e.allSeason) y.push("Trồng được quanh năm, không lo trái mùa");
       if (e.speedMul) y.push(`Đi nhanh hơn ${Math.round((e.speedMul - 1) * 100)}%`);
-      return `<tr><td><b>${esc(b.name)}</b></td><td>${tien(b.price)}đ${b.kind === "floor" ? "/ô" : ""}</td><td>${y.join(" · ") || "—"}</td></tr>`;
+      return `<tr><td><b>${esc(b.name)}</b></td><td>${xu(b.price)}${b.kind === "floor" ? "/ô" : ""}</td><td>${y.join(" · ") || "—"}</td></tr>`;
     });
   return (
     `<div class="table-wrap"><table>
@@ -309,7 +363,11 @@ const NAV_NHOM = [
     ["/cay-trong/", "Cây trồng"],
     ["/vat-nuoi/", "Vật nuôi"],
     ["/vat-pham/", "Vật phẩm"],
+    ["/cong-trinh/", "Công trình"],
+    ["/dia-hinh/", "Địa hình"],
+    ["/thoi-tiet/", "Thời tiết"],
     ["/hanh-dong/", "Hành động"],
+    ["/bieu-tuong/", "Biểu tượng"],
   ]],
   ["Về dự án", [
     ["/tac-gia/", "Tác giả"],
@@ -368,6 +426,7 @@ function page({ title, desc, url, h1, tag, body, sprites = true, hop = "", muc =
     <link rel="apple-touch-icon" href="/icon-180.png" />
 ${sprites ? '    <script type="module" src="/site/sprites.ts"></script>\n' : ""}  </head>
   <body class="wiki">
+    ${XU_SYMBOL}
     <header class="wtop">
       <a class="wlogo" href="/"><img src="/favicon.svg" alt="" width="24" height="24" /><span>ONI<b>FARM</b> WIKI</span></a>
       <a class="wplay" href="/farm/">Chơi ngay →</a>
@@ -382,8 +441,8 @@ ${sprites ? '    <script type="module" src="/site/sprites.ts"></script>\n' : ""}
         <hr class="wrule" />
 ${hop}${dan}${mucLuc}${body}
         <div class="wcredit">
-          <b>Tác giả · story:</b> TRẦN CƯỜNG ·
-          <a href="/tac-gia/">trang tác giả</a>
+          <b>Tác giả · story:</b> TRẦN CƯỜNG · <a href="/tac-gia/">trang tác giả</a><br />
+          <b>Số liệu theo bản:</b> nội dung <b>${PHIEN_BAN.content}</b> · lõi <b>${PHIEN_BAN.core}</b>
         </div>
       </main>
     </div>
@@ -432,6 +491,9 @@ function duongDan(key) {
   if (loai === "animal") return content.animals[id] ? `/vat-nuoi/${id}/` : null;
   if (loai === "item") return content.materials[id] ? `/vat-pham/vp-${id}/` : null;
   if (loai === "tool") return content.tools[id] ? `/vat-pham/vp-tool-${id}/` : null;
+  if (loai === "build") return content.buildings[id] ? `/cong-trinh/${id}/` : null;
+  if (loai === "prop") return content.props[id] ? `/dia-hinh/${id}/` : null;
+  if (loai === "seed") return content.crops[id] ? `/cay-trong/${id}/` : null;
   return null;
 }
 
@@ -442,7 +504,7 @@ function duongDan(key) {
  * không đẩy dòng ra. Thứ chưa có trang riêng thì vẫn có hình — thiếu trang là
  * lý do để không liên kết, không phải lý do để bỏ luôn hình minh hoạ.
  */
-function nhan(key, co = 20) {
+function nhan(key, co = 26) {
   const ten = itemName(key);
   const hinh = cx(key, co, ten);
   const d = duongDan(key);
@@ -453,7 +515,7 @@ function nhan(key, co = 20) {
 }
 
 /** Danh sách khoá → chuỗi nhãn ngăn bằng dấu chấm giữa. */
-const nhanDs = (keys, co = 20) => keys.map((k) => nhan(k, co)).join(" · ");
+const nhanDs = (keys, co = 26) => keys.map((k) => nhan(k, co)).join(" · ");
 
 /* ------------------------------------------------------------- cây trồng */
 
@@ -472,21 +534,21 @@ const tongNgay = (c) => c.growthDays.reduce((a, b) => a + b, 0);
 const lai = (c) => c.sellPrice * c.yieldMin - c.seedPrice;
 
 function cropCard(c) {
-  const stages = c.growthDays.map((_, i) => cx(`crop:${c.id}:${i}`, 28, ""));
-  stages.push(cx(`crop:${c.id}`, 34, `${c.name} chín`));
+  const stages = c.growthDays.map((_, i) => cx(`crop:${c.id}:${i}`, 44, ""));
+  stages.push(cx(`crop:${c.id}`, 52, `${c.name} chín`));
   const mua = c.seasons.map((s) => `<span class="chip">${esc(seasonName(s))}</span>`).join("");
   const l = lai(c);
   return `        <article class="ent" id="cay-${esc(c.id)}">
-          <div class="ent-art">${cx(`crop:${c.id}`, 64, c.name)}</div>
+          <div class="ent-art">${cx(`crop:${c.id}`, 88, c.name)}</div>
           <div class="ent-main">
             <h3><a href="/cay-trong/${c.id}/">${esc(c.name)}</a></h3>
-            <p class="ent-sub">Hạt giống: ${esc(c.seedName)} · ${tien(c.seedPrice)}đ một gói</p>
+            <p class="ent-sub">Hạt giống: ${esc(c.seedName)} · ${xu(c.seedPrice)} một gói</p>
             <div class="chips">${mua}${c.regrowDays ? '<span class="chip alt">Thu nhiều lần</span>' : ""}</div>
             <dl class="facts">
               <div><dt>Trồng bao lâu</dt><dd>${ngay(tongNgay(c))}</dd></div>
               <div><dt>Mỗi lần thu</dt><dd>${c.yieldMin === c.yieldMax ? c.yieldMin : `${c.yieldMin}–${c.yieldMax}`} quả</dd></div>
-              <div><dt>Bán được</dt><dd>${tien(c.sellPrice)}đ một quả</dd></div>
-              <div><dt>Lãi chắc chắn</dt><dd class="${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${tien(l)}đ</dd></div>
+              <div><dt>Bán được</dt><dd>${xu(c.sellPrice)} một quả</dd></div>
+              <div><dt>Lãi chắc chắn</dt><dd class="${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${xu(l)}</dd></div>
               ${c.regrowDays ? `<div><dt>Thu lại sau</dt><dd>${ngay(c.regrowDays)}</dd></div>` : ""}
             </dl>
             <div class="grow">
@@ -524,13 +586,13 @@ function cropRow(c) {
   const l = lai(c);
   const ld = laiMoiNgay(c);
   return `<tr>
-    <th scope="row">${nhan(`crop:${c.id}`, 20)}</th>
+    <th scope="row">${nhan(`crop:${c.id}`, 26)}</th>
     <td>${c.seasons.map((x) => esc(seasonName(x))).join(", ")}</td>
     <td class="num">${ngay(tongNgay(c))}</td>
-    <td class="num">${tien(c.seedPrice)}đ</td>
-    <td class="num">${tien(c.sellPrice)}đ</td>
-    <td class="num ${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${tien(l)}đ</td>
-    <td class="num ${ld >= 0 ? "up" : "down"}"><b>${ld >= 0 ? "+" : ""}${tien(Math.round(ld))}đ</b></td>
+    <td class="num">${xu(c.seedPrice)}</td>
+    <td class="num">${xu(c.sellPrice)}</td>
+    <td class="num ${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${xu(l)}</td>
+    <td class="num ${ld >= 0 ? "up" : "down"}"><b>${ld >= 0 ? "+" : ""}${xu(Math.round(ld))}</b></td>
   </tr>`;
 }
 
@@ -558,7 +620,7 @@ function cropsPage() {
       (m) => `        <div class="mua-muc" id="mua-${m.id}">
           <h3>${esc(m.name)} <b>${m.cay.length}</b></h3>
           <div class="chips">
-            ${m.cay.map((c) => `<a class="chip" href="/cay-trong/${c.id}/">${cx(`crop:${c.id}`, 18, "")}${esc(c.name)}</a>`).join("")}
+            ${m.cay.map((c) => `<a class="chip" href="/cay-trong/${c.id}/">${cx(`crop:${c.id}`, 40, "")}${esc(c.name)}</a>`).join("")}
           </div>
         </div>`,
     )
@@ -642,24 +704,24 @@ function animalCard(a) {
   const sp = a.products
     .map(
       (p) =>
-        `<li>${nhan(p.id, 20)} — ${p.min === p.max ? p.min : `${p.min}–${p.max}`} mỗi ${ngay(p.every)}</li>`,
+        `<li>${nhan(p.id, 26)} — ${p.min === p.max ? p.min : `${p.min}–${p.max}`} mỗi ${ngay(p.every)}</li>`,
     )
     .join("");
   const thit = a.meat
-    ? `<li>${nhan(a.meat.id, 20)} — ${a.meat.min === a.meat.max ? a.meat.min : `${a.meat.min}–${a.meat.max}`}, lấy một lần khi bán con vật</li>`
+    ? `<li>${nhan(a.meat.id, 26)} — ${a.meat.min === a.meat.max ? a.meat.min : `${a.meat.min}–${a.meat.max}`}, lấy một lần khi bán con vật</li>`
     : "";
   return `        <article class="ent" id="vat-${esc(a.id)}">
-          <div class="ent-art">${cx(`animal:${a.id}`, 64, a.name)}</div>
+          <div class="ent-art">${cx(`animal:${a.id}`, 88, a.name)}</div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/${a.id}/">${esc(a.name)}</a></h3>
-            <p class="ent-sub">${a.price ? `${tien(a.price)}đ một con` : "Không mua được"}</p>
+            <p class="ent-sub">${a.price ? `${xu(a.price)} một con` : "Không mua được"}</p>
             <div class="chips">
               <span class="chip">${esc(penOf(a)?.name ?? HOUSING[a.housing] ?? a.housing)}</span>
               ${a.job ? `<span class="chip alt">${esc(JOB[a.job] ?? a.job)}</span>` : ""}
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>${ngay(a.matureDays)}</dd></div>
-              <div><dt>Ăn gì</dt><dd>${a.feed.length ? a.feed.map((f) => nhan(f, 18)).join(" ") : "Tự kiếm ăn"}${a.pecks ? " · mổ sâu trên cỏ" : ""}</dd></div>
+              <div><dt>Ăn gì</dt><dd>${a.feed.length ? a.feed.map((f) => nhan(f, 26)).join(" ") : "Tự kiếm ăn"}${a.pecks ? " · mổ sâu trên cỏ" : ""}</dd></div>
               <div><dt>Về đâu</dt><dd>${penOf(a) ? `${esc(penOf(a).name)}${penOf(a).feed ? ", có máng" : ""}` : "Không có chuồng — đi khắp nông trại"}</dd></div>
               <div><dt>Bỏ đói</dt><dd>${a.pecks ? "Gần như không chết đói — còn cỏ là còn ăn" : `Chết sau ${ngay(a.starveDays)} nhịn liên tiếp`}</dd></div>
             </dl>
@@ -773,7 +835,7 @@ ${content.materialOrder
           <div class="ent-art">${cx(`item:${m.id}`, 40, m.name)}</div>
           <div class="ent-main">
             <h3>${esc(m.name)}</h3>
-            <p class="ent-sub">Mua ${tien(m.buyPrice)}đ · bán ${tien(m.sellPrice)}đ</p>
+            <p class="ent-sub">Mua ${xu(m.buyPrice)} · bán ${xu(m.sellPrice)}</p>
             <p>${an.length ? `Cho: ${an.map((a) => esc(a.name)).join(", ")}.` : "Chưa loài nào ăn."}</p>
           </div>
         </article>`;
@@ -803,7 +865,7 @@ ${xe
           <div class="ent-art">${cx(`vehicle:${v.id}`, 64, v.name)}</div>
           <div class="ent-main">
             <h3>${esc(v.name)}</h3>
-            <p class="ent-sub">${v.price ? `${tien(v.price)}đ` : "Không mua — xe của bên ngoài tự ghé"}</p>
+            <p class="ent-sub">${v.price ? `${xu(v.price)}` : "Không mua — xe của bên ngoài tự ghé"}</p>
             <dl class="facts">
               <div><dt>Chở được</dt><dd>${v.capacity} món</dd></div>
               ${v.buyBonus ? `<div><dt>Trả cao hơn</dt><dd>+${Math.round(v.buyBonus * 100)}%</dd></div>` : ""}
@@ -970,10 +1032,10 @@ function actionsPage() {
     (h) => `        <article class="act">
           <div class="act-head">
             <span class="btn-pill big">${esc(h.nut)}</span>
-            ${h.can ? cx(h.can, 32, itemName(h.can)) : ""}
+            ${h.can ? cx(h.can, 44, itemName(h.can)) : ""}
           </div>
           <h3>${esc(h.ten)}</h3>
-          ${h.can ? `<p class="ent-sub">Cần cầm: ${nhan(h.can, 20)}</p>` : ""}
+          ${h.can ? `<p class="ent-sub">Cần cầm: ${nhan(h.can, 26)}</p>` : ""}
           <p>${esc(h.y)}</p>
           <p class="meo"><b>Mẹo.</b> ${esc(h.meo)}</p>
         </article>`,
@@ -1003,7 +1065,7 @@ function actionsPage() {
           <div class="ent-art">${cx(`build:${b.id}`, 40, b.name)}</div>
           <div class="ent-main">
             <h3>${esc(b.name)}</h3>
-            <p class="ent-sub">${tien(b.price ?? 0)}đ</p>
+            <p class="ent-sub">${xu(b.price ?? 0)}</p>
             ${b.desc ? `<p>${esc(b.desc)}</p>` : ""}
           </div>
         </article>`,
@@ -1073,8 +1135,8 @@ function trangChinhPage() {
   const nVat = content.animalOrder.filter((id) => content.animals[id]?.job !== "pest").length;
   const nMon = content.materialOrder.length;
   const nCong = content.toolOrder.length;
-  const mauCay = content.cropOrder.slice(0, 10).map((id) => cx(`crop:${id}`, 32, ""));
-  const mauVat = content.animalOrder.slice(0, 6).map((id) => cx(`animal:${id}`, 32, ""));
+  const mauCay = content.cropOrder.slice(0, 10).map((id) => cx(`crop:${id}`, 40, ""));
+  const mauVat = content.animalOrder.slice(0, 6).map((id) => cx(`animal:${id}`, 40, ""));
 
   const the = (href, ten, dem, mo, anh) => `          <a class="wcard" href="${href}">
             <div class="wcard-art">${anh}</div>
@@ -1100,7 +1162,11 @@ ${the("/loi-choi/", "Lối chơi", "luật", "Một ngày dài bao lâu, năng l
 ${the("/cay-trong/", "Cây trồng", `${nCay} loại`, "Mỗi cây: gieo mùa nào, mấy ngày chín, giá hạt, giá bán, lãi mỗi ngày.", mauCay.join(""))}
 ${the("/vat-nuoi/", "Vật nuôi", `${nVat} loài`, "Ăn gì, mấy ngày một lứa, cho sữa/trứng/lông hay lấy thịt.", mauVat.join(""))}
 ${the("/vat-pham/", "Vật phẩm", `${nMon + nCong} món`, "Nguyên liệu, món chế biến và công cụ — mỗi món một trang chi tiết.", "")}
+${the("/cong-trinh/", "Công trình", `${content.buildingOrder.length} thứ`, "Vòi tưới, sàn nhà kính, hàng rào — giá bao nhiêu và làm được gì.", "")}
+${the("/dia-hinh/", "Địa hình", `${content.propOrder.length} vật thể`, "Nền đất, cây cối, đá, gỗ chết, cỏ bụi và đồ trong nhà.", "")}
+${the("/thoi-tiet/", "Thời tiết", `${Object.keys(content.weathers ?? {}).length} kiểu trời`, "Trời đổi luật chơi của một ngày thế nào.", "")}
 ${the("/hanh-dong/", "Hành động", "mọi nút", "Từng việc nhân vật làm được trên một ô đất, cần cầm gì và tốn bao nhiêu sức.", "")}
+${the("/bieu-tuong/", "Biểu tượng", "HUD · menu", "Mỗi biểu tượng trên thanh trạng thái và trong menu nói gì.", "")}
 ${the("/tac-gia/", "Tác giả", "story", "Ai làm ra nông trại này, và nó bắt đầu từ đâu.", "")}
     </div>
 
@@ -1183,11 +1249,10 @@ function vatPhamPage() {
 ${list
   .map(
     (v) => `            <tr id="${v.slug}">
-              <th scope="row"><a class="ilk" href="/vat-pham/${v.slug}/">${cx(v.key, 22, v.ten)}<span>${esc(v.ten)}</span></a></th>
-              <td>${v.banDuoc && v.ban ? `${tien(v.ban)}đ` : "—"}</td>
-              <td>${v.mua ? `${tien(v.mua)}đ` : "—"}</td>
+              <th scope="row"><a class="ilk" href="/vat-pham/${v.slug}/">${cx(v.key, 30, v.ten)}<span>${esc(v.ten)}</span></a></th>
+              <td>${v.banDuoc && v.ban ? `${xu(v.ban)}` : "—"}</td>
+              <td>${v.mua ? `${xu(v.mua)}` : "—"}</td>
               <td>${v.congThuc ? v.congThuc.in.map((i) => `${nhan(i.id)} ×${i.n}`).join(" + ") : "—"}</td>
-              <td><a href="/vat-pham/${v.slug}/">chi tiết</a></td>
             </tr>`,
   )
   .join("\n")}
@@ -1219,12 +1284,12 @@ function vatPhamChiTiet(v) {
     (r.in ?? []).some((i) => i.id === v.key),
   );
   const hop = `        <aside class="winfo">
-          <div class="winfo-art">${cx(v.key, 64, v.ten)}</div>
+          <div class="winfo-art">${cx(v.key, 112, v.ten)}</div>
           <b class="winfo-ten">${esc(v.ten)}</b>
           <dl>
             <dt>Loại</dt><dd>${esc(v.loai)}</dd>
-            ${v.banDuoc && v.ban ? `<dt>Giá bán</dt><dd>${`${tien(v.ban)}đ`}</dd>` : ""}
-            ${v.mua ? `<dt>Giá mua</dt><dd>${`${tien(v.mua)}đ`}</dd>` : ""}
+            ${v.banDuoc && v.ban ? `<dt>Giá bán</dt><dd>${`${xu(v.ban)}`}</dd>` : ""}
+            ${v.mua ? `<dt>Giá mua</dt><dd>${`${xu(v.mua)}`}</dd>` : ""}
             ${!v.banDuoc && v.loai !== "Công cụ" ? `<dt>Bán</dt><dd>không bán được</dd>` : ""}
             ${v.nangLuong ? `<dt>Ăn được</dt><dd>hồi ${v.nangLuong} năng lượng</dd>` : ""}
             ${v.viec ? `<dt>Dùng để</dt><dd>${esc(v.viec)}</dd>` : ""}
@@ -1236,13 +1301,13 @@ function vatPhamChiTiet(v) {
     <h2 id="lay">Lấy ở đâu</h2>
     <ul class="wlist">
       ${v.congThuc ? `<li><b>Chế tạo</b> từ ${v.congThuc.in.map((i) => `${nhan(i.id)} ×${i.n}`).join(" + ")}.</li>` : ""}
-      ${v.mua ? `<li><b>Mua</b> ở Chợ với giá ${`${tien(v.mua)}đ`}.</li>` : ""}
+      ${v.mua ? `<li><b>Mua</b> ở Chợ với giá ${`${xu(v.mua)}`}.</li>` : ""}
       ${!v.congThuc && !v.mua ? "<li>Nhặt được ngoài nông trại, hoặc do vật nuôi cho.</li>" : ""}
     </ul>
 
     <h2 id="dung">Dùng làm gì</h2>
     <ul class="wlist">
-      ${v.banDuoc && v.ban ? `<li><b>Bán</b> ở Quầy thu mua, ${`${tien(v.ban)}đ`} một đơn vị.</li>` : ""}
+      ${v.banDuoc && v.ban ? `<li><b>Bán</b> ở Quầy thu mua, ${`${xu(v.ban)}`} một đơn vị.</li>` : ""}
       ${v.nangLuong ? `<li><b>Ăn</b> để hồi ${v.nangLuong} năng lượng.</li>` : ""}
       ${dung.length
         ? dung
@@ -1326,8 +1391,8 @@ function tacGiaPage() {
 
 function cropDetailPage(c) {
   const l = lai(c);
-  const stages = c.growthDays.map((_, i) => cx(`crop:${c.id}:${i}`, 34, `giai đoạn ${i + 1}`));
-  stages.push(cx(`crop:${c.id}`, 40, `${c.name} chín`));
+  const stages = c.growthDays.map((_, i) => cx(`crop:${c.id}:${i}`, 48, `giai đoạn ${i + 1}`));
+  stages.push(cx(`crop:${c.id}`, 56, `${c.name} chín`));
   const mua = c.seasons.length ? c.seasons.map((s) => esc(seasonName(s))).join(" · ") : "quanh năm";
 
   /* Món chế biến làm TỪ cây này — tra ngược công thức, nên thêm một công thức
@@ -1341,17 +1406,17 @@ function cropDetailPage(c) {
   );
 
   const hop = `        <aside class="winfo">
-          <div class="winfo-art">${cx(`crop:${c.id}`, 72, c.name)}</div>
+          <div class="winfo-art">${cx(`crop:${c.id}`, 112, c.name)}</div>
           <b class="winfo-ten">${esc(c.name)}</b>
           <dl>
             <dt>Mùa gieo</dt><dd>${mua}</dd>
             <dt>Chín sau</dt><dd>${ngay(tongNgay(c))}</dd>
-            <dt>Hạt giống</dt><dd>${tien(c.seedPrice)}đ</dd>
-            <dt>Bán</dt><dd>${tien(c.sellPrice)}đ một quả</dd>
+            <dt>Hạt giống</dt><dd>${xu(c.seedPrice)}</dd>
+            <dt>Bán</dt><dd>${xu(c.sellPrice)} một quả</dd>
             <dt>Mỗi lần thu</dt><dd>${c.yieldMin === c.yieldMax ? c.yieldMin : `${c.yieldMin}–${c.yieldMax}`} quả</dd>
             ${c.regrowDays ? `<dt>Thu lại sau</dt><dd>${ngay(c.regrowDays)}</dd>` : ""}
             ${c.energy ? `<dt>Ăn được</dt><dd>hồi ${c.energy} năng lượng</dd>` : ""}
-            <dt>Lãi mỗi ngày</dt><dd class="${laiMoiNgay(c) >= 0 ? "up" : "down"}">${tien(Math.round(laiMoiNgay(c)))}đ</dd>
+            <dt>Lãi mỗi ngày</dt><dd class="${laiMoiNgay(c) >= 0 ? "up" : "down"}">${xu(Math.round(laiMoiNgay(c)))}</dd>
           </dl>
         </aside>`;
 
@@ -1369,17 +1434,17 @@ function cropDetailPage(c) {
     <h2 id="tien">Tiền nong</h2>
     <table>
       <tbody>
-        <tr><th scope="row">Hạt giống</th><td>${tien(c.seedPrice)}đ một gói</td></tr>
-        <tr><th scope="row">Bán quả</th><td>${tien(c.sellPrice)}đ</td></tr>
-        <tr><th scope="row">Lãi chắc chắn một vụ</th><td class="${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${tien(l)}đ</td></tr>
-        <tr><th scope="row">Lãi mỗi ngày</th><td class="${laiMoiNgay(c) >= 0 ? "up" : "down"}">${tien(Math.round(laiMoiNgay(c)))}đ</td></tr>
+        <tr><th scope="row">Hạt giống</th><td>${xu(c.seedPrice)} một gói</td></tr>
+        <tr><th scope="row">Bán quả</th><td>${xu(c.sellPrice)}</td></tr>
+        <tr><th scope="row">Lãi chắc chắn một vụ</th><td class="${l >= 0 ? "up" : "down"}">${l >= 0 ? "+" : ""}${xu(l)}</td></tr>
+        <tr><th scope="row">Lãi mỗi ngày</th><td class="${laiMoiNgay(c) >= 0 ? "up" : "down"}">${xu(Math.round(laiMoiNgay(c)))}</td></tr>
       </tbody>
     </table>
     <p class="note">Lãi tính theo mức thu <b>thấp nhất</b> — con số bạn chắc chắn nhận được, không phải mức trung bình.</p>
 
     <h2 id="dung">Dùng làm gì</h2>
     <ul class="wlist">
-      <li>Bán ở <b>Quầy thu mua</b>, ${tien(c.sellPrice)}đ một quả.</li>
+      <li>Bán ở <b>Quầy thu mua</b>, ${xu(c.sellPrice)} một quả.</li>
       ${c.energy ? `<li>Ăn để hồi <b>${c.energy}</b> năng lượng.</li>` : ""}
       ${cheBien.map((r) => `<li>Chế tạo ${esc(r.name)} — cần ${(r.in ?? []).map((i) => nhan(i.id)).join(" + ")}.</li>`).join("\n      ")}
       ${anBoi.length ? `<li>Cho ăn: ${nhanDs([...new Set(anBoi)].map((a) => `animal:${a}`))} ăn được món này.</li>` : ""}
@@ -1412,10 +1477,10 @@ function animalDetailPage(a) {
   const thit = a.meat ? [a.meat.id] : [];
 
   const hop = `        <aside class="winfo">
-          <div class="winfo-art">${cx(`animal:${a.id}`, 72, a.name)}</div>
+          <div class="winfo-art">${cx(`animal:${a.id}`, 112, a.name)}</div>
           <b class="winfo-ten">${esc(a.name)}</b>
           <dl>
-            <dt>Giá mua</dt><dd>${tien(a.price ?? 0)}đ</dd>
+            <dt>Giá mua</dt><dd>${xu(a.price ?? 0)}</dd>
             <dt>Lớn sau</dt><dd>${ngay(a.matureDays ?? 0)}</dd>
             ${khu ? `<dt>Ở khu</dt><dd>${esc(khu.name)}</dd>` : ""}
             ${a.fedMinutes ? `<dt>No được</dt><dd>${Math.round(a.fedMinutes / 60)} giờ game</dd>` : ""}
@@ -1436,16 +1501,16 @@ function animalDetailPage(a) {
           const pr = (a.products ?? []).find((p) => p.id === id);
           const nhip = pr?.every ? ` — mỗi ${ngay(pr.every)} một lứa` : "";
           const so = pr && pr.min ? `, ${pr.min === pr.max ? pr.min : `${pr.min}–${pr.max}`} một lứa` : "";
-          return `<li>${nhan(id, 22)}${nhip}${so}.</li>`;
+          return `<li>${nhan(id, 26)}${nhip}${so}.</li>`;
         })
         .join("\n      ")}
-      ${thit.map((id) => `<li>${nhan(id, 22)} — khi mổ thịt.</li>`).join("\n      ")}
+      ${thit.map((id) => `<li>${nhan(id, 26)} — khi mổ thịt.</li>`).join("\n      ")}
       ${!sp.length && !thit.length ? "<li>Không cho sản phẩm nào — nuôi để có bạn.</li>" : ""}
     </ul>
 
     <h2 id="nuoi">Nuôi thế nào</h2>
     <ul class="wlist">
-      <li>Mua ở <b>Chợ</b> ${tien(a.price ?? 0)}đ; xe thật chở tới kho rồi thả xuống, con vật tự đi về khu của nó.</li>
+      <li>Mua ở <b>Chợ</b> ${xu(a.price ?? 0)}; xe thật chở tới kho rồi thả xuống, con vật tự đi về khu của nó.</li>
       <li>Lớn sau <b>${ngay(a.matureDays ?? 0)}</b>; chưa lớn thì chưa cho sản phẩm.</li>
       ${a.starveDays ? `<li>Nhịn ăn <b>${a.starveDays} ngày liên tiếp</b> thì chết — đói thì trên đầu nó có bong bóng.</li>` : ""}
     </ul>
@@ -1461,6 +1526,393 @@ function animalDetailPage(a) {
     tag: a.job === "pest" ? "loài phá hoại" : "vật nuôi",
     hop,
     muc: [["an", "Ăn gì"], ["cho", "Cho gì"], ["nuoi", "Nuôi thế nào"]],
+    body,
+  });
+}
+
+
+/* ------------------------------------------------------- CÔNG TRÌNH · ĐỊA HÌNH
+
+   Cường: "thiếu công trình và địa hình rồi, bổ sung luôn vào trang tài liệu".
+
+   Đúng, và đó là hai mảng LỚN: người chơi xây vòi tưới, lát nhà kính, chặt cây,
+   đập đá, nhặt khúc gỗ — nhưng wiki không có lấy một dòng nào về chúng. Trang
+   Hành động có kể việc CHẶT và ĐẬP, mà không nói chặt cái gì ra cái gì.
+--------------------------------------------------------------------------- */
+
+const KIEU_XAY = { object: "Vật đặt trên ô", floor: "Sàn lát" };
+
+function congTrinhPage() {
+  const ds = content.buildingOrder.map((id) => content.buildings[id]).filter(Boolean);
+  const the = (b) => `        <a class="chip" href="/cong-trinh/${b.id}/">
+          ${cx(`build:${b.id}`, 40, b.name)}<span>${esc(b.name)}</span>
+        </a>`;
+
+  const body = `
+    <h2 id="ds">Xây được những gì</h2>
+    <div class="chips">
+${ds.map(the).join("\n")}
+    </div>
+
+    <h2 id="bang">Bảng so sánh</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Công trình</th><th>Giá</th><th>Kiểu</th><th>Đi qua được</th></tr></thead>
+        <tbody>
+${ds
+  .map(
+    (b) => `          <tr>
+            <th scope="row">${nhan(`build:${b.id}`, 26)}</th>
+            <td class="num">${b.price ? xu(b.price) : "không mua"}</td>
+            <td>${esc(KIEU_XAY[b.kind] ?? b.kind)}</td>
+            <td>${b.solid ? "không" : "có"}</td>
+          </tr>`,
+  )
+  .join("\n")}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="xay">Xây thế nào</h2>
+    <ul class="wlist">
+      <li>Mở <b>chế độ xây dựng</b> trong lưới Tạm dừng, chọn thứ cần xây.</li>
+      <li>Kéo một đường: game <b>xem trước cả tuyến</b> — ô nào đặt được thì khung xanh, không thì khung đỏ — và cộng sẵn tổng tiền trước khi bấm.</li>
+      <li>Đặt nhầm thì <b>gỡ ra được</b>, và tiền vật liệu trả lại theo luật của từng thứ.</li>
+    </ul>
+`;
+  return page({
+    title: "Công trình — OniFarm Wiki",
+    desc: `Toàn bộ ${ds.length} công trình xây được trong OniFarm: giá, kiểu, đi qua được hay không.`,
+    url: "/cong-trinh/",
+    h1: "Công trình",
+    tag: `${ds.length} thứ xây được`,
+    muc: [["ds", "Xây được những gì"], ["bang", "Bảng so sánh"], ["xay", "Xây thế nào"]],
+    body,
+  });
+}
+
+function congTrinhChiTiet(b) {
+  const hd = Object.entries(b.effects ?? {});
+  const TEN_HD = {
+    waterRadius: "Tự tưới quanh nó",
+    autoWet: "Ô luôn giữ ẩm",
+    allSeason: "Trồng được quanh năm",
+    speedMul: "Đi nhanh hơn",
+  };
+  const hop = `        <aside class="winfo">
+          <div class="winfo-art">${cx(`build:${b.id}`, 112, b.name)}</div>
+          <b class="winfo-ten">${esc(b.name)}</b>
+          <dl>
+            <dt>Giá</dt><dd>${b.price ? xu(b.price) : "không mua được"}</dd>
+            <dt>Kiểu</dt><dd>${esc(KIEU_XAY[b.kind] ?? b.kind)}</dd>
+            <dt>Đi qua</dt><dd>${b.solid ? "không" : "được"}</dd>
+          </dl>
+        </aside>`;
+  const body = `
+    <h2 id="lam">Nó làm gì</h2>
+    <p>${esc(b.desc ?? "")}</p>
+    ${hd.length
+      ? `<table>
+      <tbody>
+${hd.map(([k, v]) => `        <tr><th scope="row">${esc(TEN_HD[k] ?? k)}</th><td>${typeof v === "boolean" ? (v ? "có" : "không") : esc(String(v))}</td></tr>`).join("\n")}
+      </tbody>
+    </table>`
+      : ""}
+
+    <h2 id="xay">Xây thế nào</h2>
+    <ul class="wlist">
+      <li>${b.price ? `Tốn ${xu(b.price)} một ô.` : "Đã dựng sẵn trên bản đồ — không mua, không xây."}</li>
+      <li>Mở <b>chế độ xây dựng</b>, chọn ${esc(b.name)}, rồi kéo một đường; xem trước cả tuyến trước khi bấm.</li>
+    </ul>
+
+    <p class="wback"><a href="/cong-trinh/">← Về danh sách công trình</a></p>
+`;
+  return page({
+    title: `${b.name} — OniFarm Wiki`,
+    desc: `${b.name} trong OniFarm: ${b.desc ?? ""}`.slice(0, 155),
+    url: "/cong-trinh/",
+    h1: esc(b.name),
+    tag: "công trình",
+    hop,
+    muc: [["lam", "Nó làm gì"], ["xay", "Xây thế nào"]],
+    body,
+  });
+}
+
+/* ------------------------------------------------------------------ ĐỊA HÌNH */
+
+const TEN_NEN = {
+  grass: "Cỏ", path: "Lối đi", asphalt: "Đường nhựa", concrete: "Bê tông",
+  water: "Nước", wood: "Sàn gỗ", soil: "Đất cày",
+};
+
+/** Vật thể chia nhóm theo VIỆC người chơi làm với nó, không theo tên. */
+function nhomVatThe() {
+  const p = (id) => content.props[id];
+  const co = (id) => !!p(id);
+  const ds = content.propOrder.filter(co);
+  const la = (id, ...ten) => ten.some((t) => id.includes(t));
+  return [
+    ["Cây cối", ds.filter((id) => la(id, "tree", "sapling", "palm", "willow", "maple", "bamboo", "pine", "birch"))],
+    ["Đá", ds.filter((id) => la(id, "rock", "boulder"))],
+    ["Gỗ chết", ds.filter((id) => la(id, "log", "stump", "branch", "twig", "deadfall", "driftwood", "roots"))],
+    ["Cỏ và bụi", ds.filter((id) => la(id, "grass", "bush"))],
+    ["Công trình có sẵn", ds.filter((id) => la(id, "house", "door", "shop", "counter", "warehouse", "kennel", "well", "wall", "pier", "bridge", "sign", "trough", "bench", "bed", "waterfall"))],
+    ["Đồ trong nhà", ds.filter((id) => la(id, "table", "chair", "rug", "shelf", "cabinet", "stove", "sink", "lamp", "potplant", "clock", "painting", "sofa", "barrel", "crate"))],
+  ].map(([ten, ids]) => [ten, [...new Set(ids)]]);
+}
+
+function diaHinhPage() {
+  const nhom = nhomVatThe();
+  const daKe = new Set(nhom.flatMap(([, ids]) => ids));
+  const conLai = content.propOrder.filter((id) => content.props[id] && !daKe.has(id));
+  if (conLai.length) nhom.push(["Khác", conLai]);
+
+  const the = (id) => `        <a class="chip" href="/dia-hinh/${id}/">
+          ${cx(`prop:${id}`, 40, content.props[id].name)}<span>${esc(content.props[id].name)}</span>
+        </a>`;
+
+  /* Luật của NỀN nằm trong `tiles.grounds` chứ không phải ở gốc content — lấy
+     sai chỗ thì mọi nền ra "đi qua được, 1×", tức là bảng nói ngược hẳn với
+     game ở đúng dòng quan trọng nhất (mặt nước chắn đường). */
+  const nen = Object.entries(TEN_NEN).map(([id, ten]) => {
+    const g = content.tiles?.grounds?.[id] ?? {};
+    return `          <tr>
+            <th scope="row">${esc(ten)}</th>
+            <td>${g.solid ? "<b>không</b>" : "được"}</td>
+            <td>${g.speedMul ? `<b>${g.speedMul}×</b>` : "1×"}</td>
+            <td>${id === "soil" ? "cày rồi mới gieo được" : id === "water" ? "múc nước, thả cá, đi thuyền" : id === "grass" ? "cày được trong lô ruộng" : "—"}</td>
+          </tr>`;
+  });
+
+  const body = `
+    <h2 id="nen">Nền đất</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nền</th><th>Đi qua</th><th>Tốc độ</th><th>Làm gì trên đó</th></tr></thead>
+        <tbody>
+${nen.join("\n")}
+        </tbody>
+      </table>
+    </div>
+
+${nhom
+  .filter(([, ids]) => ids.length)
+  .map(
+    ([ten, ids], i) => `    <h2 id="v${i}">${esc(ten)} <span class="wdem">${ids.length} thứ</span></h2>
+    <div class="chips">
+${ids.map(the).join("\n")}
+    </div>`,
+  )
+  .join("\n\n")}
+`;
+  return page({
+    title: "Địa hình — OniFarm Wiki",
+    desc: "Nền đất và toàn bộ vật thể trên bản đồ OniFarm: cây, đá, gỗ chết, cỏ bụi, công trình có sẵn và đồ trong nhà.",
+    url: "/dia-hinh/",
+    h1: "Địa hình",
+    tag: `${content.propOrder.length} vật thể`,
+    muc: [["nen", "Nền đất"], ...nhom.filter(([, ids]) => ids.length).map(([ten], i) => [`v${i}`, ten])],
+    body,
+  });
+}
+
+const TEN_CONG_CU = { CHOP: "Rìu", MINE: "Cuốc chim", TILL: "Cuốc", WATER: "Bình tưới" };
+
+function diaHinhChiTiet(id) {
+  const p = content.props[id];
+  const rot = (p.drops ?? []).map((d) => `${nhan(d.id, 26)} ×${d.min === d.max ? d.min : `${d.min}–${d.max}`}`);
+  const hop = `        <aside class="winfo">
+          <div class="winfo-art">${cx(`prop:${id}`, 112, p.name)}</div>
+          <b class="winfo-ten">${esc(p.name)}</b>
+          <dl>
+            <dt>Đi qua</dt><dd>${p.solid ? "không" : "được"}</dd>
+            ${p.hits ? `<dt>Số nhát</dt><dd>${p.hits}</dd>` : ""}
+            ${p.tool ? `<dt>Cần</dt><dd>${esc(TEN_CONG_CU[p.tool] ?? p.tool)}</dd>` : ""}
+            ${p.portable ? `<dt>Nhấc được</dt><dd>có</dd>` : ""}
+            ${p.tall ? `<dt>Cao</dt><dd>hai ô</dd>` : ""}
+          </dl>
+        </aside>`;
+
+  const body = `
+    <h2 id="go">Gỡ nó ra sao</h2>
+    <ul class="wlist">
+      ${p.hits
+        ? `<li>Đập <b>${p.hits} nhát</b>${p.tool ? ` bằng <b>${esc(TEN_CONG_CU[p.tool] ?? p.tool)}</b>` : ""}.</li>`
+        : "<li>Không gỡ được — nó là một phần của bản đồ.</li>"}
+      ${rot.length ? `<li>Rơi ra: ${rot.join(" · ")}.</li>` : ""}
+      ${p.becomes ? `<li>Gỡ xong còn lại ${nhan(`prop:${p.becomes}`, 26)}.</li>` : ""}
+      ${p.portable ? "<li><b>Nhấc được</b>: cầm lên rồi đặt xuống chỗ khác, không cần đập.</li>" : ""}
+    </ul>
+
+    <h2 id="net">Nét riêng</h2>
+    <ul class="wlist">
+      <li>Đi qua được: <b>${p.solid ? "không" : "có"}</b>.</li>
+      ${p.sway ? `<li>Lay theo gió — càng bão càng nghiêng.</li>` : ""}
+      ${p.seasonal ? "<li>Đổi màu theo mùa: xanh non mùa xuân, vàng cam mùa thu, bạc đi mùa đông.</li>" : ""}
+      ${p.grow ? `<li>Lớn lên thành ${nhan(`prop:${p.grow.to}`, 26)} sau ${ngay(p.grow.days)}.</li>` : ""}
+      ${p.frames ? `<li>Có <b>${p.frames} kiểu hình</b> — mở ra khi có người tới gần.</li>` : ""}
+      ${p.spread ? "<li>Tự lan sang ô bên cạnh qua đêm.</li>" : ""}
+      ${p.bridge ? "<li>Bắc qua mặt nước — đi lên được.</li>" : ""}
+    </ul>
+
+    <p class="wback"><a href="/dia-hinh/">← Về danh sách địa hình</a></p>
+`;
+  return page({
+    title: `${p.name} — OniFarm Wiki`,
+    desc: `${p.name} trong OniFarm: ${p.solid ? "chắn đường" : "đi qua được"}${p.hits ? `, đập ${p.hits} nhát` : ""}${rot.length ? ", có rơi vật liệu" : ""}.`,
+    url: "/dia-hinh/",
+    h1: esc(p.name),
+    tag: "vật thể trên bản đồ",
+    hop,
+    muc: [["go", "Gỡ nó ra sao"], ["net", "Nét riêng"]],
+    body,
+  });
+}
+
+
+/* ---------------------------------------------------- THỜI TIẾT · BIỂU TƯỢNG
+
+   Cường: "tôi cũng nhớ là có vẻ một bộ ảnh thời tiết và menu, mà sao không đưa
+   vào trang tài liệu luôn".
+
+   Đúng — hai bộ hình ấy nằm sẵn trong atlas và game dùng hàng ngày trên HUD,
+   nhưng wiki chưa nhắc tới chúng lấy một dòng. Mà thời tiết thì đổi hẳn luật
+   chơi của một ngày (mưa thì cây lớn nhanh hơn rưỡi, bão thì xe không tới), còn
+   biểu tượng thì là thứ người chơi nhìn thấy nhiều nhất mà không ai giải thích.
+--------------------------------------------------------------------------- */
+
+function thoiTietPage() {
+  const ds = Object.values(content.weathers ?? {});
+  const tong = ds.reduce((a, w) => a + (w.weight ?? 0), 0) || 1;
+  const pt = (w) => `${Math.round(((w.weight ?? 0) / tong) * 100)}%`;
+
+  const the = (w) => `        <article class="ent" id="wx-${esc(w.id)}">
+          <div class="ent-art">${cx(`weather:${w.id}`, 88, w.name)}</div>
+          <div class="ent-main">
+            <h3>${esc(w.name)}</h3>
+            <p class="ent-sub">Gặp khoảng <b>${pt(w)}</b> số ngày</p>
+            <dl class="facts">
+              <div><dt>Cây lớn</dt><dd>${w.growMul === 1 ? "như thường" : `<b>${w.growMul}×</b>`}</dd></div>
+              <div><dt>Sáng ra ruộng</dt><dd>${w.wet ? "<b>đã ẩm sẵn</b>" : "phải tự tưới"}</dd></div>
+              <div><dt>Gió</dt><dd>${Math.round((w.wind ?? 0) * 100)}%</dd></div>
+              <div><dt>Sâu bệnh</dt><dd>${w.diseaseMul === 1 ? "như thường" : `${w.diseaseMul}×`}</dd></div>
+              ${w.speedMul ? `<div><dt>Đi lại</dt><dd><b>${w.speedMul}×</b> — chậm hơn</dd></div>` : ""}
+              ${w.hot ? `<div><dt>Nắng gắt</dt><dd>quá trưa là ô ẩm khô, cây chưa tưới trông héo</dd></div>` : ""}
+              ${w.storm ? `<div><dt>Quật cây</dt><dd>mỗi cây có ${Math.round(w.storm.cropChance * 100)}% lùi một giai đoạn</dd></div>` : ""}
+              ${w.shelter ? `<div><dt>Vật nuôi</dt><dd>vào trú, người làm về đứng trước kho</dd></div>` : ""}
+              ${w.halt ? `<div><dt>Xe và thuyền</dt><dd><b>không ghé</b> hôm nay</dd></div>` : ""}
+              ${w.streak ? `<div><dt>Dầm</dt><dd>có thể kéo tới ${w.streak.max} ngày liền</dd></div>` : ""}
+              ${w.fogUntil ? `<div><dt>Sương</dt><dd>phủ tới ${gioPhut(w.fogUntil)}</dd></div>` : ""}
+            </dl>
+          </div>
+        </article>`;
+
+  const body = `
+    <h2 id="ds">Sáu kiểu trời</h2>
+    <div class="ents">
+${ds.map(the).join("\n")}
+    </div>
+
+    <h2 id="luat">Trời đổi luật thế nào</h2>
+    <ul class="wlist">
+      <li>Mỗi ngày đúng <b>một</b> kiểu, rút thăm theo trọng số từ hạt của ván — nên cùng một ván chơi lại vẫn ra cùng chuỗi thời tiết.</li>
+      <li>Ngày mai được rút <b>sẵn từ hôm nay</b>, nên HUD hiện được dự báo. Thấy báo bão thì hôm nay đừng đợi xe.</li>
+      <li>Ngày <b>ẩm</b> thì sáng ra mọi ô đã cày ngoài trời tự ẩm, và đêm không khô đi — khỏi tưới.</li>
+      <li>Ô trong <b>nhà kính</b> không nghe lời trời: luôn ẩm và trồng được quanh năm.</li>
+    </ul>
+
+    <h2 id="bang">Bảng so sánh</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Trời</th><th>Gặp</th><th>Cây lớn</th><th>Ẩm sẵn</th><th>Đi lại</th><th>Xe ghé</th></tr></thead>
+        <tbody>
+${ds
+  .map(
+    (w) => `          <tr>
+            <th scope="row"><span class="ilk">${cx(`weather:${w.id}`, 30, w.name)}<span>${esc(w.name)}</span></span></th>
+            <td class="num">${pt(w)}</td>
+            <td class="num">${w.growMul}×</td>
+            <td>${w.wet ? "có" : "không"}</td>
+            <td class="num">${w.speedMul ?? 1}×</td>
+            <td>${w.halt ? "không" : "có"}</td>
+          </tr>`,
+  )
+  .join("\n")}
+        </tbody>
+      </table>
+    </div>
+`;
+  return page({
+    title: "Thời tiết — OniFarm Wiki",
+    desc: "Sáu kiểu thời tiết trong OniFarm và mỗi kiểu đổi luật chơi ra sao: cây lớn nhanh chậm, ruộng có ẩm sẵn không, xe có ghé không.",
+    url: "/thoi-tiet/",
+    h1: "Thời tiết",
+    tag: `${ds.length} kiểu trời`,
+    muc: [["ds", "Sáu kiểu trời"], ["luat", "Trời đổi luật thế nào"], ["bang", "Bảng so sánh"]],
+    body,
+  });
+}
+
+/** Bộ biểu tượng của HUD và menu — thứ người chơi nhìn nhiều nhất mà không ai giải thích. */
+const BIEU_TUONG = [
+  ["coin", "Tiền", "Số tiền đang có, và giá của mọi thứ."],
+  ["day", "Ngày", "Ngày thứ mấy của mùa đang chơi."],
+  ["sun", "Ban ngày", "Đồng hồ đang trong giờ sáng."],
+  ["moon", "Ban đêm", "Quá giờ tối — con vật đi ngủ, cây thôi lớn cho tới sáng."],
+  ["energy", "Năng lượng", "Còn bao nhiêu sức. Hết sức thì không cày gieo tưới được nữa."],
+  ["water", "Nước trong bình", "Còn mấy lần tưới. Múc thêm ở giếng hoặc bờ nước."],
+  ["goal", "Mục tiêu", "Nấc tiến trình đang nhắm tới."],
+  ["bag", "Balo", "Mở túi đồ."],
+  ["build", "Xây dựng", "Bật chế độ xây, kéo một tuyến rồi xem trước cả tuyến."],
+  ["power", "Tự động làm", "Bật thì người làm và nút tự động cùng chạy một thang việc."],
+  ["gear", "Cài đặt", "Tay thuận, cỡ chữ, phóng to, rung."],
+  ["help", "Hướng dẫn", "Bảng nhắc thao tác."],
+  ["save", "Lưu game", "Ghi tiến trình xuống máy."],
+  ["load", "Tải game", "Đọc lại bản đã ghi."],
+  ["file", "Save ra/vào", "Xuất bản lưu thành tệp, hoặc nạp một tệp vào."],
+  ["reload", "Cập nhật", "Kiểm tra bản mới."],
+  ["install", "Cài về máy", "Thêm vào màn hình chính như một app."],
+  ["bug", "Gỡ lỗi", "Bảng công cụ dành cho người làm game."],
+];
+
+function bieuTuongPage() {
+  const body = `
+    <h2 id="ds">Bộ biểu tượng</h2>
+    <div class="chips">
+${BIEU_TUONG.map(
+  ([id, ten]) => `        <span class="chip">${cx(`ui:${id}`, 40, ten)}<span>${esc(ten)}</span></span>`,
+).join("\n")}
+    </div>
+
+    <h2 id="nghia">Nghĩa từng cái</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Biểu tượng</th><th>Tên</th><th>Nói gì</th></tr></thead>
+        <tbody>
+${BIEU_TUONG.map(
+  ([id, ten, y]) => `          <tr>
+            <td>${cx(`ui:${id}`, 34, ten)}</td>
+            <th scope="row">${esc(ten)}</th>
+            <td>${esc(y)}</td>
+          </tr>`,
+).join("\n")}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="note">
+      Bộ này vẽ bằng code trong chính atlas của game, không phải emoji: emoji là font của hệ điều hành
+      nên mỗi máy ra một hình khác, mà một biểu tượng đổi hình theo máy thì nó thôi làm được việc của nó.
+    </p>
+`;
+  return page({
+    title: "Biểu tượng — OniFarm Wiki",
+    desc: "Bộ biểu tượng của HUD và menu OniFarm: tiền, ngày, năng lượng, nước, balo, xây dựng, tự động làm — mỗi cái nói gì.",
+    url: "/bieu-tuong/",
+    h1: "Biểu tượng",
+    tag: `${BIEU_TUONG.length} biểu tượng`,
+    muc: [["ds", "Bộ biểu tượng"], ["nghia", "Nghĩa từng cái"]],
     body,
   });
 }
@@ -1487,7 +1939,7 @@ function luatChoiPage() {
           ["Nhịp đồng hồ", `${b.realSecondsPerGameTenMinutes} giây thật = 10 phút trong game`],
           ["Năng lượng", `tối đa ${b.energyMax}; ngủ hồi lại đầy, ngủ muộn thì hồi ít hơn`],
           ["Túi đồ", `${b.inventorySlots} ô, trong đó ${b.hotbarSlots} ô ngoài thanh nhanh`],
-          ["Tiền khởi đầu", `${SO_LIEU.tienDau}đ`],
+          ["Tiền khởi đầu", `${xu(bal.startMoney)}`],
         ])}
         <p class="note">Ngủ <b>trên giường</b> mới sang ngày — cửa nhà chỉ để đi vào. Ngủ trong nhà thì ngoài ruộng vẫn lớn, vẫn khô, vẫn mọc cỏ.</p>
       </div>
@@ -1545,8 +1997,8 @@ function luatChoiPage() {
       <div class="wrap">
         <h2>Người làm thuê</h2>
         ${bangLuat([
-          ["Thuê", `${SO_LIEU.thueNguoi}đ một người`],
-          ["Lương", `${SO_LIEU.luongNguoi}đ mỗi ${SO_LIEU.ngayTraLuong} ngày`],
+          ["Thuê", `${xu(content.workers?.hireFee ?? 0)} một người`],
+          ["Lương", `${xu(content.workers?.wage ?? 0)} mỗi ${SO_LIEU.ngayTraLuong} ngày`],
           ["Giao việc", "chăm cây <i>hoặc</i> chăn nuôi — trong phạm vi đó họ tự chọn việc"],
           ["Thứ tự ưu tiên", "cố định, không ngẫu nhiên — nên đoán được họ sẽ làm gì"],
           ["Rảnh việc", "đi kiếm gỗ đá trong rừng, không đụng cây cảnh bạn trồng"],
@@ -1623,7 +2075,11 @@ const outs = [
   write("cay-trong", cropsPage()),
   write("vat-nuoi", animalsPage()),
   write("vat-pham", vatPhamPage()),
+  write("cong-trinh", congTrinhPage()),
+  write("dia-hinh", diaHinhPage()),
+  write("thoi-tiet", thoiTietPage()),
   write("hanh-dong", actionsPage()),
+  write("bieu-tuong", bieuTuongPage()),
   write("tac-gia", tacGiaPage()),
   write(
     "privacy",
@@ -1641,6 +2097,12 @@ const outs = [
   ...moiVatPham().map((v) => write(`vat-pham/${v.slug}`, vatPhamChiTiet(v))),
   ...content.cropOrder.map((id) => write(`cay-trong/${id}`, cropDetailPage(content.crops[id]))),
   ...content.animalOrder.map((id) => write(`vat-nuoi/${id}`, animalDetailPage(content.animals[id]))),
+  ...content.buildingOrder
+    .filter((id) => content.buildings[id])
+    .map((id) => write(`cong-trinh/${id}`, congTrinhChiTiet(content.buildings[id]))),
+  ...content.propOrder
+    .filter((id) => content.props[id])
+    .map((id) => write(`dia-hinh/${id}`, diaHinhChiTiet(id))),
 ];
 
 /* ---- soát: trang HÀNH ĐỘNG phải khớp với mã, không phải với trí nhớ -------

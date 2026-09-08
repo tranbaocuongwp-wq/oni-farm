@@ -18,6 +18,7 @@
     <script type="module" src="/site/sprites.ts"></script>
   </head>
   <body class="wiki">
+    <svg class="xu-def" aria-hidden="true"><symbol id="xu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#c9931a"/><circle cx="8" cy="8" r="5.6" fill="#ffd84a"/><circle cx="8" cy="8" r="3.2" fill="#e8b52c"/><path d="M4.6 5.2a4.8 4.8 0 0 1 3-2" stroke="#fff3bf" stroke-width="1.2" fill="none" stroke-linecap="round"/></symbol></svg>
     <header class="wtop">
       <a class="wlogo" href="/"><img src="/favicon.svg" alt="" width="24" height="24" /><span>ONI<b>FARM</b> WIKI</span></a>
       <a class="wplay" href="/farm/">Chơi ngay →</a>
@@ -31,7 +32,11 @@
           <a href="/cay-trong/">Cây trồng</a>
           <a href="/vat-nuoi/" aria-current="page">Vật nuôi</a>
           <a href="/vat-pham/">Vật phẩm</a>
-          <a href="/hanh-dong/">Hành động</a></div>
+          <a href="/cong-trinh/">Công trình</a>
+          <a href="/dia-hinh/">Địa hình</a>
+          <a href="/thoi-tiet/">Thời tiết</a>
+          <a href="/hanh-dong/">Hành động</a>
+          <a href="/bieu-tuong/">Biểu tượng</a></div>
         <div class="wgrp"><b>Về dự án</b>
           <a href="/tac-gia/">Tác giả</a>
           <a href="/privacy/">Quyền riêng tư</a></div>
@@ -47,143 +52,143 @@
         <p>Đứng cạnh con vật là nút hành động đổi thành <span class="btn-pill">THU</span>; còn cho ăn thì <b>đổ vào máng</b> chứ không đút tận miệng — xem mục dưới.</p>
         <div class="ents">
         <article class="ent" id="vat-cow">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:cow" data-size="64" role="img" aria-label="Bò"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:cow" data-size="88" role="img" aria-label="Bò"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/cow/">Bò</a></h3>
-            <p class="ent-sub">800đ một con</p>
+            <p class="ent-sub"><b class="tien">800</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu gia súc</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>6 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><canvas class="sp" data-sprite="item:hay" data-size="18" role="img" aria-label="Rơm"></canvas><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><canvas class="sp" data-sprite="crop:cassava" data-size="18" role="img" aria-label="Khoai mì"></canvas><span>Khoai mì</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:hay" data-size="26" role="img" aria-label="Rơm"></canvas></span><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:cassava" data-size="26" role="img" aria-label="Khoai mì"></canvas></span><span>Khoai mì</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Khu gia súc</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 4 ngày nhịn liên tiếp</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-milk/"><canvas class="sp" data-sprite="item:milk" data-size="20" role="img" aria-label="Sữa bò"></canvas><span>Sữa bò</span></a> — 1–2 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-beef/"><canvas class="sp" data-sprite="item:beef" data-size="20" role="img" aria-label="Thịt bò"></canvas><span>Thịt bò</span></a> — 2–3, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-milk/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:milk" data-size="26" role="img" aria-label="Sữa bò"></canvas></span><span>Sữa bò</span></a> — 1–2 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-beef/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:beef" data-size="26" role="img" aria-label="Thịt bò"></canvas></span><span>Thịt bò</span></a> — 2–3, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-goat">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:goat" data-size="64" role="img" aria-label="Dê"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:goat" data-size="88" role="img" aria-label="Dê"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/goat/">Dê</a></h3>
-            <p class="ent-sub">520đ một con</p>
+            <p class="ent-sub"><b class="tien">520</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu gia súc</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>5 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><canvas class="sp" data-sprite="item:hay" data-size="18" role="img" aria-label="Rơm"></canvas><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><canvas class="sp" data-sprite="crop:cassava" data-size="18" role="img" aria-label="Khoai mì"></canvas><span>Khoai mì</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:hay" data-size="26" role="img" aria-label="Rơm"></canvas></span><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:cassava" data-size="26" role="img" aria-label="Khoai mì"></canvas></span><span>Khoai mì</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Khu gia súc</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 4 ngày nhịn liên tiếp</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-goatmilk/"><canvas class="sp" data-sprite="item:goatmilk" data-size="20" role="img" aria-label="Sữa dê"></canvas><span>Sữa dê</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-goatmeat/"><canvas class="sp" data-sprite="item:goatmeat" data-size="20" role="img" aria-label="Thịt dê"></canvas><span>Thịt dê</span></a> — 1–2, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-goatmilk/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:goatmilk" data-size="26" role="img" aria-label="Sữa dê"></canvas></span><span>Sữa dê</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-goatmeat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:goatmeat" data-size="26" role="img" aria-label="Thịt dê"></canvas></span><span>Thịt dê</span></a> — 1–2, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-pig">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:pig" data-size="64" role="img" aria-label="Heo"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:pig" data-size="88" role="img" aria-label="Heo"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/pig/">Heo</a></h3>
-            <p class="ent-sub">460đ một con</p>
+            <p class="ent-sub"><b class="tien">460</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu heo</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>6 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/radish/"><canvas class="sp" data-sprite="crop:radish" data-size="18" role="img" aria-label="Củ cải trắng"></canvas><span>Củ cải trắng</span></a> <a class="ilk" href="/cay-trong/carrot/"><canvas class="sp" data-sprite="crop:carrot" data-size="18" role="img" aria-label="Cà rốt"></canvas><span>Cà rốt</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/radish/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:radish" data-size="26" role="img" aria-label="Củ cải trắng"></canvas></span><span>Củ cải trắng</span></a> <a class="ilk" href="/cay-trong/carrot/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:carrot" data-size="26" role="img" aria-label="Cà rốt"></canvas></span><span>Cà rốt</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Khu heo</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 3 ngày nhịn liên tiếp</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-pork/"><canvas class="sp" data-sprite="item:pork" data-size="20" role="img" aria-label="Thịt heo"></canvas><span>Thịt heo</span></a> — 2–4, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-pork/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:pork" data-size="26" role="img" aria-label="Thịt heo"></canvas></span><span>Thịt heo</span></a> — 2–4, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-sheep">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:sheep" data-size="64" role="img" aria-label="Cừu"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:sheep" data-size="88" role="img" aria-label="Cừu"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/sheep/">Cừu</a></h3>
-            <p class="ent-sub">520đ một con</p>
+            <p class="ent-sub"><b class="tien">520</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu gia súc</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>7 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><canvas class="sp" data-sprite="item:hay" data-size="18" role="img" aria-label="Rơm"></canvas><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><canvas class="sp" data-sprite="crop:cassava" data-size="18" role="img" aria-label="Khoai mì"></canvas><span>Khoai mì</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-hay/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:hay" data-size="26" role="img" aria-label="Rơm"></canvas></span><span>Rơm</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a> <a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a> <a class="ilk" href="/cay-trong/cassava/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:cassava" data-size="26" role="img" aria-label="Khoai mì"></canvas></span><span>Khoai mì</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Khu gia súc</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 4 ngày nhịn liên tiếp</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-wool/"><canvas class="sp" data-sprite="item:wool" data-size="20" role="img" aria-label="Lông cừu"></canvas><span>Lông cừu</span></a> — 1–2 mỗi 2 ngày</li><li><a class="ilk" href="/vat-pham/vp-mutton/"><canvas class="sp" data-sprite="item:mutton" data-size="20" role="img" aria-label="Thịt cừu"></canvas><span>Thịt cừu</span></a> — 2–3, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-wool/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:wool" data-size="26" role="img" aria-label="Lông cừu"></canvas></span><span>Lông cừu</span></a> — 1–2 mỗi 2 ngày</li><li><a class="ilk" href="/vat-pham/vp-mutton/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:mutton" data-size="26" role="img" aria-label="Thịt cừu"></canvas></span><span>Thịt cừu</span></a> — 2–3, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-chicken">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:chicken" data-size="64" role="img" aria-label="Gà"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:chicken" data-size="88" role="img" aria-label="Gà"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/chicken/">Gà</a></h3>
-            <p class="ent-sub">140đ một con</p>
+            <p class="ent-sub"><b class="tien">140</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu gia cầm</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>3 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a> <a class="ilk" href="/cay-trong/rice/"><canvas class="sp" data-sprite="crop:rice" data-size="18" role="img" aria-label="Lúa"></canvas><span>Lúa</span></a> <a class="ilk" href="/cay-trong/wheat/"><canvas class="sp" data-sprite="crop:wheat" data-size="18" role="img" aria-label="Lúa mì"></canvas><span>Lúa mì</span></a> <a class="ilk" href="/cay-trong/barley/"><canvas class="sp" data-sprite="crop:barley" data-size="18" role="img" aria-label="Lúa mạch"></canvas><span>Lúa mạch</span></a> <a class="ilk" href="/cay-trong/soybean/"><canvas class="sp" data-sprite="crop:soybean" data-size="18" role="img" aria-label="Đậu nành"></canvas><span>Đậu nành</span></a> · mổ sâu trên cỏ</dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a> <a class="ilk" href="/cay-trong/rice/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:rice" data-size="26" role="img" aria-label="Lúa"></canvas></span><span>Lúa</span></a> <a class="ilk" href="/cay-trong/wheat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:wheat" data-size="26" role="img" aria-label="Lúa mì"></canvas></span><span>Lúa mì</span></a> <a class="ilk" href="/cay-trong/barley/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:barley" data-size="26" role="img" aria-label="Lúa mạch"></canvas></span><span>Lúa mạch</span></a> <a class="ilk" href="/cay-trong/soybean/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:soybean" data-size="26" role="img" aria-label="Đậu nành"></canvas></span><span>Đậu nành</span></a> · mổ sâu trên cỏ</dd></div>
               <div><dt>Về đâu</dt><dd>Khu gia cầm</dd></div>
               <div><dt>Bỏ đói</dt><dd>Gần như không chết đói — còn cỏ là còn ăn</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-egg/"><canvas class="sp" data-sprite="item:egg" data-size="20" role="img" aria-label="Trứng gà"></canvas><span>Trứng gà</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-chickenmeat/"><canvas class="sp" data-sprite="item:chickenmeat" data-size="20" role="img" aria-label="Thịt gà"></canvas><span>Thịt gà</span></a> — 1, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-egg/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:egg" data-size="26" role="img" aria-label="Trứng gà"></canvas></span><span>Trứng gà</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-chickenmeat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:chickenmeat" data-size="26" role="img" aria-label="Thịt gà"></canvas></span><span>Thịt gà</span></a> — 1, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-duck">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:duck" data-size="64" role="img" aria-label="Vịt"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:duck" data-size="88" role="img" aria-label="Vịt"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/duck/">Vịt</a></h3>
-            <p class="ent-sub">190đ một con</p>
+            <p class="ent-sub"><b class="tien">190</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Khu gia cầm</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>3 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a> <a class="ilk" href="/cay-trong/rice/"><canvas class="sp" data-sprite="crop:rice" data-size="18" role="img" aria-label="Lúa"></canvas><span>Lúa</span></a> <a class="ilk" href="/cay-trong/wheat/"><canvas class="sp" data-sprite="crop:wheat" data-size="18" role="img" aria-label="Lúa mì"></canvas><span>Lúa mì</span></a> <a class="ilk" href="/cay-trong/barley/"><canvas class="sp" data-sprite="crop:barley" data-size="18" role="img" aria-label="Lúa mạch"></canvas><span>Lúa mạch</span></a> <a class="ilk" href="/cay-trong/soybean/"><canvas class="sp" data-sprite="crop:soybean" data-size="18" role="img" aria-label="Đậu nành"></canvas><span>Đậu nành</span></a> · mổ sâu trên cỏ</dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a> <a class="ilk" href="/cay-trong/rice/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:rice" data-size="26" role="img" aria-label="Lúa"></canvas></span><span>Lúa</span></a> <a class="ilk" href="/cay-trong/wheat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:wheat" data-size="26" role="img" aria-label="Lúa mì"></canvas></span><span>Lúa mì</span></a> <a class="ilk" href="/cay-trong/barley/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:barley" data-size="26" role="img" aria-label="Lúa mạch"></canvas></span><span>Lúa mạch</span></a> <a class="ilk" href="/cay-trong/soybean/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:soybean" data-size="26" role="img" aria-label="Đậu nành"></canvas></span><span>Đậu nành</span></a> · mổ sâu trên cỏ</dd></div>
               <div><dt>Về đâu</dt><dd>Khu gia cầm</dd></div>
               <div><dt>Bỏ đói</dt><dd>Gần như không chết đói — còn cỏ là còn ăn</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-duckegg/"><canvas class="sp" data-sprite="item:duckegg" data-size="20" role="img" aria-label="Trứng vịt"></canvas><span>Trứng vịt</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-duckmeat/"><canvas class="sp" data-sprite="item:duckmeat" data-size="20" role="img" aria-label="Thịt vịt"></canvas><span>Thịt vịt</span></a> — 1, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-duckegg/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:duckegg" data-size="26" role="img" aria-label="Trứng vịt"></canvas></span><span>Trứng vịt</span></a> — 1 mỗi 1 ngày</li><li><a class="ilk" href="/vat-pham/vp-duckmeat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:duckmeat" data-size="26" role="img" aria-label="Thịt vịt"></canvas></span><span>Thịt vịt</span></a> — 1, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-fish">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:fish" data-size="64" role="img" aria-label="Cá"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:fish" data-size="88" role="img" aria-label="Cá"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/fish/">Cá</a></h3>
-            <p class="ent-sub">90đ một con</p>
+            <p class="ent-sub"><b class="tien">90</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Hồ cá</span>
               
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>5 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-fishfeed/"><canvas class="sp" data-sprite="item:fishfeed" data-size="18" role="img" aria-label="Cám cá"></canvas><span>Cám cá</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a> <a class="ilk" href="/cay-trong/corn/"><canvas class="sp" data-sprite="crop:corn" data-size="18" role="img" aria-label="Ngô"></canvas><span>Ngô</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-fishfeed/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fishfeed" data-size="26" role="img" aria-label="Cám cá"></canvas></span><span>Cám cá</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a> <a class="ilk" href="/cay-trong/corn/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="crop:corn" data-size="26" role="img" aria-label="Ngô"></canvas></span><span>Ngô</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Hồ cá</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 6 ngày nhịn liên tiếp</dd></div>
             </dl>
-            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-fishmeat/"><canvas class="sp" data-sprite="item:fishmeat" data-size="20" role="img" aria-label="Thịt cá"></canvas><span>Thịt cá</span></a> — 1–2, lấy một lần khi bán con vật</li></ul>
+            <ul class="prods"><li><a class="ilk" href="/vat-pham/vp-fishmeat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fishmeat" data-size="26" role="img" aria-label="Thịt cá"></canvas></span><span>Thịt cá</span></a> — 1–2, lấy một lần khi bán con vật</li></ul>
           </div>
         </article>
         <article class="ent" id="vat-dog">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:dog" data-size="64" role="img" aria-label="Chó"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:dog" data-size="88" role="img" aria-label="Chó"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/dog/">Chó</a></h3>
-            <p class="ent-sub">600đ một con</p>
+            <p class="ent-sub"><b class="tien">600</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một con</p>
             <div class="chips">
               <span class="chip">Nhà chó</span>
               <span class="chip alt">Đi tuần, đuổi chuột và sóc</span>
             </div>
             <dl class="facts">
               <div><dt>Lớn sau</dt><dd>2 ngày</dd></div>
-              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><canvas class="sp" data-sprite="item:feedmix" data-size="18" role="img" aria-label="Cám tổng hợp"></canvas><span>Cám tổng hợp</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><canvas class="sp" data-sprite="item:fodder" data-size="18" role="img" aria-label="Cỏ khô"></canvas><span>Cỏ khô</span></a></dd></div>
+              <div><dt>Ăn gì</dt><dd><a class="ilk" href="/vat-pham/vp-feedmix/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:feedmix" data-size="26" role="img" aria-label="Cám tổng hợp"></canvas></span><span>Cám tổng hợp</span></a> <a class="ilk" href="/vat-pham/vp-fodder/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="item:fodder" data-size="26" role="img" aria-label="Cỏ khô"></canvas></span><span>Cỏ khô</span></a></dd></div>
               <div><dt>Về đâu</dt><dd>Nhà chó</dd></div>
               <div><dt>Bỏ đói</dt><dd>Chết sau 6 ngày nhịn liên tiếp</dd></div>
             </dl>
@@ -355,58 +360,58 @@
         <p class="lead">Mỗi loài ăn được vài món chứ không phải đúng một món — hết thứ này thì còn thứ kia. Cắt cỏ dày lấy rơm, bó sợi cỏ thành cỏ khô, hoặc mua thẳng ở tab <b>Thức ăn</b> trong cửa hàng: mua thì đắt hơn tự cắt, đó là chỗ đánh đổi.</p>
         <div class="ents">
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:fodder" data-size="40" role="img" aria-label="Cỏ khô"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:fodder" data-size="40" role="img" aria-label="Cỏ khô"></canvas></span></div>
           <div class="ent-main">
             <h3>Cỏ khô</h3>
-            <p class="ent-sub">Mua 7đ · bán 4đ</p>
+            <p class="ent-sub">Mua <b class="tien">7</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">4</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Cho: Bò, Dê, Heo, Cừu, Cá, Chó.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:medicine" data-size="40" role="img" aria-label="Thuốc trừ sâu"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:medicine" data-size="40" role="img" aria-label="Thuốc trừ sâu"></canvas></span></div>
           <div class="ent-main">
             <h3>Thuốc trừ sâu</h3>
-            <p class="ent-sub">Mua 35đ · bán 10đ</p>
+            <p class="ent-sub">Mua <b class="tien">35</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">10</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Chưa loài nào ăn.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:hay" data-size="40" role="img" aria-label="Rơm"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:hay" data-size="40" role="img" aria-label="Rơm"></canvas></span></div>
           <div class="ent-main">
             <h3>Rơm</h3>
-            <p class="ent-sub">Mua 10đ · bán 6đ</p>
+            <p class="ent-sub">Mua <b class="tien">10</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">6</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Cho: Bò, Dê, Cừu.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:feedmix" data-size="40" role="img" aria-label="Cám tổng hợp"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:feedmix" data-size="40" role="img" aria-label="Cám tổng hợp"></canvas></span></div>
           <div class="ent-main">
             <h3>Cám tổng hợp</h3>
-            <p class="ent-sub">Mua 16đ · bán 7đ</p>
+            <p class="ent-sub">Mua <b class="tien">16</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">7</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Cho: Bò, Dê, Heo, Cừu, Gà, Vịt, Chó.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:fishfeed" data-size="40" role="img" aria-label="Cám cá"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:fishfeed" data-size="40" role="img" aria-label="Cám cá"></canvas></span></div>
           <div class="ent-main">
             <h3>Cám cá</h3>
-            <p class="ent-sub">Mua 20đ · bán 8đ</p>
+            <p class="ent-sub">Mua <b class="tien">20</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">8</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Cho: Cá.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:pipe" data-size="40" role="img" aria-label="Ống nước"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:pipe" data-size="40" role="img" aria-label="Ống nước"></canvas></span></div>
           <div class="ent-main">
             <h3>Ống nước</h3>
-            <p class="ent-sub">Mua 120đ · bán 30đ</p>
+            <p class="ent-sub">Mua <b class="tien">120</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">30</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Chưa loài nào ăn.</p>
           </div>
         </article>
         <article class="ent sm">
-          <div class="ent-art"><canvas class="sp" data-sprite="item:glass" data-size="40" role="img" aria-label="Tấm kính"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:40px"><canvas class="sp" data-sprite="item:glass" data-size="40" role="img" aria-label="Tấm kính"></canvas></span></div>
           <div class="ent-main">
             <h3>Tấm kính</h3>
-            <p class="ent-sub">Mua 60đ · bán 15đ</p>
+            <p class="ent-sub">Mua <b class="tien">60</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> · bán <b class="tien">15</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <p>Chưa loài nào ăn.</p>
           </div>
         </article>
@@ -420,7 +425,7 @@
         <p>Con <b>chó</b> là câu trả lời: ban ngày nó <b>đi tuần</b> qua từng lô ruộng và từng chuồng, gặp là bắt. Tối thì nó <b>về nhà nằm</b> — nên chó không canh hộ bạn qua đêm, nó dọn sạch vào sáng hôm sau.</p>
         <div class="ents">
         <article class="ent" id="vat-rat">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:rat" data-size="64" role="img" aria-label="Chuột"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:rat" data-size="88" role="img" aria-label="Chuột"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/rat/">Chuột</a></h3>
             <p class="ent-sub">Không mua được</p>
@@ -438,7 +443,7 @@
           </div>
         </article>
         <article class="ent" id="vat-squirrel">
-          <div class="ent-art"><canvas class="sp" data-sprite="animal:squirrel" data-size="64" role="img" aria-label="Sóc"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:88px"><canvas class="sp" data-sprite="animal:squirrel" data-size="88" role="img" aria-label="Sóc"></canvas></span></div>
           <div class="ent-main">
             <h3><a href="/vat-nuoi/squirrel/">Sóc</a></h3>
             <p class="ent-sub">Không mua được</p>
@@ -464,10 +469,10 @@
         <p class="lead">Xe chạy trên đường nhựa và lối mòn. Xe giao hàng chở con vật và xe mới bạn vừa mua vào tận nơi; xe thu mua thì tự ghé bãi đậu lấy nông sản trong kho và trả tiền.</p>
         <div class="ents">
         <article class="ent">
-          <div class="ent-art"><canvas class="sp" data-sprite="vehicle:truck" data-size="64" role="img" aria-label="Xe tải nhỏ"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="vehicle:truck" data-size="64" role="img" aria-label="Xe tải nhỏ"></canvas></span></div>
           <div class="ent-main">
             <h3>Xe tải nhỏ</h3>
-            <p class="ent-sub">2.600đ</p>
+            <p class="ent-sub"><b class="tien">2.600</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></p>
             <dl class="facts">
               <div><dt>Chở được</dt><dd>60 món</dd></div>
               
@@ -475,7 +480,7 @@
           </div>
         </article>
         <article class="ent">
-          <div class="ent-art"><canvas class="sp" data-sprite="vehicle:buyer" data-size="64" role="img" aria-label="Xe thu mua"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="vehicle:buyer" data-size="64" role="img" aria-label="Xe thu mua"></canvas></span></div>
           <div class="ent-main">
             <h3>Xe thu mua</h3>
             <p class="ent-sub">Không mua — xe của bên ngoài tự ghé</p>
@@ -486,7 +491,7 @@
           </div>
         </article>
         <article class="ent">
-          <div class="ent-art"><canvas class="sp" data-sprite="vehicle:boat" data-size="64" role="img" aria-label="Thuyền buôn"></canvas></div>
+          <div class="ent-art"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="vehicle:boat" data-size="64" role="img" aria-label="Thuyền buôn"></canvas></span></div>
           <div class="ent-main">
             <h3>Thuyền buôn</h3>
             <p class="ent-sub">Không mua — xe của bên ngoài tự ghé</p>
@@ -500,8 +505,8 @@
       </div>
     </section>
         <div class="wcredit">
-          <b>Tác giả · story:</b> TRẦN CƯỜNG ·
-          <a href="/tac-gia/">trang tác giả</a>
+          <b>Tác giả · story:</b> TRẦN CƯỜNG · <a href="/tac-gia/">trang tác giả</a><br />
+          <b>Số liệu theo bản:</b> nội dung <b>1.53.0</b> · lõi <b>1.53.0</b>
         </div>
       </main>
     </div>

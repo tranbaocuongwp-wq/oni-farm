@@ -18,6 +18,7 @@
     <script type="module" src="/site/sprites.ts"></script>
   </head>
   <body class="wiki">
+    <svg class="xu-def" aria-hidden="true"><symbol id="xu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#c9931a"/><circle cx="8" cy="8" r="5.6" fill="#ffd84a"/><circle cx="8" cy="8" r="3.2" fill="#e8b52c"/><path d="M4.6 5.2a4.8 4.8 0 0 1 3-2" stroke="#fff3bf" stroke-width="1.2" fill="none" stroke-linecap="round"/></symbol></svg>
     <header class="wtop">
       <a class="wlogo" href="/"><img src="/favicon.svg" alt="" width="24" height="24" /><span>ONI<b>FARM</b> WIKI</span></a>
       <a class="wplay" href="/farm/">Chơi ngay →</a>
@@ -31,7 +32,11 @@
           <a href="/cay-trong/" aria-current="page">Cây trồng</a>
           <a href="/vat-nuoi/">Vật nuôi</a>
           <a href="/vat-pham/">Vật phẩm</a>
-          <a href="/hanh-dong/">Hành động</a></div>
+          <a href="/cong-trinh/">Công trình</a>
+          <a href="/dia-hinh/">Địa hình</a>
+          <a href="/thoi-tiet/">Thời tiết</a>
+          <a href="/hanh-dong/">Hành động</a>
+          <a href="/bieu-tuong/">Biểu tượng</a></div>
         <div class="wgrp"><b>Về dự án</b>
           <a href="/tac-gia/">Tác giả</a>
           <a href="/privacy/">Quyền riêng tư</a></div>
@@ -41,17 +46,17 @@
         <p class="wfrom">Từ OniFarm Wiki · cây trồng</p>
         <hr class="wrule" />
         <aside class="winfo">
-          <div class="winfo-art"><canvas class="sp" data-sprite="crop:corn" data-size="72" role="img" aria-label="Ngô"></canvas></div>
+          <div class="winfo-art"><span class="ic" style="--s:112px"><canvas class="sp" data-sprite="crop:corn" data-size="112" role="img" aria-label="Ngô"></canvas></span></div>
           <b class="winfo-ten">Ngô</b>
           <dl>
             <dt>Mùa gieo</dt><dd>Hạ</dd>
             <dt>Chín sau</dt><dd>7 ngày</dd>
-            <dt>Hạt giống</dt><dd>36đ</dd>
-            <dt>Bán</dt><dd>96đ một quả</dd>
+            <dt>Hạt giống</dt><dd><b class="tien">36</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></dd>
+            <dt>Bán</dt><dd><b class="tien">96</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một quả</dd>
             <dt>Mỗi lần thu</dt><dd>1–2 quả</dd>
             
             <dt>Ăn được</dt><dd>hồi 29 năng lượng</dd>
-            <dt>Lãi mỗi ngày</dt><dd class="up">9đ</dd>
+            <dt>Lãi mỗi ngày</dt><dd class="up"><b class="tien">9</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></dd>
           </dl>
         </aside>      <nav class="wtoc" aria-label="Mục lục">
         <b>Mục lục</b>
@@ -61,7 +66,7 @@
     <h2 id="lon">Cây lớn thế nào</h2>
     <div class="grow">
       <span class="grow-lbl">Từ hạt tới lúc chín:</span>
-      <canvas class="sp" data-sprite="crop:corn:0" data-size="34" role="img" aria-label="giai đoạn 1"></canvas><canvas class="sp" data-sprite="crop:corn:1" data-size="34" role="img" aria-label="giai đoạn 2"></canvas><canvas class="sp" data-sprite="crop:corn:2" data-size="34" role="img" aria-label="giai đoạn 3"></canvas><canvas class="sp" data-sprite="crop:corn:3" data-size="34" role="img" aria-label="giai đoạn 4"></canvas><canvas class="sp" data-sprite="crop:corn" data-size="40" role="img" aria-label="Ngô chín"></canvas>
+      <span class="ic" style="--s:48px"><canvas class="sp" data-sprite="crop:corn:0" data-size="48" role="img" aria-label="giai đoạn 1"></canvas></span><span class="ic" style="--s:48px"><canvas class="sp" data-sprite="crop:corn:1" data-size="48" role="img" aria-label="giai đoạn 2"></canvas></span><span class="ic" style="--s:48px"><canvas class="sp" data-sprite="crop:corn:2" data-size="48" role="img" aria-label="giai đoạn 3"></canvas></span><span class="ic" style="--s:48px"><canvas class="sp" data-sprite="crop:corn:3" data-size="48" role="img" aria-label="giai đoạn 4"></canvas></span><span class="ic" style="--s:56px"><canvas class="sp" data-sprite="crop:corn" data-size="56" role="img" aria-label="Ngô chín"></canvas></span>
     </div>
     <p>
       Gieo xuống ô đã cày rồi tưới; cây chỉ lớn khi <b>sang ngày mới</b> và chỉ lớn nếu ô còn ẩm.
@@ -71,27 +76,27 @@
     <h2 id="tien">Tiền nong</h2>
     <table>
       <tbody>
-        <tr><th scope="row">Hạt giống</th><td>36đ một gói</td></tr>
-        <tr><th scope="row">Bán quả</th><td>96đ</td></tr>
-        <tr><th scope="row">Lãi chắc chắn một vụ</th><td class="up">+60đ</td></tr>
-        <tr><th scope="row">Lãi mỗi ngày</th><td class="up">9đ</td></tr>
+        <tr><th scope="row">Hạt giống</th><td><b class="tien">36</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một gói</td></tr>
+        <tr><th scope="row">Bán quả</th><td><b class="tien">96</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td></tr>
+        <tr><th scope="row">Lãi chắc chắn một vụ</th><td class="up">+<b class="tien">60</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td></tr>
+        <tr><th scope="row">Lãi mỗi ngày</th><td class="up"><b class="tien">9</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td></tr>
       </tbody>
     </table>
     <p class="note">Lãi tính theo mức thu <b>thấp nhất</b> — con số bạn chắc chắn nhận được, không phải mức trung bình.</p>
 
     <h2 id="dung">Dùng làm gì</h2>
     <ul class="wlist">
-      <li>Bán ở <b>Quầy thu mua</b>, 96đ một quả.</li>
+      <li>Bán ở <b>Quầy thu mua</b>, <b class="tien">96</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một quả.</li>
       <li>Ăn để hồi <b>29</b> năng lượng.</li>
       
-      <li>Cho ăn: <a class="ilk" href="/vat-nuoi/cow/"><canvas class="sp" data-sprite="animal:cow" data-size="20" role="img" aria-label="animal:cow"></canvas><span>animal:cow</span></a> · <a class="ilk" href="/vat-nuoi/goat/"><canvas class="sp" data-sprite="animal:goat" data-size="20" role="img" aria-label="animal:goat"></canvas><span>animal:goat</span></a> · <a class="ilk" href="/vat-nuoi/sheep/"><canvas class="sp" data-sprite="animal:sheep" data-size="20" role="img" aria-label="animal:sheep"></canvas><span>animal:sheep</span></a> · <a class="ilk" href="/vat-nuoi/chicken/"><canvas class="sp" data-sprite="animal:chicken" data-size="20" role="img" aria-label="animal:chicken"></canvas><span>animal:chicken</span></a> · <a class="ilk" href="/vat-nuoi/duck/"><canvas class="sp" data-sprite="animal:duck" data-size="20" role="img" aria-label="animal:duck"></canvas><span>animal:duck</span></a> · <a class="ilk" href="/vat-nuoi/fish/"><canvas class="sp" data-sprite="animal:fish" data-size="20" role="img" aria-label="animal:fish"></canvas><span>animal:fish</span></a> ăn được món này.</li>
+      <li>Cho ăn: <a class="ilk" href="/vat-nuoi/cow/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:cow" data-size="26" role="img" aria-label="animal:cow"></canvas></span><span>animal:cow</span></a> · <a class="ilk" href="/vat-nuoi/goat/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:goat" data-size="26" role="img" aria-label="animal:goat"></canvas></span><span>animal:goat</span></a> · <a class="ilk" href="/vat-nuoi/sheep/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:sheep" data-size="26" role="img" aria-label="animal:sheep"></canvas></span><span>animal:sheep</span></a> · <a class="ilk" href="/vat-nuoi/chicken/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:chicken" data-size="26" role="img" aria-label="animal:chicken"></canvas></span><span>animal:chicken</span></a> · <a class="ilk" href="/vat-nuoi/duck/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:duck" data-size="26" role="img" aria-label="animal:duck"></canvas></span><span>animal:duck</span></a> · <a class="ilk" href="/vat-nuoi/fish/"><span class="ic" style="--s:26px"><canvas class="sp" data-sprite="animal:fish" data-size="26" role="img" aria-label="animal:fish"></canvas></span><span>animal:fish</span></a> ăn được món này.</li>
     </ul>
 
     <p class="wback"><a href="/cay-trong/">← Về danh sách cây trồng</a></p>
 
         <div class="wcredit">
-          <b>Tác giả · story:</b> TRẦN CƯỜNG ·
-          <a href="/tac-gia/">trang tác giả</a>
+          <b>Tác giả · story:</b> TRẦN CƯỜNG · <a href="/tac-gia/">trang tác giả</a><br />
+          <b>Số liệu theo bản:</b> nội dung <b>1.53.0</b> · lõi <b>1.53.0</b>
         </div>
       </main>
     </div>
