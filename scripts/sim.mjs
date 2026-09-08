@@ -11684,6 +11684,85 @@ test("164. Lớp vẽ KHÔNG được gọi drawImage ba tham số", () => {
   );
 });
 
+test("165. Con vật rảnh phải ĐỔI VIỆC, và cái đói thắng mọi việc vặt", () => {
+  /* Cường: "hành động động vật ít quá cho thêm đi, mỗi con thêm 10-14 động tác".
+     Bản trước có đúng bốn dáng — đi, ăn, ngủ, co ro — nên một đàn bò đứng trong
+     chuồng cả ngày chỉ làm MỘT việc: nông trại vẫn chạy mà nhìn thì đứng hình.
+
+     Kịch bản này giữ ba điều, và cả ba đều hỏng được một cách âm thầm:
+       1. Con vật rảnh THẬT SỰ đổi việc theo thời gian (không phải "có bảng việc
+          mà bảng ấy không bao giờ được đọc").
+       2. Việc bốc ra là TẤT ĐỊNH: cùng một state cho cùng một dáng, hai máy
+          khác nhau thấy cùng một cảnh.
+       3. Cái ĐÓI thắng mọi việc vặt. Để việc vặt thắng thì con vật sắp chết đói
+          vẫn nhởn nhơ gãi tai, và tín hiệu hỏng đúng lúc cần nhất. */
+  const store = mkStore(4242);
+  setWeather(store, "sunny");
+  let id = 0;
+  setState(store, (s) => {
+    id = ++s.entSeq;
+    s.entities.push({
+      id, kind: "animal", def: "cow", map: "farm",
+      x: 12 * TILE + 8, y: 12 * TILE + 8,
+      dir: "down", anim: 0, seed: 5,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 900, hungryDays: 0, prod: [0] },
+    });
+    s.minutes = 9 * 60; // giữa ban ngày
+  });
+  const conBo = () => store.getState().entities.find((q) => q.id === id);
+
+  // --- 1) đổi việc theo thời gian ---
+  const thay = new Set();
+  for (let m = 7 * 60; m < 18 * 60; m += 3) {
+    setState(store, (s) => { s.minutes = m; });
+    thay.add(animalMood(store.getState(), content, conBo()).pose);
+  }
+  ok(
+    thay.size >= 6,
+    `con vật rảnh chỉ làm ${thay.size} việc trong cả ngày (${[...thay].join(", ")}) — phải từ 6 trở lên`,
+  );
+  ok(!thay.has("walk"), "đứng yên thì không được ra dáng ĐANG ĐI");
+  ok(!thay.has("sleep"), "giữa ban ngày thì không được ra dáng NGỦ");
+
+  // --- 2) tất định ---
+  setState(store, (s) => { s.minutes = 10 * 60 + 21; });
+  const a1 = animalMood(store.getState(), content, conBo()).pose;
+  const a2 = animalMood(store.getState(), content, conBo()).pose;
+  eq(a2, a1, "cùng một state phải cho cùng một dáng");
+  // và hai con KHÁC NHAU ở cùng một lúc thì không nhất thiết cùng việc
+  let khac = false;
+  setState(store, (s) => {
+    for (let k = 0; k < 8; k++)
+      s.entities.push({
+        id: ++s.entSeq, kind: "animal", def: "cow", map: "farm",
+        x: (14 + k) * TILE + 8, y: 12 * TILE + 8,
+        dir: "down", anim: 0, seed: 5 + k,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 900, hungryDays: 0, prod: [0] },
+      });
+  });
+  {
+    const st = store.getState();
+    const ds = st.entities.filter((q) => q.kind === "animal").map((q) => animalMood(st, content, q).pose);
+    khac = new Set(ds).size > 1;
+  }
+  ok(khac, "cả đàn đứng cùng một chỗ cùng một lúc mà làm y hệt nhau thì vẫn là đứng hình");
+
+  // --- 3) đói thắng việc vặt ---
+  let doiRaViecVat = 0;
+  for (let m = 7 * 60; m < 18 * 60; m += 3) {
+    setState(store, (s) => {
+      s.minutes = m;
+      const e = s.entities.find((q) => q.id === id);
+      e.animal.fed = 0;
+      e.animal.hungryDays = 0;
+    });
+    if (animalMood(store.getState(), content, conBo()).pose !== "eat") doiRaViecVat++;
+  }
+  eq(doiRaViecVat, 0, "con vật ĐÓI phải ra dáng ĂN ở mọi lúc, không được rẽ sang việc vặt");
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

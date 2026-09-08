@@ -4342,8 +4342,69 @@ function khoi(
   s.ell(cx - rx * 0.28, cy - ry * 0.46, Math.max(0.5, rx * 0.44), Math.max(0.5, ry * 0.3), sang);
 }
 
-/** `huddle` = co ro trong mưa: đứng, thân hạ một pixel, mắt nhắm — không phải nằm ngủ. */
-export type AnimalPose = "walk" | "eat" | "sleep" | "huddle";
+/* ---------------------------------------------------------------------------
+   TƯ THẾ CỦA CON VẬT.
+
+   Cường: "hành động động vật ít quá cho thêm đi, mỗi con thêm 10-14 động tác".
+   Bản trước có đúng BỐN: đi, ăn, ngủ, co ro — nên một đàn bò đứng trong chuồng
+   cả ngày chỉ làm một việc, và nông trại đứng hình.
+
+   Vẽ tay 15 tư thế × 4 dáng × 4 hướng × 3 khung là 720 hình, không làm nổi và
+   cũng không nên: 15 tư thế ấy khác nhau ở đúng vài con số của cùng một bộ
+   xương — đầu ở đâu, chân gập bao nhiêu, thân nghiêng thế nào, mắt nhắm hay mở.
+   Nên tư thế ở đây là một BẢNG THAM SỐ, và ba bộ dáng (bốn chân · chim · thú
+   nhỏ) cùng đọc nó. Thêm tư thế mới = thêm một dòng.
+
+   Bộ hình dựng LƯỜI theo khoá `defId|dir|frame|pose`, nên tư thế nào không bao
+   giờ xảy ra thì không tốn một pixel bộ nhớ nào.
+--------------------------------------------------------------------------- */
+
+export type AnimalPose =
+  /** đi | đứng thở | gặm cỏ | ăn máng | uống nước */
+  | "walk" | "idle" | "graze" | "eat" | "drink"
+  /** ngủ | co ro trong mưa | ngồi | vươn vai | rũ mình */
+  | "sleep" | "huddle" | "sit" | "stretch" | "shake"
+  /** gãi | liếm lông | ngẩng nhìn | kêu | nhảy chồm */
+  | "scratch" | "groom" | "look" | "call" | "play";
+
+/** Bộ số mô tả MỘT tư thế. Mọi đơn vị theo bán kính đầu hoặc bán kính thân. */
+interface PoseRig {
+  /** đầu dịch ngang, tính theo bán kính đầu; dương = về phía trước */
+  dauX: number;
+  /** đầu dịch dọc; dương = cúi xuống */
+  dauY: number;
+  /** thân nâng lên (âm) hay hạ xuống (dương), đơn vị cũ */
+  thanY: number;
+  /** mông cao hơn vai bao nhiêu — cái làm nên dáng vươn vai và dáng chồm */
+  nghieng: number;
+  /** hệ số chiều dài chân: 1 bình thường, 0 gập hẳn */
+  chan: number;
+  /** mắt nhắm */
+  nham: boolean;
+  /** tai vểnh lên (nhân với bán kính đầu) */
+  taiVenh: number;
+  /** nét phụ vẽ quanh con vật */
+  net: "khong" | "rung" | "am" | "bui" | "nuoc";
+}
+
+const TU_THE: Record<AnimalPose, PoseRig> = {
+  //                dauX   dauY  thanY nghieng chan  nham  taiVenh  net
+  walk:    { dauX: 0,    dauY: 0,    thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0,   net: "khong" },
+  idle:    { dauX: 0,    dauY: 0,    thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0.1, net: "khong" },
+  graze:   { dauX: 0.35, dauY: 1.5,  thanY: 0,   nghieng: -0.4, chan: 1,    nham: false, taiVenh: -0.3, net: "khong" },
+  eat:     { dauX: 0.3,  dauY: 1.3,  thanY: 0,   nghieng: -0.2, chan: 1,    nham: false, taiVenh: -0.2, net: "khong" },
+  drink:   { dauX: 0.5,  dauY: 1.7,  thanY: 0,   nghieng: -0.5, chan: 1,    nham: false, taiVenh: -0.3, net: "nuoc" },
+  sleep:   { dauX: 0,    dauY: 0.6,  thanY: 0,   nghieng: 0,    chan: 0,    nham: true,  taiVenh: -0.4, net: "khong" },
+  huddle:  { dauX: -0.2, dauY: 0.5,  thanY: 1,   nghieng: 0,    chan: 0.7,  nham: true,  taiVenh: -0.5, net: "khong" },
+  sit:     { dauX: 0,    dauY: -0.3, thanY: 0,   nghieng: 1.6,  chan: 0.45, nham: false, taiVenh: 0.3, net: "khong" },
+  stretch: { dauX: 0.3,  dauY: 1.1,  thanY: 0,   nghieng: -1.6, chan: 1,    nham: true,  taiVenh: 0.2, net: "khong" },
+  shake:   { dauX: -0.3, dauY: -0.2, thanY: 0,   nghieng: 0.3,  chan: 1,    nham: true,  taiVenh: 0.4, net: "rung" },
+  scratch: { dauX: -0.4, dauY: 0.4,  thanY: 0,   nghieng: 0.5,  chan: 0.8,  nham: true,  taiVenh: 0.5, net: "rung" },
+  groom:   { dauX: -1.5, dauY: 0.9,  thanY: 0,   nghieng: 0,    chan: 1,    nham: true,  taiVenh: -0.2, net: "khong" },
+  look:    { dauX: 0.2,  dauY: -1.1, thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0.7, net: "khong" },
+  call:    { dauX: 0.3,  dauY: -1,   thanY: 0,   nghieng: 0,    chan: 1,    nham: false, taiVenh: 0.6, net: "am" },
+  play:    { dauX: 0.2,  dauY: -0.5, thanY: -2,  nghieng: -1.2, chan: 0.85, nham: false, taiVenh: 0.6, net: "bui" },
+};
 
 function makeAnimal(
   art: AnimalArt,
@@ -4367,12 +4428,15 @@ function makeAnimal(
      mắt đọc "cái này ở phía bên kia con vật" mà không cần thêm một pixel nào. */
   const xa = shade(vien, 0.78);
 
+  /* Cá luôn đang bơi: mọi tư thế trên cạn quy về `walk` cho nó. */
+  const rig = TU_THE[art.form === "fish" ? "walk" : pose] ?? TU_THE.walk;
   const nam = pose === "sleep" && art.form !== "fish";
-  const an = pose === "eat" && art.form !== "fish";
   const coRo = pose === "huddle" && art.form !== "fish";
   /* Nhún theo khung. Khung 2 là lúc cả bốn chân chạm đất nên thân hạ xuống 1px;
-     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. Co ro thì hạ luôn. */
+     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. Co ro thì hạ luôn.
+     Tư thế đứng yên nhún theo NHỊP THỞ: nửa pixel, chỉ ở khung giữa. */
   const bob = frame === 2 || coRo ? 1 : 0;
+  const tho = !nam && (pose === "idle" || pose === "look") && frame === 1 ? Q : 0;
 
   const W = Math.max(5, Math.min(14, Math.round(art.w)));
   const H = Math.max(4, Math.min(11, Math.round(art.h)));
@@ -4390,15 +4454,21 @@ function makeAnimal(
      Bò, dê, lợn, cừu, chó. Nhìn NGANG là dáng đọc được nhiều nhất nên nó được
      đầu tư nhất; nhìn thẳng/nhìn sau thu về một khối hẹp hơn với hai chân. */
   function ve_bon_chan(ngang: boolean) {
-    const chan = nam ? 0 : 3;
+    const chan = nam ? 0 : Math.max(0, Math.round(3 * rig.chan));
     const w = ngang ? W : Math.max(4, Math.round(W * 0.66));
     const h = nam ? Math.max(3, H - 2) : H;
     const day = ngang ? 2 : 1; // bề ngang một cái chân
     const bot = DAT - chan + bob;
-    const cy = bot - h / 2;
+    const cy = bot - h / 2 + rig.thanY + tho;
     const cx = ngang ? 7.4 : 8;
     const rx = w / 2;
     const ry = h / 2;
+    /* NGHIÊNG: mông cao hơn vai bao nhiêu. Dương là chổng mông (ngồi, gãi), âm
+       là chúi đầu (vươn vai, chồm, gặm cỏ). Đây là thứ làm nên phần lớn mười
+       một tư thế mới mà không phải vẽ thêm một hình nào. */
+    const ngh = ngang ? rig.nghieng : rig.nghieng * 0.35;
+    const vaiY = cy + ngh * 0.5;
+    const mongY = cy - ngh * 0.5;
 
     s.shadow(8, DAT, rx + 0.6, 1.5);
 
@@ -4421,11 +4491,16 @@ function makeAnimal(
       }
 
       // chân SAU (ở xa): tối hơn, vẽ trước nên bị thân che một phần
-      if (chan > 0) chan_doi(cx - rx * 0.66, cx - rx * 0.2, bot - 1, chan + 1, xa, day, 1);
+      if (chan > 0)
+        chan_doi(cx - rx * 0.66, cx - rx * 0.2, bot - 1 - ngh * 0.5, chan + 1 + ngh * 0.5, xa, day, 1);
     }
 
-    // ---- thân
-    khoi(s, cx, cy, rx, ry, giua, sang, vien);
+    /* ---- thân: NGỰC và MÔNG là hai khối bầu chồng nhau, không phải một quả
+       trứng. Hai khối cho ra đường lưng có eo và cái mông tròn — và chúng lệch
+       cao thấp được, tức là con vật cúi hay chồm được. */
+    khoi(s, cx - rx * 0.3, mongY, rx * 0.74, ry * 1.02, giua, sang, vien);
+    khoi(s, cx + rx * 0.32, vaiY, rx * 0.72, ry * 0.96, giua, sang, vien);
+    khoi(s, cx, (vaiY + mongY) / 2, rx * 0.62, ry * 0.9, giua, sang, vien);
     // Bụng sáng hẳn: ánh sáng dội từ mặt đất lên, và nó cắt hình khỏi bóng đổ.
     // Con xù lông thì bỏ — vệt sáng trơn nằm giữa đám lông đọc ra là một vết
     // lỗi vẽ chứ không ra cái bụng.
@@ -4445,7 +4520,8 @@ function makeAnimal(
 
     // chân TRƯỚC (ở gần)
     if (chan > 0) {
-      if (ngang) chan_doi(cx + rx * 0.24, cx + rx * 0.68, bot - 1, chan + 1, vien, day, 0);
+      if (ngang)
+        chan_doi(cx + rx * 0.24, cx + rx * 0.68, bot - 1 + ngh * 0.5, chan + 1 - ngh * 0.5, vien, day, 0);
       else chan_doi(cx - rx * 0.5, cx + rx * 0.5, bot - 1, chan + 1, vien, day, 0);
     }
 
@@ -4454,22 +4530,21 @@ function makeAnimal(
     let hx: number;
     let hy: number;
     if (ngang) {
-      hx = cx + rx * 0.92 + hs * 0.5;
-      hy = cy - ry * 0.62 - hs * 0.1;
-      if (an) {
-        hx = cx + rx * 0.98 + hs * 0.35;
-        hy = bot - hs * 0.7;
-      } else if (nam) hy = cy - ry * 0.1;
+      hx = cx + rx * 0.92 + hs * 0.5 + rig.dauX * hs;
+      hy = vaiY - ry * 0.62 - hs * 0.1 + rig.dauY * hs;
+      if (nam) hy = cy - ry * 0.1;
+      // cúi sát đất thì đầu không được chui xuống dưới chân
+      hy = Math.min(hy, DAT - hs * 0.6);
     } else {
-      hx = cx;
-      hy = dir === "up" ? cy - ry - hs * 0.55 : cy + ry * 0.35 + hs * 0.2;
-      if (an) hy += hs * 0.8;
+      hx = cx + rig.dauX * hs * 0.5;
+      hy = (dir === "up" ? cy - ry - hs * 0.55 : cy + ry * 0.35 + hs * 0.2) + rig.dauY * hs * 0.7;
+      hy = Math.min(hy, DAT - hs * 0.5);
     }
 
     // cổ: nối vai với đầu bằng hai khối bầu chồng lên nhau
     if (ngang) {
       const nx = (cx + rx * 0.7 + hx) / 2;
-      const ny = (cy - ry * 0.3 + hy) / 2;
+      const ny = (vaiY - ry * 0.3 + hy) / 2;
       khoi(s, nx, ny, Math.max(1.3, hs * 0.72), Math.max(1.3, hs * 0.9), giua, sang, vien);
     }
 
@@ -4507,8 +4582,9 @@ function makeAnimal(
         s.dot(x, ty - i, shade(toi, 1.35));
       }
     };
-    if (ngang) veTai(hx - hs * 0.5, hy - hs * 0.7, -1);
-    else for (const k of [-1, 1]) veTai(hx + k * hs * 0.7, hy - hs * 0.62, k);
+    const venh = rig.taiVenh * hs * 0.5;
+    if (ngang) veTai(hx - hs * 0.5, hy - hs * 0.7 - venh, -1 + rig.taiVenh);
+    else for (const k of [-1, 1]) veTai(hx + k * hs * 0.7, hy - hs * 0.62 - venh, k);
 
     // ---- sừng
     const horn = Math.max(0, Math.min(3, Math.round(art.horn ?? 0)));
@@ -4530,8 +4606,9 @@ function makeAnimal(
       else for (const k of [-1, 1]) veSung(hx + k * hs * 0.45, hy - hs * 0.8, k);
     }
 
-    if (nam || coRo) mat_nham(hx, hy, hs, ngang);
+    if (rig.nham) mat_nham(hx, hy, hs, ngang);
     else mat(hx, hy, hs, ngang);
+    netPhu(cx, cy, rx, ry, hx, hy, hs);
   }
 
   /* ------------------------------------------------------------------- chim
@@ -4539,11 +4616,11 @@ function makeAnimal(
      ta dùng để phân biệt chúng ngoài đời: cái MÀO và cái MỎ. `crest` bật mào
      đỏ + yếm (gà); tắt thì mỏ bẹt ra thành mỏ vịt. */
   function ve_chim(ngang: boolean) {
-    const chan = nam ? 0 : 2;
+    const chan = nam ? 0 : Math.max(0, Math.round(2 * rig.chan));
     const w = ngang ? W : Math.max(4, Math.round(W * 0.8));
     const h = nam ? Math.max(3, H - 2) : H;
     const bot = DAT - chan + bob;
-    const cy = bot - h / 2;
+    const cy = bot - h / 2 + rig.thanY + tho;
     const cx = 7.6;
     const rx = w / 2;
     const ry = h / 2;
@@ -4577,13 +4654,11 @@ function makeAnimal(
 
     // đầu
     const hs = Math.max(2, h * 0.38);
-    let hx = ngang ? cx + rx * 0.72 + hs * 0.5 : cx;
-    let hy = cy - ry * 0.85 - hs * 0.5;
-    if (an) {
-      hx = ngang ? cx + rx * 0.9 : cx;
-      hy = bot - hs * 0.6;
-    } else if (nam) hy = cy - ry * 0.5;
-    if (!ngang && dir === "down") hy = cy - ry * 0.2;
+    let hx = (ngang ? cx + rx * 0.72 + hs * 0.5 : cx) + rig.dauX * hs;
+    let hy = cy - ry * 0.85 - hs * 0.5 + rig.dauY * hs * 1.15;
+    if (nam) hy = cy - ry * 0.5;
+    if (!ngang && dir === "down") hy = cy - ry * 0.2 + rig.dauY * hs;
+    hy = Math.min(hy, DAT - hs * 0.6);
     khoi(s, hx, hy, hs, hs, giua, sang, vien);
 
     // mỏ
@@ -4607,8 +4682,9 @@ function makeAnimal(
       s.hline(ngang ? bx : Math.round(hx - 1), my + 1, 3, shade(art.accent, 0.72));
     }
 
-    if (nam || coRo) mat_nham(hx, hy, hs, ngang);
+    if (rig.nham) mat_nham(hx, hy, hs, ngang);
     else mat(hx, hy, hs, ngang);
+    netPhu(cx, cy, rx, ry, hx, hy, hs);
   }
 
   /* -------------------------------------------------------------------- cá
@@ -4651,11 +4727,11 @@ function makeAnimal(
   /* --------------------------------------------------------------- thú nhỏ
      Chuột, sóc. Nét nhận diện là TAI TO và ĐUÔI DÀI — thân thì bé tí. */
   function ve_thu_nho(ngang: boolean) {
-    const chan = nam ? 0 : 2;
+    const chan = nam ? 0 : Math.max(0, Math.round(2 * rig.chan));
     const w = ngang ? W : Math.max(4, Math.round(W * 0.72));
     const h = nam ? Math.max(3, H - 1) : H;
     const bot = DAT - chan + bob;
-    const cy = bot - h / 2;
+    const cy = bot - h / 2 + rig.thanY + tho;
     const cx = 7.6;
     const rx = w / 2;
     const ry = h / 2;
@@ -4676,8 +4752,8 @@ function makeAnimal(
     s.ell(cx, cy + ry * 0.6, rx * 0.6, ry * 0.28, art.belly);
 
     const hs = Math.max(1.8, h * 0.44);
-    const hx = ngang ? cx + rx * 0.8 + hs * 0.4 : cx;
-    const hy = cy - ry * 0.2;
+    const hx = (ngang ? cx + rx * 0.8 + hs * 0.4 : cx) + rig.dauX * hs;
+    const hy = Math.min(cy - ry * 0.2 + rig.dauY * hs, DAT - hs * 0.5);
     khoi(s, hx, hy, hs, hs, giua, sang, vien);
     // tai tròn to
     const tr = Math.max(1, Math.round(hs * 0.7));
@@ -4685,10 +4761,54 @@ function makeAnimal(
     s.disc(Math.round(hx - hs * 0.5), Math.round(hy - hs * 0.9), Math.max(0, tr - 1), art.accent);
     // mũi nhọn
     s.px(Math.round(hx + hs), Math.round(hy + hs * 0.3), art.accent);
-    mat(hx, hy, hs, ngang);
+    if (rig.nham) mat_nham(hx, hy, hs, ngang);
+    else mat(hx, hy, hs, ngang);
+    netPhu(cx, cy, rx, ry, hx, hy, hs);
   }
 
   /* ------------------------------------------------------------- chi tiết */
+
+  /**
+   * NÉT PHỤ quanh con vật — thứ biến "một con bò đứng hơi khác" thành "con bò
+   * đang làm gì đó". Ở cỡ mười sáu pixel, cái đầu nghiêng thêm một pixel không
+   * ai đọc ra; ba vạch rung bên sườn thì đọc ra ngay.
+   */
+  function netPhu(cx: number, cy: number, rx: number, ry: number, hx: number, hy: number, hs: number) {
+    if (rig.net === "khong") return;
+    const nhip = frame % 3;
+    if (rig.net === "rung") {
+      // vạch rung hai bên sườn, đổi bên theo khung
+      for (const k of [-1, 1]) {
+        const x = cx + k * (rx + 1);
+        for (let i = 0; i < 2; i++) {
+          const y = cy - ry * 0.4 + i * 1.4;
+          for (let d = 0; d < 1.2; d += Q) s.dot(x + k * d + (nhip - 1) * Q, y, P.outline);
+        }
+      }
+      return;
+    }
+    if (rig.net === "am") {
+      // nốt nhạc bay lên trước mõm — "con này đang kêu"
+      const nx = hx + hs * 1.4;
+      const ny = hy - hs * 1.2 - nhip * 0.5;
+      for (let d = 0; d < 1.5; d += Q) s.dot(nx + 1, ny - d, P.outline);
+      for (let d = -Q; d <= Q; d += Q) for (let e2 = -Q; e2 <= Q; e2 += Q) s.dot(nx + d, ny + e2, P.outline);
+      s.dot(nx + 1.5, ny - 1.5, P.outline);
+      return;
+    }
+    if (rig.net === "bui") {
+      // bụi tung dưới chân khi nhảy chồm
+      for (const k of [-1, 1]) {
+        const x = cx + k * rx * 0.9;
+        for (let d = 0; d <= 1 + nhip * 0.5; d += Q) s.dot(x + k * d, DAT - Q * (nhip % 2), P.soilEdge);
+      }
+      return;
+    }
+    // nước: hai gợn dưới mõm
+    for (let i = 0; i < 2; i++)
+      for (let d = -1 - i * 0.5; d <= 1 + i * 0.5; d += Q)
+        s.dot(hx + hs * 0.6 + d, DAT - Q * i, "#8fc4e8");
+  }
 
   /** Một CẶP chân: `pha` lệch nhau nên khung nào cũng có chân trước chân sau. */
   function chan_doi(

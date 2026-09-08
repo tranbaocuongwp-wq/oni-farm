@@ -18,6 +18,7 @@
 import type { Content, Entity, GameState, PenDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
+import { hash2 } from "../core/rng.ts";
 import { addItem, canAdd } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
@@ -171,8 +172,63 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
 
 /* --------------------------------------------------------------- dáng & cảm xúc */
 
-/** Dáng đứng, đọc được từ xa. Tên thuần chuỗi vì `game/` không được biết `art/`. */
-export type PoseName = "walk" | "eat" | "sleep" | "huddle";
+/**
+ * Dáng đứng, đọc được từ xa. Tên thuần chuỗi vì `game/` không được biết `art/`.
+ *
+ * Cường: "hành động động vật ít quá cho thêm đi, mỗi con thêm 10-14 động tác".
+ * Bản trước có đúng bốn — đi, ăn, ngủ, co ro — nên một đàn bò đứng trong chuồng
+ * cả ngày chỉ làm một việc, và nông trại đứng hình dù mọi thứ khác vẫn chạy.
+ */
+export type PoseName =
+  | "walk" | "idle" | "graze" | "eat" | "drink"
+  | "sleep" | "huddle" | "sit" | "stretch" | "shake"
+  | "scratch" | "groom" | "look" | "call" | "play";
+
+/**
+ * VIỆC VẶT lúc rảnh, kèm trọng số. Con vật đứng yên bốc một việc trong bảng
+ * này; số càng lớn càng hay gặp.
+ *
+ * Cân theo thứ con vật thật sự làm nhiều: gặm cỏ và đứng thở chiếm quá nửa, còn
+ * mấy động tác vui mắt thì hiếm — hiếm mới đáng nhìn. Bốn việc nặng nhất nằm
+ * đầu bảng nên đọc bảng là biết con vật "sống" ra sao.
+ */
+const VIEC_RANH: readonly (readonly [PoseName, number])[] = [
+  ["graze", 26],
+  ["idle", 20],
+  ["look", 10],
+  ["groom", 8],
+  ["shake", 6],
+  ["scratch", 6],
+  ["stretch", 6],
+  ["call", 5],
+  ["sit", 5],
+  ["play", 4],
+  ["drink", 4],
+];
+
+/** Mỗi NHỊP này (phút game) con vật rảnh bốc lại một việc. */
+const NHIP_VIEC = 7;
+
+/**
+ * Chọn việc vặt cho một con vật đang rảnh — THUẦN, không đụng state.
+ *
+ * Không lưu "đang làm gì" vào save, và đó là chủ ý: nó chỉ để vui mắt, mà thêm
+ * một trường vào save là thêm một bước migrate và một bất biến phải giữ mãi.
+ * Thay vào đó bốc từ (id con vật · ngày · nhịp) bằng `hash2` — cùng một cách
+ * mà lớp vẽ đã dùng cho hoa cỏ trang trí từ lâu: tất định, không tốn byte nào,
+ * và hai người mở cùng một bản lưu thấy cùng một cảnh.
+ */
+function vecRanh(e: Entity, minutes: number, day: number): PoseName {
+  const nhip = Math.floor(minutes / NHIP_VIEC);
+  let tong = 0;
+  for (const [, w] of VIEC_RANH) tong += w;
+  let r = hash2(e.id + day * 977, nhip, 0x5c37) % tong;
+  for (const [pose, w] of VIEC_RANH) {
+    r -= w;
+    if (r < 0) return pose;
+  }
+  return "idle";
+}
 
 /** Ký hiệu nổi trên đầu. `null` = không có gì đáng báo. */
 export type EmoteName = "hungry" | "ready" | "love" | "sleep" | "wet" | null;
@@ -218,7 +274,19 @@ export function animalMood(
   /* Mưa bão (content `shelter`) mà đứng ngoài trời thì CO RO chứ không gặm
      — cùng nguồn với luật trú trong `actorStep`, nên dáng không nói khác việc. */
   const troi = weatherMood(s, content);
-  const pose: PoseName = dangDi ? "walk" : dem ? "sleep" : troi.shelter ? "huddle" : "eat";
+  /* Thứ tự nhường: đang đi thì đi; đêm thì ngủ; mưa bão thì co ro; ĐÓI thì ra
+     máng ăn — đói là chuyện người chơi phải xử nên nó phải thắng mọi việc vặt;
+     còn lại mới tới việc vặt. Nếu để việc vặt thắng cái đói thì con vật sắp
+     chết đói vẫn nhởn nhơ gãi tai, và tín hiệu hỏng đúng lúc cần nhất. */
+  const pose: PoseName = dangDi
+    ? "walk"
+    : dem
+      ? "sleep"
+      : troi.shelter
+        ? "huddle"
+        : isHungry(e)
+          ? "eat"
+          : vecRanh(e, s.minutes, s.day);
 
   let emote: EmoteName = null;
   // Gà vịt cũng báo đói: từ khi cỏ là thức ăn thật thì chúng cũng chết đói
