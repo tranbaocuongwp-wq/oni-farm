@@ -14,10 +14,14 @@ import { createNewGame } from "../src/game/state.ts";
 import { checkInvariants, migrateForContent } from "../src/game/invariants.ts";
 import { TILE, tileAt, idx, isSolid, propAt, portalAt, playerOverlapsTile, blockedAt, canPlaceBuilding, troughIn, penById, penOfAnimal, nearestWaterTile } from "../src/game/world.ts";
 import { findPath, PATH_STATS, walkableTile, stepSpeed } from "../src/game/pathfind.ts";
+import { workerCard, wantOf, wantSummary } from "../src/game/workers.ts";
+import { autoStopReason } from "../src/game/hint.ts";
 import { driveable, driveableFor, pondDock, MAX_VEHICLES } from "../src/game/vehicles.ts";
 import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto, pourIntoTrough, canFeedPond, pondAt, pourSpotIn , diemThucAn, DIEM_MOT_BUA, PHUT_MOI_DIEM , canPourFromStore } from "../src/game/pen.ts";
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
+import { CROP_ORDER, jobRank } from "../src/game/joborder.ts";
+import { donDuoc, propsMocDuoc } from "../src/game/world.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
 import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE } from "../src/game/entities.ts";
@@ -48,6 +52,8 @@ import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
+import { workFrame, heldForJob } from "../src/render/draw.ts";
+import { WORK_MINUTES } from "../src/game/workerai.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
 
@@ -1334,7 +1340,30 @@ test("22. đập đá ra đá; bụi cỏ phá được bằng tay không; ô d�
   const empty = store.getState().inv.findIndex((v, i) => i < BAL.hotbarSlots && !v);
   ok(empty >= 0, "cần một ô hotbar trống để thử tay không");
   store.dispatch({ t: "SELECT", slot: empty }); // ô trống = tay không
-  eq(canUseAt(store.getState(), content, bushAt.x, bushAt.y), "chop", "tay không vẫn phá được bụi cỏ");
+  /* Bụi cỏ TRONG LÔ RUỘNG là CỎ DẠI: từ Đợt 22 nó có tên việc riêng (`clear`)
+     để nút TỰ ĐỘNG và người làm được phép dọn nó — mà vẫn không được đụng cảnh
+     quan. Thao tác y hệt, chỉ khác cái tên và cái nhãn. */
+  eq(canUseAt(store.getState(), content, bushAt.x, bushAt.y), "clear", "tay không vẫn phá được bụi cỏ (trong lô: DỌN CỎ)");
+  {
+    // …còn đúng bụi cỏ ấy đứng NGOÀI lô thì vẫn là CHẶT, không ai tự ý dọn.
+    const s0 = store.getState();
+    let ngoai = null;
+    for (let y = 0; y < s0.h && !ngoai; y++)
+      for (let x = 0; x < s0.w; x++) {
+        const t = tileAt(s0, x, y);
+        if (t && t.g === "grass" && !t.prop && !t.b && !t.crop && !inZone(s0, content, "farm", x, y)) {
+          ngoai = { x, y };
+          break;
+        }
+      }
+    ok(!!ngoai, "bản đồ có ô cỏ ngoài lô ruộng");
+    setState(store, (s) => putProp(s, ngoai.x, ngoai.y, "bush"));
+    eq(
+      canUseAt(store.getState(), content, ngoai.x, ngoai.y, true),
+      "chop",
+      "bụi cỏ NGOÀI lô vẫn là CHẶT — cảnh quan không phải cỏ dại",
+    );
+  }
   ok(isSolid(store.getState(), content, bushAt.x, bushAt.y), "bụi cỏ chặn đường trước khi phá");
   use(store, bushAt.x, bushAt.y);
   eq(tile(store, bushAt.x, bushAt.y).prop, null, "bụi cỏ biến mất sau một nhát tay không");
@@ -5946,6 +5975,7 @@ test("83. đồng hồ vật nuôi chạy TRONG ngày, và một lứa đúng b�
   const no0 = bo().animal.fed;
   const sua0 = bo().animal.prod[0];
   const phut0 = store.getState().minutes;
+  const goi0 = PATH_STATS.calls;
 
   // 200 phút GAME trôi qua trong CÙNG một ngày
   const giay = 200 / (10 / BAL.realSecondsPerGameTenMinutes);
@@ -10748,6 +10778,607 @@ test("147. THỜI TIẾT đổi HÀNH VI: mưa bão làm chậm, vật nuôi tr�
       "ngày bão vẫn RÚT xúc xắc xe thu mua (chuỗi seed kho-có-hàng khác kho-trống)",
     );
   }
+});
+
+
+test("148. MỘT thang việc cho cả người làm lẫn nút TỰ ĐỘNG", () => {
+  /* `docs/LOI-CHOI.md` chốt từ lâu: "thứ tự ưu tiên là CỐ ĐỊNH, người chơi phải
+     đoán được người làm sẽ làm gì", và hai tài liệu còn ghi rằng nút TỰ ĐỘNG với
+     người làm "dùng chung một hàm". Chúng chưa bao giờ dùng chung gì cả — một
+     bên là danh sách chuỗi (`AUTO_ORDER`), một bên là bảng số `uu` gõ tay — nên
+     tới Đợt 22 thì chúng đã trôi khỏi nhau: nút TỰ ĐỘNG gieo trước tưới, người
+     làm tưới trước gieo. Cùng một nông trại, hai nết làm.
+
+     Giờ cả hai đọc `CROP_ORDER`. Kịch bản này khoá đúng chuyện đó. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+
+  // (a) AUTO_ORDER phải CHỨA CROP_ORDER, đúng thứ tự, ngay sau hai việc chuồng
+  deepEq(AUTO_ORDER.slice(0, 2), ["pour", "feedpond"], "đổ máng và rắc hồ vẫn đứng đầu");
+  deepEq(AUTO_ORDER.slice(2), [...CROP_ORDER], "phần việc ruộng của nút TỰ ĐỘNG lấy nguyên từ CROP_ORDER");
+  eq(jobRank("harvest") < jobRank("plant"), true, "thu trước gieo");
+  eq(jobRank("plant") < jobRank("water"), true, "GIEO trước TƯỚI — cả hai bên");
+  eq(jobRank("clear") < jobRank("till"), true, "dọn cỏ trước cày (dọn xong mới có đất mà cày)");
+
+  /* (b) TỪNG CẶP BẬC: dựng một lô chỉ có đúng hai loại việc, rồi bắt CẢ HAI bộ
+     não chọn. Chúng phải chọn cùng một bậc — không cần cùng một ô (người làm đo
+     từ chỗ họ đứng, nút TỰ ĐỘNG đo từ nhân vật). */
+  const dungO = (s, z, kind, x, y) => {
+    const t = s.tiles[idx(s.w, x, y)];
+    Object.assign(t, { prop: null, b: null, tilled: false, wet: false, crop: null, hp: 0 });
+    if (kind === "harvest")
+      Object.assign(t, { tilled: true, wet: true, crop: { id: "lettuce", stage: content.crops.lettuce.growthDays.length, grow: 0, regrown: false } });
+    else if (kind === "cure")
+      Object.assign(t, { tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false, sick: true } });
+    else if (kind === "plant") Object.assign(t, { tilled: true, wet: true });
+    else if (kind === "water") Object.assign(t, { tilled: true, wet: false, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false } });
+    else if (kind === "clear") putProp(s, x, y, "grass_short");
+    // "till" = ô cỏ trống, không đặt gì thêm
+  };
+
+  for (let i = 0; i < CROP_ORDER.length; i++)
+    for (let j = i + 1; j < CROP_ORDER.length; j++) {
+      const tren = CROP_ORDER[i];
+      const duoi = CROP_ORDER[j];
+      const store = nongTraiCoTho(1, [
+        { id: "seed:lettuce", n: 40 },
+        { id: "item:medicine", n: 10 },
+      ], (s) => {
+        // dọn sạch MỌI lô, rồi chỉ đặt hai loại việc vào lô đầu
+        for (const z of lots)
+          for (let y = z.y; y < z.y + z.h; y++)
+            for (let x = z.x; x < z.x + z.w; x++)
+              Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, b: null, tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false }, hp: 0 });
+        const z0 = lots[0];
+        dungO(s, z0, duoi, z0.x + 1, z0.y + 1);
+        dungO(s, z0, tren, z0.x + 3, z0.y + 1);
+        // người làm và người chơi cùng đứng giữa lô ấy, cách hai ô mỗi bên
+        const w = s.entities.find((e) => e.kind === "worker");
+        w.x = (z0.x + 2) * TILE + 8;
+        w.y = (z0.y + 1) * TILE + 8;
+        w.ai = { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 };
+        s.player.x = (z0.x + 2) * TILE + 8;
+        s.player.y = (z0.y + 1) * TILE + 8;
+      });
+      /* Nút TỰ ĐỘNG đọc TÚI người chơi (nó đổi tay), người làm đọc KHO. Cho
+         người chơi cầm đủ cả bốn thứ để không bên nào bị thiếu đồ nghề — kịch
+         bản này hỏi về THỨ TỰ, không hỏi về đồ. */
+      giveItem(store, "seed:lettuce", 40);
+      giveItem(store, "item:medicine", 10);
+      topUpWater(store);
+      const s = store.getState();
+      const w = s.entities.find((e) => e.kind === "worker");
+      const t1 = pickTask(s, content, w);
+      ok(!!t1, `${tren} vs ${duoi}: người làm phải có việc`);
+      eq(t1.kind, tren, `${tren} vs ${duoi}: người làm chọn bậc trên`);
+
+      const auto = autoJob(s, content, 8);
+      ok(!!auto, `${tren} vs ${duoi}: nút TỰ ĐỘNG phải có việc`);
+      eq(auto.kind, tren, `${tren} vs ${duoi}: nút TỰ ĐỘNG chọn CÙNG bậc với người làm`);
+    }
+});
+
+test("149. người làm GIEO ĐƯỢC trên luống khô — y như người chơi", () => {
+  /* Lỗi im lặng suốt nhiều đợt: `cropTask` là một chuỗi `else if` mà nhánh
+     "đã cày mà chưa ẩm → tưới" đứng TRƯỚC nhánh gieo, nên nó nuốt luôn mọi
+     luống trống khô. Người làm vì thế KHÔNG BAO GIỜ gieo được trên luống khô —
+     họ đi tưới cái luống trống ấy, rồi lượt sau mới gieo. Trong khi `canUseAt`
+     của người chơi không hề đòi `wet`. Hai luật khác nhau cho cùng một động từ. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const z0 = lots[0];
+  const store = nongTraiCoTho(1, [{ id: "seed:lettuce", n: 40 }], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, b: null, tilled: false, wet: false, crop: null, hp: 0 });
+    // đúng MỘT luống: đã cày, KHÔ, chưa gieo
+    Object.assign(s.tiles[idx(s.w, z0.x + 2, z0.y + 2)], { tilled: true, wet: false });
+    const w = s.entities.find((e) => e.kind === "worker");
+    w.x = (z0.x + 2) * TILE + 8;
+    w.y = (z0.y + 1) * TILE + 8;
+    w.ai = { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 };
+    s.player.x = (z0.x + 2) * TILE + 8;
+    s.player.y = (z0.y + 1) * TILE + 8;
+  });
+  const s = store.getState();
+  const t = pickTask(s, content, s.entities.find((e) => e.kind === "worker"));
+  eq(t?.kind, "plant", "luống cày KHÔ chưa gieo → việc là GIEO, không phải đi tưới đất trống");
+  eq(`${t.tx},${t.ty}`, `${z0.x + 2},${z0.y + 2}`, "…đúng cái luống ấy");
+
+  // và người chơi vẫn gieo được ở đúng ô đó — hai bên một luật
+  selectItem(store, "seed:lettuce");
+  eq(
+    canUseAt(store.getState(), content, z0.x + 2, z0.y + 2, true),
+    "plant",
+    "người chơi cũng gieo được trên luống khô — đây là luật gốc",
+  );
+
+  // chạy thật: cây phải mọc lên
+  for (let i = 0; i < 60 * 120; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  ok(!!tile(store, z0.x + 2, z0.y + 2)?.crop, "người làm đã gieo thật xuống luống khô");
+});
+
+test("150. DỌN LÔ: cỏ dại trong lô bị nhổ, đá và cây thì chừa", () => {
+  /* "Tự động mở rộng các vườn trong phạm vi có thể" — Cường.
+
+     Cỏ dại lan vào lô mỗi đêm (`grassSpreadChance`), luống bỏ hoang tự mọc cỏ
+     lên chính nó, mà `isTillableTile` đòi `prop === null`. Người làm thì chỉ
+     được dọn trong RỪNG. Cộng lại: một lô bỏ bê là một lô chết vĩnh viễn.
+
+     Lằn ranh của việc dọn phải rút từ CONTENT, không gõ tay: nhổ được bằng tay
+     không + tự mọc qua đêm + trong lô. Nó loại đúng hai vật thể `portable` duy
+     nhất (hòn đá, khúc gỗ) — tức đúng hai thứ người chơi vác đặt xuống được. */
+  const moc = propsMocDuoc(content);
+  ok(moc.has("grass_short") && moc.has("bush"), "bao đóng mọc-qua-đêm phải có cỏ và bụi");
+  ok(!moc.has("rock"), "…và KHÔNG có hòn đá — đá không tự mọc");
+
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const z0 = lots[0];
+  const store = nongTraiCoTho(2, [], (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, b: null, tilled: true, wet: true, crop: { id: "lettuce", stage: 1, grow: 0, regrown: false }, hp: 0 });
+    // một vạt cỏ dại mọc lan vào lô, kèm một hòn đá và một khúc gỗ người chơi đặt
+    for (let k = 0; k < 5; k++)
+      Object.assign(s.tiles[idx(s.w, z0.x + k, z0.y)], { tilled: false, wet: false, crop: null, prop: null });
+    for (let k = 0; k < 5; k++) putProp(s, z0.x + k, z0.y, k < 3 ? "grass_short" : "bush");
+    Object.assign(s.tiles[idx(s.w, z0.x, z0.y + 1)], { tilled: false, wet: false, crop: null, prop: null });
+    Object.assign(s.tiles[idx(s.w, z0.x + 1, z0.y + 1)], { tilled: false, wet: false, crop: null, prop: null });
+    putProp(s, z0.x, z0.y + 1, "rock");
+    putProp(s, z0.x + 1, z0.y + 1, "log");
+  });
+  const demCo = () => {
+    const s = store.getState();
+    let n = 0;
+    for (let y = z0.y; y < z0.y + z0.h; y++)
+      for (let x = z0.x; x < z0.x + z0.w; x++) if (donDuoc(s, content, x, y)) n++;
+    return n;
+  };
+  eq(demCo(), 5, "dựng ra năm ô cỏ dại trong lô");
+  eq(tile(store, z0.x, z0.y + 1).prop, "rock", "và một hòn đá người chơi đặt");
+  eq(donDuoc(store.getState(), content, z0.x, z0.y + 1), false, "hòn đá KHÔNG phải cỏ dại");
+  eq(donDuoc(store.getState(), content, z0.x + 1, z0.y + 1), false, "khúc gỗ cũng KHÔNG");
+
+  for (let i = 0; i < 60 * 200; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+
+  eq(demCo(), 0, "người làm đã dọn sạch cỏ dại trong lô");
+  eq(tile(store, z0.x, z0.y + 1).prop, "rock", "hòn đá người chơi đặt vẫn còn nguyên");
+  eq(tile(store, z0.x + 1, z0.y + 1).prop, "log", "khúc gỗ cũng còn nguyên");
+  /* Ô vừa dọn phải TRỞ LẠI VÒNG SẢN XUẤT: hoặc đang cày được, hoặc người làm
+     đã cày/gieo luôn rồi. Cái không được phép là nó còn vướng vật thể. */
+  for (let k = 0; k < 5; k++) {
+    const t = tile(store, z0.x + k, z0.y);
+    eq(t.prop, null, `ô (${z0.x + k},${z0.y}) không còn vướng cỏ`);
+    ok(
+      t.tilled || isTillable(store.getState(), content, z0.x + k, z0.y),
+      `ô (${z0.x + k},${z0.y}) đã trở lại cày được — đó là 'mở rộng vườn'`,
+    );
+  }
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+
+test("151. RẢNH VIỆC thì làm việc vặt, không đứng đực", () => {
+  /* Cường: "tránh tình trạng đứng im quá lâu quá nhiều."
+
+     Trước Đợt 22, hết việc là `pickTask` trả null và người làm đứng 2–6 phút
+     game rồi hỏi lại ĐÚNG câu hỏi cũ — mãi mãi. Giờ hết việc ruộng thì họ hỏi
+     tiếp việc vặt: bốc xếp cho xe, vuốt ve con vật, nói chuyện với đồng nghiệp,
+     hoặc đi một vòng nông trại. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const sachViec = (s) => {
+    // mọi lô: cây đang lớn, đã tưới — không còn gì để làm
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], {
+            prop: null, b: null, tilled: true, wet: true, hp: 0,
+            crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
+          });
+    /* Và DỌN LUÔN RỪNG. Kiếm gỗ đá là một việc THẬT và nó đứng trên việc vặt —
+       rừng mọc lại mỗi đêm nên trong ván thường người làm hiếm khi hết việc.
+       Việc vặt là chỗ dựa CUỐI CÙNG, và đây là cách dựng ra đúng cái cuối cùng ấy. */
+    for (const z of content.tiles.zones)
+      if (z.kind === "forest")
+        for (let y = z.y; y < z.y + z.h; y++)
+          for (let x = z.x; x < z.x + z.w; x++)
+            Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, hp: 0 });
+    s.entities = s.entities.filter((e) => e.kind === "worker");
+  };
+
+  const store = nongTraiCoTho(2, [], sachViec);
+  const nguoi = () => store.getState().entities.filter((e) => e.kind === "worker");
+
+  let mau = 0;
+  let dungDuc = 0;
+  const viecVat = new Set();
+  let quang = 0;
+  let truoc = nguoi().map((e) => ({ x: e.x, y: e.y }));
+  /* Đếm số lần KHỞI HÀNH đi tuần. Đi tuần là việc vặt DUY NHẤT tốn một suất
+     tìm đường, và nó bị chặn bởi một cái nguội riêng rộng gấp bốn lần nguội
+     thường — không có cái nguội ấy thì người làm rảnh sẽ xin đường mỗi hai
+     phút game và ăn mất nhịp của đàn vật nuôi. */
+  let khoiHanh = 0;
+  const tuanTruoc = new Map();
+  const phut0 = store.getState().minutes;
+  const goi0 = PATH_STATS.calls;
+  for (let i = 0; i < 60 * 200; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    for (const e of nguoi()) {
+      const dangTuan = e.ai.job === "patrol" && e.ai.path.length > 0;
+      if (dangTuan && !tuanTruoc.get(e.id)) khoiHanh++;
+      tuanTruoc.set(e.id, dangTuan);
+    }
+    if (i % 30 !== 0) continue;
+    const ns = nguoi();
+    ns.forEach((e, k) => {
+      mau++;
+      if (e.ai.job) viecVat.add(e.ai.job);
+      // "đứng đực" = không đường đi, không việc, đang đếm ngược
+      if (!e.ai.path.length && e.ai.phase === "idle" && e.ai.until > 0) dungDuc++;
+      const p = truoc[k];
+      if (p) quang += Math.hypot(e.x - p.x, e.y - p.y);
+      // và việc vặt TẠI CHỖ không bao giờ được chiếm một ô nào
+      if (e.ai.phase === "chore" && e.ai.job !== "patrol")
+        eq(e.ai.tx, -1, `việc vặt '${e.ai.job}' không được chiếm ô`);
+    });
+    truoc = ns.map((e) => ({ x: e.x, y: e.y }));
+  }
+  const troiQua = store.getState().minutes - phut0;
+  /* Số lần gọi A* của HAI người rảnh trong 400 phút game. Nguội riêng 8 phút
+     cho mỗi người → trần lý thuyết 2 × 400/8 = 100. Không có nguội thì mỗi bước
+     quyết định (0,5 phút) là một lần xin đường, chỉ bị chặn bởi ngân sách chung
+     2 suất/bước — tức tới cả nghìn lần, và đàn vật nuôi mất nhịp. */
+  const goiAsao = PATH_STATS.calls - goi0;
+  const tranGoi = Math.ceil(troiQua / 8) * nguoi().length + 20;
+  ok(
+    goiAsao <= tranGoi,
+    `người rảnh không được xin đường liên tục: ${goiAsao} lần gọi A* trong ${troiQua.toFixed(0)} phút game, trần ${tranGoi}`,
+  );
+  const tran = Math.ceil(troiQua / 8) * nguoi().length + nguoi().length;
+  ok(
+    khoiHanh <= tran,
+    `đi tuần phải chịu NGUỘI riêng: ${khoiHanh} lần khởi hành trong ${troiQua.toFixed(0)} phút game, trần ${tran}`,
+  );
+  ok(khoiHanh > 0, "…nhưng vẫn phải đi tuần thật");
+  ok(mau > 100, `phải lấy đủ mẫu (${mau})`);
+  ok(dungDuc / mau <= 0.35, `đứng đực phải hiếm: ${dungDuc}/${mau} mẫu`);
+  ok(quang / TILE > 20, `và họ có đi thật, không đứng một chỗ (${(quang / TILE).toFixed(1)} ô)`);
+  ok(
+    viecVat.has("patrol") || viecVat.has("chat"),
+    `phải thấy việc vặt thật sự (đang có: ${[...viecVat].join(", ") || "không có gì"})`,
+  );
+
+  // thẻ người làm phải NÓI được là họ đang rảnh, không giả vờ đang làm ruộng
+  const w = nguoi()[0];
+  if (w.ai.phase === "chore") {
+    const the = workerCard(w, content);
+    ok(/Rảnh việc/.test(the.doing), `thẻ nói rõ đang rảnh: "${the.doing}"`);
+  }
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+test("152. việc vặt KHÔNG cướp nhịp tìm đường của vật nuôi", () => {
+  /* Cạm bẫy nằm ở chỗ không ai ngờ: ngân sách A* (`MAX_REPLANS_PER_STEP` = 2
+     mỗi bước) dùng CHUNG cho cả đàn vật nuôi, xe và người làm. Người làm đứng
+     đực 2–6 phút là người làm KHÔNG tiêu suất nào — tức cái "đứng ngơ" đang âm
+     thầm trợ cấp ngân sách cho đàn bò. Cho họ đi tuần mà không đặt nguội riêng
+     là lấy khoản trợ cấp ấy đi, và triệu chứng hiện ra ở CON VẬT: chậm được ăn.
+
+     Đo bằng hai con số trên cùng một hạt: số lần gọi A* và mốc con vật đầu tiên
+     ăn được. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const dung = (soNguoi) => {
+    const store = nongTraiCoTho(soNguoi, [{ id: "item:hay", n: 200 }], (s) => {
+      s.minutes = 8 * 60;
+      for (const z of lots)
+        for (let y = z.y; y < z.y + z.h; y++)
+          for (let x = z.x; x < z.x + z.w; x++)
+            Object.assign(s.tiles[idx(s.w, x, y)], {
+              prop: null, b: null, tilled: true, wet: true, hp: 0,
+              crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
+            });
+      // một đàn bò ĐÓI trong khu, máng cạn
+      for (const t of s.tiles) if (t.prop === "trough") { t.trough = 0; t.troughId = null; }
+      s.entities = s.entities.filter((e) => e.kind === "worker");
+      const khu = content.tiles.pens.find((p) => p.id === "cattle");
+      const box = content.animals.cow.box;
+      let dat = 0;
+      for (let y = khu.y; y < khu.y + khu.h && dat < 8; y++)
+        for (let x = khu.x; x < khu.x + khu.w && dat < 8; x++) {
+          if (blockedForActor(s, content, x * TILE + 8, y * TILE + 8, box.w, box.h, false)) continue;
+          const id = ++s.entSeq;
+          s.entities.push({
+            id, kind: "animal", def: "cow", map: "farm",
+            x: x * TILE + 8, y: y * TILE + 8, dir: "down", anim: 0, seed: 500 + id,
+            ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+            animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+          });
+          dat++;
+        }
+      s.player.x = 20 * TILE;
+      s.player.y = 20 * TILE;
+    });
+    const goi0 = PATH_STATS.calls;
+    let anLuc = -1;
+    for (let i = 0; i < 60 * 400; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (anLuc < 0 && store.getState().entities.some((e) => e.kind === "animal" && e.animal.fed > 0))
+        anLuc = i;
+    }
+    return { goi: PATH_STATS.calls - goi0, anLuc };
+  };
+
+  const khong = dung(0); // đối chứng: không có người làm nào tranh ngân sách
+  const co = dung(2);
+  ok(khong.anLuc >= 0, "đối chứng: con vật phải ăn được (tự đi tìm cỏ)");
+  ok(co.anLuc >= 0, "có người làm: con vật VẪN phải ăn được");
+  ok(
+    co.anLuc <= khong.anLuc * 1.5 + 60 * 20,
+    `người làm rảnh không được làm con vật đói lâu hơn hẳn: ${khong.anLuc} → ${co.anLuc} tick`,
+  );
+  ok(co.goi > 0 && khong.goi > 0, "cả hai ván đều có gọi A*");
+});
+
+test("153. XÃ GIAO tất định và ĐƠN PHƯƠNG — không dao động, không chiếm ô", () => {
+  /* Mọi cơ chế "A chọn B rồi đi tới B" đều đẻ ra hai bệnh: B đi mất giữa chừng
+     nên A tới nơi trơ trọi, hoặc A và B đổi chỗ cho nhau mãi. Nên xã giao ở đây
+     là ĐƠN PHƯƠNG và TẠI CHỖ: chỉ xảy ra khi người kia ĐÃ đứng ngay cạnh, và
+     không ai ghi một byte nào lên ai. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const dungCanhNhau = (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], {
+            prop: null, b: null, tilled: true, wet: true, hp: 0,
+            crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
+          });
+    for (const z of content.tiles.zones)
+      if (z.kind === "forest")
+        for (let y = z.y; y < z.y + z.h; y++)
+          for (let x = z.x; x < z.x + z.w; x++)
+            Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, hp: 0 });
+    s.entities = s.entities.filter((e) => e.kind === "worker");
+    const ws = s.entities.filter((e) => e.kind === "worker");
+    const z0 = lots[0];
+    ws.forEach((w, k) => {
+      w.x = (z0.x + 1 + k) * TILE + 8;
+      w.y = (z0.y + 6) * TILE + 8;
+      w.ai = { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 };
+    });
+    s.player.x = 20 * TILE;
+    s.player.y = 20 * TILE;
+  };
+  const chay = () => {
+    const store = nongTraiCoTho(2, [], dungCanhNhau);
+    const vet = [];
+    for (let i = 0; i < 60 * 120; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (i % 60 === 0)
+        vet.push(store.getState().entities.filter((e) => e.kind === "worker").map((e) => `${e.ai.phase}:${e.ai.job ?? "-"}`).join("|"));
+    }
+    return { vet, store };
+  };
+  const a = chay();
+  const b = chay();
+  deepEq(a.vet, b.vet, "cùng hạt → cùng chuỗi hành vi, từng mốc một");
+  ok(a.vet.some((v) => v.includes("chat")), `phải có lúc họ nói chuyện (${a.vet.slice(0, 3).join(" / ")})`);
+
+  /* VIỆC VẶT KHÔNG ĐƯỢC CHIẾM Ô. `pickTask` lọc ô "đã có người nhận" theo đúng
+     `ai.tx/ty`, nên một người đang đứng nói chuyện mà chiếm ô sẽ khoá ô đó với
+     đồng nghiệp — và hai người làm sẽ giẫm chân nhau đúng kiểu kịch bản 131 cấm. */
+  for (const e of a.store.getState().entities) {
+    if (e.kind !== "worker") continue;
+    if (e.ai.phase === "chore" && e.ai.job !== "patrol")
+      eq(e.ai.tx, -1, `việc vặt '${e.ai.job}' không được chiếm ô nào`);
+  }
+  deepEq(checkInvariants(a.store.getState(), content), [], "bất biến");
+});
+
+
+test("154. HẾT VẬT TƯ thì ĐÒI — và không tiêu một đồng nào của người chơi", () => {
+  /* Kho ĐẦY thì có báo (`storeFullWorker`); kho THIẾU thì im lặng tuyệt đối —
+     mà thiếu mới là thứ người chơi sửa được trong một phút. Người làm cứ lặng
+     lẽ tụt xuống bậc việc khác rồi đứng, và người chơi trả 220đ mỗi ba ngày cho
+     một người không nói gì.
+
+     Cường chốt: BÁO, KHÔNG TIÊU TIỀN. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const store = nongTraiCoTho(1, [], (s) => {
+    // ruộng: toàn luống ĐÃ CÀY, TRỐNG — việc duy nhất là gieo, mà kho không hạt
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, b: null, tilled: true, wet: true, crop: null, hp: 0 });
+    // và dọn sạch rừng để không còn việc kiếm gỗ đá
+    for (const z of content.tiles.zones)
+      if (z.kind === "forest")
+        for (let y = z.y; y < z.y + z.h; y++)
+          for (let x = z.x; x < z.x + z.w; x++)
+            Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, hp: 0 });
+    s.entities = s.entities.filter((e) => e.kind === "worker");
+  });
+
+  eq(wantOf(store.getState(), content), "seed", "có luống trống mà kho hết hạt → phải đòi HẠT");
+  const tien0 = store.getState().money;
+
+  for (let i = 0; i < 60 * 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+
+  const w = () => store.getState().entities.find((e) => e.kind === "worker");
+  eq(w().worker.want?.id, "seed", "người làm treo lời kêu đúng món");
+  eq(store.getState().money, tien0, "và KHÔNG tiêu một đồng nào — tiền là việc của người chơi");
+
+  // báo ĐÚNG MỘT LẦN, không nhắc lại mỗi bước
+  const demLog = () => store.getState().log.filter((l) => /hạt đúng mùa/i.test(l.text)).length;
+  eq(demLog(), 1, `lời kêu chỉ nói một lần (đang có ${demLog()} dòng)`);
+  for (let i = 0; i < 60 * 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(demLog(), 1, "…và vẫn một lần sau một phút nữa");
+
+  // thẻ người làm và chip HUD đều nói ra được
+  const the = workerCard(w(), content);
+  ok(!!the.want && /hạt/i.test(the.want), `thẻ người làm nói rõ đang chờ gì: "${the.want}"`);
+  const chip = wantSummary(store.getState(), content);
+  ok(!!chip && /hạt/i.test(chip), `chip HUD gộp lời kêu: "${chip}"`);
+
+  /* BỔ HÀNG thì lời kêu TẮT, và người làm gieo lại. Cái chip biến mất chính là
+     phản hồi — không cần thêm một dòng chữ nào nữa. */
+  setState(store, (s) => { s.store[0] = { id: "seed:lettuce", n: 60 }; });
+  eq(wantOf(store.getState(), content), null, "hàng về thì hết lý do để đòi");
+  for (let i = 0; i < 60 * 120; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  eq(w().worker.want, undefined, "lời kêu được gỡ");
+  eq(wantSummary(store.getState(), content), null, "chip HUD tắt");
+  const daGieo = () => {
+    const s = store.getState();
+    let n = 0;
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++) if (s.tiles[idx(s.w, x, y)].crop) n++;
+    return n;
+  };
+  ok(daGieo() > 0, `và người làm gieo lại thật (${daGieo()} luống)`);
+  deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+});
+
+test("155. lời kêu thiếu hàng đi qua BẤT BIẾN và save mà KHÔNG tăng SAVE_VERSION", () => {
+  /* `want` là trường TUỲ CHỌN trên người làm — cùng khuôn với `ai.job/bad/ent`,
+     và ghi chú ở core/save.ts nói rõ mốc người làm chỉ thêm trường tuỳ chọn thì
+     không phải tăng phiên bản save. Kịch bản này khoá đúng lời hứa đó. */
+  eq(SAVE_VERSION, 10, "SAVE_VERSION KHÔNG tăng vì một trường tuỳ chọn");
+
+  const store = nongTraiCoTho(1, [], () => {});
+  setState(store, (s) => {
+    const w = s.entities.find((e) => e.kind === "worker");
+    w.worker.want = { id: "seed", day: s.day };
+  });
+  deepEq(checkInvariants(store.getState(), content), [], "state có `want` vẫn hợp lệ");
+
+  // mốc ngày ở TƯƠNG LAI là dấu hiệu save hỏng — bất biến phải bắt
+  const xau = clone(store.getState());
+  xau.entities.find((e) => e.kind === "worker").worker.want = { id: "seed", day: xau.day + 5 };
+  ok(
+    checkInvariants(xau, content).some((m) => /want\.day/.test(m)),
+    "want.day ở tương lai phải bị bất biến bắt",
+  );
+  const rong = clone(store.getState());
+  rong.entities.find((e) => e.kind === "worker").worker.want = { id: "", day: 1 };
+  ok(
+    checkInvariants(rong, content).some((m) => /want\.id/.test(m)),
+    "want.id rỗng cũng bị bắt",
+  );
+
+  // save cũ (không có `want`) nạp vẫn chạy
+  const cu = clone(store.getState());
+  delete cu.entities.find((e) => e.kind === "worker").worker.want;
+  const sau = migrateForContent(cu, content).state;
+  deepEq(checkInvariants(sau, content), [], "save không có `want` vẫn hợp lệ");
+});
+
+test("156. nút TỰ ĐỘNG cũng nói VÌ SAO nó dừng, không tắt lặng lẽ", () => {
+  /* "Khi sử dụng tính năng tự động làm thì cũng phải kế thừa trí thông minh
+     này" — Cường. Người làm biết kêu thiếu hàng thì nút TỰ ĐỘNG cũng phải biết;
+     khác một chỗ: nó đọc TÚI người chơi, không đọc kho. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const store = mkStore(2201);
+  walkTo(store, HOME.x, HOME.y);
+  setState(store, (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], { prop: null, b: null, tilled: true, wet: true, crop: null, hp: 0 });
+    // bỏ sạch hạt khỏi túi
+    for (let i = 0; i < s.inv.length; i++) if (s.inv[i]?.id.startsWith("seed:")) s.inv[i] = null;
+  });
+  eq(autoStopReason(store.getState(), content), "autoNoSeed", "ruộng còn luống trống mà tay hết hạt → nói rõ là hết HẠT");
+  ok(!!content.strings.msg.autoNoSeed, "và câu ấy có trong content, không ghi cứng trong mã");
+
+  // có hạt đúng mùa trong tay thì không còn lý do gì để kêu
+  giveItem(store, "seed:lettuce", 10);
+  selectItem(store, "seed:lettuce");
+  eq(autoStopReason(store.getState(), content), null, "có hạt rồi thì im");
+
+  // ruộng không còn luống trống thì cũng im — hết việc thật, không phải thiếu đồ
+  setState(store, (s) => {
+    for (const z of lots)
+      for (let y = z.y; y < z.y + z.h; y++)
+        for (let x = z.x; x < z.x + z.w; x++)
+          Object.assign(s.tiles[idx(s.w, x, y)], { tilled: false, crop: null });
+    for (let i = 0; i < s.inv.length; i++) if (s.inv[i]?.id.startsWith("seed:")) s.inv[i] = null;
+  });
+  eq(autoStopReason(store.getState(), content), null, "hết đất trống thì đó là hết việc thật, không phải thiếu hạt");
+});
+
+
+test("157. NGƯỜI LÀM có động tác: giơ rồi bổ, và cầm đúng đồ nghề", () => {
+  /* Hai khung "giơ" và "chạm" đã được bộ sinh hình dựng sẵn cho MỌI bộ đồ từ
+     lâu — `atlas.worker` gọi thẳng `makePlayer` với đủ bảy khung — nhưng lớp vẽ
+     chưa bao giờ yêu cầu khung 5 hay 6 cho người làm. Nên nhìn từ ngoài không
+     cách nào biết một người đang cày hay đang đứng chơi.
+
+     Phần suy luận tách ra hai hàm THUẦN để kiểm được ở đây; phần còn lại chỉ là
+     mấy lệnh vẽ, không test headless được. */
+  const impact = content.balance.actionImpact ?? 0.5;
+
+  // đầu nhát (until còn đầy) là GIƠ, cuối nhát là CHẠM
+  eq(workFrame(WORK_MINUTES, WORK_MINUTES, impact), 6, "vừa bắt tay vào việc: GIƠ");
+  eq(workFrame(0.01, WORK_MINUTES, impact), 5, "sắp xong nhát: CHẠM");
+  ok(
+    workFrame(WORK_MINUTES, WORK_MINUTES, impact) !== workFrame(0.01, WORK_MINUTES, impact),
+    "hai đầu nhát phải khác khung — nếu không thì không có động tác nào cả",
+  );
+  // và nó phải ĐỔI đúng ở mốc `actionImpact`, cùng mốc người chơi dùng
+  eq(workFrame(WORK_MINUTES * (1 - impact) + 0.001, WORK_MINUTES, impact), 6, "trước mốc chạm: vẫn giơ");
+  eq(workFrame(WORK_MINUTES * (1 - impact) - 0.001, WORK_MINUTES, impact), 5, "qua mốc chạm: bổ xuống");
+
+  // đồ nghề suy từ VIỆC, không từ hotbar — người làm không có hotbar
+  eq(heldForJob("till", null), "TILL", "đi cày thì cầm cuốc");
+  eq(heldForJob("water", null), "WATER", "đi tưới thì cầm bình");
+  eq(heldForJob("plant", null), "seed", "đi gieo thì cầm hạt");
+  eq(heldForJob("break", "CHOP"), "CHOP", "chặt cây thì cầm rìu");
+  eq(heldForJob("break", "MINE"), "MINE", "đập đá thì cầm cuốc chim");
+  eq(heldForJob("clear", null), "hand", "nhổ cỏ dại thì tay không — cỏ không cần công cụ");
+  /* Ba việc BƯNG BÊ cố ý tay không: thứ đáng thấy ở chúng là MÓN TRÊN ĐẦU,
+     không phải công cụ trong tay. */
+  for (const j of ["pour", "dump", "unload"])
+    eq(heldForJob(j, null), "hand", `${j} là bưng bê, không cầm công cụ`);
+  for (const j of ["chat", "pet", "patrol", undefined])
+    eq(heldForJob(j, null), "hand", `việc vặt '${j}' không cầm gì`);
+});
+
+
+test("158. TRỜI MƯA thì thôi đi tưới — để việc khác lên trước", () => {
+  /* Sáng mai mọi ô đã cày ngoài trời tự ẩm, nên xách bình đi tưới hôm nay là đổ
+     nước xuống một thứ trời sắp làm hộ. Cùng ruộng, hai kiểu thời tiết, hai
+     quyết định khác nhau — đó là "tương tác với thời tiết" ở tầng ra quyết định
+     chứ không chỉ ở tầng vẽ. */
+  const lots = content.tiles.zones.filter((z) => z.kind === "farm");
+  const z0 = lots[0];
+  const dung = (troi) => {
+    const store = nongTraiCoTho(1, [{ id: "seed:lettuce", n: 40 }], (s) => {
+      for (const z of lots)
+        for (let y = z.y; y < z.y + z.h; y++)
+          for (let x = z.x; x < z.x + z.w; x++)
+            Object.assign(s.tiles[idx(s.w, x, y)], {
+              prop: null, b: null, tilled: true, wet: true, hp: 0,
+              crop: { id: "lettuce", stage: 1, grow: 0, regrown: false },
+            });
+      // một luống KHÔ có cây (việc tưới) và một ô cỏ trống (việc cày) cạnh nhau
+      Object.assign(s.tiles[idx(s.w, z0.x + 1, z0.y + 1)], { wet: false });
+      Object.assign(s.tiles[idx(s.w, z0.x + 2, z0.y + 1)], {
+        tilled: false, wet: false, crop: null, prop: null,
+      });
+      const w = s.entities.find((e) => e.kind === "worker");
+      w.x = (z0.x + 1) * TILE + 8;
+      w.y = (z0.y + 2) * TILE + 8;
+      w.ai = { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 };
+    });
+    setWeather(store, troi);
+    return pickTask(store.getState(), content, store.getState().entities.find((e) => e.kind === "worker"));
+  };
+  eq(dung("sunny")?.kind, "water", "trời nắng: luống khô thì đi tưới");
+  const mua = dung("rain");
+  ok(mua && mua.kind !== "water", `trời mưa: KHÔNG đi tưới, làm việc khác (đang là ${mua?.kind})`);
+  eq(mua.kind, "till", "…và việc khác ấy là mở thêm đất");
 });
 
 await Promise.all(choDoi);

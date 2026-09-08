@@ -771,6 +771,13 @@ const HANH_DONG = [
     meo: "Cỏ cao cắt ra rơm và cỏ khô — thứ để cho bò, dê, cừu ăn. Đừng dọn sạch cỏ quá sớm.",
   },
   {
+    nut: "DỌN CỎ",
+    ten: "Dọn cỏ dại trong lô",
+    can: null,
+    y: "Cỏ dại và bụi nhỏ mọc lan vào lô ruộng qua đêm, và một ô có cỏ là một ô không cày được. Nhổ tay không, không cần công cụ gì.",
+    meo: "Đây là việc DUY NHẤT trong nhóm phá vật thể mà người làm thuê và nút Tự động làm được phép tự ý làm — vì nó chỉ đụng thứ tự mọc lên và chỉ trong lô ruộng. Cây và đá ở ngoài vẫn phải bấm tay, nên không có cách nào chúng dọn mất cảnh quan bạn cố ý chừa.",
+  },
+  {
     nut: "CHẶT",
     ten: "Chặt cây lấy gỗ",
     can: "tool:axe",
@@ -1208,6 +1215,7 @@ const NUT_CUA_VIEC = {
   till: "CÀY", plant: "GIEO", water: "TƯỚI", harvest: "THU", cure: "CHỮA",
   pull: "NHỔ", chop: "CHẶT", mine: "ĐẬP", build: "XÂY",
   pour: "ĐỔ MÁNG", feedpond: "RẮC HỒ", lift: "NHẤC", putdown: "NHẤC",
+  clear: "DỌN CỎ",
 };
 
 {

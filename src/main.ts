@@ -57,7 +57,7 @@ import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tuto
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, facingTile, hintOf, infoHint, pressPlan, tileInfo, type Hint, type Press } from "./game/hint.ts";
+import { autoJob, autoStopReason, facingTile, hintOf, infoHint, pressPlan, tileInfo, type Hint, type Press } from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
@@ -975,10 +975,15 @@ async function boot() {
 
   const stopAuto = (s: GameState) => {
     setAuto(false);
+    /* NÓI RÕ VÌ SAO. "Quanh đây hết việc" đúng chữ nhưng vô ích khi ruộng còn
+       nguyên mấy chục luống trống và thứ thiếu chỉ là nắm hạt trong tay. */
+    const thieu = autoStopReason(s, content);
     toasts.say(
       s.energy < content.balance.energyCost.till
         ? "Hết năng lượng — đã tắt tự động làm."
-        : "Quanh đây hết việc — đã tắt tự động làm.",
+        : thieu
+          ? `${content.strings?.msg?.[thieu] ?? thieu} Đã tắt tự động làm.`
+          : "Quanh đây hết việc — đã tắt tự động làm.",
       "info",
     );
   };

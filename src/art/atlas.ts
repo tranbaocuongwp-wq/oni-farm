@@ -3119,7 +3119,11 @@ export type EmoteKind =
   /** người làm đang mệt — giọt mồ hôi */
   | "tired"
   /** con vật ướt mưa mà không có chỗ trú — giọt nước xanh */
-  | "wet";
+  | "wet"
+  /** người làm đang đứng nói chuyện — ba chấm */
+  | "chat"
+  /** người làm đang chờ vật tư — dấu chấm hỏi */
+  | "want";
 
 const EMOTE = 9;
 
@@ -3140,7 +3144,13 @@ function makeEmote(kind: EmoteKind): HTMLCanvasElement {
   s.px(4, 9, edge);
 
   const ink =
-    kind === "hungry" ? "#e05d5d" : kind === "ready" ? "#c9931a" : kind === "love" ? "#e05d8a" : "#5aa9e6";
+    kind === "hungry" || kind === "want"
+      ? "#e05d5d"
+      : kind === "ready"
+        ? "#c9931a"
+        : kind === "love"
+          ? "#e05d8a"
+          : "#5aa9e6";
 
   if (kind === "hungry") {
     s.vline(4, 2, 3, ink);
@@ -3162,6 +3172,18 @@ function makeEmote(kind: EmoteKind): HTMLCanvasElement {
     s.px(4, 4, ink);
     s.px(3, 5, ink);
     s.hline(2, 6, 5, ink);
+  } else if (kind === "chat") {
+    // ba chấm: "đang nói chuyện"
+    s.px(2, 4, ink);
+    s.px(4, 4, ink);
+    s.px(6, 4, ink);
+  } else if (kind === "want") {
+    // dấu chấm hỏi: "tôi đang chờ cái gì đó"
+    s.hline(3, 2, 3, ink);
+    s.px(6, 3, ink);
+    s.px(5, 4, ink);
+    s.px(4, 5, ink);
+    s.px(4, 7, ink);
   } else if (kind === "wet") {
     // giọt nước: nhọn trên, tròn dưới, một chấm sáng
     s.px(4, 1, ink);

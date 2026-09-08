@@ -20,7 +20,9 @@ import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
 import { TILE, inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
 import { runFor, type Run } from "./run.ts";
+import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
+import { CROP_ORDER } from "./joborder.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
@@ -60,6 +62,7 @@ export const LABEL: Record<Exclude<HintKind, null>, string> = {
   mine: "ĐẬP",
   cure: "CHỮA",
   pull: "NHỔ",
+  clear: "DỌN CỎ",
   shop: "MUA",
   boat: "THUYỀN BUÔN",
   sell: "BÁN",
@@ -860,7 +863,7 @@ export const PEN_INSIDE = 1;
  * Cường tả: "bấm vô cái nó chạy đi tùm lum nhổ cỏ lượm đá". Ba trong bốn cái
  * này còn không hoàn tác được.
  */
-const DON_DEP = new Set<Exclude<HintKind, null>>(["chop", "mine", "lift", "pull"]);
+const DON_DEP = new Set<Exclude<HintKind, null>>(["chop", "mine", "lift", "pull", "clear"]);
 
 export function nhoMonDangCam(kind: Exclude<HintKind, null>): boolean {
   switch (kind) {
@@ -1036,30 +1039,47 @@ export function facingTile(state: GameState, tile = 16): { x: number; y: number 
 ============================================================================ */
 
 /**
- * Thứ tự ưu tiên của một nông dân, và mỗi bậc đều có lý do:
+ * Thứ tự ưu tiên của nút TỰ ĐỘNG LÀM.
  *
- *   1. THU     — cây đã chín là giá trị đã xong; để qua đêm là mời chuột và bão.
- *   2. CHỮA    — cây bệnh đứng yên không lớn, mỗi đêm chậm là mất trọn một ngày.
- *   3. GIEO    — ô đất trống là ô đất đang phí.
- *   4. TƯỚI    — tưới SAU khi gieo, để lứa vừa gieo được tính ngay đêm nay.
- *   5. CÀY     — mở thêm đất, việc ít gấp nhất.
+ * ĐỔ MÁNG và RẮC HỒ đứng ĐẦU: con vật chết đói được, cây thì chỉ đứng chờ. Và
+ * đây là thứ làm nút ngữ cảnh đúng nghĩa — cầm bó rơm bấm một cái thì nhân vật
+ * tự đi hết các khu mà đổ, không phải lội tới từng cái máng.
  *
- * Cố ý KHÔNG có CHẶT và ĐẬP: bật tự động rồi quay đi một lúc mà về thấy sạch
- * bóng cây với đá trên cả nông trại là một thứ không hoàn tác được, và không ai
- * yêu cầu nó. Muốn dọn thì bấm tay.
+ * Phần việc RUỘNG lấy nguyên từ `CROP_ORDER` (game/joborder.ts) — **cùng một
+ * hằng với người làm thuê**. Trước Đợt 22 hai bên có hai bảng riêng và đã trôi
+ * khỏi nhau (nút TỰ ĐỘNG gieo trước tưới, người làm tưới trước gieo), đúng thứ
+ * mà `docs/LOI-CHOI.md` cấm. Giờ đổi thứ tự là đổi nết của cả hai cùng lúc.
  */
 export const AUTO_ORDER: Exclude<UseKind, null>[] = [
-  // ĐỔ MÁNG và RẮC HỒ đứng ĐẦU: con vật chết đói được, cây thì chỉ đứng chờ.
-  // Và đây là thứ làm nút ngữ cảnh đúng nghĩa — cầm bó rơm bấm một cái thì
-  // nhân vật tự đi hết các khu mà đổ, không phải lội tới từng cái máng.
   "pour",
   "feedpond",
-  "harvest",
-  "cure",
-  "plant",
-  "water",
-  "till",
+  ...CROP_ORDER,
 ];
+
+/**
+ * Vì sao nút TỰ ĐỘNG hết việc — khi lý do là THIẾU ĐỒ chứ không phải hết đất.
+ *
+ * Trước Đợt 22 nút này tắt lặng lẽ sau bốn giây không tiến triển, và câu duy
+ * nhất nó nói được là "quanh đây hết việc" — đúng chữ nhưng vô ích: ruộng còn
+ * nguyên mấy chục luống trống, chỉ là trong tay không còn hạt nào gieo được.
+ * Người làm thuê nay biết kêu thiếu hàng (`wantOf` bên workers.ts); nút TỰ ĐỘNG
+ * cũng phải biết, và nó đọc TÚI người chơi thay vì kho.
+ *
+ * Trả về khoá chuỗi trong `strings.msg`, hoặc null nếu hết việc thật.
+ */
+export function autoStopReason(state: GameState, content: Content): string | null {
+  const coLuongTrong = state.tiles.some((t) => t.tilled && !t.crop && !t.prop && !t.b);
+  if (!coLuongTrong) return null;
+  const n = Math.max(0, content.balance.hotbarSlots | 0);
+  for (let i = 0; i < n; i++) {
+    const id = state.inv[i]?.id;
+    if (!id) continue;
+    const it = parseItem(id);
+    if (it?.kind !== "seed" || !content.crops[it.ref]) continue;
+    if (cropInSeason(it.ref, state.day, content)) return null; // còn hạt gieo được
+  }
+  return "autoNoSeed";
+}
 
 export interface AutoJob {
   x: number;
@@ -1080,7 +1100,10 @@ export interface AutoJob {
  * thu hoạch được với bất cứ thứ gì đang cầm.
  */
 function slotsFor(state: GameState, content: Content, kind: Exclude<UseKind, null>): number[] {
-  if (kind === "harvest") return [state.sel];
+  /* THU HOẠCH và DỌN CỎ làm được với BẤT CỨ thứ gì đang cầm — `canUseAt` xét ô
+     trước khi nhìn tay — nên giữ nguyên ô hotbar đang chọn, đừng đổi tay cho
+     một việc không cần đổi. */
+  if (kind === "harvest" || kind === "clear") return [state.sel];
   const n = Math.max(0, content.balance.hotbarSlots | 0);
   const out: number[] = [];
   /* THỨC ĂN: mọi món mà một khu nào đó nhận. Đọc từ `pens[].feeds` chứ không

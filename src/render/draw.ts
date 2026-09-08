@@ -57,6 +57,7 @@ import { animalMood } from "../game/animals.ts";
 import type { Camera } from "./camera.ts";
 import type { EmoteKind } from "../art/atlas.ts";
 import { hash2 } from "../core/rng.ts";
+import { WORK_MINUTES } from "../game/workerai.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
 const LETTERBOX = "#0b0907";
@@ -200,6 +201,49 @@ function mucAn(content: Content, n: number): number {
   return 1;
 }
 
+/**
+ * Khung vẽ cho NGƯỜI LÀM đang làm việc: giơ (6) rồi chạm (5).
+ *
+ * Người chơi có `s.busy` là một số thực chạy theo `dt` nên pha vung của họ
+ * mượt. Người làm thì chỉ có `ai.until`, mà đồng hồ ấy trừ đúng
+ * `ACTOR_STEP_MINUTES` mỗi bước quyết định — với `WORK_MINUTES = 1.5` thì nó có
+ * ĐÚNG BA NẤC. Bậc thang chứ không mượt, và đó là lựa chọn: làm mượt đòi thêm
+ * một đồng hồ số thực vào `AiState`, tức thêm một trường vào SAVE, cho một việc
+ * hoàn toàn trang trí. Ở cỡ 16px thì ba nấc đọc ra "giơ, giơ, bổ" là đủ.
+ *
+ * THUẦN để sim kiểm được — phần còn lại của `drawActors` không test headless.
+ */
+export function workFrame(until: number, workMinutes: number, impact: number): number {
+  const tong = Math.max(0.0001, workMinutes);
+  const pha = 1 - Math.max(0, Math.min(tong, until)) / tong;
+  return pha < impact ? PLAYER_RAISE_FRAME : PLAYER_ACT_FRAME;
+}
+
+/**
+ * Người làm đang cầm gì trong tay, suy từ VIỆC ĐƯỢC GIAO (`ai.job`).
+ *
+ * Khác người chơi ở gốc: người chơi cầm gì là do ô hotbar đang chọn, còn người
+ * làm không có hotbar — họ lấy đồ từ kho lúc cần. Nên cái quyết định là việc.
+ *
+ * Ba việc BƯNG BÊ (`pour`, `dump`, `unload`) cố ý trả `hand`: thứ cần thấy ở
+ * chúng không phải công cụ trong tay mà là MÓN TRÊN ĐẦU — xem chỗ vẽ `carry`.
+ */
+export function heldForJob(job: string | undefined, propTool: string | null): HeldKind {
+  switch (job) {
+    case "till":
+      return "TILL";
+    case "water":
+      return "WATER";
+    case "plant":
+      return "seed";
+    case "break":
+    case "clear":
+      return propTool === "MINE" ? "MINE" : propTool === "CHOP" ? "CHOP" : "hand";
+    default:
+      return "hand";
+  }
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   atlas: Atlas,
@@ -216,6 +260,12 @@ export function createRenderer(
   /** nhịp cuối đã thả lá / bắn giọt — để mỗi nhịp chỉ một lần */
   let laBeat = -1;
   let giotBeat = -1;
+  /* Pha vung ĐÃ THẤY của từng người làm, để bắn hạt đúng một lần mỗi nhát.
+     Giữ ở đây chứ không ở main: khoảnh khắc "chạm đất" chỉ suy được từ
+     `ai.until`, và để main tự suy thì hai tầng cùng giữ một bản sao của cùng
+     phép tính. Không vào save — nó là chuyện của lớp vẽ. Dọn theo danh sách
+     thực thể mỗi khung nên không rò rỉ khi người làm nghỉ việc. */
+  const phaLam = new Map<number, number>();
 
   /** Ghim một toạ độ world về đúng lưới pixel THIẾT BỊ (mịn hơn world px đúng
    *  bằng scale×dpr lần). Dùng cho những thứ DI CHUYỂN mượt: nhân vật, hạt. */
@@ -719,12 +769,14 @@ export function createRenderer(
     return { kind: "hand", steel: false };
   }
 
+
   /**
    * Vật nuôi và sâu bọ. Đẩy vào cùng danh sách `items` với người chơi và dùng
    * ĐÚNG công thức `base` (`round(y) + 5`), nên con bò đi trước mặt thì che
    * nhân vật, đi sau lưng thì bị che — không cần luật riêng nào.
    */
   function drawActors(s: GameState, content: Content, items: Item[], timeSec: number) {
+    const conSong = new Set<number>();
     for (const e of s.entities) {
       if (e.map !== s.mapId) continue;
       if (!e.worker && e.kind !== "vehicle" && !content.animals[e.def]) continue;
@@ -734,8 +786,47 @@ export function createRenderer(
          đọc đúng những con số quyết định luật chơi, nên bong bóng "tới lứa"
          không bao giờ nói khác với thứ xảy ra khi bấm. */
       const mood = e.kind === "animal" ? animalMood(s, content, e) : null;
+      /* NGƯỜI LÀM ĐANG LÀM VIỆC: dùng đúng hai khung giơ/chạm mà bộ sinh hình
+         đã dựng sẵn cho mọi bộ đồ từ lâu nhưng chưa ai gọi tới. Trước Đợt 22 họ
+         chỉ có khung đứng và khung đi, nên nhìn từ ngoài không cách nào biết
+         một người đang cày hay đang đứng chơi. */
+      const lamViec = !!e.worker && e.ai.phase === "work" && e.ai.until > 0;
+      /* HẠT khi nhát chạm đất. Người làm không đi qua `stats` như người chơi
+         (họ ghi thẳng vào ô đất), nên bus hiệu ứng bên main mù hoàn toàn với
+         mọi việc họ làm. Bắt ngay tại đây: thấy khung đổi từ GIƠ sang CHẠM là
+         bắn. Cố ý KHÔNG có tiếng — ba người mỗi người một nhát mỗi 1,5 phút
+         game sẽ biến nông trại thành xưởng rèn, mà tiếng "cuốc" vốn là phản hồi
+         cho cú bấm của NGƯỜI CHƠI; phát nó từ chỗ khác là phá đúng nghĩa ấy. */
+      if (e.worker) {
+        conSong.add(e.id);
+        const khung = lamViec
+          ? workFrame(e.ai.until, WORK_MINUTES, content.balance.actionImpact ?? 0.5)
+          : 0;
+        if (khung === PLAYER_ACT_FRAME && phaLam.get(e.id) !== PLAYER_ACT_FRAME && e.ai.tx >= 0) {
+          const loai: BurstKind | null =
+            e.ai.job === "till"
+              ? "dust"
+              : e.ai.job === "water"
+                ? "water"
+                : e.ai.job === "harvest" || e.ai.job === "clear"
+                  ? "leaf"
+                  : e.ai.job === "break"
+                    ? "stone"
+                    : null;
+          if (loai) burst(loai, e.ai.tx, e.ai.ty);
+        }
+        phaLam.set(e.id, khung);
+      }
       const img = e.worker
-        ? atlas.worker(e.worker.skin, e.dir, moving ? 1 + (Math.floor(e.anim * 8) % 4) : 0)
+        ? atlas.worker(
+            e.worker.skin,
+            e.dir,
+            lamViec
+              ? workFrame(e.ai.until, WORK_MINUTES, content.balance.actionImpact ?? 0.5)
+              : moving
+                ? 1 + (Math.floor(e.anim * 8) % 4)
+                : 0,
+          )
         : e.kind === "vehicle"
           ? atlas.vehicle(e.def, e.dir, moving ? Math.floor(e.anim * 8) % 2 : 0)
           : atlas.animal(e.def, e.dir, frame, mood?.pose ?? "walk");
@@ -753,28 +844,83 @@ export function createRenderer(
         : e.kind === "vehicle"
           ? false
           : e.animal.fed <= 0;
+      /* Một cái đầu 16px chỉ đọc được MỘT bong bóng. Thứ tự nhường: mệt lả và
+         trú bão là chuyện của người chơi phải xử; rồi tới lời kêu thiếu hàng;
+         rồi mới tới xã giao. */
       const emo: EmoteKind | null = e.worker
         ? e.worker.energy <= content.workers.restBelow
           ? "tired"
           : e.ai.phase === "shelter"
             ? "wet"
-            : null
+            : e.worker.want
+              ? "want"
+              : e.ai.job === "chat"
+                ? "chat"
+                : e.ai.job === "pet"
+                  ? "love"
+                  : e.ai.job === "unload"
+                    ? "ready"
+                    : null
         : (mood?.emote ?? null);
       /* Bong bóng nhấp nhô nhẹ và KHÔNG theo `e.anim`: `anim` chỉ chạy khi con
          vật đi, nên con đang nằm ngủ sẽ có cái bóng chết cứng. Dùng đồng hồ
          thật, lệch pha theo `e.id` để cả đàn không nhún cùng một nhịp. */
       const eBob = emo ? Math.round(Math.sin(timeSec * 2.2 + e.id) * 0.9) : 0;
+      /* CÔNG CỤ trong tay người làm — cùng cách đặt với người chơi, chỉ khác
+         nguồn: việc được giao quyết định, không phải ô hotbar. */
+      let cong: { img: HTMLCanvasElement; x: number; y: number } | null = null;
+      if (lamViec) {
+        const t = e.ai.tx >= 0 ? s.tiles[e.ai.ty * s.w + e.ai.tx] : null;
+        const pt = t?.prop ? (content.props[t.prop]?.tool ?? null) : null;
+        const kind = heldForJob(e.ai.job, pt);
+        if (kind !== "hand") {
+          const hinh = atlas.held(kind, false);
+          const gio =
+            workFrame(e.ai.until, WORK_MINUTES, content.balance.actionImpact ?? 0.5) ===
+            PLAYER_RAISE_FRAME;
+          let tx = px + 4;
+          let ty = py - 6;
+          if (!gio) {
+            if (e.dir === "left") { tx = px - 5; ty = py + 6; }
+            else if (e.dir === "right") { tx = px + 13; ty = py + 6; }
+            else if (e.dir === "up") { tx = px + 4; ty = py - 4; }
+            else { tx = px + 4; ty = py + 12; }
+          } else if (e.dir === "left") tx = px + 8;
+          else if (e.dir === "right") tx = px;
+          cong = { img: hinh, x: tx, y: ty };
+        }
+      }
+      /* ĐỒ ĐANG VÁC, đội trên đầu — "hành động bưng bê" và "mang vác vật về
+         kho" mà Cường xin, phục vụ bằng đúng một cơ chế. Lấy món ĐEO NHIỀU
+         NHẤT: một người ôm mười quả cà chua và một quả trứng thì thứ đáng vẽ là
+         quả cà chua. */
+      let deo: HTMLCanvasElement | null = null;
+      if (e.worker) {
+        let nhieu = 0;
+        let monId: string | null = null;
+        for (const v of e.worker.carry) if (v && v.n > nhieu) { nhieu = v.n; monId = v.id; }
+        if (monId) deo = atlas.icon(monId);
+      }
+      const nhun = deo && moving ? (Math.floor(e.anim * 8) % 2 === 0 ? 0 : 1) : 0;
+      // Đang đội đồ thì bong bóng phải nhường chỗ, không thì hai thứ chồng nhau.
+      const emoY = py - 9 + eBob - (deo ? 11 : 0);
       items.push({
         base: Math.round(e.y) + 5,
         run: () => {
+          if (cong && e.dir !== "down") g.drawImage(cong.img, cong.x, cong.y);
           g.drawImage(img, px, py);
+          if (cong && e.dir === "down") g.drawImage(cong.img, cong.x, cong.y);
+          if (deo) g.drawImage(deo, px + img.width / 2 - 8, py - 11 + nhun);
           // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
           // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
           if (doi) g.drawImage(atlas.sickOverlay, px + img.width / 2 - TILE / 2, py + img.height - TILE);
-          if (emo) g.drawImage(atlas.emote(emo), px + img.width / 2 - 4, py - 9 + eBob);
+          if (emo) g.drawImage(atlas.emote(emo), px + img.width / 2 - 4, emoY);
         },
       });
     }
+    // Dọn khoá của người đã nghỉ việc — `MAX_ENTITIES` = 64 nên vòng này rẻ.
+    if (phaLam.size > conSong.size)
+      for (const id of [...phaLam.keys()]) if (!conSong.has(id)) phaLam.delete(id);
   }
 
   function drawPlayer(s: GameState, content: Content, items: Item[], timeSec: number) {

@@ -1070,6 +1070,20 @@ export interface WorkerState {
   paidDay: number;
   /** hàng đang đeo; đầy thì phải về kho đổ */
   carry: InvSlot[];
+  /**
+   * VẬT TƯ ĐANG CHỜ người chơi bổ sung — id món, và ngày treo lời kêu.
+   *
+   * Trước Đợt 22, hết hạt / hết cám / hết thuốc là người làm lặng lẽ tụt xuống
+   * bậc việc khác rồi đứng, không một dòng nào. Kho ĐẦY thì có báo; kho THIẾU
+   * thì không — mà thiếu mới là thứ người chơi sửa được trong một phút.
+   *
+   * `day` chỉ để tiết chế: đã kêu rồi thì im, đừng nhắc lại mỗi sáng — dòng
+   * trên thẻ và chip ở HUD đã đứng sẵn đó rồi.
+   *
+   * Tuỳ chọn: save cũ không có, và thêm một trường tuỳ chọn vào người làm thì
+   * KHÔNG phải tăng `SAVE_VERSION` — xem ghi chú ở `core/save.ts`.
+   */
+  want?: { id: string; day: number };
 }
 
 /** Việc của một chiếc xe. */

@@ -165,15 +165,17 @@ riêng và máng riêng.
 
 Thuê `hireFee` = 900đ, lương `wage` = 220đ mỗi `wageEveryDays` = 3 ngày.
 
-Mỗi người được giao **một loại việc** — *chăm cây* hoặc *chăn nuôi* — và trong
-phạm vi đó thì **tự phán đoán thứ tự ưu tiên**, làm **tuần tự** từng việc một.
+Mọi người làm cùng **một** thang việc và **tự phán đoán thứ tự ưu tiên**, làm
+**tuần tự** từng việc một. (Vai *chăm cây* / *chăn nuôi* đã bỏ từ core 1.39: nhánh
+chăn nuôi vốn bị khoá sau một cái vai mà nhánh cây trồng thì chạy cho cả hai, nên
+người "chăn nuôi" xưa nay vẫn đi làm ruộng.)
 
 > "Tự phán đoán" nghĩa là họ tự nhìn ra việc gì đang cần, **không** phải mỗi lần
 > lại chọn khác. Thứ tự ưu tiên là **cố định**. Người chơi phải đoán được người
 > làm sẽ làm gì — nếu không thì thuê người thành thả một con rối vào ruộng.
 
-Họ cày, gieo, tưới, thu, chữa bệnh, đổ máng; rảnh thì đi kiếm gỗ đá **trong
-rừng** (không đụng cảnh quan người chơi trồng). Có năng lượng riêng
+Họ cày, gieo, tưới, thu, chữa bệnh, đổ máng, **dọn cỏ dại trong lô**; rảnh thì
+đi kiếm gỗ đá **trong rừng** (không đụng cảnh quan người chơi trồng). Có năng lượng riêng
 (`energyPerTask` = 4, nghỉ khi dưới `restBelow` = 15, nghỉ `restMinutes` = 90).
 Đầy tay (`carryMax` = 24) thì đem về **kho tập trung**.
 
@@ -181,9 +183,60 @@ rừng** (không đụng cảnh quan người chơi trồng). Có năng lượng
 lọc **ngay trong vòng chấm điểm**, nên người thứ hai nhận **việc kế tiếp** thay vì
 đứng phí một lượt.
 
-Hàm chọn việc **dùng chung** với nút "tự động làm" của người chơi. Viết một lần
-dùng hai chỗ — tách hai đường thì hai thứ tự ưu tiên sẽ trôi khỏi nhau mà không ai
-nhận ra.
+### Một thang việc, hai bộ não
+
+`CROP_ORDER` (`src/game/joborder.ts`) là **hằng thứ tự dùng chung** cho cả người
+làm lẫn nút "tự động làm":
+
+```
+ĐỔ MÁNG · RẮC HỒ → THU → CHỮA → GIEO → TƯỚI → DỌN CỎ → CÀY
+```
+
+> Tài liệu này từng ghi hai bên "dùng chung một hàm" — nhưng chưa bao giờ đúng:
+> một bên là danh sách chuỗi, một bên là bảng số gõ tay. Chúng đã trôi khỏi nhau
+> đúng như cảnh báo ngay bên trên, và tới Đợt 22 thì nút tự động gieo trước tưới
+> còn người làm tưới trước gieo. Nay chỉ còn **một hằng**; hai hàm quét vẫn riêng
+> (một bên đo từ người chơi, một bên đo từ chỗ người làm đứng), nhưng thứ tự thì
+> không thể lệch nữa.
+
+**Trời ướt thì TƯỚI tụt xuống cuối** — sáng mai ruộng ngoài trời tự ẩm, tưới hôm
+nay là đổ nước xuống thứ trời sắp làm hộ.
+
+### Dọn cỏ dại: "mở rộng vườn"
+
+Cỏ dại lan vào lô mỗi đêm và luống bỏ hoang tự mọc cỏ lên chính nó; mà một ô có
+vật thể thì **không cày được**. Trước Đợt 22 không ai được phép dọn nó — người làm
+chỉ dọn trong rừng, nút tự động thì cố ý không dọn gì — nên **một lô bỏ bê là một
+lô chết vĩnh viễn**.
+
+Nay cả hai dọn được, trong đúng một lằn ranh rút từ content: **nhổ được bằng tay
+không** (`!prop.tool`) + **tự mọc qua đêm** + **trong lô ruộng**. Ba vế cộng lại
+loại đúng hai vật thể `portable` duy nhất — hòn đá và khúc gỗ — tức đúng hai thứ
+người chơi vác đặt xuống được. Cây và đá vẫn phải bấm tay như xưa.
+
+### Hết vật tư thì ĐÒI, không tiêu tiền
+
+Kho **đầy** thì xưa nay có báo; kho **thiếu** thì im lặng tuyệt đối — mà thiếu mới
+là thứ người chơi sửa được trong một phút. Nay người làm treo một lời kêu
+(`worker.want`) khi họ rảnh **vì** hết hạt đúng mùa, hết cám cho khu đang đói, hoặc
+hết thuốc mà ruộng có cây bệnh. Lời kêu hiện ở ba chỗ: bong bóng trên đầu, dòng
+trên thẻ người làm, và một chip ở HUD gộp lời của cả đội. Báo **đúng một lần** cho
+mỗi món; hàng về thì chip tự tắt.
+
+**Họ không bao giờ tiêu tiền của người chơi.** Nút tự động cũng vậy: nó nói "hết
+hạt đúng mùa" thay vì tắt lặng lẽ.
+
+### Rảnh việc thì làm việc vặt, không đứng đực
+
+Hết cả việc ruộng lẫn việc rừng thì họ đi một vòng nông trại, đứng nói chuyện với
+đồng nghiệp, vuốt ve con vật, hoặc bốc xếp cho chiếc xe đang đậu. **Chỉ là diễn
+hoạt** — không đổi một con số cân bằng nào.
+
+Ba việc xã giao **không tốn một lần tìm đường nào**: chúng chỉ xảy ra khi đối
+tượng đã đứng ngay cạnh, và người làm quay mặt về phía đó chứ không đi tới. Chỉ
+"đi một vòng" mới xin đường, và nó chịu một cái nguội rộng gấp bốn lần thường —
+ngân sách tìm đường dùng chung với cả đàn vật nuôi, nên người rảnh không được
+phép giành nhịp của một con bò đang đói.
 
 **Bão thì trú** (content `halt`): là một **cổng đứng trước** thang ưu tiên, như
 nhánh nghỉ mệt — không xen vào thang, nên thang vẫn cố định và người chơi vẫn đoán

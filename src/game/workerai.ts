@@ -17,29 +17,30 @@
    đâu thì đó là một lỗi thấy được ngay.
 ============================================================================ */
 
-import type { Content } from "./types.ts";
+import type { Content, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
-import { dEntity, dTile, randInt, touch } from "./state.ts";
+import { dEntity, dTile, randInt, toastKey, touch } from "./state.ts";
 import { idx, TILE, tileIndexAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
-import { LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, dangNghi } from "./entities.ts";
+import { ACTOR_STEP_MINUTES, LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, dangNghi } from "./entities.ts";
 import {
   atTile,
+  wantOf,
   carried,
   dumpToStore,
   findStoreTile,
   giveToWorker,
   pickTask,
-  tileTakenBy,
 } from "./workers.ts";
 import { animalNear, readyProduct } from "./animals.ts";
+import { vongTuan } from "./entities.ts";
 import { canPourFromStore, pourFromStore } from "./pen.ts";
 import { weatherMood } from "./weather.ts";
 import { cropInSeason, tileAllSeason } from "./season.ts";
 import { isTillable } from "./world.ts";
 
 /** Mỗi việc làm xong tốn ngần này PHÚT GAME — người làm không phải cái máy. */
-const WORK_MINUTES = 1.5;
+export const WORK_MINUTES = 1.5;
 
 /**
  * Một lượt của một người làm.
@@ -64,7 +65,7 @@ export function workerStep(
 
   // ---- đang nghỉ / đang làm: đếm ngược rồi thôi -------------------------
   if (e.ai.until > 0) {
-    e.ai.until = Math.max(0, e.ai.until - 0.5);
+    e.ai.until = Math.max(0, e.ai.until - ACTOR_STEP_MINUTES);
     if (e.ai.until > 0) return true;
 
     if (e.ai.phase === "work") {
@@ -142,7 +143,6 @@ export function workerStep(
       e.ai.path = [];
       return true;
     }
-    if (e.ai.path.length) return true; // còn đường thì cứ đi
     /* Hết đường mà CHƯA TỚI: ghi ô này vào sổ đen rồi chọn việc khác.
        Đây là chỗ người làm hay đứng đơ nhất — `pickTask` luôn trả về ô gần
        nhất, mà nếu ô đó bị chắn thì lượt sau nó lại trả về đúng ô đó, mãi mãi.
@@ -157,18 +157,23 @@ export function workerStep(
   // ---- chọn việc mới ----------------------------------------------------
   const task = pickTask(d.s, content, e);
   if (!task) {
-    // Không có việc: nghỉ tay một lát rồi hỏi lại. Đứng im hẳn thì trông như
-    // treo máy; hỏi lại mỗi bước thì tốn quét vô ích.
-    const r = randInt(e.seed, 2, 6);
-    e.seed = r.seed;
-    e.ai.phase = "idle";
-    e.ai.until = r.v;
-    return true;
+    /* Hết việc RUỘNG. Đừng đứng đực: hỏi tiếp VIỆC VẶT (xem `idleTask`) — đi
+       tuần, nói chuyện với đồng nghiệp, vuốt ve con vật, bốc xếp cho xe. Cường
+       nói thẳng: "tránh tình trạng đứng im quá lâu quá nhiều".
+
+       Chỉ khi cả việc vặt cũng không có mới nghỉ tay, và nghỉ NGẮN (1–2 phút
+       game ≈ nửa giây thật) chứ không phải 2–6 phút như trước — hỏi lại sớm thì
+       việc vừa xuất hiện được nhận ngay.
+
+       Nhưng TRƯỚC HẾT hỏi một câu quan trọng hơn: có phải tôi rảnh VÌ THIẾU
+       HÀNG không? Nếu đúng thì treo lời kêu — đó là thứ người chơi sửa được
+       trong một phút, mà trước Đợt 22 không ai nói. */
+    ganWant(d, content, index);
+    return idleStep(d, content, index, takeBudget);
   }
-  if (tileTakenBy(d.s, task.tx, task.ty, e.id)) {
-    e.ai.until = 1;
-    return true;
-  }
+  /* Có việc làm thì lời kêu cũ hết nghĩa — xoá ngay, đừng để cái chip ở HUD
+     đứng lại sau khi người chơi đã bổ hàng. */
+  xoaWant(d, index);
 
   /* ĐỨNG SẴN Ở ĐÓ thì làm luôn — không cần đường, không cần ngân sách. */
   if (atTile(e, task.tx, task.ty)) {
@@ -198,7 +203,7 @@ export function workerStep(
   if (!takeBudget() || dangNghi(d.s.minutes, e.ai.planAt)) {
     // Không đụng `tx/ty`, không đổi `phase`: lượt sau hỏi lại từ đầu.
     e.ai.phase = "idle";
-    e.ai.until = 0.5;
+    e.ai.until = ACTOR_STEP_MINUTES;
     return true;
   }
   e.ai.planAt = d.s.minutes;
@@ -284,6 +289,212 @@ function markBad(e: { ai: { bad?: number[] } }, i: number): void {
  * riêng, nên họ tác động thẳng lên ô — nhưng vẫn qua `dTile`, vẫn chịu kiểm
  * bất biến như mọi thay đổi khác.
  */
+/* -------------------------------------------------------- lời kêu thiếu hàng */
+
+/**
+ * Treo lời kêu thiếu vật tư, và BÁO đúng một lần cho mỗi món.
+ *
+ * Tiết chế bằng chính NỘI DUNG lời kêu, không bằng đồng hồ: đã kêu đúng món ấy
+ * rồi thì im tuyệt đối. Không nhắc lại mỗi sáng — dòng trên thẻ người làm và
+ * cái chip ở HUD đã đứng sẵn đó, nhắc lại chỉ là rác. Nhờ vậy nó cũng tất định:
+ * không một mốc thời gian thật nào tham gia, replay cùng chuỗi action cho ra
+ * cùng dãy toast.
+ */
+function ganWant(d: Draft, content: Content, index: number): void {
+  const mon = wantOf(d.s, content);
+  if (!mon) {
+    xoaWant(d, index);
+    return;
+  }
+  if (d.s.entities[index]?.worker?.want?.id === mon) return; // đã kêu rồi, im
+  const e = dEntity(d, index);
+  if (!e?.worker) return;
+  e.worker.want = { id: mon, day: d.s.day };
+  toastKey(
+    d,
+    content,
+    mon === "seed"
+      ? "workerWantSeed"
+      : mon === "item:medicine"
+        ? "workerWantMedicine"
+        : "workerWantFeed",
+    "bad",
+    e.worker.name,
+  );
+}
+
+/** Hàng đã về (hoặc có việc để làm) → gỡ lời kêu. */
+function xoaWant(d: Draft, index: number): void {
+  if (!d.s.entities[index]?.worker?.want) return;
+  const e = dEntity(d, index);
+  if (e?.worker) delete e.worker.want;
+}
+
+/* ---------------------------------------------------------------- việc vặt */
+
+/**
+ * Nguội riêng cho ĐI TUẦN, tính bằng phút game. Bốn lần `REPLAN_COOLDOWN`.
+ *
+ * Vì sao phải có: ngân sách A* (`MAX_REPLANS_PER_STEP` = 2 mỗi bước) dùng CHUNG
+ * cho cả đàn vật nuôi, xe và người làm. Trước Đợt 22, một người làm hết việc
+ * đứng im 2–6 phút game và trong suốt thời gian đó **không tiêu một suất tìm
+ * đường nào** — tức là cái "đứng ngơ" mà Cường ghét đang âm thầm trợ cấp ngân
+ * sách cho đàn bò đi ăn. Cho họ đi tuần mà không đặt nguội riêng là lấy đúng
+ * khoản trợ cấp ấy đi, và triệu chứng sẽ hiện ra ở chỗ không ai ngờ: con vật
+ * chậm được ăn. Xem kịch bản "việc vặt KHÔNG làm vật nuôi đói".
+ */
+const PATROL_COOLDOWN = 8;
+
+/** Một người làm khác đang rảnh, trong `r` ô. Gần nhất thắng; hoà thì id nhỏ thắng. */
+function nguoiLamGan(s: GameState, e: Entity, r: number): Entity | null {
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  for (const o of s.entities) {
+    if (o.id === e.id || o.map !== s.mapId || !o.worker) continue;
+    const d = Math.hypot(o.x - e.x, o.y - e.y) / TILE;
+    if (d > r || d > bestD) continue;
+    if (d === bestD && best && o.id > best.id) continue;
+    bestD = d;
+    best = o;
+  }
+  return best;
+}
+
+/** Hướng nhìn từ (e) sang (o) — để hai người quay mặt vào nhau. */
+function huongToi(e: Entity, o: { x: number; y: number }): Entity["dir"] {
+  const dx = o.x - e.x;
+  const dy = o.y - e.y;
+  return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? "right" : "left") : dy >= 0 ? "down" : "up";
+}
+
+/**
+ * VIỆC VẶT — thứ người làm làm khi hết việc ruộng, thay cho đứng đực.
+ *
+ * Chia theo CHI PHÍ TÌM ĐƯỜNG, và đó là cả thiết kế:
+ *
+ *   · hạng RẺ (không một nút A* nào): nói chuyện · vuốt ve con vật · bốc xếp
+ *     cho xe. Cả ba chỉ xảy ra khi đối tượng ĐÃ ở ngay cạnh — người làm quay
+ *     mặt về phía đó rồi đứng làm, KHÔNG đi tới. Nhờ vậy chúng miễn phí y như
+ *     bữa ăn của con vật, và không cướp nhịp của ai.
+ *   · hạng ĐẮT (một nút A*): đi tuần. Phải qua `takeBudget()` **và** một cái
+ *     nguội riêng rộng gấp bốn (`PATROL_COOLDOWN`).
+ *
+ * XÃ GIAO LÀ ĐƠN PHƯƠNG: mỗi người tự quyết, không ghi một byte nào lên người
+ * kia. Nếu người kia cũng rảnh thì chính luật này khiến họ cũng quay lại nhìn —
+ * hai người đứng nói chuyện với nhau mà không cần một dòng thương lượng nào.
+ * Mọi cơ chế "A chọn B rồi đi tới B" đều đẻ ra hai bệnh: B đi mất giữa chừng
+ * nên A tới nơi trơ trọi, hoặc A và B đổi chỗ cho nhau mãi.
+ *
+ * KHÔNG đặt `ai.tx/ty` cho ba việc hạng rẻ: `pickTask` lọc ô "đã có người nhận"
+ * theo đúng hai trường ấy, nên một người đang đứng nói chuyện mà chiếm ô sẽ
+ * khoá ô đó với đồng nghiệp. Và việc vặt KHÔNG BAO GIỜ ghi sổ đen — sổ đen chỉ
+ * nhớ được 12 ô và nó nằm trong save, dành cho việc ruộng.
+ *
+ * Ngẫu nhiên chỉ rút từ `e.seed` (hạt riêng của từng người), không bao giờ đụng
+ * `state.seed` — TICK phải sạch, xem kịch bản 55/56/60.
+ */
+function idleStep(
+  d: Draft,
+  content: Content,
+  index: number,
+  takeBudget: () => boolean,
+): boolean {
+  const s = d.s;
+  const cur = s.entities[index]!;
+  const e = dEntity(d, index);
+  if (!e?.worker) return false;
+
+  const nghi = (job: string, phut: number, dir?: Entity["dir"]) => {
+    e.ai.phase = "chore";
+    e.ai.job = job;
+    e.ai.until = phut;
+    e.ai.path = [];
+    e.ai.tx = -1;
+    e.ai.ty = -1;
+    e.ai.ent = undefined;
+    if (dir) e.dir = dir;
+  };
+
+  /* Trời mưa (content `shelter`) thì thôi đi tuần và thôi xã giao ngoài đồng —
+     đứng tán gẫu dưới mưa nhìn ngu ngơ. Vẫn làm việc chính như thường. */
+  const troi = weatherMood(s, content);
+
+  // 1. XE đang đậu chờ ngay cạnh → bốc xếp.
+  for (const v of s.entities) {
+    if (v.map !== s.mapId || v.kind !== "vehicle" || v.ai.phase !== "wait") continue;
+    if (Math.hypot(v.x - cur.x, v.y - cur.y) / TILE > 2) continue;
+    nghi("unload", WORK_MINUTES * 2, huongToi(cur, v));
+    return true;
+  }
+
+  /* 2–3. XÃ GIAO chỉ CHEN VÀO, không phải nết mặc định.
+
+     Bản đầu cho xã giao đứng trước đi tuần, và hai người làm đứng cạnh nhau đã
+     nói chuyện với nhau MÃI MÃI — đo được: 0 ô đi trong hơn ba phút game. Đó
+     cũng là đứng im, chỉ khác bộ mặt. Nên: đi tuần là nền, xã giao rút thăm một
+     phần tư số lượt. Xúc xắc lấy từ hạt RIÊNG của từng người nên vẫn tái lập
+     được, và hai người cạnh nhau không bao giờ đồng pha. */
+  const xt = randInt(e.seed, 0, 3);
+  e.seed = xt.seed;
+  if (xt.v === 0 && !troi.shelter) {
+    // CON VẬT ngay cạnh → vuốt ve. (Chỉ diễn hoạt: không đổi một con số nào.)
+    const an = animalNear(s, Math.floor(cur.x / TILE), Math.floor(cur.y / TILE), 1.5);
+    if (an) {
+      nghi("pet", WORK_MINUTES, huongToi(cur, an));
+      return true;
+    }
+    // ĐỒNG NGHIỆP ngay cạnh → nói chuyện.
+    const ban = nguoiLamGan(s, cur, 2);
+    if (ban) {
+      const r = randInt(e.seed, 3, 6);
+      e.seed = r.seed;
+      nghi("chat", r.v, huongToi(cur, ban));
+      return true;
+    }
+  }
+
+  /* 4. ĐI TUẦN một vòng nông trại — việc vặt DUY NHẤT tốn tìm đường, nên nó
+     phải qua cả hai cổng. Trượt cổng thì nghỉ ngắn rồi hỏi lại, không sao. */
+  const nguoi = randInt(e.seed, 1, 2);
+  e.seed = nguoi.seed;
+  if (troi.shelter || s.minutes - e.ai.planAt < PATROL_COOLDOWN || !takeBudget()) {
+    e.ai.phase = "idle";
+    e.ai.job = undefined;
+    e.ai.until = nguoi.v;
+    return true;
+  }
+  const chang = vongTuan(s, content);
+  if (!chang.length) {
+    e.ai.phase = "idle";
+    e.ai.job = undefined;
+    e.ai.until = nguoi.v;
+    return true;
+  }
+  const k = Math.abs((s.actStep / 40) | 0) % chang.length;
+  const g = chang[k]!;
+  e.ai.planAt = s.minutes;
+  const cx = Math.floor(cur.x / TILE);
+  const cy = Math.floor(cur.y / TILE);
+  const path = findPath(s, content, cx, cy, new Set([idx(s.w, g.x, g.y)]), {
+    maxNodes: MAX_NODES_ACTOR,
+    box: content.workers.box,
+    leash: {
+      x: Math.round((cx + g.x) / 2),
+      y: Math.round((cy + g.y) / 2),
+      r: Math.max(LEASH_TILES, Math.max(Math.abs(cx - g.x), Math.abs(cy - g.y)) / 2 + 6),
+    },
+  });
+  e.ai.phase = "chore";
+  e.ai.job = "patrol";
+  e.ai.tx = -1;
+  e.ai.ty = -1;
+  e.ai.ent = undefined;
+  // Không tới được thì thôi, KHÔNG ghi sổ đen: đi tuần không đáng một ô trí nhớ.
+  e.ai.path = path && path.length ? path.slice(0, MAX_PATH) : [];
+  if (!e.ai.path.length) e.ai.until = nguoi.v;
+  return true;
+}
+
 function doWork(d: Draft, content: Content, index: number): void {
   const e = dEntity(d, index);
   if (!e?.worker) return;
@@ -371,8 +582,12 @@ function doWork(d: Draft, content: Content, index: number): void {
   }
   xong();
 
-  // KIẾM TÀI NGUYÊN: chặt cây, đập đá — chỉ trong rừng, xem `pickTask`.
-  if (viec === "break") {
+  /* PHÁ MỘT VẬT THỂ. Hai việc, một khối:
+       · `break` — kiếm gỗ đá, CHỈ trong rừng;
+       · `clear` — dọn cỏ dại mọc lan vào LÔ RUỘNG, trả lại đất cày được.
+     Thao tác y hệt nhau nên dùng chung khối này; khác nhau ở chỗ ĐƯỢC PHÉP
+     đụng cái gì, và câu trả lời đó nằm ở `pickTask` (`donDuoc`). */
+  if (viec === "break" || viec === "clear") {
     const def = t.prop ? content.props[t.prop] : null;
     if (!def?.hits) return;
     const m = dTile(d, ti);

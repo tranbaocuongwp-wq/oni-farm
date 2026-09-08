@@ -67,6 +67,10 @@
     "animalHungry": "Vật nuôi đang đói:",
     "deliverElsewhere": "Hàng được giao ngoài nông trại — ra đó nhận.",
     "wageUnpaid": "Không đủ tiền trả lương, người làm nghỉ việc:",
-    "storeFullWorker": "Kho đầy — người làm đứng chờ, dọn bớt kho đi."
+    "storeFullWorker": "Kho đầy — người làm đứng chờ, dọn bớt kho đi.",
+    "workerWantSeed": "Kho hết hạt đúng mùa — đang chờ người mua thêm:",
+    "workerWantFeed": "Kho hết thức ăn cho vật nuôi — đang chờ:",
+    "workerWantMedicine": "Kho hết thuốc mà ruộng có cây bệnh — đang chờ:",
+    "autoNoSeed": "Hết hạt đúng mùa — ghé Chợ mua thêm."
   }
 }

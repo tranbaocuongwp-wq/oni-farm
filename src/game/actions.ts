@@ -39,6 +39,7 @@ import {
   propDef,
   tileIndexAt,
   isSolid,
+  donDuoc,
 } from "./world.ts";
 
 /* ---------------------------------------------------- đặt xuống có nhốt ai */
@@ -477,6 +478,15 @@ export type UseKind =
   | "feedpond"
   /** đang vác thì ĐẶT xuống một ô trống */
   | "putdown"
+  /**
+   * DỌN cỏ dại mọc lan vào LÔ RUỘNG — cùng thao tác với `chop` nhưng khác NGHĨA.
+   *
+   * Tách ra làm một việc riêng vì nó là việc DUY NHẤT trong nhóm "phá vật thể"
+   * mà nút TỰ ĐỘNG và người làm thuê được phép tự ý làm: nó chỉ đụng thứ tự mọc
+   * lên và chỉ trong lô ruộng, nên không có cách nào nó dọn mất cảnh quan người
+   * chơi cố ý chừa. `chop`/`mine` thì vẫn phải bấm tay. Xem `donDuoc`.
+   */
+  | "clear"
   | null;
 
 /**
@@ -544,6 +554,8 @@ export function canUseAt(
     if (def.portable && selectedItemId(state.inv, sel) === null) return "lift";
     const tool = heldTool(state, content, sel);
     if (!canBreakWith(def, tool)) return null;
+    // Cỏ dại mọc lan vào lô ruộng: cùng thao tác, khác nghĩa — xem `UseKind.clear`.
+    if (donDuoc(state, content, x, y)) return "clear";
     return breakAction(def, tool) === "MINE" ? "mine" : "chop";
   }
 

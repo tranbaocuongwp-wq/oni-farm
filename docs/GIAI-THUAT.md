@@ -126,14 +126,59 @@ Con vật đứng sát máng đầy vẫn phải ngủ hết giấc rồi bốc 
 
 ---
 
-## 4. Chọn việc — một hàm, hai chỗ dùng
+## 4. Chọn việc — một HẰNG thứ tự, hai hàm quét
 
-`nearestTarget` / `autoJob` trong `src/game/hint.ts` phục vụ **cả** nút AUTO của
-người chơi **và** người làm thuê. Tách hai đường thì hai thứ tự ưu tiên trôi khỏi
-nhau theo thời gian, và không ai nhận ra cho tới lúc chúng đã khác hẳn.
+`CROP_ORDER` trong **`src/game/joborder.ts`** (module không import gì cả) là thứ
+tự việc ruộng dùng chung cho **cả hai** bộ não: `autoJob`/`AUTO_ORDER`
+(`hint.ts`, nút AUTO của người chơi) và `cropTask`/`pickTask` (`workers.ts`,
+người làm thuê).
 
-Thứ tự `AUTO_ORDER` bắt đầu bằng **ĐỔ MÁNG** và **RẮC HỒ**: con vật chết đói được,
-cây thì chỉ đứng chờ.
+```
+ĐỔ MÁNG · RẮC HỒ → THU → CHỮA → GIEO → TƯỚI → DỌN CỎ → CÀY
+```
+
+Hai **hàm quét** vẫn riêng, và phải riêng: một bên đo khoảng cách từ nhân vật, một
+bên đo từ chỗ người làm đang đứng. Nhưng **thứ tự** thì chỉ còn một nguồn.
+
+> Mục này từng ghi "một hàm, hai chỗ dùng" — và nó chưa bao giờ đúng: một bên là
+> danh sách chuỗi, một bên là bảng số gõ tay, không có một lời gọi chéo nào. Đúng
+> điều mục này cảnh báo đã xảy ra: tới Đợt 22 thì nút AUTO gieo trước tưới còn
+> người làm tưới trước gieo. Bài học không phải "viết chung một hàm" mà là **rút
+> cái QUYẾT ĐỊNH ra một hằng** — hai hàm khác nhau vẫn được, miễn chúng đọc chung
+> một bảng.
+
+Đổ máng và rắc hồ đứng đầu: con vật chết đói được, cây thì chỉ đứng chờ. Và **trời
+ướt thì TƯỚI tụt xuống cuối** — sáng mai ruộng ngoài trời tự ẩm.
+
+### Việc vặt của người rảnh: chia theo CHI PHÍ TÌM ĐƯỜNG
+
+Ngân sách A\* (`MAX_REPLANS_PER_STEP` = 2 mỗi bước) dùng **chung** cho cả đàn vật
+nuôi, xe và người làm. Trước Đợt 22, một người làm hết việc đứng im 2–6 phút game
+và trong suốt thời gian đó **không tiêu một suất nào** — tức cái "đứng ngơ" đang
+âm thầm trợ cấp ngân sách cho đàn bò đi ăn. Cho họ đi tuần mà không tính lại là
+lấy đúng khoản trợ cấp ấy đi, và triệu chứng hiện ra ở chỗ không ai ngờ: **con vật
+chậm được ăn**.
+
+| hạng | việc | A\* | cổng |
+|---|---|---|---|
+| rẻ (0 nút) | nói chuyện · vuốt ve · bốc xếp cho xe | không | không cổng nào — chỉ xảy ra khi đối tượng ĐÃ ở ngay cạnh, người làm quay mặt về phía đó chứ không đi tới |
+| đắt (1 nút) | đi một vòng nông trại | có | `takeBudget()` **+ nguội riêng 8 phút game** (gấp bốn `REPLAN_COOLDOWN`) |
+
+Kịch bản 151 khoá trần **số lần gọi A\*** của người rảnh, và 152 đo **mốc con vật
+đầu tiên ăn được** có bị lùi không.
+
+**Xã giao là ĐƠN PHƯƠNG.** Mỗi người tự quyết, không ghi một byte nào lên người
+kia; nếu người kia cũng rảnh thì chính luật ấy khiến họ cũng quay lại nhìn. Mọi
+cơ chế "A chọn B rồi đi tới B" đều đẻ ra hai bệnh: B đi mất giữa chừng nên A tới
+nơi trơ trọi, hoặc A và B đổi chỗ cho nhau mãi. Việc vặt cũng **không đặt
+`ai.tx/ty`** — `pickTask` lọc ô "đã có người nhận" theo đúng hai trường ấy, nên
+một người đứng nói chuyện mà chiếm ô sẽ khoá ô đó với đồng nghiệp.
+
+**Giới hạn đã biết:** `entities.ts` bỏ qua `workerStep` khi người làm còn đường đi
+(`if (cur.ai.path.length) continue`), nên họ **không phản ứng gì trong lúc đang
+đi** — bão ập tới giữa đường thì họ đi nốt đoạn còn lại rồi mới trú. Với `MAX_PATH`
+= 64 thì đoạn dài nhất chỉ vài giây thật; gỡ cổng đó ra sẽ đổi nhịp của mọi actor
+cùng lúc.
 
 **Vành quét kẹp vào biên bản đồ** — bỏ ~9.400 lần gọi rỗng cho mỗi loại việc.
 Kịch bản 118 khẳng định kết quả **y hệt** duyệt thô.
@@ -178,6 +223,7 @@ Ba nguồn, tách bạch:
 | `state.seed` | theo **sự kiện** | thời tiết, bệnh, cỏ lan, sản lượng, sinh thực thể |
 | `entity.seed` | mỗi con tự advance | hành vi lang thang của **từng** con |
 | — | | vị trí decor: hàm **thuần** của `(x, y)`, không rút gì |
+| `entity.seed` | | việc vặt của người làm rảnh (nói chuyện / vuốt ve / đi tuần) — TICK vẫn không đụng `state.seed`, xem kịch bản 60 |
 | — | | **hành vi theo thời tiết** (chậm, trú, người làm về kho, xe không tới): đọc thuần `weatherDef`, không rút gì — kịch bản 147 khoá cả chuyện xúc xắc xe thu mua vẫn được rút ngày bão |
 
 Vì sao tách: xem [`KIEN-TRUC.md`](KIEN-TRUC.md#5-tất-định--xương-sống-của-cả-dự-án).

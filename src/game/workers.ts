@@ -22,13 +22,16 @@ import type { Draft } from "./state.ts";
 import { dEntity, randInt, toastKey, toastText, touch, dStats } from "./state.ts";
 import { addItem, canAdd } from "./inventory.ts";
 import { setStore, storeHasRoom } from "./storage.ts";
+import { itemName } from "./items.ts";
 import { MAX_ENTITIES, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt, idx } from "./world.ts";
 import { animalDef, entityAt } from "./entities.ts";
 import { readyProduct } from "./animals.ts";
 import { pourSpotIn, troughItem, troughMax, troughStock } from "./pen.ts";
 import { cropInSeason } from "./season.ts";
-import { isTillable } from "./world.ts";
+import { donDuoc, isTillable } from "./world.ts";
+import { CROP_ORDER, jobRank } from "./joborder.ts";
+import { weatherDef } from "./weather.ts";
 
 /** Tên gọi cho vui — không ảnh hưởng luật chơi, chỉ để người chơi phân biệt. */
 const NAMES = ["Tư", "Bảy", "Hùng", "Lan", "Sáu", "Mai", "Dũng", "Hạnh", "Tí", "Nga"];
@@ -246,7 +249,25 @@ export function restWorkers(d: Draft, content: Content): void {
 
 /* ------------------------------------------------------------- chọn việc */
 
-export type TaskKind = "use" | "gather" | "pour" | "dump" | "till" | "plant" | "break";
+/**
+ * Loại việc người làm nhận. Ba việc ruộng (`harvest`/`cure`/`water`) trước Đợt
+ * 22 gộp chung làm `"use"`, và cái gộp ấy trả giá ở hai chỗ: thẻ người làm chỉ
+ * nói được câu vô nghĩa "làm việc trên ruộng", còn lớp vẽ thì không biết nên
+ * đặt CÁI GÌ vào tay họ. `"use"` vẫn được `doWork` chấp nhận để save cũ chạy
+ * tiếp bình thường.
+ */
+export type TaskKind =
+  | "use"
+  | "harvest"
+  | "cure"
+  | "water"
+  | "gather"
+  | "pour"
+  | "dump"
+  | "till"
+  | "plant"
+  | "clear"
+  | "break";
 
 export interface Task {
   kind: TaskKind;
@@ -254,6 +275,98 @@ export interface Task {
   ty: number;
   /** Con vật cần tới, cho `gather`/`feed`. Xem `AiState.ent`. */
   ent?: number;
+}
+
+/* ------------------------------------------------------- VẬT TƯ CÒN HAY HẾT
+
+   Ba câu hỏi mà cả `pickTask`, `doWork` lẫn lời kêu thiếu hàng đều phải hỏi —
+   và trước Đợt 22 mỗi nơi tự tính một kiểu (`cropTask` tự quét `seed:`, `doWork`
+   tự `findIndex` thuốc, `pickTask` tự `some` cám). Ba bản sao của cùng một câu
+   hỏi là ba cơ hội để chúng trôi khỏi nhau — đúng bài học của chính đợt này,
+   nên rút ra dùng chung ngay trước khi nó kịp xảy ra.
+--------------------------------------------------------------------------- */
+
+/** Kho có HẠT gieo được hôm nay không (đúng mùa). */
+export function hatDungMua(s: GameState, content: Content): boolean {
+  return s.store.some(
+    (v) => v && v.id.startsWith("seed:") && cropInSeason(v.id.slice(5), s.day, content),
+  );
+}
+
+/** Kho có THUỐC chữa cây bệnh không. */
+export function coThuoc(s: GameState): boolean {
+  return s.store.some((v) => v && v.id === "item:medicine");
+}
+
+/** Kho có món KHU NÀY nhận không (và đúng món đang nằm trong máng). */
+export function monChoKhu(
+  s: GameState,
+  _content: Content,
+  pen: { feeds?: readonly string[] },
+  spot: { x: number; y: number },
+): boolean {
+  const dang = troughItem(s, spot.x, spot.y);
+  const muon = dang !== null ? [dang] : (pen.feeds ?? []);
+  return s.store.some((v) => v && muon.includes(v.id));
+}
+
+/**
+ * Vật tư đang CHẶN một việc có thật, hoặc null.
+ *
+ * Đây là câu người làm nói ra khi họ rảnh: *"tôi rảnh VÌ thiếu hàng"* — khác
+ * hẳn "kho hơi thiếu". Nên nó chỉ trả về một món khi việc cần món ấy ĐANG CÓ ở
+ * ngoài kia: có khu đói mà kho hết cám, có cây bệnh mà kho hết thuốc, có luống
+ * trống mà kho hết hạt đúng mùa.
+ *
+ * Thứ tự hỏi bám đúng thang việc: con vật chết đói được, cây bệnh thì lụi dần,
+ * còn luống trống chỉ nằm đó chờ.
+ *
+ * THUẦN — không Draft, không toast. Nơi gọi quyết định làm gì với câu trả lời.
+ */
+export function wantOf(s: GameState, content: Content): string | null {
+  // 1. CÁM: khu nào có con đang đói mà kho không còn món khu ấy nhận.
+  for (const pen of content.tiles.pens ?? []) {
+    if (pen.map !== s.mapId) continue;
+    const spot = pourSpotIn(s, content, pen);
+    if (!spot) continue;
+    if (troughStock(s, spot.x, spot.y) >= troughMax(content)) continue;
+    const doi = s.entities.some(
+      (a) =>
+        a.kind === "animal" &&
+        a.map === s.mapId &&
+        animalDef(content, a.def)?.pen === pen.id &&
+        a.animal.fed < (animalDef(content, a.def)?.fedMinutes ?? 0) * 0.5,
+    );
+    if (!doi) continue;
+    if (monChoKhu(s, content, pen, spot)) continue;
+    return (pen.feeds ?? [])[0] ?? "item:feedmix";
+  }
+
+  // 2. THUỐC: có cây bệnh mà kho hết thuốc.
+  if (!coThuoc(s) && s.tiles.some((t) => t.crop?.sick)) return "item:medicine";
+
+  // 3. HẠT: có luống cày trống mà kho hết hạt đúng mùa.
+  if (!hatDungMua(s, content)) {
+    const coLuong = s.tiles.some((t) => t.tilled && !t.crop && !t.prop && !t.b);
+    if (coLuong) return "seed";
+  }
+  return null;
+}
+
+/**
+ * Một câu gộp lời kêu của MỌI người làm, hoặc null. Suy tại chỗ, không lưu —
+ * thêm một bản gộp vào state là thêm một thứ phải đồng bộ, phải migrate, phải
+ * kiểm bất biến, cho một dòng chữ đọc xong là quên.
+ */
+export function wantSummary(s: GameState, content: Content): string | null {
+  const mon = new Set<string>();
+  for (const e of s.entities) {
+    const w = e.worker?.want;
+    if (w?.id) mon.add(w.id);
+  }
+  if (!mon.size) return null;
+  const ten = [...mon].map((id) => (id === "seed" ? "hạt đúng mùa" : itemName(id, content)));
+  return `Người làm đang chờ: ${ten.join(" · ")}`;
 }
 
 /**
@@ -382,9 +495,7 @@ export function pickTask(s: GameState, content: Content, e: Entity): Task | null
       if (troughStock(s, spot.x, spot.y) >= troughMax(content)) continue;
       if (xau(spot.x, spot.y)) continue;
       // Kho có món nào khu này nhận không (và đúng món đang nằm trong máng).
-      const dang = troughItem(s, spot.x, spot.y);
-      const muon = dang !== null ? [dang] : (pen.feeds ?? []);
-      if (!s.store.some((v) => v && muon.includes(v.id))) continue;
+      if (!monChoKhu(s, content, pen, spot)) continue;
       // Khu này có con nào cần ăn không — máng vơi mà chuồng trống thì kệ nó.
       const can = s.entities.some(
         (a) =>
@@ -486,52 +597,71 @@ function cropTask(
   pens: readonly { map: string; x: number; y: number; w: number; h: number }[] | undefined,
 ): Task | null {
   // Kho có hạt ĐÚNG MÙA nào không — không có thì đừng nhận việc gieo.
-  const coHat = s.store.some(
-    (v) => v && v.id.startsWith("seed:") && cropInSeason(v.id.slice(5), s.day, content),
-  );
+  const coHat = hatDungMua(s, content);
   const trongChuong = (x: number, y: number): boolean =>
     (pens ?? []).some(
       (p) => p.map === s.mapId && x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h,
     );
   let best: Task | null = null;
   let bestScore = Infinity;
+  /* Bậc ưu tiên KHÔNG còn là mấy con số gõ tay ở đây: nó đọc `CROP_ORDER`
+     (game/joborder.ts), CÙNG một hằng mà nút TỰ ĐỘNG của người chơi đọc. Trước
+     Đợt 22 hai bên có hai bảng riêng và đã trôi khỏi nhau — người làm tưới
+     trước gieo, người chơi gieo trước tưới. */
+  /* TRỜI ƯỚT thì TƯỚI tụt xuống cuối bảng. Sáng mai mọi ô đã cày ngoài trời tự
+     ẩm (xem `newday.ts`), nên xách bình đi tưới hôm nay là đổ nước xuống một
+     thứ trời sắp làm hộ — trong khi luống chưa gieo thì vẫn nằm đó. Nút TỰ ĐỘNG
+     của người chơi thừa hưởng cùng luật vì cả hai đọc chung `CROP_ORDER`. */
+  const troiUot = weatherDef(s, content).wet;
+  const xet = (x: number, y: number, kind: TaskKind) => {
+    if (xau(x, y)) return;
+    const bac = troiUot && kind === "water" ? CROP_ORDER.length : jobRank(kind);
+    const score = bac * 1000 + Math.abs(x - cx) + Math.abs(y - cy);
+    if (score < bestScore) {
+      bestScore = score;
+      best = { kind, tx: x, ty: y };
+    }
+  };
   for (let y = Math.max(0, cy - R); y <= Math.min(s.h - 1, cy + R); y++) {
     for (let x = Math.max(0, cx - R); x <= Math.min(s.w - 1, cx + R); x++) {
       const t = s.tiles[y * s.w + x];
       if (!t) continue;
-      let uu = -1;
-      let kind: TaskKind = "use";
+
       if (t.crop) {
         const cd = content.crops[t.crop.id];
-        if (cd && t.crop.stage >= cd.growthDays.length) uu = 0; // chín
-        else if (t.crop.sick) uu = 1; // bệnh
-        else if (t.tilled && !t.wet) uu = 2; // khô
-      } else if (t.tilled && !t.wet) {
-        uu = 2; // luống khô, chưa gieo
-      } else if (t.tilled && !t.prop && !t.b) {
-        // Luống trống đã ẩm: GIEO.
-        if (coHat) {
-          uu = 3;
-          kind = "plant";
-        }
-      } else if (!t.prop && !t.b && !t.crop && isTillable(s, content, x, y) && !trongChuong(x, y)) {
-        // Đất lô chưa cày: CÀY. `isTillable` đã kẹp trong vùng ruộng; chặn thêm
-        // khu chuồng cho chắc — sàn chuồng không phải chỗ trồng trọt.
-        uu = 4;
-        kind = "till";
+        if (cd && t.crop.stage >= cd.growthDays.length) {
+          // Thu hoạch mà không đủ chỗ cho `yieldMax` thì để đó, về kho đổ đã.
+          if (cho >= cd.yieldMax) xet(x, y, "harvest");
+        } else if (t.crop.sick) xet(x, y, "cure");
+        else if (t.tilled && !t.wet) xet(x, y, "water");
+        continue;
       }
-      if (uu < 0) continue;
-      if (xau(x, y)) continue;
-      // Thu hoạch mà không đủ chỗ cho `yieldMax` thì để đó, về kho đổ đã.
-      if (uu === 0 && t.crop) {
-        const cd = content.crops[t.crop.id];
-        if (cd && cho < cd.yieldMax) continue;
+
+      /* LUỐNG ĐÃ CÀY: gieo VÀ tưới là hai ứng viên RIÊNG, không loại trừ nhau.
+         Trước Đợt 22 đây là một chuỗi `else if` mà nhánh tưới đứng trước, nên
+         một luống cày khô chưa gieo luôn bị đọc thành "đi tưới" — và người làm
+         KHÔNG BAO GIỜ gieo được trên luống khô, trong khi người chơi thì gieo
+         được (`canUseAt` không đòi `wet`). Hai luật khác nhau cho cùng một động
+         từ, im lặng suốt nhiều đợt. */
+      if (t.tilled && !t.prop && !t.b) {
+        if (coHat) xet(x, y, "plant");
+        if (!t.wet) xet(x, y, "water");
+        continue;
       }
-      const score = uu * 1000 + Math.abs(x - cx) + Math.abs(y - cy);
-      if (score < bestScore) {
-        bestScore = score;
-        best = { kind, tx: x, ty: y };
+      if (t.tilled && !t.wet) {
+        xet(x, y, "water");
+        continue;
       }
+
+      // CỎ DẠI mọc lan vào lô: dọn đi để trả lại một ô đất cày được.
+      if (t.prop) {
+        if (cho >= 2 && donDuoc(s, content, x, y)) xet(x, y, "clear");
+        continue;
+      }
+
+      // Đất lô chưa cày: CÀY. `isTillable` đã kẹp trong vùng ruộng; chặn thêm
+      // khu chuồng cho chắc — sàn chuồng không phải chỗ trồng trọt.
+      if (!t.b && !t.crop && isTillable(s, content, x, y) && !trongChuong(x, y)) xet(x, y, "till");
     }
   }
   return best;
@@ -552,6 +682,8 @@ export interface WorkerCard {
   carry: number;
   carried: number;
   carryMax: number;
+  /** Vật tư đang chờ người chơi bổ sung, hoặc null. */
+  want: string | null;
   /** Ngày trả lương kế tiếp. */
   payDay: number;
   wage: number;
@@ -578,15 +710,27 @@ export function workerCard(e: Entity, content: Content): WorkerCard | null {
     dump: "về kho đổ hàng",
     pour: "đi đổ máng",
     gather: "đi thu sản phẩm",
-    use: "làm việc trên ruộng",
+    harvest: "đi thu hoạch",
+    cure: "đi chữa cây bệnh",
+    water: "đi tưới",
     till: "đi cày",
     plant: "đi gieo hạt",
+    clear: "đi dọn cỏ trong lô",
     break: "đi kiếm gỗ đá",
+    // việc vặt lúc rảnh — xem `idleStep` trong workerai.ts
+    patrol: "đi một vòng nông trại",
+    chat: "đứng nói chuyện",
+    pet: "vuốt ve con vật",
+    unload: "bốc xếp cho xe",
+    // save cũ: ba việc ruộng từng gộp làm một, không nói rõ hơn được
+    use: "làm việc trên ruộng",
   };
   const viec = e.ai.job ? (ten[e.ai.job] ?? "làm việc") : null;
   const doing =
     e.ai.phase === "rest"
       ? "Đang nghỉ lấy sức"
+      : e.ai.phase === "chore" && viec
+        ? `Rảnh việc — đang ${viec}`
       : viec
         ? (e.ai.phase === "walk" ? `Đang ${viec}` : `Đang ${viec}`)
         : deo >= cfg.carryMax
@@ -601,6 +745,7 @@ export function workerCard(e: Entity, content: Content): WorkerCard | null {
     carry: cfg.carryMax > 0 ? Math.max(0, Math.min(1, deo / cfg.carryMax)) : 0,
     carried: deo,
     carryMax: cfg.carryMax,
+    want: w.want ? (w.want.id === "seed" ? "hạt đúng mùa" : itemName(w.want.id, content)) : null,
     payDay: w.paidDay + cfg.wageEveryDays,
     wage: cfg.wage,
   };

@@ -105,13 +105,17 @@ function dem(s: GameState, content: Content): boolean {
 }
 
 /**
- * VÒNG TUẦN của con chó: tâm mỗi khu đáng canh trên bản đồ đang chơi.
+ * VÒNG TUẦN: tâm mỗi khu đáng canh trên bản đồ đang chơi.
+ *
+ * Con chó dùng nó để đi tuần bắt sâu bọ; từ Đợt 22 NGƯỜI LÀM rảnh việc cũng đi
+ * đúng vòng ấy thay vì đứng đực. Một danh sách chặng, hai kẻ đi — nếu tách hai
+ * bản thì "chỗ đáng để mắt tới" sẽ có hai định nghĩa trôi khỏi nhau.
  *
  * Lô ruộng và khu chăn nuôi — đúng những chỗ sâu bọ tìm tới. Thứ tự lấy theo
  * thứ tự khai trong content nên nó cố định, và cả vòng tính lại mỗi lần chứ
  * không nhớ: content đổi qua OTA thì chặng mới có hiệu lực ngay.
  */
-function vongTuan(s: GameState, content: Content): { x: number; y: number }[] {
+export function vongTuan(s: GameState, content: Content): { x: number; y: number }[] {
   const ra: { x: number; y: number }[] = [];
   for (const z of content.tiles.zones ?? [])
     if (z.map === s.mapId && z.kind === "farm")

@@ -337,6 +337,16 @@ body[data-hand="left"] .hud-top {
 .goal-chip.collapsed {
   padding-right: 8px;
 }
+.goal-chip.want {
+  cursor: default;
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--edge));
+}
+.goal-chip.want #want {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .goal-chip.flash {
   animation: goal-flash 0.9s ease-out;
 }

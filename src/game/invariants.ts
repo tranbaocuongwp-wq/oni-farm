@@ -219,6 +219,15 @@ export function checkInvariants(state: GameState, content: Content): string[] {
           if (!Array.isArray(en.worker.carry)) e.push(`người làm ${en.id}: carry phải là mảng`);
           if (en.worker.paidDay > state.day)
             e.push(`người làm ${en.id}: paidDay ${en.worker.paidDay} lớn hơn ngày hiện tại`);
+          /* Lời kêu thiếu hàng: cùng lý do với `paidDay` — một cái mốc ngày ở
+             tương lai là dấu hiệu save bị sửa tay hoặc migrate hụt. */
+          const dangCho = en.worker.want;
+          if (dangCho !== undefined) {
+            if (typeof dangCho !== "object" || dangCho === null || typeof dangCho.id !== "string" || !dangCho.id)
+              e.push(`người làm ${en.id}: want.id phải là chuỗi không rỗng`);
+            else if (!Number.isFinite(dangCho.day) || dangCho.day > state.day)
+              e.push(`người làm ${en.id}: want.day ${dangCho.day} lớn hơn ngày hiện tại`);
+          }
         }
       } else if (en.kind === "vehicle") {
         if (!content.vehicles[en.def])

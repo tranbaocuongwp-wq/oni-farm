@@ -30,6 +30,7 @@ import { currentSeason, dayOfSeason, yearOf } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
 import { bestGoal } from "../game/progression.ts";
+import { wantSummary } from "../game/workers.ts";
 import type { AnimalStats } from "../game/animals.ts";
 import type { WorkerCard } from "../game/workers.ts";
 
@@ -150,6 +151,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       <button class="goal-chip" id="goal-box" type="button" aria-label="Mục tiêu hiện tại">
         <i class="ic" data-ic="goal"></i><span id="goal">—</span>
       </button>
+      <div class="goal-chip want" id="want-box" hidden aria-live="polite">
+        <i class="ic" data-ic="bag"></i><span id="want">—</span>
+      </div>
       <div id="toasts" aria-live="polite"></div>
     </div>
     <div class="hud-mid">
@@ -199,6 +203,8 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elWaterLine = $("hud-water-line");
   const elGoal = $("goal");
   const elGoalBox = $("goal-box");
+  const elWant = $("want");
+  const elWantBox = $("want-box");
   const elWx = $("hud-wx");
   const elWxName = $("hud-wx-name");
   const elWxNext = $("hud-wx-next");
@@ -222,6 +228,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const prev = {
     money: -1, day: -1, clock: "", night: false, energy: -1, water: -1, cap: -1,
     goal: "", hotbar: "", hint: "", bag: -1, wx: "", sel: "",
+    want: null as string | null,
   };
 
   /* ---- tên thứ đang cầm ------------------------------------------------
@@ -426,6 +433,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
           `<span class="mbar ${st.energy < 0.2 ? "bad" : ""}"><i style="width:${Math.round(st.energy * 100)}%"></i></span></div>` +
           `<div class="mrow" title="Đang đeo ${st.carried}/${st.carryMax}"><i class="ri" data-ic="bag"></i>` +
           `<span class="mbar ${st.carry >= 1 ? "ok" : ""}"><i style="width:${Math.round(st.carry * 100)}%"></i></span></div>` +
+          (st.want ? `<div class="mnote bad">Đang chờ: ${st.want}</div>` : "") +
           `<div class="mnote">${st.job} · lương ${st.wage}đ ngày ${st.payDay}</div>`;
         for (const el of elAnimal.querySelectorAll<HTMLElement>("i.ri")) {
           const src = atlas.ui(el.dataset["ic"] as UiIcon);
@@ -614,6 +622,17 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         elWater.textContent = `${water}/${cap}`;
         elWaterLine.classList.toggle("warn", cap > 0 && water <= cap * 0.15);
         elWaterLine.hidden = cap <= 0;
+      }
+
+      /* LỜI KÊU THIẾU HÀNG của người làm — một chip riêng, không nhét chung
+         với chip mục tiêu: mục tiêu là "đi tới đâu", còn đây là "đang kẹt vì
+         cái gì". Chồng hai loại tin vào một chỗ thì cái nào cũng bị bỏ qua.
+         Suy tại chỗ mỗi khung (`wantSummary` là hàm thuần), không lưu gì. */
+      const want = wantSummary(s, content);
+      if (want !== prev.want) {
+        prev.want = want;
+        elWant.textContent = want ?? "";
+        elWantBox.hidden = !want;
       }
 
       const goal = currentGoal(s, content);

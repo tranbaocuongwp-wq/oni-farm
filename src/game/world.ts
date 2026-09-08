@@ -156,6 +156,70 @@ export function youngGrassProp(content: Content): PropDef | null {
   return null;
 }
 
+/**
+ * Bao đóng những vật thể MỌC ĐƯỢC QUA ĐÊM — cỏ dại, bụi, cây con và mọi thứ
+ * chúng lớn lên thành.
+ *
+ * Vì sao cần: `newday.ts` cho cỏ lan sang ô trống và cho luống bỏ hoang tự mọc
+ * cỏ lên chính nó, mà nó KHÔNG loại trừ lô ruộng. Cộng với `isTillableTile` đòi
+ * `prop === null`, một lô bỏ bê vài đêm là một lô chết vĩnh viễn — không ai dọn,
+ * vì người làm chỉ được phép dọn trong rừng và nút TỰ ĐỘNG cố ý không dọn gì.
+ *
+ * Tập này trả lời câu "cái gì TỰ nó mọc ra": bắt đầu từ cỏ dại và cỏ non, cộng
+ * mọi vật thể có `grow` hoặc `spread`, rồi đóng theo `grow.to` / `spread.into` /
+ * `becomes`. Rút từ content nên OTA đổi bộ cây là luật tự đúng theo.
+ *
+ * Cache theo `Content` như `zonesOf` — nó chỉ đổi khi content đổi.
+ */
+const mocQuaDem = new WeakMap<Content, Set<string>>();
+export function propsMocDuoc(content: Content): Set<string> {
+  const co = mocQuaDem.get(content);
+  if (co) return co;
+  const ra = new Set<string>();
+  const them = (id: string | undefined | null) => {
+    if (!id || ra.has(id)) return;
+    if (!content.props[id]) return;
+    ra.add(id);
+    const p = content.props[id]!;
+    them(p.grow?.to);
+    them(p.spread?.into);
+    them(p.becomes);
+  };
+  them(weedProp(content)?.id);
+  them(youngGrassProp(content)?.id);
+  for (const id of content.propOrder) {
+    const p = content.props[id];
+    if (p?.grow || p?.spread) them(id);
+  }
+  mocQuaDem.set(content, ra);
+  return ra;
+}
+
+/**
+ * Ô này có phải CỎ DẠI TRONG LÔ RUỘNG — thứ dọn đi để trả lại đất cày được?
+ *
+ * Ba vế, và vế nào cũng cần thiết:
+ *   · trong `zones kind:"farm"` — ngoài lô là cảnh quan, không ai được đụng;
+ *   · NHỔ ĐƯỢC BẰNG TAY KHÔNG (`!def.tool`) — cây và đá cần rìu, cần cuốc chim,
+ *     và chúng vẫn là CHẶT/ĐẬP như xưa, kể cả khi đứng giữa lô. Đây cũng là vế
+ *     loại luôn hai vật thể `portable` duy nhất của content (HÒN ĐÁ và KHÚC GỖ)
+ *     — đúng hai thứ người chơi vác đặt xuống được. Vẫn hỏi `portable` một lần
+ *     nữa cho chắc: content sau này có thể thêm một vật vác được mà không cần
+ *     công cụ, và lúc ấy nó vẫn phải là đồ của người chơi.
+ *   · thuộc bao đóng mọc-qua-đêm — tức nó tới đây bằng cách TỰ MỌC.
+ *
+ * Ba vế cộng lại là câu trả lời cho nỗi sợ đã ghi ở `workers.ts` ("đừng dọn thứ
+ * người chơi cố ý chừa").
+ */
+export function donDuoc(state: GameState, content: Content, x: number, y: number): boolean {
+  const t = tileAt(state, x, y);
+  if (!t?.prop) return false;
+  const def = propDef(content, t.prop);
+  if (!def || !def.hits || def.tool || def.portable) return false;
+  if (!propsMocDuoc(content).has(t.prop)) return false;
+  return inZone(state, content, "farm", x, y);
+}
+
 /** Vật thể "cây gỗ nhỏ" (bảng gỡ lỗi rắc cây): cần rìu, cao một ô, phá là hết. */
 export function saplingProp(content: Content): PropDef | null {
   for (const id of content.propOrder) {

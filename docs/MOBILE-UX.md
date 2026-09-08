@@ -271,6 +271,7 @@ một nhánh `Press`, một dòng `LABEL`, một nhánh `execute`, kèm test.
 | Autotile ở lớp vẽ | `atlas.shore[side][frame]` cho nước giáp đất; `atlas.soilEdge[side]` cho đất cày giáp ô chưa cày; `atlas.voidOut/voidIn` ngoài biên. State không lưu gì. |
 | Icon HUD | `atlas.ui(name)` 12×12: coin, day, sun, moon, energy, water, goal. |
 | Con trỏ & dấu đích | `cursorOk/cursorNo` (ô ngắm) khác `navMark[3]` (đích đang đi) để phân biệt "sẽ làm ở đó" và "sẽ tới đó". `DrawOptions.target` vẽ `cursorOk` mờ ở ô nút chính sẽ tác động khi nó khác ô ngắm. |
+| Người làm | Dùng **nguyên** bảy khung của nhân vật chính, kể cả khung 5 (chạm) và 6 (giơ) — hai khung ấy đã được cache sẵn cho mọi bộ đồ từ lâu nhưng tới Đợt 22 lớp vẽ mới gọi tới. Pha vung suy từ `ai.until / WORK_MINUTES` (`workFrame`, hàm thuần có test): đúng **ba nấc**, bậc thang chứ không mượt như người chơi — làm mượt đòi thêm một đồng hồ số thực vào save cho một việc trang trí. Công cụ suy từ VIỆC (`heldForJob`), không từ hotbar: họ không có hotbar. Đồ đang đeo vẽ **trên đầu** bằng `atlas.icon` — "bưng bê" và "vác về kho" phục vụ bằng đúng một cơ chế; lúc ấy bong bóng đẩy lên một nấc. Hạt bắn khi khung đổi sang CHẠM, do renderer tự bắt bằng một `Map` theo `e.id` (không vào save, dọn theo danh sách thực thể mỗi khung). **Không có tiếng** — xem `docs/TIEN-DO.md`. |
 | Xe | 32×32 (`VEHICLE_SIZE`), thân 24×13 — một rưỡi ô, to hơn hẳn người; hộp va chạm vẫn 13×11 (content) nên đường 1 ô vẫn đi được. Hai khung bánh theo `e.anim`. Ba dáng suy từ content: `sea` → thuyền (buồm, nhấp nhô ±1px theo `timeSec`), có `buyBonus` → sàn phẳng chở kiện, còn lại thùng kín. Vẽ một hình hướng phải rồi xoay/lật. Neo: `px = e.x − w/2`, `py = e.y − h/2 − 5`. |
 | Cầu (`prop.bridge`) | `atlas.propMask[id]` 16 biến thể theo cạnh có LAN CAN (`bridgeRail` trong draw.ts: ô kề là nước và không cùng cầu; đầu cầu tiếp đất thì mở). Lan can cạnh DƯỚI là `atlas.propOver[id]`, đẩy vào `items` với `base = y·16 + 16 + 5` để vẽ **đè lên** người/xe đứng trên ô — lần đầu `items` có một lớp phủ sau actor. |
 | Gió (`weather.wind`, chỉ lớp vẽ) | prop có `sway` (cây 1, bụi 0,7, cỏ 0,4–0,8) lắc theo sin lệch pha theo ô; mưa nghiêng `roi × wind × 0,4`; lá bay (`burst "blow"` từ một tán cây mỗi 0,6s khi wind ≥ 0,5, hạt chịu lực ngang `windX`); mặt nước gợn nhanh hơn; vũng nước trên lối đi (`atlas.puddle`, băm toạ độ); giọt bắn dưới chân người đi trong mưa. Tất cả tắt với `reduceMotion`, không vào state. |
@@ -311,7 +312,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 147 kịch bản sim (146 nút một nguồn · 147 thời tiết đổi hành vi · 37 hint · 72 tay cầm …) + OTA
+npm run test:all       # typecheck + 158 kịch bản sim (148 một thang việc · 151 việc vặt · 154 đòi vật tư · 157 động tác người làm …) + OTA
 npm run build
 ```
 
@@ -323,6 +324,8 @@ Những thứ phải đúng ở mọi khổ:
 - [ ] nút hành động đổi nhãn CÀY → GIEO → TƯỚI khi đổi hotbar trên cùng một ô
 - [ ] cầm cám đứng ngoài chuồng gà: nút ghi ĐỔ MÁNG, dòng dưới "Cách N ô", trên bản đồ có dấu mờ ở cái máng; bấm là đi tới máng rồi đổ
 - [ ] ép Bão bằng bảng gỡ lỗi: mưa nghiêng, cây lay, bò trong chuồng co ro, người làm đứng trước kho, sáng ra toast "xe và thuyền không ghé"
+- [ ] thuê hai người làm: thấy họ giơ cuốc rồi bổ xuống, đội đồ trên đầu khi mang về kho, đứng quay mặt vào nhau có bong bóng ba chấm
+- [ ] dọn sạch hạt khỏi kho: bong bóng chấm hỏi đỏ trên đầu người làm + chip vàng "Người làm đang chờ: hạt đúng mùa" dưới chip mục tiêu
 - [ ] hotbar 10 ô + nút balo vừa một hàng ở 360px; kéo hạt từ hotbar xuống balo và ngược lại
 - [ ] chạm kép trên canvas, véo hai ngón: `visualViewport.scale` vẫn 1
 - [ ] hotbar không đè lên cụm nút; ngang thì hotbar không chui dưới nút

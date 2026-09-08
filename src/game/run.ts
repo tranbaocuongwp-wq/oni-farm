@@ -64,6 +64,7 @@ export type RunTarget =
 const LABEL: Record<RunJob, string> = {
   till: "CÀY",
   pull: "NHỔ",
+  clear: "DỌN CỎ",
   plant: "GIEO",
   water: "TƯỚI",
   cure: "CHỮA",

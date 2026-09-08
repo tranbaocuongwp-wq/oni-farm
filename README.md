@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 147 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 158 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -162,6 +162,7 @@ src/
   core/        ⭐ LÀN CHẬM  — engine, store, save, OTA; phải phát hành mới đổi được
   game/        ⚠️ KHÔNG chạm DOM — logic thuần, chạy thẳng trong Node để test
   game/hint.ts ⚠️ `pressPlan`: MỘT nguồn cho cả nhãn lẫn cú bấm của nút chính — thuần, có test
+  game/joborder.ts ⚠️ HẰNG thứ tự việc ruộng — nút TỰ ĐỘNG và người làm cùng đọc, không import gì
   art/         sinh toàn bộ pixel art bằng code (viền, 6 khung nhân vật, autotile bờ/mép, icon HUD)
   render/      vẽ canvas, chỉ ĐỌC state; hạt hiệu ứng + lấp lánh + viền rừng là trang trí, không vào state
   ui/          HUD + modal + tutorial bằng DOM
@@ -1005,6 +1006,70 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 22: một bộ não cho cả người làm lẫn nút TỰ ĐỘNG (core 1.49 · content 1.49)
+
+Cường: *"tăng trí tuệ cho các NPC, để họ tự chủ bao quát hầu hết tất cả các công việc trong nông
+trại… tránh tình trạng đứng im quá lâu quá nhiều"*, và chốt thêm: *"khi sử dụng tính năng tự động
+làm thì cũng phải kế thừa trí thông minh này."* Câu chốt ấy đổi hình dạng cả đợt — mọi thứ dưới đây
+phải nằm ở chỗ **cả hai bên cùng đọc**.
+
+#### Bốn lỗi tìm được trước khi thêm được một tính năng nào
+
+Khảo sát định mở đường cho tính năng mới, nhưng va phải bốn thứ hỏng sẵn:
+
+1. **Người làm KHÔNG BAO GIỜ gieo được trên luống khô.** `cropTask` là một chuỗi `else if` mà nhánh
+   "đã cày mà chưa ẩm → tưới" đứng trước, nên nó nuốt luôn mọi luống trống khô. Người chơi thì gieo
+   được — `canUseAt` không hề đòi `wet`. Hai luật khác nhau cho cùng một động từ, im lặng nhiều đợt.
+2. **Hai thang việc đã trôi khỏi nhau.** Nút TỰ ĐỘNG gieo trước tưới, người làm tưới trước gieo —
+   đúng thứ `docs/LOI-CHOI.md` cấm ("thứ tự ưu tiên là CỐ ĐỊNH, người chơi phải đoán được"), và hai
+   tài liệu còn ghi rằng chúng "dùng chung một hàm". Chúng chưa bao giờ dùng chung gì cả.
+3. **Lô bỏ bê là lô chết vĩnh viễn.** Cỏ dại lan vào lô mỗi đêm, luống bỏ hoang tự mọc cỏ lên chính
+   nó, mà ô có vật thể thì không cày được — và không ai được phép dọn: người làm chỉ dọn trong rừng,
+   nút TỰ ĐỘNG cố ý không dọn gì.
+4. **Hết vật tư là im lặng tuyệt đối.** Kho ĐẦY thì có báo; kho THIẾU thì không — mà thiếu mới là
+   thứ người chơi sửa được trong một phút.
+
+#### Sửa bằng cách rút cái QUYẾT ĐỊNH ra, không phải viết chung một hàm
+
+`CROP_ORDER` trong `src/game/joborder.ts` — một module **không import gì cả**, và điều đó là bắt
+buộc: `hint.ts` đã import `workers.ts`, nên đặt hằng ở một trong hai bên là tạo vòng import. Hai hàm
+quét vẫn riêng (một bên đo từ nhân vật, một bên đo từ chỗ người làm đứng), nhưng thứ tự thì chỉ còn
+một nguồn. Đó mới là bài học: không phải "viết chung một hàm" mà là rút cái **bảng quyết định** ra.
+
+#### Dọn cỏ: lằn ranh rút từ content, không đoán
+
+Việc mới `clear` là một `UseKind` thật, nên nút TỰ ĐỘNG có nó miễn phí. Nhưng nó phải không bao giờ
+đụng cảnh quan người chơi cố ý chừa — nỗi sợ đã ghi thành chú thích trong `workers.ts` từ lâu. Lằn
+ranh: **nhổ được bằng tay không** + **tự mọc qua đêm** + **trong lô ruộng**. Ba vế cộng lại loại đúng
+hai vật thể `portable` duy nhất của content — hòn đá và khúc gỗ — tức đúng hai thứ người chơi vác đặt
+xuống được. Không viết cứng một id nào; OTA đổi bộ cây thì luật tự đúng theo.
+
+#### Cái "đứng ngơ" đang trợ cấp ngân sách cho đàn bò
+
+Đây là chỗ suýt hỏng. Ngân sách A\* (2 suất mỗi bước) dùng **chung** cho cả đàn vật nuôi, xe và người
+làm. Một người làm hết việc đứng im 2–6 phút game thì **không tiêu một suất nào** — nên thay nó bằng
+"đi tuần" là lấy đúng khoản trợ cấp ấy đi, và triệu chứng hiện ra ở chỗ không ai ngờ: con vật chậm
+được ăn. Nên việc vặt chia hai hạng: nói chuyện / vuốt ve / bốc xếp **không tốn một lần tìm đường
+nào** (chỉ xảy ra khi đối tượng đã ở ngay cạnh), còn đi tuần chịu một cái nguội rộng gấp bốn. Kịch
+bản 151 khoá trần số lần gọi A\*, 152 đo mốc con vật đầu tiên ăn được.
+
+Xã giao là **đơn phương**: mỗi người tự quyết, không ghi gì lên người kia; nếu người kia cũng rảnh
+thì chính luật ấy khiến họ cũng quay lại nhìn. Mọi cơ chế "A chọn B rồi đi tới B" đều đẻ ra hai bệnh
+— B đi mất giữa chừng, hoặc hai người đổi chỗ cho nhau mãi.
+
+#### Nhìn thấy họ làm việc
+
+Hai khung **giơ** và **chạm** đã được bộ sinh hình dựng và cache sẵn cho mọi bộ đồ từ lâu, chỉ là lớp
+vẽ chưa bao giờ yêu cầu chúng cho người làm. Giờ có: giơ cuốc rồi bổ xuống, cầm đúng đồ nghề theo
+việc được giao (không theo hotbar — họ không có hotbar), đội món đang đeo trên đầu, hạt bụi bay khi
+nhát chạm đất. Cố ý **không có tiếng**: ba người mỗi người một nhát mỗi 1,5 phút game sẽ thành xưởng
+rèn, và tiếng "cuốc" vốn là phản hồi cho cú bấm của người chơi.
+
+Lời kêu thiếu hàng đi ba đường: bong bóng chấm hỏi trên đầu, dòng trên thẻ người làm, và một chip
+vàng ở HUD gộp lời cả đội. Báo đúng một lần mỗi món; hàng về thì chip tự tắt — cái chip biến mất
+chính là phản hồi. **Không ai tiêu một đồng nào của người chơi**, kể cả nút TỰ ĐỘNG: nó nói "hết hạt
+đúng mùa" thay vì tắt lặng lẽ.
 
 ### Đợt 21: nút ngữ cảnh một nguồn, thời tiết có hành vi, cầu lan can và xe to (core 1.48 · content 1.48)
 
