@@ -256,6 +256,39 @@ function surface(w: number, h: number): Surface {
 /** Bước lưới HD tính bằng ĐƠN VỊ CŨ — khoảng cách giữa hai pixel HD kề nhau. */
 const Q = 1 / ART;
 
+/* ---------------------------------------------------------------------------
+   LẬT và XOAY một sprite đã vẽ xong.
+
+   Ba chỗ trong file này từng tự viết phép lật bằng `translate`/`scale` với toạ
+   độ ĐƠN VỊ CŨ — mà `translate` ăn PIXEL ẢNH. Từ Đợt 24 hai hệ ấy lệch nhau
+   `ART` lần, nên mọi con vật quay TRÁI bị cắt mất một nửa, và xe quay trái/lên/
+   xuống thì trôi khỏi ô. Gom về hai hàm để phép nhân `ART` chỉ tồn tại một chỗ
+   và không ai phải nhớ nó nữa.
+--------------------------------------------------------------------------- */
+
+/** Lật ngang. `w`,`h` là cỡ ô tính bằng ĐƠN VỊ CŨ. */
+function latNgang(src: CanvasImageSource, w: number, h: number): HTMLCanvasElement {
+  const m = surface(w, h);
+  m.g.save();
+  m.g.translate(w * ART, 0);
+  m.g.scale(-1, 1);
+  m.g.drawImage(src, 0, 0);
+  m.g.restore();
+  return m.c;
+}
+
+/** Xoay quanh tâm ô vuông cạnh `w` (đơn vị cũ), `goc` tính bằng radian. */
+function xoayQuanhTam(src: CanvasImageSource, w: number, goc: number): HTMLCanvasElement {
+  const m = surface(w, w);
+  const nua = (w * ART) / 2;
+  m.g.save();
+  m.g.translate(nua, nua);
+  m.g.rotate(goc);
+  m.g.drawImage(src, -nua, -nua);
+  m.g.restore();
+  return m.c;
+}
+
 const pick = <T,>(arr: readonly T[], r: number): T => arr[Math.floor(r * arr.length) % arr.length]!;
 
 /**
@@ -3726,7 +3759,9 @@ function makeSeedIcon(def: CropDef, ripe?: HTMLCanvasElement): HTMLCanvasElement
     /* Cây cao 24px nhưng phần có vẽ nằm ở ĐÁY. Lấy 12px dưới cùng rồi ép vào ô
        8×8: nếu lấy cả 24px thì hai phần ba nhãn là khoảng trống. */
     s.g.imageSmoothingEnabled = false;
-    s.g.drawImage(ripe, 2, ripe.height - 12, 12, 12, 4, 5, 8, 8);
+    /* `s.g` là canvas THẬT nên MỌI toạ độ ở đây tính bằng pixel ẢNH — cả nguồn
+       lẫn đích. Viết đích theo đơn vị cũ thì hình cây co lại còn một góc nhãn. */
+    s.g.drawImage(ripe, 2 * ART, ripe.height - 12 * ART, 12 * ART, 12 * ART, 4 * ART, 5 * ART, 8 * ART, 8 * ART);
   } else {
     s.disc(8, 9, 2, def.art.fruit);
     s.px(7, 8, def.art.fruitDark);
@@ -4299,9 +4334,12 @@ function khoi(
   sang: string,
   toi: string,
 ): void {
+  /* Vành tối chỉ dày MỘT pixel HD. Bản cũ dày 0,8 đơn vị cũ — ở HD thành ra
+     một cái viền dày gần hai pixel bọc quanh mọi khối, và cả con vật trông như
+     được cắt dán từ bìa cứng. */
   s.ell(cx, cy, rx, ry, toi);
-  s.ell(cx, cy - 0.5, Math.max(0.6, rx - 0.8), Math.max(0.6, ry - 0.7), giua);
-  s.ell(cx - rx * 0.26, cy - ry * 0.44, Math.max(0.5, rx * 0.46), Math.max(0.5, ry * 0.3), sang);
+  s.ell(cx, cy - Q, Math.max(0.6, rx - Q), Math.max(0.6, ry - Q), giua);
+  s.ell(cx - rx * 0.28, cy - ry * 0.46, Math.max(0.5, rx * 0.44), Math.max(0.5, ry * 0.3), sang);
 }
 
 /** `huddle` = co ro trong mưa: đứng, thân hạ một pixel, mắt nhắm — không phải nằm ngủ. */
@@ -4345,15 +4383,8 @@ function makeAnimal(
   else if (art.form === "critter") ve_thu_nho(side);
   else ve_bon_chan(side);
 
-  const done = outline(s);
-  if (!flip) return done.c;
-  const m = surface(TILE, TILE);
-  m.g.save();
-  m.g.translate(TILE, 0);
-  m.g.scale(-1, 1);
-  m.g.drawImage(done.c, 0, 0);
-  m.g.restore();
-  return m.c;
+  const done = outline(s, P.outline, 1);
+  return flip ? latNgang(done.c, TILE, TILE) : done.c;
 
   /* ---------------------------------------------------------------- bốn chân
      Bò, dê, lợn, cừu, chó. Nhìn NGANG là dáng đọc được nhiều nhất nên nó được
@@ -4376,8 +4407,17 @@ function makeAnimal(
          lên, các loài khác thõng xuống rồi cong nhẹ ra sau. */
       const tx = cx - rx - 0.4;
       if (!art.tailUp) {
-        s.vline(Math.round(tx), Math.round(cy - ry * 0.4), Math.max(2, Math.round(h * 0.7)), xa);
-        s.px(Math.round(tx) - 1, Math.round(cy + ry * 0.9), toi);
+        const dai = Math.max(2, h * 0.75);
+        for (let i = 0; i <= dai; i += Q) {
+          const u = i / dai;
+          const x = tx - u * u * 1.2; // cong nhẹ ra sau
+          s.dot(x, cy - ry * 0.4 + i, xa);
+          s.dot(x + Q, cy - ry * 0.4 + i, shade(xa, 1.25));
+        }
+        // chùm lông cuối đuôi
+        for (let dx = -0.75; dx <= 0.5; dx += Q)
+          for (let dy = 0; dy < 1; dy += Q)
+            s.dot(tx - 1.2 + dx, cy - ry * 0.4 + dai + dy, toi);
       }
 
       // chân SAU (ở xa): tối hơn, vẽ trước nên bị thân che một phần
@@ -4455,38 +4495,39 @@ function makeAnimal(
     }
 
     // ---- tai: nêm nhỏ ở đỉnh-sau của đầu
-    const tai = Math.max(1, Math.round(hs * 0.5));
-    if (ngang) {
-      s.vline(Math.round(hx - hs * 0.55), Math.round(hy - hs * 0.75 - tai), tai, toi);
-    } else {
-      for (const k of [-1, 1])
-        s.vline(Math.round(hx + k * hs * 0.7), Math.round(hy - hs * 0.7 - tai), tai, toi);
-    }
+    const tai = Math.max(0.8, hs * 0.5);
+    /* Tai là cái NÊM thon, không phải một vạch dọc: vạch dọc ở HD đọc ra là
+       một cái sừng nhỏ, và con bò hoá ra có bốn sừng. */
+    const veTai = (tx: number, ty: number, nghieng: number) => {
+      for (let i = 0; i <= tai; i += Q) {
+        const co = i / tai;
+        const w = (1 - co) * 0.45 + 0.2;
+        const x = tx + nghieng * i * 0.45;
+        for (let dx = -w; dx <= w; dx += Q) s.dot(x + dx, ty - i, toi);
+        s.dot(x, ty - i, shade(toi, 1.35));
+      }
+    };
+    if (ngang) veTai(hx - hs * 0.5, hy - hs * 0.7, -1);
+    else for (const k of [-1, 1]) veTai(hx + k * hs * 0.7, hy - hs * 0.62, k);
 
     // ---- sừng
     const horn = Math.max(0, Math.min(3, Math.round(art.horn ?? 0)));
     if (horn > 0) {
       /* Sừng VUỐT RA SAU, không dựng thẳng: sừng thẳng đứng ở 16px đọc ra là
          cái ăng-ten. Mỗi nấc `horn` thêm một đốt lùi về sau và lên trên. */
-      if (ngang) {
-        let sx = Math.round(hx + hs * 0.2);
-        let sy = Math.round(hy - hs * 0.9);
-        for (let i = 0; i <= horn; i++) {
-          s.px(sx, sy, art.accent);
-          sx -= 1;
-          sy -= i === 0 ? 1 : 0;
+      const veSung = (sx0: number, sy0: number, huong: number) => {
+        const n = Math.round(horn * ART) + 2;
+        for (let i = 0; i <= n; i++) {
+          const u = i / n;
+          const x = sx0 + huong * u * (horn * 0.62 + 0.5);
+          const y = sy0 - Math.sin(u * 1.9) * (horn * 0.45 + 0.5);
+          s.dot(x, y, art.accent);
+          if (u < 0.5) s.dot(x, y + Q, shade(art.accent, 0.7));
+          else s.dot(x, y - Q, lighten(art.accent));
         }
-      } else {
-        for (const k of [-1, 1]) {
-          let sx = Math.round(hx + k * hs * 0.5);
-          let sy = Math.round(hy - hs * 0.85);
-          for (let i = 0; i <= horn; i++) {
-            s.px(sx, sy, art.accent);
-            sx += k;
-            sy -= i === 0 ? 1 : 0;
-          }
-        }
-      }
+      };
+      if (ngang) veSung(hx + hs * 0.2, hy - hs * 0.85, -1);
+      else for (const k of [-1, 1]) veSung(hx + k * hs * 0.45, hy - hs * 0.8, k);
     }
 
     if (nam || coRo) mat_nham(hx, hy, hs, ngang);
@@ -4662,34 +4703,51 @@ function makeAnimal(
     const lift = (i: number) => (frame === 0 || frame === 2 ? 0 : (i + pha + frame) % 2);
     [x1, x2].forEach((x, i) => {
       const l = lift(i);
-      s.rect(Math.round(x - (day - 1) / 2), top - l, day, len + l, mau);
-      // móng: hàng cuối tối hẳn
-      s.rect(Math.round(x - (day - 1) / 2), top + len - l - 1, day, 1, shade(mau, 0.6));
+      const y0 = top - l;
+      const h = len + l;
+      /* Chân THON về móng và có nét sáng dọc mép trước. Bản cũ là một hình chữ
+         nhật đặc dày hai đơn vị cũ (bốn pixel HD) tô một màu — ở HD nó đọc ra
+         bốn cái cột xi măng dưới bụng con bò, không ra bốn cái chân. */
+      for (let dy = 0; dy < h; dy += Q) {
+        const co = dy / Math.max(Q, h);
+        // `day` là bề ngang ĐẦY ĐỦ của chân, nên nửa bề ngang là `day/2`.
+        const w = day * (0.31 - co * 0.08);
+        for (let dx = -w; dx <= w; dx += Q) s.dot(x + dx, y0 + dy, mau);
+        s.dot(x - w, y0 + dy, lighten(mau));
+      }
+      // móng: hai hàng cuối tối hẳn, rộng ra một chút
+      const mw = day * 0.34;
+      for (let dx = -mw; dx <= mw; dx += Q) {
+        s.dot(x + dx, y0 + h - Q, shade(mau, 0.5));
+        s.dot(x + dx, y0 + h - Q * 2, shade(mau, 0.68));
+      }
     });
   }
 
   /** Mắt có lòng trắng — chấm đen trơn ở 16px đọc ra là một lỗ thủng. */
   function mat(hx: number, hy: number, hs: number, ngang: boolean) {
     if (dir === "up") return; // quay lưng thì không có mắt sau gáy
-    const ey = Math.round(hy - hs * 0.05);
-    if (ngang) {
-      const ex = Math.round(hx + hs * 0.25);
-      s.px(ex, ey, "#ffffff");
-      s.px(ex + 1, ey, "#1b1410");
-    } else {
-      for (const k of [-1, 1]) {
-        const ex = Math.round(hx + k * hs * 0.5);
-        s.px(ex, ey, "#1b1410");
-      }
-    }
+    const ey = hy - hs * 0.08;
+    const veMat = (ex: number) => {
+      // tròng 2×2 pixel HD + một chấm sáng: dưới ngưỡng ấy con mắt biến mất
+      for (const dx of [0, Q]) for (const dy of [0, Q]) s.dot(ex + dx, ey + dy, "#1b1410");
+      s.dot(ex, ey, "#ffffff");
+      s.dot(ex - Q, ey + Q, shade(giua, 0.75)); // hốc mắt
+    };
+    if (ngang) veMat(hx + hs * 0.3);
+    else for (const k of [-1, 1]) veMat(hx + k * hs * 0.55 - (k < 0 ? Q : 0));
   }
 
   /** Mắt nhắm: một gạch ngang. Đây là thứ đọc ra "đang ngủ" nhanh nhất. */
   function mat_nham(hx: number, hy: number, hs: number, ngang: boolean) {
     if (dir === "up") return;
-    const ey = Math.round(hy - hs * 0.05);
-    if (ngang) s.hline(Math.round(hx + hs * 0.2), ey, 2, "#1b1410");
-    else for (const k of [-1, 1]) s.hline(Math.round(hx + k * hs * 0.6) - 1, ey, 2, "#1b1410");
+    const ey = hy - hs * 0.05;
+    const nham = (ex: number) => {
+      for (let dx = 0; dx < 1.5; dx += Q) s.dot(ex + dx, ey, "#1b1410");
+      s.dot(ex + Q, ey + Q, shade(giua, 0.7)); // mí dưới
+    };
+    if (ngang) nham(hx + hs * 0.2);
+    else for (const k of [-1, 1]) nham(hx + k * hs * 0.6 - 0.75);
   }
 
   /** Lông cừu: viền bướu quanh mép trên + đốm xoáy trong thân. */
@@ -4857,14 +4915,8 @@ function makeVehicle(
   const done = outline(s).c;
   if (!doc && !flip) return done;
   // xoay/lật: right → left (lật ngang); right → down (xoay 90° thuận); right → up (xoay 90° ngược)
-  const m = surface(S, S);
-  m.g.save();
-  m.g.translate(S / 2, S / 2);
-  if (!doc) m.g.scale(-1, 1);
-  else m.g.rotate(dir === "down" ? Math.PI / 2 : -Math.PI / 2);
-  m.g.drawImage(done, -S / 2, -S / 2);
-  m.g.restore();
-  return m.c;
+  if (!doc) return latNgang(done, S, S);
+  return xoayQuanhTam(done, S, dir === "down" ? Math.PI / 2 : -Math.PI / 2);
 }
 
 export function buildAtlas(content: Content): Atlas {
