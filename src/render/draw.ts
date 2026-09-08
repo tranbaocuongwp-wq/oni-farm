@@ -1048,8 +1048,13 @@ export function createRenderer(
          `e.y − 5`, bóng ở `e.y + 2` — đúng chỗ của bản 16×16 cũ, nên xe to lên
          mà không nhảy vị trí. Thuyền nhấp nhô ±1px theo đồng hồ vẽ (trang trí). */
       const nhap = e.kind === "vehicle" && content.vehicles[e.def]?.sea ? Math.round(Math.sin(timeSec * 2 + e.id)) : 0;
-      const px = snapDev(e.x - camera.rx) - img.width / 2;
-      const py = snapDev(e.y - camera.ry) - img.height / 2 - 5 + nhap;
+      /* `img.width/height` là PIXEL ẢNH, còn `px/py` là ĐƠN VỊ THẾ GIỚI: từ Đợt
+         24 hai thứ ấy lệch nhau đúng `ART` lần. Quy về thế giới NGAY ở đây, một
+         lần, rồi mọi phép neo bên dưới chỉ nói bằng một thứ đơn vị. */
+      const imgW = img.width / ART;
+      const imgH = img.height / ART;
+      const px = snapDev(e.x - camera.rx) - imgW / 2;
+      const py = snapDev(e.y - camera.ry) - imgH / 2 - 5 + nhap;
       // Người làm mệt cũng báo bằng lớp phủ giống con vật đói — một ký hiệu
       // cho một ý "cái này đang cần bạn để mắt tới".
       const doi = e.worker
@@ -1123,11 +1128,11 @@ export function createRenderer(
           if (cong && e.dir !== "down") put(cong.img, cong.x, cong.y);
           put(img, px, py);
           if (cong && e.dir === "down") put(cong.img, cong.x, cong.y);
-          if (deo) put(deo, px + img.width / 2 - 8, py - 11 + nhun);
+          if (deo) put(deo, px + imgW / 2 - 8, py - 11 + nhun);
           // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
           // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
-          if (doi) put(atlas.sickOverlay, px + img.width / 2 - TILE / 2, py + img.height - TILE);
-          if (emo) put(atlas.emote(emo), px + img.width / 2 - 4, emoY);
+          if (doi) put(atlas.sickOverlay, px + imgW / 2 - TILE / 2, py + imgH - TILE);
+          if (emo) put(atlas.emote(emo), px + imgW / 2 - 4, emoY);
         },
       });
     }
