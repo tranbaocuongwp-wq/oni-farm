@@ -170,8 +170,8 @@ src/
   core/haptics.ts   rung nhẹ khi thao tác (Android)
   farm/        vỏ trang game (/farm/)
   site/sprites.ts   đổ sprite của GAME vào trang tài liệu (một bản sự thật)
-  index.html + tinh-nang/ + huong-dan/ + cach-hoat-dong/ + tai-ve/ + privacy/
-  thu-vien/{,cay-trong,vat-nuoi,hanh-dong}/   ⚙️ SINH RA — scripts/build-site.mjs
+  index.html + loi-choi/ + cay-trong/ + vat-nuoi/ + hanh-dong/ + privacy/
+  vat-pham/{,<một trang mỗi món>}/ + tac-gia/  ⚙️ SINH RA — scripts/build-site.mjs
 ```
 
 Ba ràng buộc giữ kiến trúc không mục theo thời gian:
@@ -2063,9 +2063,16 @@ qua trong một action — không có khung hình nào để con vật đi tới
 
 ---
 
-## Trang tài liệu (`/thu-vien/`)
+## Trang tài liệu — một cái WIKI (`/`)
 
-Bốn trang tra cứu — cây trồng, vật nuôi, hành động, và "cách game vận hành" —
+Cường, Đợt 25: *"loại bỏ các trang tĩnh khác, chỉ để lại [game] và docs; trình
+bày trang tài liệu này giống như wiki — lối chơi, các vật, chi tiết vật. Tác giả
+/ story: TRẦN CƯỜNG"*.
+
+Bốn trang giới thiệu cũ đã gỡ hẳn: chúng nói VỀ game cho người chưa chơi, còn
+wiki nói về THỨ TRONG game cho người đang chơi — hai thể loại không trộn được.
+Nay còn Trang chính, Lối chơi, Cây trồng, Vật nuôi, Vật phẩm (kèm **một trang
+chi tiết cho mỗi món**), Hành động, Tác giả và Quyền riêng tư — tất cả
 **sinh ra từ chính content** bằng `scripts/build-site.mjs` (chạy trong
 `npm run build`, trước `vite build` vì vite phải thấy file HTML mới quét được).
 

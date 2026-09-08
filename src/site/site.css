@@ -969,3 +969,247 @@ a.chip:hover {
 .ent {
   scroll-margin-top: var(--k5);
 }
+
+/* ============================================================================
+   LỚP WIKI — Cường: "trình bày trang tài liệu này giống như wiki".
+
+   Đổi BỐ CỤC chứ không đổi bảng màu: một cái wiki khác một trang giới thiệu ở
+   chỗ nó có THANH BÊN tra cứu luôn hiện, tiêu đề bài có gạch ngang dưới, hộp
+   thông tin nằm bên phải, và mục lục ngay đầu bài. Giữ nguyên tông nâu vàng
+   của game thì site và game vẫn là một sản phẩm, chỉ khác cách đọc.
+
+   Mọi lớp ở đây bắt đầu bằng `w` để không đụng vào lớp cũ của các trang tra
+   cứu (bảng cây trồng, thẻ vật nuôi…) — chúng vẫn dùng lại nguyên vẹn.
+============================================================================ */
+
+body.wiki {
+  background: var(--bg);
+}
+
+/* ---- thanh trên cùng ---- */
+.wtop {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  border-bottom: 2px solid var(--edge);
+}
+.wlogo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.wlogo b { color: var(--gold); }
+.wlogo span { font-size: 15px; }
+.wplay {
+  margin-left: auto;
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: #241a08;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+/* ---- lưới: thanh bên + bài ---- */
+.wgrid {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 22px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 14px 96px;
+}
+.wside {
+  align-self: start;
+  position: sticky;
+  top: 62px;
+  display: grid;
+  gap: 14px;
+}
+.wgrp {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 10px 8px;
+  display: grid;
+  gap: 2px;
+}
+.wgrp > b {
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 2px 8px 6px;
+}
+.wgrp a {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  font-size: 14.5px;
+}
+.wgrp a:hover { background: var(--panel-2); color: var(--ink); }
+.wgrp a[aria-current="page"] {
+  background: var(--panel-3);
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* ---- bài ---- */
+.wmain { min-width: 0; }
+.wh1 {
+  font-size: clamp(26px, 5.4vw, 38px);
+  margin: 0;
+  line-height: 1.15;
+}
+.wfrom {
+  margin: 4px 0 0;
+  color: var(--ink-mute);
+  font-size: 13px;
+  font-style: italic;
+}
+.wrule {
+  border: 0;
+  border-top: 2px solid var(--edge);
+  margin: 10px 0 18px;
+}
+.wmain h2 {
+  font-size: var(--chu-muc);
+  margin: 28px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-3);
+}
+.wdem {
+  font-size: 13px;
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+.wbox {
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-left: 6px solid var(--gold);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.wbox .lead { margin: 0 0 8px; }
+.wbox .lead:last-child { margin-bottom: 0; }
+
+/* ---- mục lục ---- */
+.wtoc {
+  display: inline-block;
+  min-width: 220px;
+  background: var(--bg-2);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 10px 16px 12px;
+  margin: 14px 0 4px;
+}
+.wtoc > b { font-size: 13px; letter-spacing: 0.06em; }
+.wtoc ol { margin: 6px 0 0; padding-left: 20px; }
+.wtoc li { margin: 3px 0; }
+.wtoc a { color: var(--blue); }
+
+/* ---- hộp thông tin ---- */
+.winfo {
+  float: right;
+  width: 240px;
+  max-width: 100%;
+  margin: 0 0 16px 20px;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.winfo-art { min-height: 68px; display: grid; place-items: center; }
+.winfo-ten { display: block; margin: 6px 0 10px; font-size: 17px; }
+.winfo dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  text-align: left;
+  font-size: 14px;
+}
+.winfo dt { color: var(--ink-mute); }
+.winfo dd { margin: 0; }
+
+/* ---- thẻ danh mục ở Trang chính ---- */
+.wcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+.wcard {
+  display: block;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.wcard:hover { border-color: var(--edge-hi); background: var(--panel-2); }
+.wcard-art { display: flex; flex-wrap: wrap; gap: 2px; min-height: 34px; }
+.wcard b { display: block; margin-top: 6px; font-size: var(--chu-the); }
+.wcard-n { font-size: 12.5px; color: var(--gold); }
+.wcard p { margin: 6px 0 0; font-size: 14px; color: var(--ink-dim); }
+
+/* ---- bảng và danh sách trong bài ---- */
+.wtab {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.wtab th, .wtab td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--panel-3); }
+.wtab thead th { background: var(--panel-2); font-size: 12.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-mute); }
+.wtab tbody th { font-weight: 600; }
+.wtab tbody tr:hover { background: var(--panel-2); }
+.wtab canvas { vertical-align: middle; margin-right: 4px; }
+.wlist { padding-left: 20px; }
+.wlist li { margin: 6px 0; }
+.wsteps { padding-left: 22px; }
+.wsteps li { margin: 8px 0; }
+.wback { margin-top: 26px; }
+
+/* ---- ghi công tác giả cuối bài ---- */
+.wcredit {
+  margin-top: 34px;
+  padding-top: 12px;
+  border-top: 2px solid var(--edge);
+  color: var(--ink-mute);
+  font-size: 13.5px;
+}
+.wcredit b { color: var(--ink-dim); }
+
+footer.wfoot {
+  border-top: 2px solid var(--edge);
+  background: var(--bg-2);
+  padding: 16px 14px 84px;
+  color: var(--ink-mute);
+  font-size: 13.5px;
+  text-align: center;
+}
+
+@media (max-width: 780px) {
+  .wgrid { grid-template-columns: minmax(0, 1fr); padding-top: 12px; }
+  .wside { position: static; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .winfo { float: none; width: auto; margin: 0 0 16px; }
+}

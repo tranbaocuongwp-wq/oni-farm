@@ -282,14 +282,43 @@ function noiDung(ten) {
 
 /* ------------------------------------------------------------------- khung */
 
-const NAV = [
-  ["/tinh-nang/", "Tính năng"],
-  ["/luat-choi/", "Luật chơi"],
-  ["/thu-vien/", "Thư viện"],
-  ["/huong-dan/", "Hướng dẫn"],
-  ["/cach-hoat-dong/", "Cách game vận hành"],
-  ["/tai-ve/", "Cài về máy"],
+/* ---------------------------------------------------------------------------
+   TRANG TÀI LIỆU KIỂU WIKI.
+
+   Cường: "loại bỏ các trang tĩnh khác, chỉ để lại [game] và docs; trình bày
+   trang tài liệu này giống như wiki — lối chơi, các vật, chi tiết vật. Tác giả
+   / story: TRẦN CƯỜNG".
+
+   Bốn trang giới thiệu cũ (Tính năng · Hướng dẫn · Cách game vận hành · Cài về
+   máy) là trang QUẢNG CÁO: chúng nói về game cho người chưa chơi. Một cái wiki
+   thì nói về THỨ TRONG GAME cho người đang chơi — mỗi cây, mỗi con, mỗi món đồ
+   một trang tra được. Hai thể loại ấy không trộn vào nhau được, nên bốn trang
+   kia đi hẳn.
+
+   Nav xếp theo NHÓM như thanh bên của một wiki thật, không phải một hàng ngang:
+   người tra cứu nhảy giữa các mục cùng loại, chứ không đọc tuần tự từ trái sang
+   phải như trang giới thiệu.
+--------------------------------------------------------------------------- */
+
+const NAV_NHOM = [
+  ["Bắt đầu", [
+    ["/", "Trang chính"],
+    ["/loi-choi/", "Lối chơi"],
+  ]],
+  ["Tra cứu", [
+    ["/cay-trong/", "Cây trồng"],
+    ["/vat-nuoi/", "Vật nuôi"],
+    ["/vat-pham/", "Vật phẩm"],
+    ["/hanh-dong/", "Hành động"],
+  ]],
+  ["Về dự án", [
+    ["/tac-gia/", "Tác giả"],
+    ["/privacy/", "Quyền riêng tư"],
+  ]],
 ];
+
+/** Danh sách phẳng — dùng cho phép soát "mục nào trong nav cũng có trang thật". */
+const NAV = NAV_NHOM.flatMap(([, ds]) => ds);
 
 /**
  * Vỏ trang — MỘT chỗ duy nhất quyết định nav, thẻ meta, chân trang.
@@ -297,11 +326,29 @@ const NAV = [
  * Các trang viết tay cũng dùng đúng khuôn này (xem `writeStaticNav` bên dưới
  * đồng bộ lại nav cho chúng), nên năm trang không bao giờ lệch nhau một mục.
  */
-function page({ title, desc, url, h1, tag, body, sprites = true, wide = false }) {
-  const nav = NAV.map(
-    ([href, text]) =>
-      `<a href="${href}"${href === url ? ' aria-current="page"' : ""}>${text}</a>`,
+/**
+ * Vỏ trang WIKI — MỘT chỗ duy nhất quyết định thanh bên, thẻ meta, chân trang.
+ *
+ * `hop` là hộp thông tin bên phải (infobox) — thứ làm một trang wiki ra wiki:
+ * đọc cái hộp là biết ngay các con số, không phải đọc hết bài. `muc` là mục lục
+ * dựng từ chính các tiêu đề của bài.
+ */
+function page({ title, desc, url, h1, tag, body, sprites = true, hop = "", muc = [], dan = "" }) {
+  const nav = NAV_NHOM.map(
+    ([ten, ds]) =>
+      `<div class="wgrp"><b>${ten}</b>\n          ${ds
+        .map(
+          ([href, text]) =>
+            `<a href="${href}"${href === url ? ' aria-current="page"' : ""}>${text}</a>`,
+        )
+        .join("\n          ")}</div>`,
   ).join("\n        ");
+  const mucLuc = muc.length
+    ? `      <nav class="wtoc" aria-label="Mục lục">
+        <b>Mục lục</b>
+        <ol>${muc.map(([id, ten]) => `<li><a href="#${id}">${esc(ten)}</a></li>`).join("")}</ol>
+      </nav>\n`
+    : "";
   return `<!doctype html>
 <html lang="vi">
   <head>
@@ -309,35 +356,42 @@ function page({ title, desc, url, h1, tag, body, sprites = true, wide = false })
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#14100c" />
     <meta name="description" content="${esc(desc)}" />
+    <meta name="author" content="Trần Cường" />
     <meta property="og:title" content="${esc(title)}" />
     <meta property="og:description" content="${esc(desc)}" />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content="article" />
     <title>${esc(title)}</title>
     <link rel="stylesheet" href="/site/site.css" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
 ${sprites ? '    <script type="module" src="/site/sprites.ts"></script>\n' : ""}  </head>
-  <body${wide ? ' class="wide"' : ""}>
-    <nav>
-      <div class="wrap">
-        <a class="brand" href="/"><img src="/favicon.svg" alt="" width="22" height="22" />ONI<span>FARM</span></a>
-        ${nav}
-        <a class="play" href="/farm/">Chơi ngay</a>
-      </div>
-    </nav>
-    <header class="hero">
-      <div class="wrap">
-        <h1>${h1}</h1>
-        <p class="tag">${tag}</p>
-      </div>
+  <body class="wiki">
+    <header class="wtop">
+      <a class="wlogo" href="/"><img src="/favicon.svg" alt="" width="24" height="24" /><span>ONI<b>FARM</b> WIKI</span></a>
+      <a class="wplay" href="/farm/">Chơi ngay</a>
     </header>
-${body}
-    <footer>
+    <div class="wgrid">
+      <aside class="wside">
+        ${nav}
+      </aside>
+      <main class="wmain">
+        <h1 class="wh1">${h1}</h1>
+        <p class="wfrom">Từ OniFarm Wiki${tag ? ` · ${tag}` : ""}</p>
+        <hr class="wrule" />
+${hop}${dan}${mucLuc}${body}
+        <div class="wcredit">
+          <b>Tác giả · story:</b> TRẦN CƯỜNG ·
+          <a href="/tac-gia/">trang tác giả</a>
+        </div>
+      </main>
+    </div>
+    <footer class="wfoot">
       <div class="wrap">
         OniFarm · game offline, save nằm trên máy bạn ·
-        <a href="/thu-vien/">Thư viện</a> ·
-        <a href="/privacy/">Quyền riêng tư</a>
+        <a href="/">Trang chính</a> ·
+        <a href="/privacy/">Quyền riêng tư</a> ·
+        Tác giả: TRẦN CƯỜNG
       </div>
     </footer>
     <div class="sticky-play"><a class="cta" href="/farm/">Chơi ngay</a></div>
@@ -471,10 +525,10 @@ function cropsPage() {
     .join("\n");
 
   return page({
-    title: "Thư viện cây trồng — OniFarm",
+    title: "Cây trồng — OniFarm Wiki",
     desc: `Chi tiết ${list.length} loại cây trong OniFarm: trồng mấy ngày, thu được bao nhiêu, bán được bao nhiêu, lãi mỗi ngày, hợp mùa nào.`,
-    url: "/thu-vien/",
-    h1: "CÂY TRỒNG",
+    url: "/cay-trong/",
+    h1: "Cây trồng",
     tag: `Toàn bộ ${list.length} loại cây, kèm số ngày lớn, sản lượng và lãi mỗi ngày. Số lấy thẳng từ game nên không bao giờ lệch.`,
     wide: true,
     body: `    <section class="jump-bar"><div class="wrap"><div class="jumps">${muc}</div></div></section>
@@ -583,10 +637,10 @@ function animalsPage() {
   const xe = content.vehicleOrder.map((id) => content.vehicles[id]).filter(Boolean);
 
   return page({
-    title: "Thư viện vật nuôi — OniFarm",
+    title: "Vật nuôi — OniFarm Wiki",
     desc: "Chi tiết từng con vật trong OniFarm: nuôi bao lâu thì lớn, ăn gì, cho sữa/trứng/lông mấy ngày một lần, bán thịt được bao nhiêu.",
-    url: "/thu-vien/",
-    h1: "VẬT NUÔI",
+    url: "/vat-nuoi/",
+    h1: "Vật nuôi",
     tag: "Con nào ăn gì, mấy ngày cho một lứa, và chuyện gì xảy ra nếu bạn quên cho ăn.",
     wide: true,
     body: `    <section>
@@ -909,10 +963,10 @@ function actionsPage() {
     .join("\n");
 
   return page({
-    title: "Nhân vật làm được những gì — OniFarm",
+    title: "Hành động — OniFarm Wiki",
     desc: "Tất cả việc nhân vật trong OniFarm làm được: cày, gieo, tưới, thu, chặt, đập, xây, mua bán, chế tạo, chăn nuôi — kèm mẹo cho từng việc.",
-    url: "/thu-vien/",
-    h1: "HÀNH ĐỘNG",
+    url: "/hanh-dong/",
+    h1: "Hành động",
     tag: "Nút to góc dưới màn hình đổi chữ theo việc bạn sắp làm. Đây là toàn bộ danh sách chữ đó.",
     wide: true,
     body: `    <section>
@@ -943,48 +997,6 @@ ${ct}
   });
 }
 
-/* ----------------------------------------------------------------- trang hub */
-
-function hubPage() {
-  const nCay = content.cropOrder.length;
-  const nVat = content.animalOrder.filter((id) => content.animals[id]?.job !== "pest").length;
-  const mau = content.cropOrder.slice(0, 8).map((id) => cx(`crop:${id}`, 34, ""));
-  const mauVat = content.animalOrder.slice(0, 6).map((id) => cx(`animal:${id}`, 34, ""));
-
-  return page({
-    title: "Thư viện OniFarm — cây trồng, vật nuôi, hành động",
-    desc: `Tra cứu ${nCay} loại cây, ${nVat} loài vật và toàn bộ việc nhân vật làm được trong OniFarm.`,
-    url: "/thu-vien/",
-    h1: "THƯ VIỆN",
-    tag: "Mọi thứ trong game, tra được trong vài giây. Số liệu lấy thẳng từ bản đang chơi.",
-    body: `    <section>
-      <div class="wrap">
-        <div class="hub">
-          <a class="hub-card" href="/thu-vien/cay-trong/">
-            <div class="hub-art">${mau.join("")}</div>
-            <h3>Cây trồng <b>${nCay}</b></h3>
-            <p>Trồng mấy ngày, thu bao nhiêu, bán được bao nhiêu, hợp mùa nào.</p>
-          </a>
-          <a class="hub-card" href="/thu-vien/vat-nuoi/">
-            <div class="hub-art">${mauVat.join("")}</div>
-            <h3>Vật nuôi <b>${nVat}</b></h3>
-            <p>Ăn gì, mấy ngày một lứa sữa/trứng/lông, bỏ đói thì sao.</p>
-          </a>
-          <a class="hub-card" href="/thu-vien/hanh-dong/">
-            <div class="hub-art"><span class="btn-pill big">CÀY</span><span class="btn-pill big">THU</span><span class="btn-pill big">NGỦ</span></div>
-            <h3>Hành động</h3>
-            <p>Từng việc nhân vật làm được, cần cầm gì, và mẹo cho mỗi việc.</p>
-          </a>
-          <a class="hub-card" href="/cach-hoat-dong/">
-            <div class="hub-art">${cx("ui:moon", 30, "Ngày đêm")}${cx("ui:water", 30, "Mưa")}${cx("ui:sun", 30, "Thời tiết")}</div>
-            <h3>Cách game vận hành</h3>
-            <p>Vì sao cây lớn khi bạn ngủ, thời tiết ảnh hưởng gì, tiền từ đâu ra.</p>
-          </a>
-        </div>
-      </div>
-    </section>`,
-  });
-}
 
 /* ------------------------------------------------------------- luật chơi ---
 
@@ -1000,6 +1012,265 @@ function bangLuat(hang) {
     hang.map(([k, v]) => `<tr><th scope="row">${k}</th><td>${v}</td></tr>`).join("") +
     `</tbody></table></div>`
   );
+}
+
+/* ------------------------------------------------------------ TRANG CHÍNH */
+
+/**
+ * Trang chính của wiki. Không phải trang quảng cáo: nó là CỬA TRA CỨU — bao
+ * nhiêu cây, bao nhiêu loài, bao nhiêu món, và đường vào từng danh mục.
+ */
+function trangChinhPage() {
+  const nCay = content.cropOrder.length;
+  const nVat = content.animalOrder.filter((id) => content.animals[id]?.job !== "pest").length;
+  const nMon = content.materialOrder.length;
+  const nCong = content.toolOrder.length;
+  const mauCay = content.cropOrder.slice(0, 10).map((id) => cx(`crop:${id}`, 32, ""));
+  const mauVat = content.animalOrder.slice(0, 6).map((id) => cx(`animal:${id}`, 32, ""));
+
+  const the = (href, ten, dem, mo, anh) => `          <a class="wcard" href="${href}">
+            <div class="wcard-art">${anh}</div>
+            <b>${esc(ten)}</b>
+            <span class="wcard-n">${dem}</span>
+            <p>${esc(mo)}</p>
+          </a>`;
+
+  const dan = `        <section class="wbox">
+      <p class="lead">
+        Đây là sổ tra cứu của <b>OniFarm</b> — một game nông trại pixel chơi thẳng trên trình duyệt,
+        không cần cài, không cần mạng sau lần mở đầu. Mọi con số trên các trang dưới đây
+        <b>sinh thẳng từ dữ liệu game</b>, nên chúng không bao giờ lệch với thứ bạn gặp lúc chơi.
+      </p>
+      <p class="lead">Tác giả · story: <b>TRẦN CƯỜNG</b>.</p>
+    </section>
+`;
+
+  const body = `
+    <h2 id="danh-muc">Danh mục</h2>
+    <div class="wcards">
+${the("/loi-choi/", "Lối chơi", "luật", "Một ngày dài bao lâu, năng lượng tiêu thế nào, mùa và thời tiết đổi ra sao.", "")}
+${the("/cay-trong/", "Cây trồng", `${nCay} loại`, "Mỗi cây: gieo mùa nào, mấy ngày chín, giá hạt, giá bán, lãi mỗi ngày.", mauCay.join(""))}
+${the("/vat-nuoi/", "Vật nuôi", `${nVat} loài`, "Ăn gì, mấy ngày một lứa, cho sữa/trứng/lông hay lấy thịt.", mauVat.join(""))}
+${the("/vat-pham/", "Vật phẩm", `${nMon + nCong} món`, "Nguyên liệu, món chế biến và công cụ — mỗi món một trang chi tiết.", "")}
+${the("/hanh-dong/", "Hành động", "mọi nút", "Từng việc nhân vật làm được trên một ô đất, cần cầm gì và tốn bao nhiêu sức.", "")}
+${the("/tac-gia/", "Tác giả", "story", "Ai làm ra nông trại này, và nó bắt đầu từ đâu.", "")}
+    </div>
+
+    <h2 id="bat-dau">Bắt đầu từ đâu</h2>
+    <ol class="wsteps">
+      <li><b>Cày một ô đất.</b> Cầm cuốc, đứng cạnh ô trong lô ruộng, bấm nút chính.</li>
+      <li><b>Gieo rồi tưới.</b> Hạt mua ở Chợ; nước múc ở giếng hoặc bờ hồ.</li>
+      <li><b>Ngủ một đêm.</b> Cây chỉ lớn khi sang ngày mới, và chỉ lớn nếu ô còn ẩm.</li>
+      <li><b>Thu rồi bán.</b> Bán ở Quầy thu mua, hoặc để xe tới chở đi.</li>
+      <li><b>Thuê người làm.</b> Từ đó nông trại chạy cả lúc bạn đứng nhìn.</li>
+    </ol>
+
+    <h2 id="so-lieu">Vài con số</h2>
+    ${bangLuat([
+      ["Cây trồng", `${nCay} loại`],
+      ["Vật nuôi", `${nVat} loài`],
+      ["Nguyên liệu và món chế biến", `${nMon} món`],
+      ["Công cụ", `${nCong} món`],
+      ["Công thức chế tạo", `${SO_LIEU.soCongThuc}`],
+      ["Một ngày trong game", `${SO_LIEU.phutMoiNgayThat} phút ngoài đời`],
+      ["Kịch bản kiểm thử", `${SO_LIEU.soKichBan}`],
+    ])}
+`;
+
+  return page({
+    title: "OniFarm Wiki — sổ tra cứu cây trồng, vật nuôi, vật phẩm",
+    desc: `Sổ tra cứu OniFarm: ${nCay} loại cây, ${nVat} loài vật, ${nMon + nCong} vật phẩm, luật chơi và mọi hành động. Số liệu sinh thẳng từ dữ liệu game. Tác giả: Trần Cường.`,
+    url: "/",
+    h1: "Trang chính",
+    tag: "sổ tra cứu của OniFarm",
+    muc: [["danh-muc", "Danh mục"], ["bat-dau", "Bắt đầu từ đâu"], ["so-lieu", "Vài con số"]],
+    dan,
+    body,
+  });
+}
+
+/* -------------------------------------------------------------- VẬT PHẨM */
+
+/** Mọi thứ CẦM ĐƯỢC, gom một chỗ: nguyên liệu · món chế biến · công cụ · nông sản. */
+function moiVatPham() {
+  const ra = [];
+  for (const id of content.materialOrder) {
+    const m = content.materials[id];
+    if (!m) continue;
+    const ct = Object.values(content.recipes ?? {}).find((r) => r.out?.id === `item:${id}`);
+    ra.push({
+      key: `item:${id}`, slug: `vp-${id}`, ten: m.name,
+      loai: ct ? "Món chế biến" : "Nguyên liệu",
+      ban: m.sellPrice ?? 0, mua: m.buyPrice ?? 0,
+      banDuoc: m.sell !== false, congThuc: ct ?? null,
+      nangLuong: m.energy ?? 0,
+    });
+  }
+  for (const id of content.toolOrder) {
+    const t = content.tools[id];
+    if (!t) continue;
+    const ct = Object.values(content.recipes ?? {}).find((r) => r.out?.id === `tool:${id}`);
+    ra.push({
+      key: `tool:${id}`, slug: `vp-tool-${id}`, ten: t.name,
+      loai: "Công cụ", ban: 0, mua: t.buyPrice ?? 0, banDuoc: false,
+      congThuc: ct ?? null, nangLuong: 0, viec: t.action ?? "", suc: t.capacity ?? 0,
+    });
+  }
+  return ra;
+}
+
+const tenNguyenLieu = (id) => itemName(id);
+
+function vatPhamPage() {
+  const ds = moiVatPham();
+  const nhom = [
+    ["Nguyên liệu", ds.filter((v) => v.loai === "Nguyên liệu")],
+    ["Món chế biến", ds.filter((v) => v.loai === "Món chế biến")],
+    ["Công cụ", ds.filter((v) => v.loai === "Công cụ")],
+  ];
+
+  const bang = (list) => `        <table class="wtab">
+          <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th><th></th></tr></thead>
+          <tbody>
+${list
+  .map(
+    (v) => `            <tr id="${v.slug}">
+              <th scope="row">${cx(v.key, 26, v.ten)} ${esc(v.ten)}</th>
+              <td>${v.banDuoc && v.ban ? `${tien(v.ban)}đ` : "—"}</td>
+              <td>${v.mua ? `${tien(v.mua)}đ` : "—"}</td>
+              <td>${v.congThuc ? v.congThuc.in.map((i) => `${esc(tenNguyenLieu(i.id))} ×${i.n}`).join(" + ") : "—"}</td>
+              <td><a href="/vat-pham/${v.slug}/">chi tiết</a></td>
+            </tr>`,
+  )
+  .join("\n")}
+          </tbody>
+        </table>`;
+
+  const body = nhom
+    .map(
+      ([ten, list], i) => `
+    <h2 id="n${i}">${esc(ten)} <span class="wdem">${list.length} món</span></h2>
+${bang(list)}`,
+    )
+    .join("\n");
+
+  return page({
+    title: "Vật phẩm — OniFarm Wiki",
+    desc: `Toàn bộ ${ds.length} vật phẩm trong OniFarm: nguyên liệu, món chế biến và công cụ — giá bán, giá mua, công thức chế tạo.`,
+    url: "/vat-pham/",
+    h1: "Vật phẩm",
+    tag: `${ds.length} món`,
+    muc: nhom.map(([ten], i) => [`n${i}`, ten]),
+    body,
+  });
+}
+
+/** Một trang CHI TIẾT cho mỗi món — đây là thứ làm sổ tra cứu ra wiki. */
+function vatPhamChiTiet(v) {
+  const dung = Object.values(content.recipes ?? {}).filter((r) =>
+    (r.in ?? []).some((i) => i.id === v.key),
+  );
+  const hop = `        <aside class="winfo">
+          <div class="winfo-art">${cx(v.key, 64, v.ten)}</div>
+          <b class="winfo-ten">${esc(v.ten)}</b>
+          <dl>
+            <dt>Loại</dt><dd>${esc(v.loai)}</dd>
+            ${v.banDuoc && v.ban ? `<dt>Giá bán</dt><dd>${`${tien(v.ban)}đ`}</dd>` : ""}
+            ${v.mua ? `<dt>Giá mua</dt><dd>${`${tien(v.mua)}đ`}</dd>` : ""}
+            ${!v.banDuoc && v.loai !== "Công cụ" ? `<dt>Bán</dt><dd>không bán được</dd>` : ""}
+            ${v.nangLuong ? `<dt>Ăn được</dt><dd>hồi ${v.nangLuong} năng lượng</dd>` : ""}
+            ${v.viec ? `<dt>Dùng để</dt><dd>${esc(v.viec)}</dd>` : ""}
+            ${v.suc ? `<dt>Dung tích</dt><dd>${v.suc} lần tưới</dd>` : ""}
+          </dl>
+        </aside>`;
+
+  const body = `
+    <h2 id="lay">Lấy ở đâu</h2>
+    <ul class="wlist">
+      ${v.congThuc ? `<li><b>Chế tạo</b> từ ${v.congThuc.in.map((i) => `${esc(tenNguyenLieu(i.id))} ×${i.n}`).join(" + ")}.</li>` : ""}
+      ${v.mua ? `<li><b>Mua</b> ở Chợ với giá ${`${tien(v.mua)}đ`}.</li>` : ""}
+      ${!v.congThuc && !v.mua ? "<li>Nhặt được ngoài nông trại, hoặc do vật nuôi cho.</li>" : ""}
+    </ul>
+
+    <h2 id="dung">Dùng làm gì</h2>
+    <ul class="wlist">
+      ${v.banDuoc && v.ban ? `<li><b>Bán</b> ở Quầy thu mua, ${`${tien(v.ban)}đ`} một đơn vị.</li>` : ""}
+      ${v.nangLuong ? `<li><b>Ăn</b> để hồi ${v.nangLuong} năng lượng.</li>` : ""}
+      ${dung.length
+        ? dung
+            .map(
+              (r) =>
+                `<li><b>Chế tạo</b> ${esc(r.name)} (cần ${(r.in ?? []).map((i) => `${esc(tenNguyenLieu(i.id))} ×${i.n}`).join(" + ")}).</li>`,
+            )
+            .join("\n      ")
+        : ""}
+      ${!v.banDuoc && !v.nangLuong && !dung.length ? "<li>Giữ trong kho để dùng khi cần.</li>" : ""}
+    </ul>
+
+    <p class="wback"><a href="/vat-pham/">← Về danh sách vật phẩm</a></p>
+`;
+
+  return page({
+    title: `${v.ten} — OniFarm Wiki`,
+    desc: `${v.ten} trong OniFarm: ${v.loai.toLowerCase()}${v.ban ? `, bán ${v.ban}đ` : ""}${v.congThuc ? ", chế tạo được" : ""}.`,
+    url: "/vat-pham/",
+    h1: esc(v.ten),
+    tag: v.loai.toLowerCase(),
+    hop,
+    muc: [["lay", "Lấy ở đâu"], ["dung", "Dùng làm gì"]],
+    body,
+  });
+}
+
+/* --------------------------------------------------------------- TÁC GIẢ */
+
+function tacGiaPage() {
+  const dan = `        <section class="wbox">
+      <p class="lead">
+        OniFarm do <b>TRẦN CƯỜNG</b> nghĩ ra và dựng nên — từ ý tưởng, luật chơi, bố cục nông trại,
+        cho tới từng vòng phản hồi "chỗ này nhìn kì, sửa đi".
+      </p>
+    </section>
+`;
+
+  const body = `
+    <h2 id="story">Story</h2>
+    <p>
+      Bắt đầu từ một câu hỏi giản dị: <i>một cái nông trại chạy được, mở bằng trình duyệt, không cần cài,
+      không cần mạng — thì nó phải như thế nào?</i>
+    </p>
+    <p>
+      Trả lời câu ấy hoá ra không phải chuyện vẽ cho đẹp. Nó là chuyện một cái nút phải nói đúng thứ nó
+      sẽ làm; một con bò đói phải nhìn ra là đang đói; một dòng sông phải chảy về đâu đó. Mỗi lần nông
+      trại "nhìn kì", đào xuống dưới thì gần như lần nào cũng gặp một chỗ sai trong cách dựng, chứ không
+      phải một nét vẽ xấu.
+    </p>
+    <p>
+      Nông trại này lớn lên theo từng đợt như thế: nhìn, chỉ ra chỗ sai, đào tới gốc, sửa, rồi nhìn lại.
+    </p>
+
+    <h2 id="nguyen-tac">Ba nguyên tắc</h2>
+    <ul class="wlist">
+      <li><b>Số trên trang không bao giờ lệch với số trong game.</b> Mọi bảng ở wiki này sinh thẳng từ
+        dữ liệu game, nên không có chỗ nào để một con số cũ nằm lại.</li>
+      <li><b>Chơi được rồi mới đẹp.</b> Luật chơi chạy được kiểm bằng ${SO_LIEU.soKichBan} kịch bản mô
+        phỏng, không cần trình duyệt.</li>
+      <li><b>Save nằm trên máy bạn.</b> Không tài khoản, không máy chủ, không quảng cáo.</li>
+    </ul>
+
+    <h2 id="lien-he">Chơi thử</h2>
+    <p><a class="cta" href="/farm/">Mở nông trại</a></p>
+`;
+  return page({
+    title: "Tác giả — OniFarm Wiki",
+    desc: "OniFarm do Trần Cường nghĩ ra và dựng nên: ý tưởng, luật chơi, bố cục nông trại và story.",
+    url: "/tac-gia/",
+    h1: "Tác giả",
+    tag: "Trần Cường",
+    muc: [["story", "Story"], ["nguyen-tac", "Ba nguyên tắc"], ["lien-he", "Chơi thử"]],
+    dan,
+    body,
+  });
 }
 
 function luatChoiPage() {
@@ -1074,7 +1345,7 @@ function luatChoiPage() {
           <div class="card"><h3>Đói quá thì chết</h3>
             <p>Hết cỏ, hết máng thì đói tiếp, và quá số ngày chịu đói của loài đó thì chết. Thẻ từng con cho biết còn no bao lâu.</p></div>
         </div>
-        <p class="note"><a href="/thu-vien/vat-nuoi/">Xem chi tiết từng loài →</a></p>
+        <p class="note"><a href="/vat-nuoi/">Xem chi tiết từng loài →</a></p>
       </div>
     </section>
 
@@ -1139,10 +1410,10 @@ function luatChoiPage() {
   `;
 
   return page({
-    title: "Luật chơi — OniFarm",
+    title: "Lối chơi — OniFarm Wiki",
     desc: `Toàn bộ luật chơi OniFarm: một ngày dài bao lâu, cây lớn thế nào, ${SO_LIEU.soMua} mùa, bệnh cây, cho vật nuôi ăn, thuê người làm, mua bán. Số liệu lấy thẳng từ bản đang chơi.`,
-    url: "/luat-choi/",
-    h1: "LUẬT CHƠI",
+    url: "/loi-choi/",
+    h1: "Lối chơi",
     tag: "Mọi thứ cần biết để chơi. Số liệu lấy thẳng từ bản đang chơi, không gõ tay.",
     body,
   });
@@ -1150,44 +1421,32 @@ function luatChoiPage() {
 
 /* --------------------------------------------------------------------- chạy */
 
-/* Sáu trang giới thiệu: vỏ ở đây, CHỮ trong `src/site/noi-dung/*.html`. */
-const GIOI_THIEU = [
-  { duong: "", ten: "trang-chu", url: "/", h1: 'ONI<span>FARM</span>',
-    title: "OniFarm — Nông trại hiện đại pixel, chơi offline trên mọi thiết bị",
-    desc: "OniFarm — game nông trại pixel chơi offline: bốn mùa, 61 loại cây, chăn nuôi, người làm thuê, chế độ xây dựng kéo thả. Chơi bằng cảm ứng, chuột hay tay cầm.",
-    tag: "Cày đất, gieo hạt, tưới nước, ngủ một đêm rồi ra thu hoạch. Rồi nuôi bò, thuê người làm, kéo một con đường ra kho — và đứng nhìn nông trại tự chạy.",
-    wide: true },
-  { duong: "tinh-nang", ten: "tinh-nang", url: "/tinh-nang/", h1: "TÍNH NĂNG",
-    title: "Tính năng — OniFarm",
-    desc: "Những gì đã có trong bản chơi được của OniFarm: chơi trên điện thoại, bốn mùa, chăn nuôi, người làm thuê, chế độ xây dựng, chơi offline.",
-    tag: "Những gì đã có trong bản chơi được hiện tại." },
-  { duong: "huong-dan", ten: "huong-dan", url: "/huong-dan/", h1: "HƯỚNG DẪN",
-    title: "Hướng dẫn chơi — OniFarm",
-    desc: "Hướng dẫn chơi OniFarm từ ngày đầu: cày gieo tưới thu, kiếm tiền, nuôi con vật đầu tiên, thuê người làm.",
-    tag: "Từ ngày đầu tới lúc nông trại tự chạy." },
-  { duong: "cach-hoat-dong", ten: "cach-hoat-dong", url: "/cach-hoat-dong/", h1: "CÁCH GAME VẬN HÀNH",
-    title: "Cách game vận hành — OniFarm",
-    desc: "Bên trong OniFarm: một cửa duy nhất cho mọi thay đổi, tính tất định, nội dung tách khỏi mã, cập nhật OTA, kiểm thử headless.",
-    tag: "Bên trong thì nó chạy thế nào." },
-  { duong: "tai-ve", ten: "tai-ve", url: "/tai-ve/", h1: "CÀI VỀ MÁY",
-    title: "Cài về máy — OniFarm",
-    desc: "Cài OniFarm về màn hình chính như một app: iPhone, Android, máy tính. Chơi offline hoàn toàn, không cần cửa hàng ứng dụng.",
-    tag: "Thêm vào màn hình chính, chơi như một app — không qua cửa hàng nào." },
-  { duong: "privacy", ten: "privacy", url: "/privacy/", h1: "QUYỀN RIÊNG TƯ",
-    title: "Quyền riêng tư — OniFarm",
-    desc: "OniFarm không thu thập gì cả: không tài khoản, không máy chủ, không quảng cáo. Toàn bộ tiến trình nằm trên máy bạn.",
-    tag: "Ngắn thôi: chúng tôi không thu thập gì cả." },
-];
-
+/* Hai trang viết TAY còn lại: vỏ ở đây, CHỮ trong `src/site/noi-dung/*.html`.
+   Bốn trang giới thiệu cũ (Tính năng · Hướng dẫn · Cách game vận hành · Cài về
+   máy) đã gỡ theo yêu cầu của Cường — chúng nói VỀ game cho người chưa chơi,
+   còn wiki thì nói về THỨ TRONG game cho người đang chơi. */
 const outs = [
-  ...GIOI_THIEU.map((t) =>
-    write(t.duong, page({ ...t, body: noiDung(t.ten) })),
+  write("", trangChinhPage()),
+  write("loi-choi", luatChoiPage()),
+  write("cay-trong", cropsPage()),
+  write("vat-nuoi", animalsPage()),
+  write("vat-pham", vatPhamPage()),
+  write("hanh-dong", actionsPage()),
+  write("tac-gia", tacGiaPage()),
+  write(
+    "privacy",
+    page({
+      url: "/privacy/",
+      h1: "Quyền riêng tư",
+      tag: "ngắn thôi",
+      title: "Quyền riêng tư — OniFarm Wiki",
+      desc: "OniFarm không thu thập gì cả: không tài khoản, không máy chủ, không quảng cáo. Toàn bộ tiến trình nằm trên máy bạn.",
+      body: noiDung("privacy"),
+    }),
   ),
-  write("luat-choi", luatChoiPage()),
-  write("thu-vien", hubPage()),
-  write("thu-vien/cay-trong", cropsPage()),
-  write("thu-vien/vat-nuoi", animalsPage()),
-  write("thu-vien/hanh-dong", actionsPage()),
+  /* MỖI MÓN MỘT TRANG — đây là thứ tách một cái wiki khỏi một trang danh sách:
+     tra tới đâu cũng có chỗ để dừng lại đọc kỹ. */
+  ...moiVatPham().map((v) => write(`vat-pham/${v.slug}`, vatPhamChiTiet(v))),
 ];
 
 /* ---- soát: trang HÀNH ĐỘNG phải khớp với mã, không phải với trí nhớ -------

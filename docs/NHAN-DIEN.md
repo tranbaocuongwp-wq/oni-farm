@@ -181,15 +181,19 @@ Builder còn **tự soát** hai chuyện, và cả hai đều đã cấy lỗi �
 
 ## 6. Bản đồ trang
 
+Từ Đợt 25 site KHÔNG còn là trang giới thiệu mà là một **wiki**: thanh bên tra
+cứu luôn hiện, tiêu đề bài có gạch dưới, hộp thông tin bên phải, mục lục đầu
+bài. Bốn trang giới thiệu cũ (Tính năng · Hướng dẫn · Cách game vận hành · Cài
+về máy) đã gỡ — chúng nói VỀ game cho người chưa chơi, còn wiki nói về THỨ
+TRONG game cho người đang chơi.
+
 | Trang | Nội dung đến từ |
 |---|---|
-| `/` | `noi-dung/trang-chu.html` |
-| `/tinh-nang/` | `noi-dung/tinh-nang.html` |
-| `/luat-choi/` | **sinh từ content** — `luatChoiPage()` |
-| `/thu-vien/` + 3 trang con | **sinh từ content** |
-| `/huong-dan/` | `noi-dung/huong-dan.html` |
-| `/cach-hoat-dong/` | `noi-dung/cach-hoat-dong.html` |
-| `/tai-ve/` | `noi-dung/tai-ve.html` |
+| `/` Trang chính | **sinh từ content** — `trangChinhPage()` |
+| `/loi-choi/` | **sinh từ content** — `luatChoiPage()` |
+| `/cay-trong/` · `/vat-nuoi/` · `/hanh-dong/` | **sinh từ content** |
+| `/vat-pham/` + một trang cho MỖI món | **sinh từ content** |
+| `/tac-gia/` | `tacGiaPage()` — Trần Cường, story |
 | `/privacy/` | `noi-dung/privacy.html` |
 | `/farm/` | chính game — không dùng vỏ này |
 
