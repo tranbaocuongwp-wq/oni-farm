@@ -1,510 +1,59 @@
 /* ============================================================================
-   BỘ NHẬN DIỆN — vỏ trang tĩnh, và hệ thống thiết kế dùng chung với game.
+   TRANG TÀI LIỆU — CSS.
 
-   Đây là chỗ DUY NHẤT định nghĩa màu, cỡ chữ và khoảng cách của trang tĩnh.
-   Token màu dùng chung với game (`src/style.css`) để site và game trông như
-   một sản phẩm chứ không phải hai.
+   Cường: "tại sao không phải trình bày giống như một trang web thông thường
+   thôi, thân thiện với mọi thiết bị, mà cứ làm cho nó màu mè lên làm chi".
 
-   Ba luật của bộ nhận diện này:
+   Đúng, và bản trước sai thật. Nó khoác cho trang tra cứu nguyên bộ nhận diện
+   của GAME: nền nâu tối, khung gỗ, chữ vàng, nút nổi bám đáy màn hình. Trong
+   game thì bộ ấy đúng — nó là một phần của thế giới đang chơi. Trên một trang
+   tra cứu thì nó chỉ làm chữ khó đọc hơn và trang nặng hơn, mà không nói thêm
+   được điều gì. Người vào đây để TRA MỘT CON SỐ, không để ngắm.
 
-   1. MÀU CÓ VAI, không có tên riêng lẻ. `--gold` không phải "màu vàng" mà là
-      "màu của tiền, của thương hiệu, của việc cần chú ý"; `--green` là "màu
-      của cây, của việc làm được". Dùng đúng vai thì trang mới đọc được mà
-      không cần chú giải.
+   Nên bản này là một trang tài liệu thường: nền sáng, chữ đen, liên kết xanh,
+   bảng kẻ mảnh, một cột nội dung có bề ngang đọc được. Không hiệu ứng, không
+   bóng đổ, không nút nổi. Toàn bộ vừa hơn 300 dòng, thay cho 970 dòng cũ.
 
-   2. CHỮ chạy theo một THANG, không phải mỗi chỗ một cỡ. Xem `--chu-*`. Cỡ
-      thân bài co giãn theo bề ngang màn hình (`clamp`) nên đọc được trên điện
-      thoại mà không phải phóng to.
-
-   3. LOGO là một file, dùng lại ở mọi nơi. Dấu cây trên nav, favicon của tab
-      và icon PWA đều là `public/favicon.svg` — sinh từ lưới 16×16 trong
-      `scripts/make-icons.mjs`. Không có bản sao nào để trôi khỏi nhau.
-
-   Thiết kế mobile-first: nav cuộn ngang, nút "Chơi ngay" luôn trong tầm ngón
-   cái, bảng cuộn ngang trong khung riêng, chữ sans hệ thống cho tiếng Việt.
-
-   Tài liệu: docs/NHAN-DIEN.md
+   Thân thiện với mọi thiết bị bằng cách RẺ NHẤT: bố cục một cột, thanh bên
+   xuống dưới khi màn hẹp, bảng cuộn ngang trong khung riêng, cỡ chữ cố định
+   16px (đủ lớn để không phải phóng to trên điện thoại), và không có gì bám
+   dính che mất nội dung.
 ============================================================================ */
 
 :root {
-  --bg: #14100c;
-  --bg-2: #1d1710;
-  --panel: #2b2118;
-  --panel-2: #3a2c20;
-  --panel-3: #4a3826;
-  --edge: #6b4f37;
-  --edge-hi: #a37850;
-  --ink: #f6ecdc;
-  --ink-dim: #b9a68d;
-  --ink-mute: #8a7a66;
-  --gold: #ffd84a;
-  --gold-dark: #c9931a;
-  --green: #6cc94f;
-  --green-dark: #3d6b2a;
-  --red: #e05d5d;
-  --red-dark: #6b2a2a;
-  --blue: #5aa9e6;
-  --glass: rgba(43, 33, 24, 0.9);
-  --shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
-  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --nen: #ffffff;
+  --nen-2: #f6f6f4;
+  --nen-3: #eceae5;
+  --vien: #c8ccd1;
+  --vien-nhat: #e4e6e9;
+  --chu: #1f1f1f;
+  --chu-nhat: #5a5f66;
+  --lien-ket: #0645ad;
+  --lien-ket-da: #0b0080;
+  --xanh: #2f7d32;
+  --do: #b3261e;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-
-  /* THANG CHỮ — bốn bậc, không hơn. Thêm bậc thứ năm là mở đường cho "cỡ nào
-     cũng được", và trang sẽ trôi thành mỗi mục một cỡ. */
-  --chu-to: clamp(28px, 7vw, 44px); /* h1 trong hero */
-  --chu-muc: clamp(20px, 4.2vw, 27px); /* h2 — tên một mục */
-  --chu-the: clamp(16px, 2.9vw, 18px); /* h3 — tên một thẻ */
-  --chu-nho: 13.5px; /* chú thích, nhãn, chip */
-
-  /* KHOẢNG CÁCH — bội của 4, để mọi thứ rơi đúng lưới. */
-  --k1: 4px;
-  --k2: 8px;
-  --k3: 12px;
-  --k4: 16px;
-  --k5: 24px;
-  --k6: 40px;
-  --k7: 64px;
-
-  --bo: 10px; /* bo góc chuẩn của thẻ và nút */
-  --sa-b: env(safe-area-inset-bottom, 0px);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-text-size-adjust: 100%;
-}
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: clamp(15px, 2.6vw, 16.5px);
-  line-height: 1.7;
-  /* nền ruộng: các dải cỏ mờ chạy chéo */
-  background-image: repeating-linear-gradient(
-    115deg,
-    rgba(108, 201, 79, 0.035) 0 22px,
-    transparent 22px 44px
-  );
-  /* chừa chỗ cho thanh "Chơi ngay" dính đáy trên mobile */
-  padding-bottom: calc(72px + var(--sa-b));
+  background: var(--nen);
+  color: var(--chu);
+  font: 16px/1.6 var(--font);
 }
 
-a {
-  color: var(--blue);
-}
+a { color: var(--lien-ket); }
+a:visited { color: var(--lien-ket-da); }
+a:hover { text-decoration: none; }
 
-.wrap {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
+img, canvas { max-width: 100%; }
 
-/* --------------------------------------------------------------- thanh nav */
-nav {
-  border-bottom: 2px solid var(--edge);
-  background: rgba(20, 16, 12, 0.94);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  backdrop-filter: blur(6px);
-}
-
-nav .wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 56px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  white-space: nowrap;
-}
-nav .wrap::-webkit-scrollbar {
-  display: none;
-}
-
-nav .brand {
-  color: var(--gold);
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-decoration: none;
-  margin-right: auto;
-  font-size: 16px;
-  padding-right: 12px;
-  /* Dấu cây đứng cạnh chữ, cùng một đường tâm. `inline-flex` chứ không phải
-     `img` trôi trong dòng chữ: chữ ONIFARM có `letter-spacing: 2px` nên nếu
-     để trôi thì khoảng cách giữa dấu và chữ đổi theo cỡ chữ của trình duyệt. */
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-nav .brand img {
-  /* Cùng một file với favicon và với icon PWA — sửa `make-icons.mjs` là cả ba
-     đổi theo, không có bản sao nào để trôi khỏi nhau. */
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  /* Pixel art: đừng làm mượt khi trình duyệt phóng theo mật độ màn hình. */
-  image-rendering: pixelated;
-  flex: none;
-}
-nav .brand span {
-  color: var(--green);
-}
-
-nav a {
-  color: var(--ink-dim);
-  text-decoration: none;
-  font-size: 14px;
-  padding: 10px 10px;
-  border-radius: 6px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-
-nav a:hover,
-nav a[aria-current="page"] {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-nav a.play {
-  color: #14100c;
-  background: var(--gold);
-  padding: 6px 14px;
-  border-radius: 6px;
-  border-bottom: 3px solid var(--gold-dark);
-  font-weight: 800;
-  margin-left: 6px;
-}
-
-/* ------------------------------------------------------------------- hero */
-header.hero {
-  padding: clamp(40px, 8vw, 72px) 0 clamp(32px, 6vw, 52px);
-  text-align: center;
-  border-bottom: 2px solid var(--edge);
-  background: linear-gradient(180deg, var(--bg-2), var(--bg));
-}
-
-h1 {
-  font-size: clamp(30px, 7vw, 50px);
-  letter-spacing: 3px;
-  color: var(--gold);
-  margin: 0 0 10px;
-  font-weight: 900;
-  text-shadow: 0 3px 0 #6b4f37;
-}
-h1 span {
-  color: var(--green);
-}
-
-.tag {
-  color: var(--ink-dim);
-  margin: 0 auto 26px;
-  max-width: 560px;
-}
-
-.cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 52px;
-  background: var(--gold);
-  color: #14100c;
-  font-weight: 800;
-  text-decoration: none;
-  padding: 10px 30px;
-  border-radius: 8px;
-  border-bottom: 4px solid var(--gold-dark);
-  letter-spacing: 0.5px;
-}
-
-.cta:hover {
-  background: #ffe27a;
-}
-
-.cta.ghost {
-  background: transparent;
-  color: var(--ink);
-  border: 2px solid var(--edge);
-  border-bottom-width: 4px;
-}
-
-.cta-row {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.note {
-  color: var(--ink-dim);
-  font-size: 13px;
-  margin-top: 18px;
-}
-
-/* --------------------------------------------------------------- devices */
-.devices {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 22px;
-}
-.devices span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  color: var(--ink-dim);
-  font-size: 13px;
-  background: rgba(43, 33, 24, 0.6);
-}
-
-/* ---------------------------------------------------------------- sections */
-section {
-  padding: clamp(32px, 6vw, 48px) 0;
-  border-bottom: 1px solid #2b2118;
-}
-
-h2 {
-  font-size: clamp(19px, 3.4vw, 22px);
-  color: var(--gold);
-  margin: 0 0 6px;
-  letter-spacing: 0.5px;
-}
-
-h3 {
-  font-size: 16px;
-  margin: 0 0 4px;
-  color: var(--ink);
-}
-
-p {
-  color: var(--ink-dim);
-  margin: 0 0 12px;
-}
-
-.lead {
-  color: var(--ink);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 14px;
-  margin-top: 22px;
-}
-
-.card {
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 16px 18px;
-  box-shadow: var(--shadow);
-}
-
-.card p {
-  margin: 0;
-  font-size: 14px;
-}
-
-.card .ico {
-  font-size: 24px;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-
-ol.steps {
-  counter-reset: s;
-  list-style: none;
-  padding: 0;
-  margin: 22px 0 0;
-}
-
-ol.steps li {
-  counter-increment: s;
-  position: relative;
-  padding: 0 0 16px 44px;
-  color: var(--ink-dim);
-  border-left: 2px solid var(--edge);
-  margin-left: 13px;
-}
-
-ol.steps li:last-child {
-  border-left-color: transparent;
-  padding-bottom: 0;
-}
-
-ol.steps li::before {
-  content: counter(s);
-  position: absolute;
-  left: -15px;
-  top: 0;
-  width: 28px;
-  height: 28px;
-  background: var(--panel);
-  border: 2px solid var(--edge-hi);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--gold);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-ol.steps li b {
-  color: var(--ink);
-}
-
-/* bảng cuộn ngang trong khung riêng trên màn hẹp */
-.table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin-top: 18px;
-  border: 1px solid #3a2c20;
-  border-radius: 8px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  min-width: 420px;
-}
-.table-wrap table {
-  min-width: 0;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid #3a2c20;
-  vertical-align: top;
-}
-
-th {
-  color: var(--gold);
-  font-weight: 600;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-td {
-  color: var(--ink-dim);
-}
-
-td b {
-  color: var(--ink);
-}
-
-kbd {
-  display: inline-block;
-  background: #1b140e;
-  border: 1px solid var(--edge);
-  border-bottom-width: 2px;
-  border-radius: 3px;
-  padding: 0 6px;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  color: var(--ink);
-}
-
-.btn-pill {
-  display: inline-block;
-  padding: 1px 9px;
-  border-radius: 999px;
-  background: var(--green-dark);
-  border: 1px solid #5c9b40;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-}
-
-pre {
-  background: #100c08;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  font-size: 13px;
-  font-family: var(--mono);
-  color: #cfe3c0;
-}
-
-code {
-  color: var(--green);
-  font-family: var(--mono);
-}
-
-footer {
-  padding: 28px 0 46px;
-  color: var(--ink-dim);
-  font-size: 13px;
-  text-align: center;
-}
-
-footer a {
-  color: var(--ink-dim);
-}
-
-/* --------------------------------------------- thanh Chơi ngay dính đáy (mobile) */
-.sticky-play {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 10px 16px calc(10px + var(--sa-b));
-  background: rgba(20, 16, 12, 0.94);
-  border-top: 2px solid var(--edge);
-  backdrop-filter: blur(6px);
-  z-index: 9;
-  display: flex;
-  justify-content: center;
-}
-.sticky-play .cta {
-  width: min(100%, 420px);
-}
-@media (min-width: 720px) {
-  .sticky-play {
-    display: none;
-  }
-  body {
-    padding-bottom: 0;
-  }
-}
-
-/* ==========================================================================
-   THƯ VIỆN — thẻ tra cứu cây trồng, vật nuôi, hành động.
-
-   Ba trục thích ứng, cùng một bộ thẻ:
-     · điện thoại  → một cột, hình nằm cạnh chữ, số liệu xếp hai cột
-     · tablet      → hai cột
-     · máy tính    → ba cột, khung rộng hơn (body.wide)
-
-   Cố ý KHÔNG dùng breakpoint cứng cho lưới thẻ: `auto-fill` + `minmax` tự chọn
-   số cột theo bề ngang thật, nên màn hình lạ (gập, chia đôi, cửa sổ hẹp) cũng
-   ra bố cục đúng mà không phải thêm một điểm ngắt nào.
-   ========================================================================== */
-
-/* Trang tra cứu cần bề ngang hơn trang giới thiệu: một thẻ cây có hình, chip
-   mùa, bốn con số và dải giai đoạn. Nhét vào 880px thì chữ gãy khắp nơi. */
-body.wide .wrap {
-  max-width: 1180px;
-}
-
-/* ------------------------------------------------------------ hình sprite */
 /* Pixel art: cấm mọi làm mượt, ở cả bốn họ trình duyệt. Thiếu dòng nào là hình
-   nhoè trên đúng trình duyệt đó và rất khó nhận ra khi chỉ thử một máy. */
+   nhoè trên đúng trình duyệt đó, và rất khó nhận ra khi chỉ thử một máy. */
 canvas.sp {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
@@ -512,704 +61,286 @@ canvas.sp {
   flex: none;
 }
 
-/* ---------------------------------------------------------- thanh nhảy mục */
-.jump-bar {
-  padding: 12px 0;
-  position: sticky;
-  top: 56px;
-  z-index: 8;
-  background: rgba(20, 16, 12, 0.94);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--edge);
-}
-.jumps {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.jumps::-webkit-scrollbar {
-  display: none;
-}
-.jump {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 6px 14px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--ink-dim);
-  text-decoration: none;
-  font-size: 14px;
-}
-.jump b {
-  color: var(--gold);
-}
-.jump:hover {
-  border-color: var(--edge-hi);
-  color: var(--ink);
-}
+/* ---------------------------------------------------------------- thanh trên */
 
-/* --------------------------------------------------------------- thẻ mục */
-.ents {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  gap: 14px;
-  margin-top: 20px;
-}
-.ents.cols {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-}
-
-.ent {
-  display: flex;
-  gap: 14px;
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 14px;
-  box-shadow: var(--shadow);
-}
-
-/* Ô hình cố định: 61 thẻ mà mỗi thẻ rộng một kiểu theo cỡ cây thì cả lưới
-   nhấp nhô. Khung cố định, hình căn giữa trong đó. */
-.ent-art {
-  flex: none;
-  /* `align-self` chứ không để giãn: thẻ trên điện thoại cao gấp ba lần ô hình,
-     mà `stretch` mặc định của flex sẽ kéo cái khung rỗng cao theo cả thẻ. */
-  align-self: flex-start;
-  width: 84px;
-  height: 84px;
-  display: grid;
-  place-items: center;
-  background: var(--bg-2);
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-}
-.ent.sm .ent-art {
-  width: 60px;
-  height: 60px;
-}
-.ent-main {
-  min-width: 0;
-  flex: 1;
-}
-.ent-sub {
-  font-size: 13px;
-  color: var(--ink-mute);
-  margin: 0 0 8px;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 10px;
-}
-.chip {
-  font-size: 12px;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  border: 1px solid var(--edge);
-  color: var(--ink-dim);
-}
-.chip.alt {
-  background: var(--green-dark);
-  border-color: #5c9b40;
-  color: #eaf7e2;
-}
-
-/* Số liệu: hai cột trên mọi cỡ. Nhãn nhỏ mờ ở trên, số sáng ở dưới — mắt quét
-   theo cột số chứ không phải đọc từng dòng "nhãn: giá trị". */
-dl.facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
-  margin: 0 0 10px;
-}
-dl.facts div {
-  min-width: 0;
-}
-dl.facts dt {
-  font-size: 11.5px;
-  color: var(--ink-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-dl.facts dd {
-  margin: 0;
-  font-size: 14px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-dl.facts dd.up {
-  color: var(--green);
-  font-weight: 700;
-}
-dl.facts dd.down {
-  color: var(--red);
-  font-weight: 700;
-}
-
-/* Dải giai đoạn lớn: đọc từ trái sang phải là thấy cây cao dần. */
-.grow {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding-top: 10px;
-  border-top: 1px solid var(--panel-2);
-}
-.grow-lbl {
-  font-size: 11.5px;
-  color: var(--ink-mute);
-  align-self: center;
-  margin-right: 2px;
-}
-
-ul.prods {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13.5px;
-  color: var(--ink-dim);
-}
-ul.prods li {
-  margin-bottom: 3px;
-}
-
-/* --------------------------------------------------------- thẻ hành động */
-.acts {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-  margin-top: 20px;
-}
-.act {
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: var(--shadow);
-}
-.act-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.act p {
-  font-size: 14px;
-  margin: 0 0 8px;
-}
-.act .meo {
-  margin: 10px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--panel-2);
-  font-size: 13px;
-  color: var(--ink-mute);
-}
-.act .meo b {
-  color: var(--gold);
-}
-
-/* Nút giả in đúng chữ trên nút hành động thật trong game — người chơi nhận ra
-   ngay chữ mình vẫn bấm, không phải dịch từ mô tả sang nút. */
-.btn-pill.big {
-  font-size: 14px;
-  padding: 6px 14px;
-  border-bottom-width: 3px;
-  border-bottom-style: solid;
-  border-bottom-color: #2b4d1c;
-}
-
-/* ------------------------------------------------------------- trang hub */
-.hub {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 14px;
-  margin-top: 22px;
-}
-.hub-card {
-  display: block;
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 16px 18px;
-  text-decoration: none;
-  box-shadow: var(--shadow);
-}
-.hub-card:hover {
-  border-color: var(--edge-hi);
-  background: var(--panel-2);
-}
-.hub-card h3 {
-  color: var(--gold);
-}
-.hub-card h3 b {
-  color: var(--ink-mute);
-  font-weight: 400;
-  font-size: 13px;
-  margin-left: 4px;
-}
-.hub-card p {
-  margin: 0;
-  font-size: 14px;
-}
-/* Dải hình mẫu CAO CỐ ĐỊNH, cắt phần thừa: bốn thẻ hub nằm cạnh nhau, thẻ nào
-   có nhiều hình hơn mà xuống dòng là cả hàng cao lệch. */
-.hub-art {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  height: 48px;
-  overflow: hidden;
-  margin-bottom: 12px;
-  font-size: 22px;
-}
-
-/* Thẻ hẹp (điện thoại): số liệu về một cột. Hai cột ở bề ngang này làm nhãn
-   "TRỒNG BAO LÂU" xuống dòng, và khi một nhãn xuống dòng còn nhãn bên cạnh thì
-   không, hai con số lệch nhau — mắt đọc thành sai cặp. */
-@media (max-width: 430px) {
-  dl.facts {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-}
-
-/* --------------------------------------------------------------- callout */
-/* Câu quan trọng nhất của mỗi mục. Vạch vàng bên trái thay cho việc in đậm cả
-   đoạn — in đậm nhiều thì không còn gì nổi bật nữa. */
-p.callout {
-  margin-top: 18px;
-  padding: 12px 16px;
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  border-left: 4px solid var(--gold);
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-}
-p.callout b {
-  color: var(--ink);
-}
-
-/* ------------------------------------------------- nav dài: cuộn trên mobile */
-/* Nav giờ có sáu mục; trên màn hẹp nó cuộn ngang (đã có sẵn `overflow-x`).
-   Nhưng "Chơi ngay" phải LUÔN thấy được, nên ghim nó vào mép phải. */
-@media (max-width: 719px) {
-  /* Nav sáu mục thì trên màn hẹp nó cuộn ngang, và nút vàng ghim bên phải sẽ
-     đè lên mục đang cuộn qua dưới nó — trông như lỗi. Bỏ hẳn nút trong nav:
-     thanh "Chơi ngay" dính đáy đã luôn ở đó rồi, hai nút cùng việc là thừa. */
-  nav a.play {
-    display: none;
-  }
-  /* Trang thư viện có thanh nhảy mục dính dưới nav — cộng dồn hai thanh dính
-     trên màn hẹp thì mất gần một phần ba màn hình. Thanh nhảy thôi dính. */
-  .jump-bar {
-    position: static;
-  }
-}
-
-/* Dải hình mẫu dưới hero: hình THẬT của game thay cho ảnh chụp màn hình. Ảnh
-   chụp thì cũ đi theo mỗi bản; những con này thì không. */
-.showcase {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 26px;
-  padding: 14px 16px;
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  background: rgba(43, 33, 24, 0.5);
-  min-height: 72px;
-}
-
-/* ---- BẢNG LUẬT: hai cột "điều gì / ra sao" -------------------------------
-   Khác bảng số liệu của thư viện ở chỗ nó không có hàng tiêu đề: cột trái
-   CHÍNH LÀ tiêu đề của hàng đó. Dùng `<th scope="row">` chứ không phải `<td>`
-   in đậm — trình đọc màn hình đọc được "Thức dậy: 6:00" thay vì hai ô rời. */
-table.luat {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: var(--k4);
-}
-table.luat th,
-table.luat td {
-  text-align: left;
-  vertical-align: top;
-  padding: var(--k3) var(--k4);
-  border-bottom: 1px solid var(--panel-2);
-}
-table.luat th {
-  color: var(--gold);
-  font-weight: 700;
-  white-space: nowrap;
-  width: 1%;
-}
-table.luat td {
-  color: var(--ink-dim);
-}
-table.luat tr:last-child th,
-table.luat tr:last-child td {
-  border-bottom: 0;
-}
-/* Màn hẹp: hai cột cạnh nhau thì cột phải chỉ còn vài chữ mỗi dòng — xếp
-   chồng, nhãn nằm trên giá trị.
-
-   `min-width: 0` trên khung cuộn là bắt buộc: `.table-wrap` sinh ra để bảng
-   RỘNG cuộn ngang trong khung riêng, nhưng bảng này thì xếp chồng nên không
-   bao giờ cần cuộn — thiếu dòng đó thì nó vẫn giữ bề rộng nội dung và đẩy cả
-   trang tràn ngang 10px. */
-@media (max-width: 520px) {
-  .table-wrap:has(table.luat) {
-    overflow-x: visible;
-    min-width: 0;
-  }
-  table.luat,
-  table.luat tbody,
-  table.luat tr,
-  table.luat th,
-  table.luat td {
-    display: block;
-    width: auto;
-  }
-  table.luat tr {
-    padding: var(--k3) 0;
-    border-bottom: 1px solid var(--panel-2);
-  }
-  table.luat th,
-  table.luat td {
-    padding: 0;
-    border: 0;
-    white-space: normal;
-  }
-  table.luat th {
-    margin-bottom: var(--k1);
-  }
-}
-
-/* ---- BẢNG SO SÁNH: 61 cây trên một màn hình ------------------------------
-   Khác `table.luat` (hai cột "điều gì / ra sao") ở chỗ nó có nhiều cột SỐ và
-   người đọc quét dọc để so. Nên: số căn PHẢI (chữ số thẳng hàng thì mắt so
-   được), hàng tiêu đề DÍNH lại khi cuộn (bảng dài 61 dòng, cuộn tới giữa mà
-   mất tiêu đề cột là bảng vô dụng), và tên cây là liên kết tới thẻ đầy đủ. */
-table.so-sanh {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-table.so-sanh th,
-table.so-sanh td {
-  padding: var(--k2) var(--k3);
-  border-bottom: 1px solid var(--panel-2);
-  text-align: left;
-  white-space: nowrap;
-}
-table.so-sanh thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--panel);
-  color: var(--gold);
-  font-size: var(--chu-nho);
-  border-bottom: 2px solid var(--edge);
-}
-table.so-sanh tbody th {
-  font-weight: 700;
-}
-table.so-sanh tbody th a {
-  color: var(--ink);
-  text-decoration: none;
-}
-table.so-sanh tbody th a:hover {
-  color: var(--gold);
-  text-decoration: underline;
-}
-table.so-sanh .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-table.so-sanh tbody tr:nth-child(2n) {
-  background: rgba(255, 255, 255, 0.022);
-}
-table.so-sanh .up {
-  color: var(--green);
-}
-table.so-sanh .down {
-  color: var(--red);
-}
-
-/* ---- MỤC THEO MÙA: chip trỏ tới thẻ đầy đủ ----
-   Mùa không còn vẽ lại trọn cái thẻ nữa (xem `cropsPage`), chỉ còn là một bảng
-   mục — nên mỗi mùa là một khối chip gọn. */
-.mua-muc {
-  margin-top: var(--k5);
-  scroll-margin-top: var(--k5);
-}
-.mua-muc h3 {
-  margin: 0 0 var(--k3);
-}
-.mua-muc h3 b {
-  color: var(--gold);
-  font-weight: 700;
-}
-a.chip {
-  text-decoration: none;
-}
-a.chip:hover {
-  border-color: var(--edge-hi);
-  color: var(--ink);
-}
-.ent {
-  scroll-margin-top: var(--k5);
-}
-
-/* ============================================================================
-   LỚP WIKI — Cường: "trình bày trang tài liệu này giống như wiki".
-
-   Đổi BỐ CỤC chứ không đổi bảng màu: một cái wiki khác một trang giới thiệu ở
-   chỗ nó có THANH BÊN tra cứu luôn hiện, tiêu đề bài có gạch ngang dưới, hộp
-   thông tin nằm bên phải, và mục lục ngay đầu bài. Giữ nguyên tông nâu vàng
-   của game thì site và game vẫn là một sản phẩm, chỉ khác cách đọc.
-
-   Mọi lớp ở đây bắt đầu bằng `w` để không đụng vào lớp cũ của các trang tra
-   cứu (bảng cây trồng, thẻ vật nuôi…) — chúng vẫn dùng lại nguyên vẹn.
-============================================================================ */
-
-body.wiki {
-  background: var(--bg);
-}
-
-/* ---- thanh trên cùng ---- */
 .wtop {
-  position: sticky;
-  top: 0;
-  z-index: 30;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 14px;
-  background: var(--glass);
-  backdrop-filter: blur(8px);
-  border-bottom: 2px solid var(--edge);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--vien);
+  background: var(--nen-2);
 }
 .wlogo {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--ink);
+  color: var(--chu);
   text-decoration: none;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-.wlogo b { color: var(--gold); }
-.wlogo span { font-size: 15px; }
-.wplay {
-  margin-left: auto;
-  padding: 7px 14px;
-  border-radius: 8px;
-  background: var(--gold);
-  color: #241a08;
-  font-weight: 800;
-  text-decoration: none;
-  box-shadow: var(--shadow);
-}
-
-/* ---- lưới: thanh bên + bài ---- */
-.wgrid {
-  display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
-  gap: 22px;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 18px 14px 96px;
-}
-.wside {
-  align-self: start;
-  position: sticky;
-  top: 62px;
-  display: grid;
-  gap: 14px;
-}
-.wgrp {
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 10px 8px;
-  display: grid;
-  gap: 2px;
-}
-.wgrp > b {
-  font-size: 11.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  padding: 2px 8px 6px;
-}
-.wgrp a {
-  display: block;
-  padding: 6px 8px;
-  border-radius: 6px;
-  color: var(--ink-dim);
-  text-decoration: none;
-  font-size: 14.5px;
-}
-.wgrp a:hover { background: var(--panel-2); color: var(--ink); }
-.wgrp a[aria-current="page"] {
-  background: var(--panel-3);
-  color: var(--gold);
   font-weight: 700;
 }
+.wlogo b { font-weight: 700; }
+.wplay { margin-left: auto; }
 
-/* ---- bài ---- */
+/* ------------------------------------------------------------------ bố cục */
+
+.wgrid {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 32px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 56px;
+}
+.wside { align-self: start; }
+.wgrp { margin-bottom: 18px; }
+.wgrp > b {
+  display: block;
+  font-size: 13px;
+  color: var(--chu-nhat);
+  margin-bottom: 4px;
+}
+.wgrp a { display: block; padding: 2px 0; font-size: 15px; }
+.wgrp a[aria-current="page"] { color: var(--chu); font-weight: 700; text-decoration: none; }
+
 .wmain { min-width: 0; }
-.wh1 {
-  font-size: clamp(26px, 5.4vw, 38px);
-  margin: 0;
-  line-height: 1.15;
-}
-.wfrom {
-  margin: 4px 0 0;
-  color: var(--ink-mute);
-  font-size: 13px;
-  font-style: italic;
-}
-.wrule {
-  border: 0;
-  border-top: 2px solid var(--edge);
-  margin: 10px 0 18px;
-}
+.wmain > *:first-child { margin-top: 0; }
+
+/* Bề ngang đọc được cho CHỮ; bảng và lưới thẻ được phép rộng hết cột. */
+.wmain p,
+.wmain ul,
+.wmain ol { max-width: 44rem; }
+
+.wh1 { font-size: 30px; font-weight: 400; margin: 0; line-height: 1.25; }
+.wfrom { margin: 2px 0 0; color: var(--chu-nhat); font-size: 14px; font-style: italic; }
+.wrule { border: 0; border-top: 1px solid var(--vien); margin: 8px 0 18px; }
 .wmain h2 {
-  font-size: var(--chu-muc);
-  margin: 28px 0 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--panel-3);
-}
-.wdem {
-  font-size: 13px;
-  color: var(--ink-mute);
+  font-size: 22px;
   font-weight: 400;
+  margin: 28px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--vien);
 }
+.wmain h3 { font-size: 17px; margin: 18px 0 6px; }
+.wdem { font-size: 14px; color: var(--chu-nhat); }
+
+.lead { font-size: 17px; }
+.note, .meo { color: var(--chu-nhat); font-size: 15px; }
+
+/* --------------------------------------------------------- mục lục · hộp tin */
+
+.wtoc {
+  display: table;
+  background: var(--nen-2);
+  border: 1px solid var(--vien);
+  padding: 8px 18px 10px;
+  margin: 16px 0;
+}
+.wtoc > b { font-size: 15px; }
+.wtoc ol { margin: 4px 0 0; padding-left: 22px; }
+
 .wbox {
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-left: 6px solid var(--gold);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 8px;
+  background: var(--nen-2);
+  border: 1px solid var(--vien);
+  border-left: 4px solid var(--vien);
+  padding: 12px 16px;
+  margin: 0 0 16px;
 }
 .wbox .lead { margin: 0 0 8px; }
 .wbox .lead:last-child { margin-bottom: 0; }
 
-/* ---- mục lục ---- */
-.wtoc {
-  display: inline-block;
-  min-width: 220px;
-  background: var(--bg-2);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 10px 16px 12px;
-  margin: 14px 0 4px;
-}
-.wtoc > b { font-size: 13px; letter-spacing: 0.06em; }
-.wtoc ol { margin: 6px 0 0; padding-left: 20px; }
-.wtoc li { margin: 3px 0; }
-.wtoc a { color: var(--blue); }
-
-/* ---- hộp thông tin ---- */
 .winfo {
   float: right;
   width: 240px;
-  max-width: 100%;
-  margin: 0 0 16px 20px;
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
+  margin: 0 0 16px 24px;
+  background: var(--nen-2);
+  border: 1px solid var(--vien);
   padding: 12px;
+  font-size: 14px;
   text-align: center;
 }
-.winfo-art { min-height: 68px; display: grid; place-items: center; }
-.winfo-ten { display: block; margin: 6px 0 10px; font-size: 17px; }
+.winfo-art { min-height: 64px; display: grid; place-items: center; }
+.winfo-ten { display: block; margin: 6px 0 10px; font-size: 16px; }
 .winfo dl {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 10px;
+  gap: 3px 10px;
   margin: 0;
   text-align: left;
-  font-size: 14px;
 }
-.winfo dt { color: var(--ink-mute); }
+.winfo dt { color: var(--chu-nhat); }
 .winfo dd { margin: 0; }
 
-/* ---- thẻ danh mục ở Trang chính ---- */
-.wcards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 12px;
-}
-.wcard {
-  display: block;
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  padding: 12px 14px;
-  color: var(--ink);
-  text-decoration: none;
-}
-.wcard:hover { border-color: var(--edge-hi); background: var(--panel-2); }
-.wcard-art { display: flex; flex-wrap: wrap; gap: 2px; min-height: 34px; }
-.wcard b { display: block; margin-top: 6px; font-size: var(--chu-the); }
-.wcard-n { font-size: 12.5px; color: var(--gold); }
-.wcard p { margin: 6px 0 0; font-size: 14px; color: var(--ink-dim); }
+/* ------------------------------------------------------------------- bảng */
 
-/* ---- bảng và danh sách trong bài ---- */
-.wtab {
-  width: 100%;
+table, .wtab {
   border-collapse: collapse;
-  font-size: 14.5px;
-  background: var(--panel);
-  border: 2px solid var(--edge);
-  border-radius: 10px;
-  overflow: hidden;
+  width: 100%;
+  font-size: 15px;
+  margin: 8px 0 4px;
 }
-.wtab th, .wtab td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--panel-3); }
-.wtab thead th { background: var(--panel-2); font-size: 12.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-mute); }
-.wtab tbody th { font-weight: 600; }
-.wtab tbody tr:hover { background: var(--panel-2); }
-.wtab canvas { vertical-align: middle; margin-right: 4px; }
-.wlist { padding-left: 20px; }
-.wlist li { margin: 6px 0; }
-.wsteps { padding-left: 22px; }
-.wsteps li { margin: 8px 0; }
-.wback { margin-top: 26px; }
+th, td {
+  border: 1px solid var(--vien);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+thead th, table th[scope="col"] {
+  background: var(--nen-3);
+  font-weight: 700;
+}
+tbody th { background: var(--nen-2); font-weight: 600; }
+td.num, .num { text-align: right; white-space: nowrap; }
+.up { color: var(--xanh); }
+.down { color: var(--do); }
 
-/* ---- ghi công tác giả cuối bài ---- */
-.wcredit {
-  margin-top: 34px;
-  padding-top: 12px;
-  border-top: 2px solid var(--edge);
-  color: var(--ink-mute);
-  font-size: 13.5px;
+/* Bảng rộng hơn màn thì cuộn TRONG khung của nó, không đẩy cả trang lệch. */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ------------------------------------------------- thẻ, chip, danh sách con */
+
+/* `min(230px, 100%)` chứ không phải `230px`: trên màn 320px, một cột tối thiểu
+   230px cộng lề là vừa đủ tràn, và nội dung bị cắt mất mép phải mà KHÔNG cuộn
+   được — kiểu hỏng tệ nhất, vì nó im lặng. `min()` cho phép cột co xuống bằng
+   bề ngang thật của màn khi cần. */
+.wcards, .ents, .acts, .grid, .cols, .prods {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+  gap: 12px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
 }
-.wcredit b { color: var(--ink-dim); }
+.wcards > *, .ents > *, .acts > *, .grid > *, .cols > *, .prods > * { min-width: 0; }
+.wcard, .card, .ent, .act, .luat {
+  display: block;
+  border: 1px solid var(--vien);
+  padding: 10px 12px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--nen);
+}
+.wcard:hover, .ent:hover { background: var(--nen-2); }
+.wcard b { display: block; margin-top: 6px; }
+.wcard-art { display: flex; flex-wrap: wrap; gap: 2px; min-height: 34px; }
+.wcard-n { font-size: 14px; color: var(--chu-nhat); }
+.wcard p { margin: 4px 0 0; font-size: 14px; color: var(--chu-nhat); }
+
+.ent-art { display: flex; align-items: flex-end; gap: 4px; min-height: 40px; }
+.ent-main { margin-top: 4px; }
+.ent-sub { margin: 2px 0; font-size: 14px; color: var(--chu-nhat); }
+.ent .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 10px; font-size: 14px; }
+.facts > * { min-width: 0; }
+.ent-main { min-width: 0; }
+.ent-main, .facts dd { overflow-wrap: anywhere; }
+.facts dl, .facts > div { margin: 0; }
+.facts dt { color: var(--chu-nhat); }
+.facts dd { margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; padding: 0; list-style: none; }
+.chip {
+  display: inline-block;
+  border: 1px solid var(--vien);
+  background: var(--nen-2);
+  padding: 1px 7px;
+  font-size: 13.5px;
+  border-radius: 2px;
+}
+.chip.alt { background: var(--nen); }
+
+.grow { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.grow-lbl { font-size: 13px; color: var(--chu-nhat); }
+
+.act-head { display: flex; align-items: center; gap: 8px; }
+.btn-pill {
+  display: inline-block;
+  border: 1px solid var(--vien);
+  background: var(--nen-3);
+  padding: 1px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 2px;
+}
+.btn-pill.big { font-size: 14px; }
+
+.wlist { padding-left: 22px; }
+.wlist li, .wsteps li { margin: 5px 0; }
+.wsteps { padding-left: 24px; }
+.wback { margin-top: 28px; }
+
+.jumps, .jump-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
+.jump { font-size: 15px; }
+.mua-muc { margin: 10px 0; }
+.so-sanh { margin: 12px 0; }
+
+/* --------------------------------------------------------------- cuối trang */
+
+.wcredit {
+  margin-top: 32px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vien);
+  color: var(--chu-nhat);
+  font-size: 14px;
+}
 
 footer.wfoot {
-  border-top: 2px solid var(--edge);
-  background: var(--bg-2);
-  padding: 16px 14px 84px;
-  color: var(--ink-mute);
-  font-size: 13.5px;
+  border-top: 1px solid var(--vien);
+  background: var(--nen-2);
+  padding: 14px 16px 20px;
+  color: var(--chu-nhat);
+  font-size: 14px;
   text-align: center;
 }
+.wrap { max-width: 1100px; margin: 0 auto; }
 
-@media (max-width: 780px) {
-  .wgrid { grid-template-columns: minmax(0, 1fr); padding-top: 12px; }
-  .wside { position: static; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .winfo { float: none; width: auto; margin: 0 0 16px; }
+/* Nút "Chơi ngay" là một LIÊN KẾT bình thường ở thanh trên và ở cuối bài. Bản
+   trước còn một nút nổi bám đáy màn hình suốt mọi trang — trên điện thoại nó
+   che mất đúng dòng cuối của bảng đang đọc. */
+.cta { font-weight: 700; }
+.sticky-play { display: none; }
+
+/* ------------------------------------------------------------- màn hình hẹp */
+
+/* Dưới 480px thì hai cột số liệu của một thẻ con vật hoá ra hai cột hẹp tới
+   mức mỗi dòng gãy làm ba. Một cột thì dài hơn, nhưng đọc được. */
+@media (max-width: 480px) {
+  .ent .facts { grid-template-columns: minmax(0, 1fr); }
 }
+
+@media (max-width: 760px) {
+  .wgrid { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 16px; }
+  /* Thanh bên xuống DƯỚI bài: trên điện thoại, mục lục của cả site mà nằm trên
+     đầu thì người đọc phải cuộn qua nó mới tới được nội dung mình vừa bấm vào. */
+  .wside { order: 2; border-top: 1px solid var(--vien); padding-top: 14px; }
+  .wgrp { margin-bottom: 12px; }
+  .wmain { order: 1; }
+  .winfo { float: none; width: auto; margin: 0 0 16px; }
+  .wh1 { font-size: 26px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Máy đang để nền tối thì trang cũng tối — nhưng là XÁM TRUNG TÍNH, không
+     phải bộ nâu vàng của game. Chỉ đảo bảng màu, không đổi một khoảng cách nào. */
+  :root {
+    --nen: #1b1b1d;
+    --nen-2: #232326;
+    --nen-3: #2c2c30;
+    --vien: #45454a;
+    --vien-nhat: #3a3a3e;
+    --chu: #e6e6e6;
+    --chu-nhat: #a6a6ad;
+    --lien-ket: #7fb3ff;
+    --lien-ket-da: #b9a3ff;
+    --xanh: #7fd18a;
+    --do: #ef8b84;
+  }
+}
+
+/* Nhãn có HÌNH: sprite nằm ngay cạnh chữ, cùng đường cơ sở, không đẩy dòng ra. */
+.ilk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: -3px;
+}
+.ilk canvas { display: inline-block; }

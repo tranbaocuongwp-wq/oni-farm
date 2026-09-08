@@ -16,7 +16,11 @@ Logo, màu, chữ, và cách site được dựng. Đây là **hợp đồng**: 
 cửa sổ, luống đất dồn lại thành một vệt xám không ra hình gì. Cây chỉ có hai
 khối — tán và thân — nên nó vẫn là cái cây ở mọi cỡ.
 
-Nguồn: **`scripts/make-icons.mjs`**, một lưới 16×16 ký tự. Không có file ảnh
+Nguồn: **`scripts/make-icons.mjs`**. Từ Đợt 26 hình dựng ở lưới **32×32** và
+dựng bằng ĐÚNG CÁCH GAME DỰNG CÂY — tán là năm khối tròn chồng nhau, viền tính
+tự động từ pixel đặc. Trước đó là một lưới 16×16 gõ tay: bốn lần ít chi tiết hơn
+game, nên trên màn hình chính điện thoại (192px) icon trông thô hơn hẳn thứ nó
+dẫn vào. Không có file ảnh
 nào nằm sẵn trong repo; `npm run icons` dựng lại toàn bộ:
 
 | Tệp | Dùng ở đâu |
@@ -35,7 +39,7 @@ theo, kể cả dấu cây trên nav — nav dùng thẳng `/favicon.svg`.
 
 * **Maskable.** Android cắt icon theo hình tuỳ máy (tròn, vuông bo, giọt nước),
   chỉ đảm bảo giữ vòng tròn giữa. Nên nền **phủ kín** và cây nằm gọn trong
-  **12/16 ô giữa** — cắt kiểu nào cũng không xén mất ngọn hay gốc.
+  **24/32 ô giữa** — cắt kiểu nào cũng không xén mất ngọn hay gốc.
 * **Đọc được ở 16px.** Ba mức đậm nhạt rõ ràng (tán sáng · tán tối · viền), không
   dựa vào chi tiết nhỏ hơn một pixel lưới.
 * **Mang màu thương hiệu.** Hai quả `--gold` — đúng màu vàng của HUD trong game
@@ -46,37 +50,57 @@ theo, kể cả dấu cây trên nav — nav dùng thẳng `/favicon.svg`.
 
 ---
 
-## 2. Màu — có VAI, không có tên
+## 2. Màu — GAME một bộ, TRANG TÀI LIỆU một bộ
 
-Token định nghĩa ở `src/site/site.css` (`:root`), dùng chung với game
-(`src/style.css`) để site và game trông như **một** sản phẩm.
+Đây là chỗ đổi lớn nhất ở Đợt 26, và nó bắt đầu từ một câu của Cường: *"tại sao
+không phải trình bày giống như một trang web thông thường thôi, thân thiện với
+mọi thiết bị, mà cứ làm cho nó màu mè lên làm chi"*.
+
+Câu ấy đúng. Trước đó site khoác nguyên bộ nhận diện của game: nền nâu tối, khung
+gỗ, chữ vàng, nút nổi bám đáy màn hình. **Trong game thì bộ ấy đúng** — nó là một
+phần của thế giới đang chơi, và người chơi đang ở trong thế giới đó. **Trên trang
+tra cứu thì nó chỉ làm chữ khó đọc hơn và trang nặng hơn**, mà không nói thêm
+được điều gì: người vào đây để tra một con số, không để ngắm.
+
+Nên hai bộ tách hẳn nhau:
+
+| | Game (`src/style.css`) | Trang tài liệu (`src/site/site.css`) |
+|---|---|---|
+| Nền | nâu tối, khung gỗ | trắng (`#fff`), xám nhạt cho hộp |
+| Chữ | kem trên nâu | đen trên trắng, 16px cố định |
+| Nhấn | vàng `--gold`, xanh `--green` | liên kết xanh cổ điển, gạch chân |
+| Viền | hai pixel, có bóng đổ | một pixel `#c8ccd1`, không bóng |
+| Nút | nổi, có bóng, bám đáy màn | liên kết thường trong dòng |
+
+Bộ token của site còn đúng **ba vai**, và cả ba đảo được sang nền tối theo cài
+đặt máy (`prefers-color-scheme`) mà **không** đổi một khoảng cách nào:
 
 | Token | Vai |
 |---|---|
-| `--gold` `#ffd84a` | tiền · thương hiệu · thứ cần chú ý · nhãn hàng trong bảng |
-| `--green` `#6cc94f` | cây · làm được · thành công |
-| `--red` `#e05d5d` | hỏng · thiếu · từ chối |
-| `--blue` `#5aa9e6` | liên kết · nước · đồng hồ |
-| `--ink` / `--ink-dim` / `--ink-mute` | chữ chính / chữ phụ / chữ mờ |
-| `--bg` → `--panel-3` | năm bậc nền, tối dần vào trong |
-| `--edge` / `--edge-hi` | viền thường / viền nổi |
+| `--chu` / `--chu-nhat` | chữ chính / chữ phụ |
+| `--nen` → `--nen-3` | ba bậc nền, nhạt dần ra ngoài |
+| `--xanh` / `--do` | số dương / số âm trong bảng |
 
-**Dùng đúng vai thì trang tự đọc được.** Người đọc học một lần rằng vàng là tiền
-và đỏ là hỏng, rồi không cần chú giải nào nữa. Lấy `--gold` để trang trí một tiêu
-đề không nói về tiền là phá đúng cái quy ước đó.
+Toàn bộ CSS site nay hơn 300 dòng, thay cho 970 dòng cũ.
 
 ---
 
-## 3. Chữ — bốn bậc, không hơn
+## 3. Chữ — cố định, không co giãn
 
 ```
---chu-to    clamp(28px, 7vw, 44px)     h1 trong hero
---chu-muc   clamp(20px, 4.2vw, 27px)   h2 — tên một mục
---chu-the   clamp(16px, 2.9vw, 18px)   h3 — tên một thẻ
---chu-nho   13.5px                     chú thích, nhãn, chip
+thân bài  16px / 1.6     KHÔNG clamp
+h1        30px           26px dưới 760px
+h2        22px
+h3        17px
+chú thích 14px
+bảng      15px
 ```
 
-Thân bài `clamp(15px, 2.6vw, 16.5px)`, `line-height: 1.7`.
+**Vì sao thôi dùng `clamp()`.** Cỡ chữ co theo bề ngang màn hình nghe thì hay,
+nhưng trên điện thoại nó cho ra chữ 15px — và dưới 16px thì Safari trên iOS
+**tự phóng to cả trang** khi chạm vào ô nhập, còn người mắt kém thì phải chụm
+ngón để đọc. 16px cố định là cỡ mà mọi trình duyệt coi là "chữ thường"; nó không
+đẹp hơn, nó chỉ đọc được ở mọi máy mà không phải làm gì thêm.
 
 Thêm bậc thứ năm là mở đường cho "cỡ nào cũng được", và trang sẽ trôi thành mỗi
 mục một cỡ. Bốn bậc đủ cho mọi trang hiện có.
@@ -86,6 +110,30 @@ hệ thống là font được máy đó dựng chữ Việt tốt nhất. Khôn
 trang chơi được offline thì không nên chờ mạng để hiện chữ.
 
 **Khoảng cách** là bội của 4 (`--k1` … `--k7`), để mọi thứ rơi đúng một lưới.
+
+---
+
+## 3b. Hình minh hoạ và liên kết nội bộ
+
+Cường: *"cái nào sử dụng được hình minh hoạ, hoặc là link nội bộ trong bài viết,
+thì phải gắn vào hết — ví dụ nói về cỏ thì phải có cái hình kế bên"*.
+
+Luật: **mọi tên của một thứ trong game đều đi qua `nhan(key)`** — hàm này trả về
+sprite + tên + liên kết tới trang chi tiết của chính nó. Một hàm, nên không có
+chỗ nào để quên, và thêm một trang chi tiết mới là mọi chỗ nhắc tên tự có liên
+kết.
+
+Bảng khoá → trang:
+
+| Khoá sprite | Trang |
+|---|---|
+| `crop:<id>` | `/cay-trong/<id>/` |
+| `animal:<id>` | `/vat-nuoi/<id>/` |
+| `item:<id>` | `/vat-pham/vp-<id>/` |
+| `tool:<id>` | `/vat-pham/vp-tool-<id>/` |
+
+Thứ chưa có trang riêng thì **vẫn có hình**: thiếu trang là lý do để không liên
+kết, không phải lý do để bỏ luôn hình minh hoạ.
 
 ---
 
@@ -192,7 +240,9 @@ TRONG game cho người đang chơi.
 | `/` Trang chính | **sinh từ content** — `trangChinhPage()` |
 | `/loi-choi/` | **sinh từ content** — `luatChoiPage()` |
 | `/cay-trong/` · `/vat-nuoi/` · `/hanh-dong/` | **sinh từ content** |
-| `/vat-pham/` + một trang cho MỖI món | **sinh từ content** |
+| `/cay-trong/<id>/` — một trang cho MỖI cây (61) | **sinh từ content** |
+| `/vat-nuoi/<id>/` — một trang cho MỖI loài (10) | **sinh từ content** |
+| `/vat-pham/` + một trang cho MỖI món (37) | **sinh từ content** |
 | `/tac-gia/` | `tacGiaPage()` — Trần Cường, story |
 | `/privacy/` | `noi-dung/privacy.html` |
 | `/farm/` | chính game — không dùng vỏ này |
