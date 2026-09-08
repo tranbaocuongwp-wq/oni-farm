@@ -262,6 +262,62 @@
     "5": {
       "ground": "grass",
       "prop": "logpile"
+    },
+    "0": {
+      "ground": "wood",
+      "prop": "table"
+    },
+    "6": {
+      "ground": "wood",
+      "prop": "chair"
+    },
+    "7": {
+      "ground": "wood",
+      "prop": "rug"
+    },
+    "8": {
+      "ground": "wood",
+      "prop": "shelf"
+    },
+    "9": {
+      "ground": "wood",
+      "prop": "cabinet"
+    },
+    "!": {
+      "ground": "wood",
+      "prop": "stove"
+    },
+    "@": {
+      "ground": "wood",
+      "prop": "sink"
+    },
+    "$": {
+      "ground": "wood",
+      "prop": "lamp"
+    },
+    "%": {
+      "ground": "wood",
+      "prop": "potplant"
+    },
+    "&": {
+      "ground": "wood",
+      "prop": "clock"
+    },
+    "*": {
+      "ground": "wood",
+      "prop": "painting"
+    },
+    "+": {
+      "ground": "wood",
+      "prop": "sofa"
+    },
+    ";": {
+      "ground": "wood",
+      "prop": "barrel"
+    },
+    "?": {
+      "ground": "wood",
+      "prop": "crate"
     }
   },
   "spawn": {

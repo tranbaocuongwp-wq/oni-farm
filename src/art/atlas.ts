@@ -1648,15 +1648,38 @@ function makeBench(art: PropArt): HTMLCanvasElement {
 }
 
 /** Tường trong nhà. */
-function makeWall(art: PropArt): HTMLCanvasElement {
+/* Màu tường trong nhà — cố định, vì đồ treo tường (đồng hồ, tranh) phải vẽ CẢ
+   mảng tường phía sau chúng, mà chúng lại có bảng màu của riêng mình. */
+const TUONG: PropArt = { body: "#6b5540", dark: "#3a2c20", accent: "#8a6f52" };
+
+/** Mảng TƯỜNG gạch — tách riêng vì đồ treo tường vẽ đè lên chính nó. */
+function makeWallSurface(): Surface {
   const s = surface(TILE, TILE);
-  s.rect(0, 0, TILE, TILE, art.body);
-  for (let y = 0; y < TILE; y += 4) {
-    s.hline(0, y, TILE, art.dark);
-    for (let x = (y / 4) % 2 === 0 ? 0 : 4; x < TILE; x += 8) s.vline(x, y, 4, art.dark);
+  for (let y = 0; y < TILE; y += Q) for (let x = 0; x < TILE; x += Q) s.dot(x, y, TUONG.body);
+  /* Gạch xây SO LE: hàng dưới lệch nửa viên so với hàng trên. Mạch vữa sáng
+     hơn viên gạch một nấc, và mép dưới mỗi viên tối một nấc — chừng ấy là đủ
+     để bức tường có bề dày thay vì là một mảng màu kẻ ô. */
+  const cao = 4;
+  const rong = 8;
+  for (let hy = 0; hy < TILE; hy += cao) {
+    const lech = ((hy / cao) % 2) * (rong / 2);
+    for (let x = 0; x < TILE; x += Q) {
+      s.dot(x, hy, TUONG.dark);
+      s.dot(x, hy + cao - Q, shade(TUONG.body, 0.88));
+    }
+    for (let x = -rong; x < TILE + rong; x += rong)
+      for (let d = Q; d < cao - Q; d += Q) s.dot(x + lech, hy + d, TUONG.dark);
   }
-  s.hline(0, 0, TILE, art.accent);
-  return s.c;
+  for (let x = 0; x < TILE; x += Q) {
+    s.dot(x, 0, TUONG.accent);
+    s.dot(x, Q, lighten(TUONG.accent));
+  }
+  return s;
+}
+
+function makeWall(art: PropArt): HTMLCanvasElement {
+  void art;
+  return makeWallSurface().c;
 }
 
 /** Cửa ra vào nhìn từ trong phòng. */
@@ -2524,6 +2547,282 @@ function makeLogPile(art: PropArt): HTMLCanvasElement {
   return outline(s, shade(art.dark, 0.6), 1).c;
 }
 
+
+/* ---------------------------------------------------------------------------
+   ĐỒ ĐẠC TRONG NHÀ — Cường: "thêm 1 số đồ đạc bàn ghế ở trong nhà nữa bạn".
+
+   Trong nhà trước giờ là mười bốn ô ván sàn với đúng một cái giường. Người chơi
+   bước vào, thấy một căn phòng trống, rồi bước ra — cả bản đồ ấy không có lý do
+   nào để tồn tại ngoài chỗ ngủ.
+
+   Mười bốn món dưới đây đều nhìn TỪ TRÊN XUỐNG, cùng góc với cả game: cái bàn
+   là mặt bàn nhìn từ trên, cái ghế là mặt ngồi và cái lưng tựa đổ về sau. Vẽ
+   chúng như nhìn ngang (kiểu ảnh danh mục nội thất) là lỗi mà con thuyền đã
+   mắc, và nó đọc ra "kì" ngay lập tức.
+--------------------------------------------------------------------------- */
+
+/** Mặt gỗ có thớ dọc — dùng chung cho bàn, kệ, tủ, thùng. */
+function matGo(s: Surface, x0: number, y0: number, w: number, h: number, art: PropArt): void {
+  for (let y = 0; y < h; y += Q) for (let x = 0; x < w; x += Q) s.dot(x0 + x, y0 + y, art.body);
+  for (let x = 1; x < w; x += 2.5) for (let y = 0; y < h; y += Q) s.dot(x0 + x, y0 + y, shade(art.body, 0.88));
+  for (let x = 0; x < w; x += Q) {
+    s.dot(x0 + x, y0, lighten(art.body));
+    s.dot(x0 + x, y0 + h - Q, art.dark);
+  }
+  for (let y = 0; y < h; y += Q) {
+    s.dot(x0, y0 + y, shade(art.body, 0.9));
+    s.dot(x0 + w - Q, y0 + y, art.dark);
+  }
+}
+
+/** BÀN ĂN — mặt bàn nhìn từ trên, bốn chân thò ra bốn góc, một bộ đồ ăn bày sẵn. */
+function makeTable(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 6.5, 1.6);
+  for (const [cx, cy] of [[2.5, 12.5], [12, 12.5], [2.5, 3], [12, 3]] as const)
+    for (let y = 0; y < 2; y += Q) for (let x = 0; x < 1.5; x += Q) s.dot(cx + x, cy + y, art.dark);
+  matGo(s, 1.5, 2.5, 13, 11, art);
+  // đĩa và cốc bày trên bàn
+  s.ell(6, 7.5, 2.2, 1.8, shade(art.accent, 0.82));
+  s.ell(6, 7.2, 1.8, 1.4, art.accent);
+  s.ell(6, 7.2, 0.7, 0.6, "#d8b276");
+  s.ell(10.5, 6.5, 1.1, 1, "#e8e4d8");
+  s.ell(10.5, 6.3, 0.8, 0.7, "#ffffff");
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** GHẾ — mặt ngồi vuông, lưng tựa đổ về phía sau (phía trên ô). */
+function makeChair(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 4, 1.4);
+  // lưng tựa: ba nan dọc
+  for (let x = 4.5; x < 11.5; x += Q) for (let y = 3; y < 4.5; y += Q) s.dot(x, y, art.dark);
+  for (const nx of [5.5, 7.5, 9.5]) for (let y = 4.5; y < 6.5; y += Q) s.dot(nx, y, art.body);
+  for (let x = 4.5; x < 11.5; x += Q) s.dot(x, 3, art.accent);
+  // mặt ngồi
+  matGo(s, 4, 6.5, 8, 5, art);
+  // bốn chân
+  for (const cx of [4.5, 10.5]) for (let y = 11.5; y < 13.5; y += Q) for (let x = 0; x < 1; x += Q) s.dot(cx + x, y, art.dark);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** THẢM — nằm sát sàn, ĐI QUA ĐƯỢC: viền hoa văn và tua rua hai đầu. */
+function makeRug(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  for (let y = 1; y < 15; y += Q) for (let x = 0; x < TILE; x += Q) s.dot(x, y, art.body);
+  for (let y = 2; y < 14; y += Q) for (let x = 1; x < 15; x += Q) s.dot(x, y, art.dark);
+  for (let y = 3.5; y < 12.5; y += Q) for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, art.body);
+  // hoa văn quả trám ở giữa
+  for (let d = 0; d <= 3; d += Q) {
+    for (let k = -d; k <= d; k += Q) {
+      s.dot(8 + k, 8 - (3 - d), art.accent);
+      s.dot(8 + k, 8 + (3 - d), art.accent);
+    }
+  }
+  // tua rua hai đầu
+  for (let x = 0.5; x < 15.5; x += 1) {
+    s.dot(x, 0.5, art.accent);
+    s.dot(x, 15, art.accent);
+  }
+  return s.c;
+}
+
+/** KỆ SÁCH — ba tầng, sách xếp đứng đủ màu. */
+function makeShelf(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6, 1.5);
+  matGo(s, 1.5, 2, 13, 12.5, art);
+  const mau = ["#c04a48", "#4a7fa6", "#c9a02a", "#4f8a3f", "#8a5ca8", "#c96a3a"];
+  for (let tang = 0; tang < 3; tang++) {
+    const y0 = 3 + tang * 4;
+    for (let x = 1.5; x < 14.5; x += Q) s.dot(x, y0 + 3.2, art.dark);
+    let x = 2.5;
+    let i = tang * 2;
+    while (x < 13.5) {
+      const w = 0.5 + ((i * 7) % 3) * 0.5;
+      const c = mau[(i + tang) % mau.length]!;
+      for (let dx = 0; dx < w; dx += Q) for (let y = y0; y < y0 + 3; y += Q) s.dot(x + dx, y, c);
+      for (let dx = 0; dx < w; dx += Q) s.dot(x + dx, y0, lighten(c));
+      x += w + Q;
+      i++;
+    }
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** TỦ ĐỨNG — hai cánh, tay nắm đồng, gờ chân tủ. */
+function makeCabinet(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 5.5, 1.5);
+  matGo(s, 2, 1.5, 12, 13, art);
+  for (let y = 2.5; y < 13.5; y += Q) s.dot(8, y, art.dark);
+  // tay nắm đồng trên hai cánh, và gờ chân tủ
+  for (const cx of [6.5, 9.5]) for (let y = 7; y < 9; y += Q) s.dot(cx, y, art.accent);
+  for (let y = 3.5; y < 12.5; y += Q) { s.dot(3.5, y, shade(art.body, 0.86)); s.dot(12.5, y, shade(art.body, 0.86)); }
+  for (let x = 2; x < 14; x += Q) { s.dot(x, 12.5, art.dark); s.dot(x, 13, shade(art.dark, 0.7)); }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** BẾP LÒ — mặt bếp bốn vòng, một vòng đang đỏ lửa, và cái nồi trên đó. */
+function makeStove(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6, 1.5);
+  for (let y = 2; y < 14.5; y += Q) for (let x = 1.5; x < 14.5; x += Q) s.dot(x, y, art.body);
+  for (let x = 1.5; x < 14.5; x += Q) { s.dot(x, 2, lighten(art.body)); s.dot(x, 14, art.dark); }
+  for (const [cx, cy] of [[5, 5.5], [11, 5.5], [5, 10.5], [11, 10.5]] as const) {
+    s.ell(cx, cy, 2.2, 2, art.dark);
+    s.ell(cx, cy, 1.6, 1.4, shade(art.body, 0.8));
+  }
+  // vòng đang đỏ + cái nồi
+  s.ell(5, 5.5, 1.6, 1.4, art.accent);
+  s.ell(11, 10.5, 2.4, 2.2, "#6b7078");
+  s.ell(11, 10.2, 2, 1.8, "#9aa0a8");
+  s.dot(13.4, 10.5, "#4a4f56");
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** BỒN RỬA — chậu men trắng, vòi cong, một dòng nước. */
+function makeSink(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6, 1.5);
+  for (let y = 4; y < 14.5; y += Q) for (let x = 1.5; x < 14.5; x += Q) s.dot(x, y, art.body);
+  for (let x = 1.5; x < 14.5; x += Q) { s.dot(x, 4, "#eef0f4"); s.dot(x, 14, art.dark); }
+  // chậu trũng
+  for (let y = 6; y < 12.5; y += Q) for (let x = 3.5; x < 12.5; x += Q) s.dot(x, y, art.dark);
+  for (let y = 6.5; y < 12; y += Q) for (let x = 4; x < 12; x += Q) s.dot(x, y, shade(art.body, 0.9));
+  s.ell(8, 11, 1.2, 0.8, art.accent);
+  // vòi
+  for (let y = 3; y < 6; y += Q) s.dot(8, y, "#b8bec6");
+  for (let x = 8; x < 10; x += Q) s.dot(x, 3, "#b8bec6");
+  for (let y = 3; y < 5; y += Q) s.dot(9.8, y, "#b8bec6");
+  for (let y = 5; y < 8; y += Q) s.dot(9.8, y, art.accent);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** ĐÈN SÀN — chân ba càng, cột, chao đèn toả sáng vàng. */
+function makeLamp(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 3.5, 1.3);
+  for (const k of [-1, 0, 1]) for (let d = 0; d < 2.2; d += Q) s.dot(8 + k * d, 14 - Math.abs(k) * 0, art.dark);
+  for (let y = 6; y < 14; y += Q) { s.dot(8, y, art.body); s.dot(8.5, y, art.dark); }
+  // chao đèn: hình thang, mép dưới rộng
+  for (let d = 0; d <= 4; d += Q) {
+    const w = 1.6 + d * 0.75;
+    for (let x = -w; x <= w; x += Q) s.dot(8.2 + x, 2 + d, x < 0 ? art.accent : shade(art.accent, 0.85));
+  }
+  for (let x = -4.6; x <= 4.6; x += Q) s.dot(8.2 + x, 6, shade(art.accent, 0.6));
+  // quầng sáng hắt xuống
+  for (let d = 0; d < 2.5; d += Q) {
+    const w = 3 + d;
+    for (let x = -w; x <= w; x += Q) if ((Math.floor(x * ART) + Math.floor(d * ART)) % 3 === 0) s.dot(8.2 + x, 6.5 + d, "#ffefc0");
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** CHẬU CÂY — chậu gốm và một bụi lá xoè. */
+function makePotPlant(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 4, 1.4);
+  for (let y = 9; y < 14.5; y += Q) {
+    const w = 3.4 - (y - 9) * 0.28;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, art.body);
+    s.dot(8 - w, y, art.dark);
+    s.dot(8 + w, y, art.dark);
+    s.dot(8 - w + Q, y, lighten(art.body));
+  }
+  for (let x = -3.6; x <= 3.6; x += Q) { s.dot(8 + x, 9, lighten(art.body)); s.dot(8 + x, 9.5, art.dark); }
+  // lá: bảy chiếc toả từ gốc
+  for (let i = 0; i < 7; i++) {
+    const goc = Math.PI * (1.1 + (i / 6) * 0.8);
+    la(s, 8, 9, 8 + Math.cos(goc) * 5.5, 9 + Math.sin(goc) * 5.5, 1.2,
+       i % 2 ? art.accent : lighten(art.accent), shade(art.accent, 0.66), lighten(art.accent));
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** ĐỒNG HỒ TREO — treo trên tường, nên nó vẽ CẢ mảng tường phía sau. */
+function makeClock(art: PropArt): HTMLCanvasElement {
+  const s = makeWallSurface();
+  s.ell(8, 7.5, 4.2, 4.2, art.dark);
+  s.ell(8, 7.5, 3.4, 3.4, art.accent);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    s.dot(8 + Math.cos(a) * 2.8, 7.5 + Math.sin(a) * 2.8, art.dark);
+  }
+  for (let d = 0; d < 2.2; d += Q) s.dot(8, 7.5 - d, art.dark);          // kim dài
+  for (let d = 0; d < 1.5; d += Q) s.dot(8 + d * 0.9, 7.5 + d * 0.5, art.dark); // kim ngắn
+  s.dot(8, 7.5, art.body);
+  // quả lắc
+  for (let y = 11.5; y < 13.5; y += Q) s.dot(8, y, art.dark);
+  s.ell(8, 13.8, 1.1, 1.1, art.body);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** TRANH TREO — khung gỗ, phong cảnh đồng quê bên trong. Cũng vẽ cả tường. */
+function makePainting(art: PropArt): HTMLCanvasElement {
+  const s = makeWallSurface();
+  for (let y = 3; y < 12; y += Q) for (let x = 2; x < 14; x += Q) s.dot(x, y, art.body);
+  for (let x = 2; x < 14; x += Q) { s.dot(x, 3, lighten(art.body)); s.dot(x, 11.5, art.dark); }
+  // tranh: trời, đồi, mặt trời
+  for (let y = 4.5; y < 10; y += Q) for (let x = 3.5; x < 12.5; x += Q) s.dot(x, y, art.accent);
+  for (let x = 3.5; x < 12.5; x += Q) {
+    const doi = 8.5 - Math.sin((x - 3.5) * 0.45) * 1.4;
+    for (let y = doi; y < 10; y += Q) s.dot(x, y, "#5f9e4a");
+    s.dot(x, doi, "#7fbf5f");
+  }
+  s.ell(10.5, 6, 1.1, 1.1, "#ffd84a");
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** GHẾ SOFA — nệm ba chỗ ngồi, hai tay vịn, lưng tựa dày. */
+function makeSofa(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 7, 1.6);
+  // lưng tựa
+  for (let y = 2.5; y < 6; y += Q) for (let x = 1; x < 15; x += Q) s.dot(x, y, art.dark);
+  for (let x = 1; x < 15; x += Q) s.dot(x, 2.5, art.accent);
+  // nệm ngồi: ba khoang
+  for (let y = 6; y < 13; y += Q) for (let x = 1; x < 15; x += Q) s.dot(x, y, art.body);
+  for (const kx of [5.5, 10.5]) for (let y = 6; y < 13; y += Q) s.dot(kx, y, art.dark);
+  for (let x = 1; x < 15; x += Q) s.dot(x, 6, lighten(art.body));
+  // tay vịn
+  for (const ax of [1, 13.5]) for (let y = 5; y < 13.5; y += Q) for (let x = 0; x < 1.5; x += Q) s.dot(ax + x, y, art.dark);
+  for (const ax of [1, 13.5]) for (let x = 0; x < 1.5; x += Q) s.dot(ax + x, 5, art.accent);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** THÙNG GỖ — đai sắt ngang, nắp gỗ nhìn từ trên. */
+function makeBarrel(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 4.5, 1.4);
+  for (let y = 3; y < 14.5; y += Q) {
+    const w = 4.6 - Math.abs((y - 8.5) / 5.5) * 0.9;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, art.body);
+    s.dot(8 - w, y, art.dark);
+    s.dot(8 + w, y, art.dark);
+    s.dot(8 - w + Q, y, lighten(art.body));
+  }
+  for (const dy of [5, 8.5, 12]) for (let x = -4.6; x <= 4.6; x += Q) s.dot(8 + x, dy, art.accent);
+  // nắp
+  s.ell(8, 3.5, 3.9, 1.5, art.dark);
+  s.ell(8, 3.3, 3.4, 1.2, shade(art.body, 1.08));
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** THÙNG HÀNG — hộp gỗ đóng đinh, có nẹp chéo. */
+function makeCrate(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 5.5, 1.4);
+  matGo(s, 2, 3, 12, 11.5, art);
+  // nẹp viền và nẹp chéo
+  for (let x = 2; x < 14; x += Q) { s.dot(x, 3.5, art.dark); s.dot(x, 13.5, art.dark); }
+  for (let y = 3; y < 14.5; y += Q) { s.dot(2.5, y, art.dark); s.dot(13, y, art.dark); }
+  for (let d = 0; d < 11; d += Q) s.dot(2.5 + d, 3.5 + d, art.dark);
+  for (let d = 0; d < 11; d += Q) s.dot(13 - d, 3.5 + d, art.dark);
+  for (const [dx, dy] of [[3, 4], [12.5, 4], [3, 13], [12.5, 13]] as const) s.dot(dx, dy, "#c9ccd2");
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
 function makeProp(id: string, art: PropArt, kieu = 0): HTMLCanvasElement {
   switch (id) {
     case "door": return makeDoor(art, kieu);
@@ -2575,6 +2874,20 @@ function makeProp(id: string, art: PropArt, kieu = 0): HTMLCanvasElement {
     case "roots": return makeRoots(art);
     case "twigs": return makeTwigs(art);
     case "logpile": return makeLogPile(art);
+    case "table": return makeTable(art);
+    case "chair": return makeChair(art);
+    case "rug": return makeRug(art);
+    case "shelf": return makeShelf(art);
+    case "cabinet": return makeCabinet(art);
+    case "stove": return makeStove(art);
+    case "sink": return makeSink(art);
+    case "lamp": return makeLamp(art);
+    case "potplant": return makePotPlant(art);
+    case "clock": return makeClock(art);
+    case "painting": return makePainting(art);
+    case "sofa": return makeSofa(art);
+    case "barrel": return makeBarrel(art);
+    case "crate": return makeCrate(art);
     case "pine": return makePine(art);
     case "birch": return makeBirch(art);
     case "palm": return makePalm(art);
