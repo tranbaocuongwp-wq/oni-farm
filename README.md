@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 163 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 165 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -1006,6 +1006,74 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 25: vẽ lại người, thú, tàu, cây rừng — và cho nước chảy thật (core 1.52 · content 1.52)
+
+Cường xem bản HD rồi chỉ từng chỗ một: *"chưa có thấy nhân [vật], mấy cái công trình toà nhà"*, *"chưa thấy
+vẽ động vật"*, *"sao con trỏ chuột to quá vậy"*, *"suối chảy nước chảy thác nước, sóng biển nữa — mấy cái này
+rất quan trọng"*, *"mấy cái tàu nữa kìa"*, *"vẽ lại hết bộ ảnh tất cả động vật đi cho chân thực vô, sai nhìn
+kì quá"*, *"quá ít động tác, tăng mạnh đi"*, *"THÊM 5-7 loại cây rừng"*.
+
+Điều đáng ghi lại: **gần như chỗ nào cũng hoá ra là một lỗi kiến trúc, không phải chuyện nét vẽ.**
+
+#### Con trỏ to gấp đôi — và một dạng lỗi đã lọt bốn lần
+
+Từ Đợt 24 sprite rộng `ART` lần đơn vị thế giới, nên `g.drawImage(img, x, y)` **ba tham số** vẽ theo cỡ pixel
+ảnh, tức gấp đôi cỡ thật. Lúc chuyển 47 chỗ sang `put()` tôi bỏ sót ba chỗ vì chúng viết nhiều dòng. Không
+phép kiểm nào bắt được: sim không có canvas, `tsc` thấy ba tham số là hợp lệ, build vẫn xanh. Người bắt được
+là Cường — tức là nó đã ra tới bản chạy.
+
+Kịch bản 164 nay **quét chính `draw.ts`** để chặn dạng gọi ấy (bỏ chú thích trước khi quét, nếu không chính
+dòng tài liệu giải thích luật sẽ làm kịch bản đỏ). Cùng dạng lỗi ấy còn ba chỗ nữa trong `atlas.ts`: con vật
+quay trái bị cắt mất một nửa, xe quay trái/lên/xuống trôi khỏi ô, nhãn túi hạt co lại còn một góc. Cách sửa
+đúng là **bỏ đi cơ hội viết sai**: gom phép lật và phép xoay về `latNgang()` / `xoayQuanhTam()`.
+
+#### Vì sao mọi con vật từng trông giống nhau
+
+Bản trước dựng **mọi** con bốn chân bằng cùng một quả trứng, rồi phân biệt bằng vài cờ rời rạc (`patch` cho
+bò, `fluff` cho cừu, `snout` cho heo). Nhưng con bò khác con heo ở **bóng dáng** chứ không ở đốm: bò lưng
+thẳng ngực sâu chân cao, heo thùng tròn bụng sệ chân ngắn, cừu là một đám mây có bốn que, chó ngực nở bụng
+thóp. Bốn bóng dáng ấy gộp làm một quả trứng thì tô màu gì cũng vẫn là bốn quả trứng khác màu.
+
+Nay mỗi loài có một **hồ sơ hình**, trong đó đường lưng và đường bụng là **hàm** theo dọc thân — đó là chỗ
+khác nhau lớn nhất giữa các loài, và cũng là thứ cho phép con vật cúi, chồm, chổng mông.
+
+Ba lỗi phải sửa sau khi xem trên trình duyệt, cả ba là "đúng ý mà sai hình": cái đầu **chạy ra ngoài mép
+canvas** (nay thu THÂN chứ không thu đầu — mất một pixel bề dài không ai để ý, mất cái đầu thì ai cũng để
+ý); **cổ dày gần bằng cái đầu** nên con chó ra hình con lạc đà; **đầu đặt cao ngang đường lưng** nên thành
+một cái bướu thứ hai mọc trên vai.
+
+#### Mười tám tư thế, mà không vẽ 720 bức
+
+15 tư thế × 4 dáng × 4 hướng × 3 khung là 720 hình — không làm nổi và cũng không nên: chúng khác nhau ở đúng
+vài con số của cùng một bộ xương. Nên tư thế là một **bảng tham số**; thêm tư thế mới là thêm một dòng. Con
+vật rảnh bốc việc từ bảng trọng số theo `hash2(id, ngày, nhịp)` — tất định, và **không thêm một byte nào vào
+save**, vì thêm một trường là thêm một bước migrate và một bất biến phải giữ mãi.
+
+#### Bốn loại nước, và một câu trả lời do content nói ra
+
+Hồ cá, con sông và mặt biển từng dùng **chung** một hình gợn lăn tăn 16×16: dòng sông không chảy về đâu cả,
+mặt biển đứng im, và cả ba là một tấm lưới ô vuông lặp lại. Nay lớp vẽ **tự suy ra** loại nước từ hình dạng
+vùng nước — trừ BIỂN, thứ được xác định bằng vùng nước nối liền với **cổng biển** (chỗ thuyền buôn đi vào).
+Thử đoán bằng "nước chạm mép dưới bản đồ" thì hỏng ngay: bản đồ có viền cây bao quanh nên cả vịnh bị nhận
+nhầm thành một con suối chảy ngang.
+
+Mặt nước thành **mảng lặp 64×64** tô bằng `fillRect` (cùng mẹo với lớp mưa của Đợt 23): vệt nước dài hơn cả ô
+nên nó chảy xuyên qua ranh giới ô, và không còn chu kỳ nào đủ ngắn để mắt bắt được cái lưới.
+
+#### Con thuyền sai góc nhìn
+
+Nó được vẽ như **nhìn ngang** trong khi cả bản đồ nhìn từ trên xuống — cái buồm tam giác dựng đứng ấy chỉ
+đúng nếu người xem đứng ngang mặt nước. Nhìn từ trên, buồm phải là một cánh cung phồng chạy dọc từ cột về
+lái. Buồm cũng thôi lấy màu `accent`: `accent` của thuyền là màu gỗ bánh lái, nên lấy nó thì thuyền căng một
+lá buồm nâu — cùng dạng lỗi với hai cái sừng hồng của con bò.
+
+#### Bảy loài cây rừng, và cây UỐN chứ không TRƯỢT
+
+Thông · bạch dương · dừa · liễu · phong · tre · cây khô, rải theo vùng (dừa ven biển, liễu ven sông, thông ở
+rừng Bắc). Và cây cao nay cắt làm **bốn lát**, mỗi lát dịch theo bình phương độ cao: gốc đứng yên, ngọn đi xa
+nhất, thân cong thành một cung. Bản trước cắt hai lát nên cả cái tán dịch nguyên khối — cái cây bị *xô* chứ
+không bị *uốn*.
 
 ### Đợt 24: HD pixel art, và sáu mươi mốt cây thôi giống nhau (core 1.51 · content 1.51)
 

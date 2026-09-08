@@ -317,7 +317,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 163 kịch bản sim (159 dây bẫy cache nền · 160 cây theo mùa · 148 một thang việc · 151 việc vặt …) + OTA
+npm run test:all       # typecheck + 165 kịch bản sim (159 dây bẫy cache nền · 160 cây theo mùa · 148 một thang việc · 151 việc vặt …) + OTA
 npm run build
 ```
 
