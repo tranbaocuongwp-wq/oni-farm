@@ -845,7 +845,9 @@ function makeBed(art: PropArt): HTMLCanvasElement {
  * Vẽ CHỪA hai mép trên/dưới một chút để mặt nước còn lộ ra hai bên: người chơi
  * phải thấy mình đang đi TRÊN nước, chứ không phải trên một dải sàn gỗ.
  */
-function makePier(art: PropArt): HTMLCanvasElement {
+const KHONG_LAN_CAN: Neighbors = { up: false, down: false, left: false, right: false };
+
+function makePier(art: PropArt, rail: Neighbors = KHONG_LAN_CAN): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.rect(0, 3, TILE, 10, art.dark);
   s.rect(0, 4, TILE, 8, art.body);
@@ -854,6 +856,38 @@ function makePier(art: PropArt): HTMLCanvasElement {
   s.hline(0, 11, TILE, art.dark);
   s.px(2, 13, art.dark);                                          // chân cọc
   s.px(11, 13, art.dark);
+  /* LAN CAN ở cạnh giáp nước (Đợt 21). Cột 2px + thanh ngang sáng; cạnh trên
+     và hai bên vẽ ở đây (nằm SAU người đi trên cầu), cạnh dưới nằm ở
+     `makePierOver` để vẽ ĐÈ lên người. */
+  const cot = shade(art.dark, 0.8);
+  const thanh = art.accent;
+  if (rail.left) {
+    s.rect(0, 1, 2, 11, cot);
+    s.hline(0, 1, 2, thanh);
+    s.px(0, 6, thanh);
+    s.px(1, 6, thanh);
+  }
+  if (rail.right) {
+    s.rect(TILE - 2, 1, 2, 11, cot);
+    s.hline(TILE - 2, 1, 2, thanh);
+    s.px(TILE - 2, 6, thanh);
+    s.px(TILE - 1, 6, thanh);
+  }
+  if (rail.up) {
+    s.rect(0, 0, TILE, 2, cot);
+    s.hline(0, 0, TILE, thanh);
+    for (let x = 2; x < TILE; x += 5) s.vline(x, 1, 3, cot);
+  }
+  return s.c;
+}
+
+/** Lan can CẠNH DƯỚI của cầu tàu — vẽ sau người đứng trên ô, nên là canvas riêng. */
+function makePierOver(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const cot = shade(art.dark, 0.8);
+  s.rect(0, 12, TILE, 2, cot);
+  s.hline(0, 12, TILE, art.accent);
+  for (let x = 2; x < TILE; x += 5) s.vline(x, 12, 4, cot);
   return s.c;
 }
 
@@ -2415,6 +2449,22 @@ function makeRainDrop(frame: number): HTMLCanvasElement {
   return s.c;
 }
 
+/** Vũng nước 16×16: một elip xanh nhạt mờ, viền tối, một chấm phản chiếu. */
+function makePuddle(k: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const cx = k === 0 ? 8 : 7;
+  const cy = k === 0 ? 10 : 8;
+  const rx = k === 0 ? 5 : 4;
+  const ry = k === 0 ? 2.5 : 2;
+  s.g.globalAlpha = 0.55;
+  s.ell(cx, cy, rx + 0.6, ry + 0.6, "#3d5a78");
+  s.ell(cx, cy, rx, ry, "#7fb6ec");
+  s.g.globalAlpha = 0.8;
+  s.px(cx - 2, cy - 1, "#dff1ff");
+  s.g.globalAlpha = 1;
+  return s.c;
+}
+
 /** Icon 12×12 cho HUD theo id thời tiết. Id lạ (content mới) → mặt trời. */
 function makeWeatherIcon(id: string): HTMLCanvasElement {
   const s = surface(12, 12);
@@ -2486,6 +2536,10 @@ export interface Atlas {
   voidIn: HTMLCanvasElement[];
   /** Mọi vật thể, dựng theo props.json. Cao 32px nếu prop khai `tall`. */
   props: Record<string, HTMLCanvasElement>;
+  /** CẦU (`prop.bridge`): 16 biến thể theo cạnh nào có LAN CAN (khoá `tileMaskKey`). */
+  propMask: Record<string, Map<string, HTMLCanvasElement>>;
+  /** Lan can cạnh DƯỚI của cầu — vẽ SAU người/xe đứng trên ô, nên là hình riêng. */
+  propOver: Record<string, HTMLCanvasElement>;
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật thể NHIỀU Ô tự nối (`prop.block`): id → (khoá trái-phải → sprite) */
@@ -2497,7 +2551,8 @@ export interface Atlas {
   /** người làm thuê: cùng 28 khung với nhân vật chính, khác bảng màu */
   worker(skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement;
   /** xe: 4 hướng, không cần khung đi (bánh quay không thấy ở cỡ này) */
-  vehicle(defId: string, dir: PlayerDir): HTMLCanvasElement | null;
+  /** Xe 32×32, hai khung bánh (`frame` 0/1). Site gọi hai tham số → khung 0. */
+  vehicle(defId: string, dir: PlayerDir, frame?: number): HTMLCanvasElement | null;
   /** khoá = "u d l r" dạng bit + có phải cửa không */
   house: Map<string, HTMLCanvasElement>;
   /** [dir][frame] — PLAYER_FRAMES khung: 0 đứng, 1-4 đi, 5 chạm, 6 giơ */
@@ -2530,6 +2585,8 @@ export interface Atlas {
   wiltOverlay: HTMLCanvasElement;
   /** vệt mưa, 3 khung */
   rainDrop: HTMLCanvasElement[];
+  /** Vũng nước trên lối đi khi trời mưa — hai hình, chọn theo băm toạ độ ô. */
+  puddle: HTMLCanvasElement[];
   /** icon 12×12 theo id thời tiết (id lạ → mặt trời) */
   weatherIcon(id: string): HTMLCanvasElement;
 }
@@ -2648,23 +2705,48 @@ export function blockVariantKey(left: boolean, right: boolean): string {
  * nhìn nó giống cầu gỗ đi bộ thì người chơi không hiểu vì sao chiếc xe lại
  * băng qua mặt nước.
  */
-function makeRoadBridge(art: PropArt): HTMLCanvasElement {
+function makeRoadBridge(art: PropArt, rail: Neighbors = KHONG_LAN_CAN): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const nhua = art.body;
   const toi = art.dark;
   const vach = art.accent;
-  // dầm gỗ nhô ra hai mép trên/dưới — cho thấy nó là một cây cầu, không phải đường
-  s.rect(0, 0, TILE, 2, shade("#6b4a2c", 1.0));
-  s.rect(0, TILE - 2, TILE, 2, shade("#6b4a2c", 1.0));
-  s.hline(0, 0, TILE, shade("#8a6238", 1.0));
-  s.hline(0, TILE - 1, TILE, shade("#4a3320", 1.0));
-  // mặt nhựa
-  s.rect(0, 2, TILE, TILE - 4, nhua);
-  s.hline(0, 2, TILE, shade(nhua, 1.18));
-  s.hline(0, TILE - 3, TILE, toi);
-  // vạch kẻ dọc, đứt quãng — cùng ngôn ngữ với mặt đường trên bờ
-  for (let y = 3; y < TILE - 3; y += 4) s.rect(TILE - 1, y, 1, 2, vach);
+  // mặt nhựa phủ kín; dầm gỗ chỉ nhô ở cạnh có lan can (cạnh giáp nước)
+  s.rect(0, 0, TILE, TILE, nhua);
+  /* Vạch kẻ đứt ở mép PHẢI — chỉ khi bên phải KHÔNG có lan can, tức là còn
+     một cột cầu nữa (hai ô cầu kề nhau thì vạch nằm đúng giữa lòng đường).
+     Trước đây vạch vẽ luôn và nằm sát mép cầu ở cột ngoài. */
+  if (!rail.right) for (let y = 3; y < TILE - 3; y += 4) s.rect(TILE - 1, y, 1, 2, vach);
+  // lan can THÉP: cột tối, thanh sọc vàng-đen (`accent` là màu vạch)
+  const thep = shade(toi, 0.85);
+  const soc = (x: number, y: number, w: number, h: number, doc: boolean) => {
+    s.rect(x, y, w, h, thep);
+    for (let k = 0; k < (doc ? h : w); k += 4)
+      if (doc) s.rect(x, y + k, w, 2, vach);
+      else s.rect(x + k, y, 2, h, vach);
+  };
+  if (rail.left) {
+    s.rect(0, 0, 2, TILE, "#6b4a2c");
+    soc(0, 0, 2, TILE, true);
+  }
+  if (rail.right) {
+    s.rect(TILE - 2, 0, 2, TILE, "#6b4a2c");
+    soc(TILE - 2, 0, 2, TILE, true);
+  }
+  if (rail.up) {
+    s.rect(0, 0, TILE, 2, "#6b4a2c");
+    soc(0, 0, TILE, 2, false);
+  }
   return outline(s).c;
+}
+
+/** Lan can CẠNH DƯỚI của cầu đường — vẽ đè lên xe/người đang qua cầu. */
+function makeRoadBridgeOver(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const thep = shade(art.dark, 0.85);
+  s.rect(0, TILE - 3, TILE, 3, thep);
+  for (let k = 0; k < TILE; k += 4) s.rect(k, TILE - 3, 2, 2, art.accent);
+  s.hline(0, TILE - 1, TILE, "#4a3320");
+  return s.c;
 }
 
 function houseKey(n: Neighbors, door: boolean): string {
@@ -3035,7 +3117,9 @@ export type EmoteKind =
   /** đang ngủ — chữ Z */
   | "sleep"
   /** người làm đang mệt — giọt mồ hôi */
-  | "tired";
+  | "tired"
+  /** con vật ướt mưa mà không có chỗ trú — giọt nước xanh */
+  | "wet";
 
 const EMOTE = 9;
 
@@ -3078,6 +3162,14 @@ function makeEmote(kind: EmoteKind): HTMLCanvasElement {
     s.px(4, 4, ink);
     s.px(3, 5, ink);
     s.hline(2, 6, 5, ink);
+  } else if (kind === "wet") {
+    // giọt nước: nhọn trên, tròn dưới, một chấm sáng
+    s.px(4, 1, ink);
+    s.hline(3, 2, 3, ink);
+    s.hline(2, 3, 5, ink);
+    s.hline(2, 4, 5, ink);
+    s.hline(3, 5, 3, ink);
+    s.px(3, 3, "#dff1ff");
   } else {
     // giọt mồ hôi
     s.px(4, 2, ink);
@@ -3141,7 +3233,8 @@ function khoi(
   s.ell(cx - rx * 0.26, cy - ry * 0.44, Math.max(0.5, rx * 0.46), Math.max(0.5, ry * 0.3), sang);
 }
 
-export type AnimalPose = "walk" | "eat" | "sleep";
+/** `huddle` = co ro trong mưa: đứng, thân hạ một pixel, mắt nhắm — không phải nằm ngủ. */
+export type AnimalPose = "walk" | "eat" | "sleep" | "huddle";
 
 function makeAnimal(
   art: AnimalArt,
@@ -3167,9 +3260,10 @@ function makeAnimal(
 
   const nam = pose === "sleep" && art.form !== "fish";
   const an = pose === "eat" && art.form !== "fish";
+  const coRo = pose === "huddle" && art.form !== "fish";
   /* Nhún theo khung. Khung 2 là lúc cả bốn chân chạm đất nên thân hạ xuống 1px;
-     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. */
-  const bob = frame === 2 ? 1 : 0;
+     đó là toàn bộ chuyển động mà mắt đọc ra ở cỡ này. Co ro thì hạ luôn. */
+  const bob = frame === 2 || coRo ? 1 : 0;
 
   const W = Math.max(5, Math.min(14, Math.round(art.w)));
   const H = Math.max(4, Math.min(11, Math.round(art.h)));
@@ -3324,7 +3418,7 @@ function makeAnimal(
       }
     }
 
-    if (nam) mat_nham(hx, hy, hs, ngang);
+    if (nam || coRo) mat_nham(hx, hy, hs, ngang);
     else mat(hx, hy, hs, ngang);
   }
 
@@ -3401,7 +3495,7 @@ function makeAnimal(
       s.hline(ngang ? bx : Math.round(hx - 1), my + 1, 3, shade(art.accent, 0.72));
     }
 
-    if (nam) mat_nham(hx, hy, hs, ngang);
+    if (nam || coRo) mat_nham(hx, hy, hs, ngang);
     else mat(hx, hy, hs, ngang);
   }
 
@@ -3573,54 +3667,133 @@ function makeAnimal(
   }
 }
 
+/** Ba dáng xe, suy từ content (xem `vehicleOf`). */
+export type VehicleStyle = "box" | "flatbed" | "boat";
+
+/** Cỡ canvas xe: hai ô — xe phải to hơn người, mà người là 16px. */
+export const VEHICLE_SIZE = 32;
+
 /**
- * Xe tải. Nhìn từ trên xuống nên chỉ có hai dáng thật: DỌC (đi lên/xuống) và
- * NGANG (đi trái/phải). Ở 16×16 thì bánh xe quay không ai thấy, nên không cần
- * khung hoạt hoạ — đỡ được 3/4 số canvas mà mắt không nhận ra khác biệt.
+ * Xe (Đợt 21: 32×32, thân dài 24px — một rưỡi ô — thay cho 10×14 ngang cỡ
+ * người). Nhìn từ trên xuống nên chỉ có hai dáng thật: DỌC và NGANG; hai khung
+ * BÁNH (`frame`) để xe đang chạy nhìn ra là đang chạy. Hộp va chạm KHÔNG đổi
+ * (13×11 trong content) — sprite to lên, đường 1 ô vẫn đi được.
+ *
+ *   box     — thùng kín + ca-bin (xe giao hàng)
+ *   flatbed — ca-bin + sàn phẳng chở kiện hàng (xe thu mua)
+ *   boat    — thân thuyền bo hai đầu, ca-bin, cột buồm và lá buồm
  */
 function makeVehicle(
   art: { body: string; dark: string; glass: string; accent: string },
   dir: PlayerDir,
+  frame = 0,
+  style: VehicleStyle = "box",
 ): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
+  const S = VEHICLE_SIZE;
+  const s = surface(S, S);
   const doc = dir === "up" || dir === "down";
-  const w = doc ? 10 : 14;
-  const h = doc ? 14 : 10;
-  const x0 = Math.round((TILE - w) / 2);
-  const y0 = Math.round((TILE - h) / 2);
+  const flip = dir === "left" || dir === "up";
+  const L = 24; // chiều dài thân
+  const Wd = style === "boat" ? 11 : 13; // bề ngang thân
+  const toi = art.dark;
+  const sang = lighten(art.body);
 
-  s.shadow(8, TILE - 1, w / 2, 1.5);
-  // thùng xe
-  s.rect(x0, y0, w, h, art.body);
-  s.hline(x0, y0, w, art.dark);
-  s.hline(x0, y0 + h - 1, w, art.dark);
-  s.vline(x0, y0, h, art.dark);
-  s.vline(x0 + w - 1, y0, h, art.dark);
+  /* Vẽ MỘT lần ở dáng NGANG hướng PHẢI, rồi xoay/lật cho ba hướng còn lại —
+     một hình nguồn, bốn hướng, không chép tay bốn lần. */
+  const x0 = Math.round((S - L) / 2);
+  const y0 = Math.round((S - Wd) / 2) - 2;
+  const y1 = y0 + Wd - 1;
 
-  // ca-bin + kính, đặt về phía ĐẦU xe
-  if (doc) {
-    const cy = dir === "up" ? y0 + 1 : y0 + h - 5;
-    s.rect(x0 + 1, cy, w - 2, 4, art.dark);
-    s.rect(x0 + 2, cy + 1, w - 4, 2, art.glass);
+  s.shadow(S / 2, y1 + 3, L / 2 - 1, 2);
+
+  if (style === "boat") {
+    // thân: mũi nhọn bên phải, đuôi vuông bên trái
+    for (let x = 0; x < L; x++) {
+      const t = x / (L - 1);
+      const co = t > 0.72 ? Math.round(((t - 0.72) / 0.28) * (Wd / 2 - 1)) : 0; // mũi thu hẹp
+      s.vline(x0 + x, y0 + co, Wd - co * 2, art.body);
+      s.px(x0 + x, y0 + co, sang);
+      s.px(x0 + x, y1 - co, toi);
+    }
+    s.rect(x0, y0, 1, Wd, toi); // đuôi
+    // ván sàn
+    for (let x = x0 + 3; x < x0 + L - 7; x += 4) s.vline(x, y0 + 2, Wd - 4, shade(art.body, 0.85));
+    // ca-bin gần đuôi, kính hướng mũi
+    s.rect(x0 + 3, y0 + 2, 6, Wd - 4, toi);
+    s.rect(x0 + 7, y0 + 3, 1, Wd - 6, art.glass);
+    // cột buồm + buồm (màu accent) cắm giữa thân
+    const mx = x0 + 13;
+    s.vline(mx, y0 - 6, Wd + 4, "#4a3320");
+    for (let k = 0; k < 6; k++) s.hline(mx + 1, y0 - 5 + k, 1 + k, art.accent);
+    s.hline(mx + 1, y0 + 1, 6, shade(art.accent, 0.8));
+    // gợn nước hai bên mạn, đổi theo khung
+    const w = frame === 0 ? 0 : 2;
+    s.px(x0 - 1 + w, y0 - 1, "#dff1ff");
+    s.px(x0 + 8 - w, y1 + 2, "#dff1ff");
+    s.px(x0 + L - 4 + w, y1 + 1, "#dff1ff");
   } else {
-    const cx = dir === "left" ? x0 + 1 : x0 + w - 5;
-    s.rect(cx, y0 + 1, 4, h - 2, art.dark);
-    s.rect(cx + 1, y0 + 2, 2, h - 4, art.glass);
+    // ca-bin ở đầu PHẢI, dài 8; phần sau là thùng (24-9)
+    const cabW = 8;
+    const cx0 = x0 + L - cabW;
+    // thùng / sàn
+    if (style === "box") {
+      s.rect(x0, y0, L - cabW - 1, Wd, art.body);
+      s.hline(x0, y0, L - cabW - 1, sang);
+      s.hline(x0, y1, L - cabW - 1, toi);
+      s.vline(x0, y0, Wd, toi);
+      s.vline(x0 + L - cabW - 2, y0, Wd, toi);
+      // sọc accent dọc thùng
+      s.hline(x0 + 1, y0 + Math.round(Wd / 2), L - cabW - 3, art.accent);
+    } else {
+      // sàn phẳng tối, thành thấp, hai kiện hàng
+      s.rect(x0, y0 + 1, L - cabW - 1, Wd - 2, shade(toi, 1.1));
+      s.hline(x0, y0 + 1, L - cabW - 1, art.body);
+      s.hline(x0, y1 - 1, L - cabW - 1, art.body);
+      s.vline(x0, y0 + 1, Wd - 2, art.body);
+      const kien = "#c9a06a";
+      const kienToi = "#8a6238";
+      s.rect(x0 + 2, y0 + 3, 5, Wd - 6, kien);
+      s.rect(x0 + 2, y0 + 3, 5, 1, lighten(kien));
+      s.rect(x0 + 2, y1 - 3, 5, 1, kienToi);
+      s.rect(x0 + 9, y0 + 3, 5, Wd - 6, kien);
+      s.rect(x0 + 9, y0 + 3, 5, 1, lighten(kien));
+      s.rect(x0 + 9, y1 - 3, 5, 1, kienToi);
+    }
+    // ca-bin
+    s.rect(cx0, y0, cabW, Wd, art.body);
+    s.hline(cx0, y0, cabW, sang);
+    s.hline(cx0, y1, cabW, toi);
+    s.vline(cx0 + cabW - 1, y0, Wd, toi);
+    s.rect(cx0 + 3, y0 + 1, 3, Wd - 2, toi); // khung kính
+    s.rect(cx0 + 4, y0 + 2, 1, Wd - 4, art.glass);
+    // đèn pha
+    s.px(cx0 + cabW - 1, y0 + 1, art.accent);
+    s.px(cx0 + cabW - 1, y1 - 1, art.accent);
+    // đèn hậu
+    s.px(x0, y0 + 1, "#e05d5d");
+    s.px(x0, y1 - 1, "#e05d5d");
+    // BÁNH: bốn bánh nhô khỏi thân 1px, khung 1 dịch vân bánh 1px = đang lăn
+    const banh = "#1e1a18";
+    const van = frame === 0 ? "#3a3532" : "#57504b";
+    for (const bx of [x0 + 3, cx0 + 1]) {
+      s.rect(bx, y0 - 1, 4, 2, banh);
+      s.rect(bx, y1, 4, 2, banh);
+      s.px(bx + 1 + frame, y0 - 1, van);
+      s.px(bx + 1 + frame, y1 + 1, van);
+    }
   }
 
-  // đèn + sọc
-  if (doc) {
-    const ly = dir === "up" ? y0 : y0 + h - 1;
-    s.px(x0 + 1, ly, art.accent);
-    s.px(x0 + w - 2, ly, art.accent);
-    s.hline(x0 + 1, y0 + Math.round(h / 2), w - 2, art.accent);
-  } else {
-    const lx = dir === "left" ? x0 : x0 + w - 1;
-    s.px(lx, y0 + 1, art.accent);
-    s.px(lx, y0 + h - 2, art.accent);
-    s.vline(x0 + Math.round(w / 2), y0 + 1, h - 2, art.accent);
-  }
-  return outline(s).c;
+  const done = outline(s).c;
+  if (!doc && !flip) return done;
+  // xoay/lật: right → left (lật ngang); right → down (xoay 90° thuận); right → up (xoay 90° ngược)
+  const m = surface(S, S);
+  m.g.save();
+  m.g.translate(S / 2, S / 2);
+  if (!doc) m.g.scale(-1, 1);
+  else m.g.rotate(dir === "down" ? Math.PI / 2 : -Math.PI / 2);
+  m.g.drawImage(done, -S / 2, -S / 2);
+  m.g.restore();
+  return m.c;
 }
 
 export function buildAtlas(content: Content): Atlas {
@@ -3670,13 +3843,17 @@ export function buildAtlas(content: Content): Atlas {
      khởi động thì màn hình chờ dài thêm mà phần lớn không dùng tới (ván mới
      chưa có con nào). Dựng lần đầu cần đến rồi nhớ luôn. */
   const vehCache = new Map<string, HTMLCanvasElement>();
-  const vehicleOf = (defId: string, dir: PlayerDir): HTMLCanvasElement | null => {
+  const vehicleOf = (defId: string, dir: PlayerDir, frame = 0): HTMLCanvasElement | null => {
     const def = content.vehicles[defId];
     if (!def) return null;
-    const key = `${defId}|${dir}`;
+    const f = frame & 1;
+    const key = `${defId}|${dir}|${f}`;
     let c = vehCache.get(key);
     if (!c) {
-      c = makeVehicle(def.art, dir);
+      /* Dáng xe suy từ content, không từ tên: thuyền = `sea`; xe có `buyBonus`
+         (đi mua) là sàn phẳng chở kiện; còn lại là thùng kín chở hàng. */
+      const dang: VehicleStyle = def.sea ? "boat" : def.buyBonus !== undefined ? "flatbed" : "box";
+      c = makeVehicle(def.art, dir, f, dang);
       vehCache.set(key, c);
     }
     return c;
@@ -3749,10 +3926,26 @@ export function buildAtlas(content: Content): Atlas {
   const FALLBACK_ART: PropArt = { body: "#8a8f98", dark: "#4a4f56", accent: "#c8cfdb" };
   const props: Record<string, HTMLCanvasElement> = {};
   const blocks: Record<string, Map<string, HTMLCanvasElement>> = {};
+  const propMask: Record<string, Map<string, HTMLCanvasElement>> = {};
+  const propOver: Record<string, HTMLCanvasElement> = {};
   for (const id of content.propOrder) {
     if (id === "house" || id === "door") continue;
     const art = content.props[id]?.art ?? FALLBACK_ART;
     props[id] = makeProp(id, art);
+    /* CẦU: 16 biến thể lan can + một hình lan can dưới. Cạnh nào giáp nước là
+       do renderer đọc bản đồ (`bridgeRail`), atlas chỉ dựng đủ mọi tổ hợp. */
+    if (content.props[id]?.bridge) {
+      const m = new Map<string, HTMLCanvasElement>();
+      for (const up of [false, true])
+        for (const down of [false, true])
+          for (const left of [false, true])
+            for (const right of [false, true]) {
+              const n = { up, down, left, right };
+              m.set(tileMaskKey(n), id === "roadbridge" ? makeRoadBridge(art, n) : makePier(art, n));
+            }
+      propMask[id] = m;
+      propOver[id] = id === "roadbridge" ? makeRoadBridgeOver(art) : makePierOver(art);
+    }
     /* Vật thể NHIỀU Ô: dựng sẵn cả bốn biến thể (đứng lẻ · đầu trái · thân ·
        đầu phải). Bốn hình cho mỗi loại — rẻ hơn hẳn việc dựng lại lúc vẽ. */
     if (content.props[id]?.block) {
@@ -3813,6 +4006,8 @@ export function buildAtlas(content: Content): Atlas {
   return {
     grass, path, asphalt, concrete, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
     autotiles,
+    propMask,
+    propOver,
     blocks,
     animal: animalOf,
     emote: emoteOf,
@@ -3860,6 +4055,7 @@ export function buildAtlas(content: Content): Atlas {
     sickOverlay: makeSickOverlay(),
     wiltOverlay: makeWiltOverlay(),
     rainDrop: [0, 1, 2].map(makeRainDrop),
+    puddle: [0, 1].map(makePuddle),
     weatherIcon,
   };
 }

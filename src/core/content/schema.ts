@@ -303,6 +303,7 @@ export function validateProps(raw: unknown): string[] {
     if (typeof item["solid"] !== "boolean") k.fail("solid", "phải là boolean");
     if (item["tall"] !== undefined && typeof item["tall"] !== "boolean")
       k.fail("tall", "phải là boolean");
+    if (item["sway"] !== undefined) k.num(item, "sway", 0, 2);
     if (item["place"] !== undefined && item["place"] !== "tile" && item["place"] !== "edge")
       k.fail("place", 'phải là "tile" (chiếm trọn ô) hoặc "edge" (đứng ở mép ô)');
     if (item["place"] === "edge" && item["solid"] === true)
@@ -628,6 +629,11 @@ export function validateWeather(raw: unknown): string[] {
     k.num(item, "growMul", 0, 10);
     k.num(item, "wind", 0, 1);
     if (item["hot"] !== undefined && typeof item["hot"] !== "boolean") k.fail("hot", "phải là boolean");
+    // Hệ số tốc độ chỉ được LÀM CHẬM: > 1 thì trời mưa chạy nhanh hơn trời nắng,
+    // và < 0.3 thì cả nông trại đứng hình mà không ai hiểu vì sao.
+    if (item["speedMul"] !== undefined) k.num(item, "speedMul", 0.3, 1);
+    if (item["shelter"] !== undefined && typeof item["shelter"] !== "boolean") k.fail("shelter", "phải là boolean");
+    if (item["halt"] !== undefined && typeof item["halt"] !== "boolean") k.fail("halt", "phải là boolean");
     if (item["diseaseMul"] !== undefined) k.num(item, "diseaseMul", 0, 20);
     if (item["fogUntil"] !== undefined) k.num(item, "fogUntil", 0, 2880);
     const streak = item["streak"];

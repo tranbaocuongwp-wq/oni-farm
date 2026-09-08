@@ -24,10 +24,12 @@ import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE } from "../src/game/entities.t
 import { grazeableAt } from "../src/game/graze.ts";
 import { dayMinutes, readyProduct, animalStats } from "../src/game/animals.ts";
 import { inZone, zoneAt, isTillable, blockedForActor, tileOkFor, waterSpotForBox, tileCenterX, tileCenterY, maxSpeedMul } from "../src/game/world.ts";
+import { weatherMood } from "../src/game/weather.ts";
+import { animalMood } from "../src/game/animals.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src/game/items.ts";
 import { sellSlots, countItem} from "../src/game/inventory.ts";
-import { hintAt, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt} from "../src/game/hint.ts";
+import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import * as seasonApi from "../src/game/season.ts";
 import { cropInSeason } from "../src/game/season.ts";
@@ -10147,9 +10149,11 @@ test("145. THUYỀN BUÔN ghé bến biển bán hàng cửa hàng trên bờ kh
     const coThuyen = () => store.getState().entities.some((e) => e.def === "boat");
     const ngayGhe = [];
     for (let n = 0; n < 9; n++) {
-      // dọn thuyền cũ để mỗi ngày là một phép thử độc lập
+      // dọn thuyền cũ để mỗi ngày là một phép thử độc lập; và GHIM TRỜI NẮNG —
+      // từ Đợt 21 thuyền không ra khơi ngày bão (kịch bản 147 kiểm chuyện đó)
       setState(store, (s) => {
         s.entities = s.entities.filter((e) => e.def !== "boat");
+        s.weather.tomorrow = "sunny";
       });
       sleep(store);
       if (coThuyen()) ngayGhe.push(store.getState().day);
@@ -10164,6 +10168,7 @@ test("145. THUYỀN BUÔN ghé bến biển bán hàng cửa hàng trên bờ kh
     setState(store, (s) => {
       s.money = 5000;
       s.day = 2;
+      s.weather.tomorrow = "sunny";
     });
     sleep(store); // sang ngày 3 → thuyền ghé
     const th0 = store.getState().entities.find((e) => e.def === "boat");
@@ -10241,6 +10246,509 @@ test("145. THUYỀN BUÔN ghé bến biển bán hàng cửa hàng trên bờ kh
 });
 
 /* ------------------------------------------------------------------ tổng kết */
+
+
+test("146. NHÃN và CÚ BẤM là MỘT: nút chính nói gì thì bấm làm đúng thứ đó", () => {
+  /* Trước Đợt 21, nhãn nút chính do `hintAt` tính còn cú bấm trong main.ts đi
+     một bộ luật khác — và `contextAction` (nguồn của nhãn "ĐỔ MÁNG", "MUA",
+     "THU cả đàn") KHÔNG có một lời gọi nào ngoài hint.ts. Nhãn ghi ĐỔ MÁNG mà
+     bấm thì lắc đầu; THU con bò cách hai ô mà bấm lại đi cày; NGỦ ở hai ô mà
+     giường im lặng vì reducer đo tầm khác UI.
+
+     Giờ chỉ còn `pressPlan`: nó trả về đúng một `Press` mà main.ts thực thi,
+     và `hintOf(press)` là cái nhãn. Kịch bản này dựng từng ca rối đã gặp và
+     khoá cả hai vế: nhãn nói gì, và Press là gì. */
+  const OPTS = { context: true, canGo: true };
+  const cung = (store, x, y, msg) => {
+    const p = pressPlan(store.getState(), content, { x, y }, OPTS);
+    deepEq(hintOf(p), hintAt(store.getState(), content, x, y), `${msg}: nhãn phải là hình chiếu của cú bấm`);
+    return p;
+  };
+
+  /* --- 1. cầm bắp cạnh chuồng gà, ngắm bụi cỏ → ĐỔ MÁNG, và ĐI TỚI máng --- */
+  {
+    const store = mkStore(1401);
+    const khu = content.tiles.pens.find((p) => p.id === "coop");
+    const m = pourSpotIn(store.getState(), content, khu);
+    const px = 38;
+    const py = khu.y + khu.h - 1 + 3;
+    setState(store, (s) => {
+      s.player.x = px * TILE + 8;
+      s.player.y = py * TILE + 8;
+      putProp(s, px + 1, py, "bush");
+    });
+    giveItem(store, "crop:corn", 20);
+    selectItem(store, "crop:corn");
+    const p = cung(store, px + 1, py, "cám + bụi cỏ");
+    eq(p.t, "go", "máng ở xa → cú bấm là ĐI TỚI");
+    eq(p.then, "use", "…rồi ĐỔ");
+    eq(p.kind, "pour", "…đúng việc ĐỔ MÁNG");
+    eq(`${p.x},${p.y}`, `${m.x},${m.y}`, "…tại đúng cái máng");
+    const h = hintOf(p);
+    eq(h.label, "ĐỔ MÁNG", "nhãn ĐỔ MÁNG");
+    ok(!h.ready, "chưa tới nơi thì chưa sáng");
+    ok(/Cách \d+ ô/.test(h.why ?? ""), `dòng phụ nói cách mấy ô (nhận "${h.why}")`);
+    deepEq(h.at, { x: m.x, y: m.y }, "và nút chỉ vào ô máng để HUD vẽ dấu");
+  }
+
+  /* --- 2. đứng TRÊN cầu tàu, ngắm ô dưới chân, mặt nước kề → MÚC ngay --- */
+  {
+    const store = mkStore(1402);
+    const s0 = store.getState();
+    let cau = null;
+    for (let y = 0; y < s0.h && !cau; y++)
+      for (let x = 0; x < s0.w; x++)
+        if (tileAt(s0, x, y)?.prop === "pier") { cau = { x, y }; break; }
+    ok(!!cau, "bản đồ có cầu tàu");
+    setState(store, (s) => {
+      s.player.x = cau.x * TILE + 8;
+      s.player.y = cau.y * TILE + 8;
+      s.water = 0;
+    });
+    selectItem(store, "tool:can");
+    const p = cung(store, cau.x, cau.y, "trên cầu tàu");
+    eq(p.t, "interact", "ô dưới chân là cầu tàu (đi xuyên, không đập, không nói chuyện) → không nuốt câu trả lời");
+    eq(p.kind, "REFILL", "…và việc là MÚC ở mặt nước kề");
+    eq(hintOf(p).label, "MÚC", "nhãn MÚC");
+  }
+
+  /* --- 3. trên cầu, thuyền buôn cập bến → THUYỀN BUÔN thắng mặt nước --- */
+  {
+    const store = mkStore();
+    setState(store, (s) => {
+      s.money = 5000;
+      s.day = 2;
+      s.weather.tomorrow = "sunny";
+    });
+    sleep(store);
+    for (let k = 0; k < 60000; k++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      const th = store.getState().entities.find((e) => e.def === "boat");
+      if (!th || th.ai.phase === "wait") break;
+    }
+    const th = store.getState().entities.find((e) => e.def === "boat");
+    eq(th?.ai.phase, "wait", "thuyền cập bến");
+    const ben = content.tiles.dock;
+    setState(store, (s) => {
+      s.player.x = ben.x * TILE + 8;
+      s.player.y = (ben.y - 1) * TILE + 8;
+    });
+    selectItem(store, "tool:can");
+    const p = cung(store, ben.x, ben.y - 1, "cạnh thuyền");
+    eq(p.t, "boat", "cú bấm mở sạp thuyền, dù mặt nước MÚC được ở ngay cạnh");
+    eq(p.id, th.id, "…đúng con thuyền");
+    eq(hintOf(p).label, "THUYỀN BUÔN", "nhãn THUYỀN BUÔN");
+  }
+
+  /* --- 4. hai con bò: con GẦN chưa tới lứa, con XA (2 ô) tới lứa → THU đúng con xa --- */
+  {
+    const store = mkStore(1404);
+    walkTo(store, HOME.x, HOME.y);
+    setState(store, (s) => { s.sel = 5; s.inv[5] = null; });
+    const px = HOME.x;
+    const py = HOME.y;
+    const tha = (dx, dy, prod) => {
+      setState(store, (s) => {
+        const n = s.entSeq + 1;
+        s.entSeq = n;
+        s.entities.push({
+          id: n, kind: "animal", def: "cow", map: "farm",
+          x: (px + dx) * TILE + 8, y: (py + dy) * TILE + 8,
+          dir: "down", anim: 0, seed: 77 + n,
+          ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+          animal: { age: 9, fed: 400, hungryDays: 0, prod: [prod] },
+        });
+      });
+      return store.getState().entSeq;
+    };
+    tha(1, 0, 0);                  // kề bên, chưa tới lứa
+    const idCheo = tha(1, 1, 99999); // chéo góc (1,41 ô — trong tầm), tới lứa
+    const p = cung(store, px + 1, py, "hai con bò");
+    eq(p.t, "gather", "cú bấm là THU");
+    eq(p.id, idCheo, "…đúng con TỚI LỨA ở chéo, không phải con kề chưa tới lứa");
+    eq(hintOf(p).label, "THU", "nhãn THU");
+    // con tới lứa ở XA hơn tầm với → ĐI TỚI rồi thu, vẫn là cùng nhãn
+    setState(store, (s) => { s.entities = s.entities.filter((e) => e.id !== idCheo); });
+    const idXa = tha(0, 3, 99999);
+    const p2 = cung(store, px, py + 3, "bò xa");
+    eq(p2.t, "go", "xa tầm → đi tới");
+    eq(p2.then, "gather", "…rồi THU");
+    eq(hintOf(p2).label, "THU", "nhãn vẫn THU");
+    ok(idXa > 0, "có con xa");
+  }
+
+  /* --- 5. cầm bình: luống khô ĐÚNG ô ngắm, máng kề → TƯỚI (ô ngắm thắng hoà) --- */
+  {
+    const store = mkStore(1405);
+    const khu = content.tiles.pens.find((p) => p.id === "cattle");
+    const m = pourSpotIn(store.getState(), content, khu);
+    ok(!!m, "khu bò có máng");
+    // đứng NGAY DƯỚI máng, ngoài rào; ô ngắm là một luống cày khô ngay bên
+    const px = m.x;
+    const py = khu.y + khu.h + 1;
+    setState(store, (s) => {
+      s.player.x = px * TILE + 8;
+      s.player.y = py * TILE + 8;
+      const t = s.tiles[idx(s.w, px + 1, py)];
+      Object.assign(t, { prop: null, b: null, tilled: true, wet: false, crop: null });
+      s.water = 5;
+    });
+    topUpWater(store);
+    selectItem(store, "tool:can");
+    const p = cung(store, px + 1, py, "bình + luống khô");
+    eq(p.t, "use", "cú bấm là DÙNG tại chỗ");
+    eq(p.kind, "water", "…việc TƯỚI ô đang ngắm, không nhảy sang máng");
+    eq(`${p.x},${p.y}`, `${px + 1},${py}`, "…đúng ô ngắm");
+  }
+
+  /* --- 6. đang VÁC gỗ: ô trống → ĐẶT XUỐNG; ô có cây → DÙNG + lý do --- */
+  {
+    const store = mkStore(1406);
+    walkTo(store, HOME.x, HOME.y);
+    setState(store, (s) => { s.carry = "log"; });
+    const plot = PLOTS[0];
+    const p1 = cung(store, plot.x, plot.y, "vác gỗ, ô trống");
+    eq(p1.t, "use", "ô trống → dùng");
+    eq(p1.kind, "putdown", "…là ĐẶT XUỐNG");
+    setState(store, (s) => { putProp(s, plot.x, plot.y, "tree"); });
+    const p2 = cung(store, plot.x, plot.y, "vác gỗ, ô có cây");
+    eq(p2.t, "deny", "ô có cây → không làm gì");
+    ok(!!p2.why, `…nhưng có lý do (nhận "${p2.why}")`);
+    eq(hintOf(p2).label, "DÙNG", "nhãn DÙNG");
+  }
+
+  /* --- 7. cầm HÀNG RÀO cạnh bò tới lứa → XÂY (ý định đã nói bằng món cầm) --- */
+  {
+    const store = mkStore(1407);
+    walkTo(store, HOME.x, HOME.y);
+    const px = HOME.x, py = HOME.y;
+    setState(store, (s) => {
+      const n = s.entSeq + 1;
+      s.entSeq = n;
+      s.entities.push({
+        id: n, kind: "animal", def: "cow", map: "farm",
+        x: (px + 1) * TILE + 8, y: py * TILE + 8,
+        dir: "down", anim: 0, seed: 77 + n,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 400, hungryDays: 0, prod: [99999] },
+      });
+    });
+    giveItem(store, "build:fence", 5);
+    selectItem(store, "build:fence");
+    const p = cung(store, px + 1, py, "hàng rào + bò");
+    eq(p.t, "build", "cú bấm mở chế độ xây");
+    eq(hintOf(p).label, "XÂY", "…và nhãn cũng ghi XÂY — không còn THU trước XÂY");
+  }
+
+  /* --- 8. nút ngữ cảnh TẮT: việc ở xa thì KHÔNG đi, rơi về ô trước mặt --- */
+  {
+    const store = mkStore(1408);
+    walkTo(store, HOME.x, HOME.y);
+    selectItem(store, "tool:hoe");
+    const far = { x: PLOTS[0].x, y: PLOTS[0].y + 5 };
+    const pOn = pressPlan(store.getState(), content, far, { context: true, canGo: true });
+    eq(pOn.t, "go", "bật: ô xa → đi tới");
+    const pOff = pressPlan(store.getState(), content, far, { context: false, canGo: false });
+    ok(pOff.t !== "go" && pOff.t !== "run", `tắt: không đi, không chuyến (đang là ${pOff.t})`);
+    const f = facingTile(store.getState(), TILE);
+    if (pOff.t === "use") eq(`${pOff.x},${pOff.y}`, `${f.x},${f.y}`, "tắt: cú bấm rơi về ô TRƯỚC MẶT");
+  }
+
+  /* --- 9. hết năng lượng: nút vẫn ghi CÀY nhưng cú bấm là TỪ CHỐI có lý do --- */
+  {
+    const store = mkStore(1409);
+    walkTo(store, HOME.x, HOME.y);
+    selectItem(store, "tool:hoe");
+    setState(store, (s) => { s.energy = 0; });
+    const p = cung(store, PLOTS[0].x, PLOTS[0].y, "hết sức");
+    eq(p.t, "deny", "hết sức → từ chối");
+    eq(p.kind, "till", "…nhưng vẫn biết ô này có việc CÀY");
+    ok(/năng lượng/i.test(p.why ?? ""), "…và nói vì sao");
+  }
+
+  /* --- 10. NGỦ: giường cách hai ô → ĐI TỚI, không dispatch cho reducer im lặng --- */
+  {
+    const store = mkStore(1410);
+    enterHouse(store);
+    walkTo(store, 2, 5); // giường ở (2,2): cách ba ô — ngoài `inInteractRange`
+    const p = cung(store, 2, 2, "giường xa");
+    eq(p.t, "go", "ngoài tầm → đi tới");
+    eq(p.then, "interact", "…rồi mới NGỦ");
+    eq(hintOf(p).label, "NGỦ", "nhãn NGỦ");
+    walkTo(store, 2, 3);
+    const p2 = cung(store, 2, 2, "giường kề");
+    eq(p2.t, "interact", "kề giường → tương tác ngay");
+    eq(p2.kind, "SLEEP", "…là NGỦ");
+  }
+
+  /* --- 11. NÚT PHỤ: người làm đứng cạnh → XEM <TÊN>, cùng hàm cho HUD và cú bấm --- */
+  {
+    const store = mkStore(1411);
+    khoaNac(store);
+    unlockAll(store);
+    store.dispatch({ t: "HIRE", job: "crops" });
+    const nl = store.getState().entities.find((e) => e.kind === "worker");
+    ok(!!nl, "thuê được người làm");
+    setState(store, (s) => {
+      const w = s.entities.find((e) => e.kind === "worker");
+      s.player.x = w.x + TILE;
+      s.player.y = w.y;
+    });
+    const px = Math.floor(store.getState().player.x / TILE);
+    const py = Math.floor(store.getState().player.y / TILE);
+    const ih = infoHint(store.getState(), content, { x: px, y: py });
+    eq(ih?.what, "worker", "nút phụ nói về NGƯỜI LÀM");
+    eq(ih?.id, nl.id, "…đúng người");
+    ok(ih.label.startsWith("XEM "), `…nhãn XEM <TÊN> (nhận "${ih.label}")`);
+  }
+});
+
+
+test("147. THỜI TIẾT đổi HÀNH VI: mưa bão làm chậm, vật nuôi trú, người làm về kho, xe không tới", () => {
+  /* Trước Đợt 21 `wind` chỉ lắc ngọn cây trồng, và ngoài chuyện cây lớn/ướt/
+     quật thì trời mưa hay nắng không đổi một bước chân nào. Giờ content nói:
+       speedMul — mọi thứ ngoài trời đi chậm lại (người chơi, đàn, người làm, xe)
+       shelter  — vật nuôi trú: có chuồng thì ở trong, con ĐÓI vẫn ra ăn
+       halt     — bão: người làm về đứng trước kho, xe/thuyền không ghé, đói cũng không ra
+     Mọi thứ đọc thuần từ `weatherDef`, không rút seed — 41/55/56 vẫn phải xanh. */
+  const bao = content.weathers.storm;
+  const mua = content.weathers.rain;
+  ok(bao.halt === true && bao.shelter === true, "content: bão phải có halt + shelter");
+  ok(mua.shelter === true && !mua.halt, "content: mưa trú nhưng không ngưng việc");
+  ok(bao.speedMul < 1 && mua.speedMul < 1, "content: mưa bão làm chậm");
+
+  /* --- a) TỐC ĐỘ: bò và người chơi chậm đúng hệ số; trong nhà thì không ----- */
+  {
+    const loai = content.animals.cow;
+    const doBo = (troi) => {
+      const store = mkStore(606);
+      setWeather(store, troi);
+      setState(store, (s) => {
+        s.player.x = HOME.x * TILE + 8;
+        s.player.y = HOME.y * TILE + 8;
+        s.entSeq = 1;
+        s.entities = [{
+          id: 1, kind: "animal", def: "cow", map: s.mapId,
+          x: (HOME.x + 3) * TILE + 8, y: HOME.y * TILE + 8,
+          dir: "left", anim: 0, seed: 5,
+          ai: { phase: "wander", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+          animal: { age: 9, fed: loai.fedMinutes, hungryDays: 0, prod: loai.products.map(() => 0) },
+        }];
+        const e = s.entities[0];
+        const cx = Math.floor(e.x / TILE);
+        const cy = Math.floor(e.y / TILE);
+        e.ai.path = [1, 2, 3, 4, 5, 6].map((k) => idx(s.w, cx + k, cy));
+      });
+      const x0 = store.getState().entities[0].x;
+      for (let i = 0; i < 60; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+      return store.getState().entities[0].x - x0;
+    };
+    const nang = doBo("sunny");
+    const gio = doBo("storm");
+    ok(nang > 0, "trời nắng bò đi được");
+    ok(
+      Math.abs(gio / nang - bao.speedMul) < 0.03,
+      `bão: bò đi ${gio.toFixed(1)}px so với nắng ${nang.toFixed(1)}px — tỉ lệ ${(gio / nang).toFixed(2)}, mong ${bao.speedMul}`,
+    );
+
+    const doNguoi = (troi, trongNha) => {
+      const store = mkStore(606);
+      if (trongNha) enterHouse(store);
+      else walkTo(store, HOME.x, HOME.y);
+      setWeather(store, troi);
+      const x0 = store.getState().player.x;
+      for (let i = 0; i < 30; i++) store.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 1 / 60 });
+      return store.getState().player.x - x0;
+    };
+    const n2 = doNguoi("sunny", false);
+    const g2 = doNguoi("storm", false);
+    ok(n2 > 0, "người chơi đi được");
+    ok(Math.abs(g2 / n2 - bao.speedMul) < 0.03, `bão: người chơi chậm đúng hệ số (${(g2 / n2).toFixed(2)})`);
+    const n3 = doNguoi("sunny", true);
+    const g3 = doNguoi("storm", true);
+    ok(n3 > 0 && Math.abs(g3 - n3) < 1e-6, `TRONG NHÀ thì bão không làm chậm (${n3.toFixed(1)} vs ${g3.toFixed(1)})`);
+    eq(weatherMood(store0(mkStore()), content).speedMul, 1, "trời nắng: hệ số 1");
+  }
+
+  /* --- b) BÒ ĐÓI, máng cạn: bão thì ở trong chuồng; nắng thì ra bãi cỏ ---- */
+  const khuBo = content.tiles.pens.find((p) => p.id === "cattle");
+  /* Ô ĐỨNG ĐƯỢC trong ruột khu cho hộp của con bò — không chép toạ độ, vì máng
+     và cột rào nằm đâu là chuyện của bản đồ. */
+  const oTrongKhu = (s) => {
+    const box = content.animals.cow.box;
+    for (let y = khuBo.y; y < khuBo.y + khuBo.h; y++)
+      for (let x = khuBo.x; x < khuBo.x + khuBo.w; x++)
+        if (!blockedForActor(s, content, x * TILE + 8, y * TILE + 8, box.w, box.h, false)) return { x, y };
+    throw new Error("khu bò không có ô đứng được");
+  };
+  const trongKhu = (e, khu) => {
+    const x = Math.floor(e.x / TILE);
+    const y = Math.floor(e.y / TILE);
+    return x >= khu.x - 1 && x < khu.x + khu.w + 1 && y >= khu.y - 1 && y < khu.y + khu.h + 1;
+  };
+  const thaBoDoi = (troi) => {
+    const store = mkStore(7171);
+    setWeather(store, troi);
+    let id = 0;
+    setState(store, (s) => {
+      s.minutes = 9 * 60;
+      s.entities = s.entities.filter((e) => e.kind !== "animal");
+      // máng cạn
+      for (const t of s.tiles) if (t.prop === "trough") { t.trough = 0; t.troughId = null; }
+      id = ++s.entSeq;
+      const o = oTrongKhu(s);
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: o.x * TILE + 8, y: o.y * TILE + 8,
+        dir: "down", anim: 0, seed: 21,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: 0, hungryDays: 0, prod: [0] },
+      });
+      s.player.x = 20 * TILE;
+      s.player.y = 20 * TILE;
+    });
+    let raNgoai = false;
+    for (let i = 0; i < 60 * 240; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      const e = store.getState().entities.find((q) => q.id === id);
+      if (!trongKhu(e, khuBo)) raNgoai = true;
+      if (store.getState().minutes >= 12 * 60) break;
+    }
+    return { raNgoai, store, e: store.getState().entities.find((q) => q.id === id) };
+  };
+  ok(thaBoDoi("sunny").raNgoai, "đối chứng: nắng, đói, máng cạn → bò RA bãi cỏ");
+  const b = thaBoDoi("storm");
+  ok(!b.raNgoai, "bão: bò đói vẫn Ở TRONG chuồng suốt ba giờ");
+  eq(animalMood(b.store.getState(), content, b.e).pose, "huddle", "…và đứng CO RO");
+  ok(thaBoDoi("rain").raNgoai, "mưa (không halt): con đói vẫn được ra ăn — mưa dầm ba ngày mà nhịn là chết");
+  deepEq(checkInvariants(b.store.getState(), content), [], "bất biến");
+
+  /* --- c) BÒ NO trong chuồng: mưa thì đứng yên, nắng thì loanh quanh --- */
+  const thaBoNo = (troi) => {
+    const store = mkStore(7272);
+    setWeather(store, troi);
+    let id = 0;
+    setState(store, (s) => {
+      s.minutes = 9 * 60;
+      s.entities = s.entities.filter((e) => e.kind !== "animal");
+      id = ++s.entSeq;
+      const o = oTrongKhu(s);
+      s.entities.push({
+        id, kind: "animal", def: "cow", map: "farm",
+        x: o.x * TILE + 8, y: o.y * TILE + 8,
+        dir: "down", anim: 0, seed: 21,
+        ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+        animal: { age: 9, fed: content.animals.cow.fedMinutes, hungryDays: 0, prod: [0] },
+      });
+      s.player.x = 20 * TILE;
+      s.player.y = 20 * TILE;
+    });
+    const e0 = store.getState().entities.find((q) => q.id === id);
+    let quang = 0;
+    let prev = { x: e0.x, y: e0.y };
+    for (let i = 0; i < 60 * 240; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      const e = store.getState().entities.find((q) => q.id === id);
+      quang += Math.hypot(e.x - prev.x, e.y - prev.y);
+      prev = { x: e.x, y: e.y };
+      if (store.getState().minutes >= 11 * 60) break;
+    }
+    return quang / TILE;
+  };
+  const diNang = thaBoNo("sunny");
+  const diMua = thaBoNo("rain");
+  ok(diNang > 2, `đối chứng: nắng thì bò no vẫn loanh quanh (${diNang.toFixed(1)} ô)`);
+  ok(diMua < 0.01, `mưa: bò no đứng yên co ro, không đi một bước (${diMua.toFixed(2)} ô)`);
+
+  /* --- d) NGƯỜI LÀM: bão thì về đứng ở ô giao nhận trước kho, không tốn sức --- */
+  {
+    const o = content.tiles.dropoff;
+    const store = mkStore(7373);
+    khoaNac(store);
+    unlockAll(store);
+    store.dispatch({ t: "HIRE", job: "crops" });
+    setWeather(store, "storm");
+    setState(store, (s) => {
+      s.minutes = 9 * 60;
+      const w = s.entities.find((e) => e.kind === "worker");
+      // đẩy ra đầu kia nông trại, để "về kho" là một chuyến đi thật
+      w.x = HOME.x * TILE + 8;
+      w.y = HOME.y * TILE + 8;
+      w.ai.path = [];
+      s.player.x = 20 * TILE;
+      s.player.y = 20 * TILE;
+    });
+    const nl = () => store.getState().entities.find((e) => e.kind === "worker");
+    const suc0 = nl().worker.energy;
+    for (let i = 0; i < 60 * 600; i++) {
+      store.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (store.getState().minutes >= 12 * 60) break;
+    }
+    const w = nl();
+    eq(w.ai.phase, "shelter", "bão: người làm ở trạng thái TRÚ");
+    ok(
+      Math.abs(Math.floor(w.x / TILE) - o.x) <= 1 && Math.abs(Math.floor(w.y / TILE) - o.y) <= 1,
+      `…và đứng ở ô giao nhận trước kho (đang ở ${Math.floor(w.x / TILE)},${Math.floor(w.y / TILE)}; kho ${o.x},${o.y})`,
+    );
+    eq(w.worker.energy, suc0, "…không tốn sức, cũng không hồi sức (đó là việc của `rest`)");
+    deepEq(checkInvariants(store.getState(), content), [], "bất biến");
+
+    // đối chứng: trời nắng thì cùng người ấy đi làm việc
+    const st2 = mkStore(7373);
+    khoaNac(st2);
+    unlockAll(st2);
+    st2.dispatch({ t: "HIRE", job: "crops" });
+    setWeather(st2, "sunny");
+    setState(st2, (s) => { s.minutes = 9 * 60; s.player.x = 20 * TILE; s.player.y = 20 * TILE; });
+    for (let i = 0; i < 60 * 600; i++) {
+      st2.dispatch({ t: "TICK", dt: 1 / 60 });
+      if (st2.getState().minutes >= 12 * 60) break;
+    }
+    ok(st2.getState().entities.find((e) => e.kind === "worker").ai.phase !== "shelter", "nắng: không ai trú");
+  }
+
+  /* --- e) XE THU MUA và THUYỀN không ghé ngày bão; chuỗi seed không đổi --- */
+  {
+    const chay = (troi, coHang = true) => {
+      const store = mkStore(7474);
+      setState(store, (s) => {
+        s.store[0] = coHang ? { id: "crop:lettuce", n: 30 } : null;
+        s.day = 2;
+        s.weather.tomorrow = troi;
+      });
+      const thay = { buyer: 0, boat: 0 };
+      const hat = [];
+      for (let n = 0; n < 12; n++) {
+        setState(store, (s) => {
+          s.entities = s.entities.filter((e) => e.kind !== "vehicle");
+          s.weather.tomorrow = troi;
+          s.store[0] = coHang ? { id: "crop:lettuce", n: 30 } : null;
+        });
+        sleep(store);
+        hat.push(store.getState().seed);
+        for (const e of store.getState().entities) if (e.kind === "vehicle") thay[e.def] = (thay[e.def] ?? 0) + 1;
+      }
+      return { thay, hat };
+    };
+    const nang = chay("sunny");
+    ok(nang.thay.buyer >= 1, `đối chứng: 12 ngày nắng có xe thu mua (${nang.thay.buyer})`);
+    ok(nang.thay.boat >= 3, `đối chứng: 12 ngày nắng có thuyền (${nang.thay.boat})`);
+    const gio = chay("storm");
+    eq(gio.thay.buyer ?? 0, 0, "bão: không ngày nào xe thu mua tới");
+    eq(gio.thay.boat ?? 0, 0, "bão: thuyền không ra khơi");
+    /* Xúc xắc xe thu mua vẫn được RÚT ngày bão. Đo bằng cách so hai ván CÙNG
+       bão: kho có hàng (tới chỗ rút xúc xắc) và kho trống (thoát trước xúc
+       xắc). Gác `halt` TRƯỚC `randInt` thì hai chuỗi seed trùng nhau — tức là
+       thêm luật bão đã làm ngày nắng kế tiếp đổi kết quả so với bản cũ, mà
+       kịch bản 41 không bắt được vì nó chỉ so cùng seed với chính nó. */
+    const trong = chay("storm", false);
+    eq(trong.thay.buyer ?? 0, 0, "kho trống thì cũng không xe");
+    ok(
+      JSON.stringify(gio.hat) !== JSON.stringify(trong.hat),
+      "ngày bão vẫn RÚT xúc xắc xe thu mua (chuỗi seed kho-có-hàng khác kho-trống)",
+    );
+  }
+});
 
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");

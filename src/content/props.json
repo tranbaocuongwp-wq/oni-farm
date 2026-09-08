@@ -20,7 +20,8 @@
         "body": "#2f6b33",
         "dark": "#245227",
         "accent": "#5a3d24"
-      }
+      },
+      "sway": 1
     },
     {
       "id": "sapling",
@@ -47,7 +48,8 @@
       "stormFell": {
         "to": "log",
         "chance": 0.25
-      }
+      },
+      "sway": 0.6
     },
     {
       "id": "stump",
@@ -109,7 +111,8 @@
         "body": "#3f7a3a",
         "dark": "#2e5c2b",
         "accent": "#4f9647"
-      }
+      },
+      "sway": 0.7
     },
     {
       "id": "well",
@@ -266,7 +269,8 @@
         "body": "#7cc25a",
         "dark": "#4d9a3f",
         "accent": "#a6e07a"
-      }
+      },
+      "sway": 0.4
     },
     {
       "id": "grass_tall",
@@ -293,7 +297,8 @@
         "body": "#5fae4a",
         "dark": "#3d7a33",
         "accent": "#8fd06a"
-      }
+      },
+      "sway": 0.8
     },
     {
       "id": "bush_small",

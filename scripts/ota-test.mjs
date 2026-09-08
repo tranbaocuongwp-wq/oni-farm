@@ -123,6 +123,8 @@ reject("weather: tổng weight = 0 thì không rút thăm được", (p) => {
 });
 reject("weather: firstDay không tồn tại", (p) => (p.weather.firstDay = "tuyet"));
 reject("weather: wind ngoài [0,1]", (p) => (p.weather.weathers[0].wind = 3));
+reject("weather: speedMul > 1 (trời mưa chạy nhanh hơn trời nắng)", (p) => (p.weather.weathers[0].speedMul = 2));
+reject("weather: shelter không phải boolean", (p) => (p.weather.weathers[0].shelter = "yes"));
 reject("props: grow.to trỏ vào vật thể không có", (p) => {
   p.props.props.find((x) => x.id === "sapling").grow = { to: "khongCo", days: 2 };
 });

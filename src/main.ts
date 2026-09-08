@@ -57,32 +57,23 @@ import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tuto
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { INTERACT_SCAN, autoJob, facingTile, hintAt, interactHint, tileInfo, type Hint, boatAt} from "./game/hint.ts";
+import { autoJob, facingTile, hintOf, infoHint, pressPlan, tileInfo, type Hint, type Press } from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { currentSeason } from "./game/season.ts";
-import { animalNear, animalStats, readyProduct } from "./game/animals.ts";
+import { animalStats } from "./game/animals.ts";
 import { itemName } from "./game/items.ts";
-import { workerCard, workerNear } from "./game/workers.ts";
+import { workerCard } from "./game/workers.ts";
 import { canPlaceBuilding, inReach } from "./game/world.ts";
 import type { UseKind } from "./game/actions.ts";
 
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
 const CONTENT_URL = "https://oni-farm.pages.dev";
 
-/**
- * Tầm với dùng cho việc NGẮM và cho lối vào cửa hàng/quầy — rộng hơn tầm THAO
- * TÁC một chút, để con trỏ bắt được ô mà ngón tay chỉ vào hụt vài pixel.
- *
- * ⚠️ TUYỆT ĐỐI không dùng con số này để hỏi "làm được chưa": luật thật là
- * `inReach()` trong game/world.ts (1,6 ô). Trước đây chỗ này hỏi bằng 1,8 ô, và
- * hai con số lệch nhau đúng 0,2 ô đã đẻ ra một lỗi rất khó thấy: ô nằm trong
- * khoảng đó được nút báo "làm được", nhưng reducer từ chối trong im lặng —
- * không toast, không khoá `busy`, không có gì. Bấm tay thì tưởng máy đơ; bật
- * "tự động làm" thì nó dispatch USE mỗi khung hình vào đúng ô đó cho tới khi
- * đồng hồ "không tiến triển" tự tắt chế độ.
- */
-const AIM_REACH = TILE * 1.8;
+/* Tầm với: chỉ có MỘT luật, `inReach()`/`inInteractRange()` trong game/world.ts,
+   và từ Đợt 21 mọi cú bấm đi qua `pressPlan` nên UI không còn con số riêng
+   nào nữa. (Từng có một hằng 1,8 ô ở đây — lệch 0,2 ô với luật thật đã đẻ ra
+   một lỗi rất khó thấy: nút báo "làm được", reducer từ chối trong im lặng.) */
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -905,22 +896,10 @@ async function boot() {
     return !!def && def.kind === "object" && def.solid;
   }
 
-  function tryInteract(s: GameState, tx: number, ty: number): boolean {
-    /* THUYỀN BUÔN xét TRƯỚC vật thể trên lưới: cái sạp là chính con thuyền,
-       không phải một ô nào cả, nên `nearbyInteract` (thứ chỉ đọc lưới) không
-       bao giờ thấy nó. Và nó chỉ có mặt trong lúc thuyền còn cập bến, nên
-       không có nguy cơ nuốt mất một tương tác cố định nào. */
-    const px = Math.floor(s.player.x / TILE);
-    const py = Math.floor(s.player.y / TILE);
-    if (boatAt(s, px, py)) {
-      buzz("tap");
-      menus.openShopTab("boat");
-      return true;
-    }
-    const hit = nearbyInteract(s, tx, ty);
-    if (!hit) return false;
+  /** Thực thi một cú `interact` mà `pressPlan` đã chốt — không quét lại. */
+  function doInteract(kind: InteractKind, x: number, y: number): boolean {
     buzz("tap");
-    switch (hit.kind) {
+    switch (kind) {
       case "SHOP":
         menus.openShop();
         return true;
@@ -934,19 +913,29 @@ async function boot() {
         menus.openCraft();
         return true;
       case "SLEEP":
-        store.dispatch({ t: "SLEEP" });
+        /* Đi qua INTERACT chứ không phải SLEEP thẳng: reducer ĐẶT nhân vật lên
+           giường rồi mới sang ngày (`balance.sleepSeconds`), và kiểm tầm với
+           — trước đây nút chính bỏ qua cả hai. */
+        store.dispatch({ t: "INTERACT", x, y });
         return true;
       case "REFILL":
-        lastUse = { x: hit.x, y: hit.y };
+        lastUse = { x, y };
         store.dispatch({ t: "REFILL" });
-        renderer.burst("water", hit.x, hit.y);
+        renderer.burst("water", x, y);
         return true;
       case "PORTAL":
-        store.dispatch({ t: "PORTAL", x: hit.x, y: hit.y });
+        store.dispatch({ t: "PORTAL", x, y });
         return true;
       default:
         return false;
     }
+  }
+
+  /** Tương tác ở ô (x,y) nếu ở đó có vật thể trong tầm — dùng cho chuyến MÚC NƯỚC. */
+  function tryInteract(s: GameState, tx: number, ty: number): boolean {
+    const p = pressPlan(s, content, { x: tx, y: ty }, { context: false, canGo: false, only: "interact" });
+    if (p.t !== "interact") return false;
+    return doInteract(p.kind, p.x, p.y);
   }
 
   /* ---- TỰ ĐỘNG LÀM ----------------------------------------------------
@@ -964,7 +953,7 @@ async function boot() {
   let autoMiss = 0;
   /** Ô đang đi tới ĐỂ LÀM VIỆC (không phải do người chơi chạm). Tới nơi thì chỉ
    *  dùng công cụ, không mở hộp thoại nào. */
-  let workGoal: { x: number; y: number; refill?: boolean } | null = null;
+  let workGoal: { x: number; y: number; refill?: boolean; then?: "use" | "gather" | "interact" | "boat" } | null = null;
   /** Bao lâu rồi không có việc nào THÀNH CÔNG, tính bằng giây. */
   let autoIdle = 0;
   let autoMark = "";
@@ -1141,21 +1130,18 @@ async function boot() {
    * không nhìn thấy nền đất dưới chân nó, nên cú bấm phải nói về con bò.
    */
   function tryAnimal(s: GameState, tx: number, ty: number): boolean {
-    if (!inReachOf(s, tx, ty)) return false;
-    const e = animalNear(s, tx, ty);
-    if (!e) return false;
-    const def = content.animals[e.def];
-    if (!def) return false;
+    const p = pressPlan(s, content, { x: tx, y: ty }, { context: false, canGo: false, only: "gather" });
+    if (p.t !== "gather") return false;
+    return doGather(p.x, p.y);
+  }
+
+  /** Thu sản phẩm ở ô con vật đang đứng — `pressPlan` đã chọn đúng con. */
+  function doGather(x: number, y: number): boolean {
     // Ghi `lastUse` để hạt của bus phản hồi rơi ĐÚNG con vật, không phải ô
     // cuốc lần cuối.
-    if (readyProduct(e, content) >= 0) {
-      lastUse = { x: tx, y: ty };
-      store.dispatch({ t: "GATHER", x: tx, y: ty });
-      return true;
-    }
-    /* ĐÓI thì KHÔNG cho ăn ở đây nữa (core 1.38): thức ăn chỉ vào bằng máng
-       hoặc rắc xuống hồ, rồi con vật tự tới ăn. Xem `game/animals.ts`. */
-    return false;
+    lastUse = { x, y };
+    store.dispatch({ t: "GATHER", x, y });
+    return true;
   }
 
   /* ---- CHUYẾN CỦA MÓN ĐANG CẦM --------------------------------------
@@ -1262,8 +1248,66 @@ async function boot() {
     if (!nav.goTo(s, content, t.x, t.y, { avoidStandingOn: holdingSolidBuilding(s) })) stopRun("done");
   }
 
-  function actOnTile(s: GameState, tx: number, ty: number): boolean {
-    return tryAnimal(s, tx, ty) || tryInteract(s, tx, ty) || tryUse(s, tx, ty);
+  /** Tuỳ chọn cho `pressPlan` — MỘT chỗ quyết định, HUD và cú bấm cùng dùng. */
+  function pressOpts(only?: "use" | "gather" | "interact" | "boat" | "any") {
+    return { context: settings.contextButton, canGo: settings.contextButton && aimed !== null, only };
+  }
+
+  /** Ô mà nút chính đang nói về — cùng một ô cho HUD lẫn cú bấm. */
+  function pressCursor(s: GameState): { x: number; y: number } | null {
+    const navT = nav.target();
+    if (navT) return { x: navT.tx, y: navT.ty };
+    const c = targetTile(s);
+    return c ? { x: c.x, y: c.y } : null;
+  }
+
+  /**
+   * THỰC THI một cú bấm nút chính. Đây là chỗ DUY NHẤT nút chính làm việc;
+   * mọi quyết định "làm gì" đã nằm trong `pressPlan` (src/game/hint.ts) — hàm
+   * này chỉ chuyển từng nhánh thành dispatch/menu/đi tới.
+   */
+  function execute(s: GameState, p: Press): boolean {
+    switch (p.t) {
+      case "deny":
+        deny();
+        return false;
+      case "build":
+        buildUI.open();
+        return true;
+      case "use": {
+        if (!tryUse(s, p.x, p.y)) return false;
+        // Nhát này cùng loại với chuyến của món → làm xong là làm tiếp.
+        if (p.run) {
+          if (autoWork) setAuto(false);
+          run = p.run;
+          runMap = s.mapId;
+          runIdle = 0;
+          runMark = runProgress(s);
+          runTried = { key: `${p.kind}:${p.x},${p.y}`, mark: runMark };
+        }
+        return true;
+      }
+      case "gather":
+        return doGather(p.x, p.y);
+      case "interact":
+        return doInteract(p.kind, p.x, p.y);
+      case "boat":
+        buzz("tap");
+        menus.openShopTab("boat");
+        return true;
+      case "go": {
+        workGoal = { x: p.x, y: p.y, then: p.then };
+        if (nav.goTo(s, content, p.x, p.y, { avoidStandingOn: holdingSolidBuilding(s) })) return true;
+        workGoal = null;
+        // Trước đây thất bại ở đây là im lặng — nhân vật đứng yên, nút vẫn sáng.
+        toasts.say("Không có đường tới đó", "bad");
+        deny();
+        return false;
+      }
+      case "run":
+        batDauChuyen(s);
+        return true;
+    }
   }
 
   /* Vòng tiêu điểm vàng chỉ có nghĩa khi tiêu điểm do BÀN PHÍM hoặc TAY CẦM
@@ -1704,12 +1748,10 @@ async function boot() {
              phải mở được cái giếng. Mọi chuyến đi làm việc khác vẫn chỉ được
              `tryUse` — đi cày một ô cạnh quầy thu mua mà bật hộp thoại bán hàng
              giữa lúc tự động làm là thế giới đứng hình cho tới khi tắt nó đi. */
-          const done = goal?.refill
-            ? tryInteract(st, arrived.tx, arrived.ty)
-            : goal
-              ? tryUse(st, arrived.tx, arrived.ty)
-              : actOnTile(st, arrived.tx, arrived.ty);
-          if (!done) deny();
+          const only = goal?.refill ? "interact" : (goal?.then ?? "any");
+          const p = pressPlan(st, content, { x: arrived.tx, y: arrived.ty }, pressOpts(only));
+          if (p.t === "go" || p.t === "run") deny();
+          else execute(st, p);
         }
       }
 
@@ -1912,67 +1954,11 @@ async function boot() {
             buzz("tap");
             break;
           }
-          let c = targetTile(s);
-          /* Ô đang ngắm ở XA mà CÓ VIỆC với món đang cầm (hoặc có gì để tương
-             tác) thì đi tới rồi làm — chạm ô, thấy nút ghi CÀY, bấm CÀY. Trước
-             đây hỏi `tileActionable`, một hàm mù món: mọi ô đất đều "được",
-             nhân vật đi tới nơi rồi lắc đầu. Việc ở ô đó cùng loại với chuyến
-             của món thì tới nơi làm xong là chuyến tiếp tục. */
-          if (c && !inReachOf(s, c.x, c.y) && aimed && settings.contextButton) {
-            const kx = canUseAt(s, content, c.x, c.y, true);
-            if (kx !== null) {
-              const r = runFor(s, content);
-              if (r && (r.jobs as string[]).includes(kx)) {
-                if (autoWork) setAuto(false);
-                run = r;
-                runMap = s.mapId;
-                runIdle = 0;
-                runMark = runProgress(s);
-                runTried = null;
-              }
-              workGoal = { x: c.x, y: c.y };
-              if (nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
-              workGoal = null;
-              if (run) stopRun();
-            } else if (interactAt(s, content, c.x, c.y) !== null) {
-              if (nav.goTo(s, content, c.x, c.y, { avoidStandingOn: holdingSolidBuilding(s) })) break;
-            }
-          }
-          if (c && !inReachOf(s, c.x, c.y)) c = targetTile(s, true);
-          if (c && inReachOf(s, c.x, c.y)) {
-            // Con vật trước tiên — nếu không thì nhãn nút ghi THU mà bấm vào lại
-            // đi cày, tức là nút nói một đằng làm một nẻo.
-            if (tryAnimal(s, c.x, c.y)) break;
-            /* CÔNG CỤ TRƯỚC, TƯƠNG TÁC SAU — và thứ tự đó là cả cái luật.
-
-               Một nút ngữ cảnh duy nhất thì nó phải mở được cửa hàng, cái
-               giường, cái giếng. Nhưng hồi nút chính làm cả hai theo thứ tự
-               ngược lại, đang cày một luống dài mà đi ngang quầy thu mua là
-               bật bảng bán hàng — cả nhịp làm việc gãy vì thứ mình không định
-               làm. Hỏi công cụ trước thì chuyện đó không xảy ra được: đứng
-               trên đất cày được mà cầm cuốc thì luôn là CÀY, và cái quầy chỉ
-               lên tiếng khi trên tay không có việc gì cho ô đó. */
-            const kx = canUseAt(s, content, c.x, c.y);
-            if (kx !== null) {
-              tryUse(s, c.x, c.y);
-              // Nhát này cùng loại với chuyến của món → làm xong là làm tiếp.
-              const r = runFor(s, content);
-              if (r && (r.jobs as string[]).includes(kx) && settings.contextButton) {
-                if (autoWork) setAuto(false);
-                run = r;
-                runMap = s.mapId;
-                runIdle = 0;
-                runMark = runProgress(s);
-                runTried = { key: `${kx}:${c.x},${c.y}`, mark: runMark };
-              }
-            } else if (tryInteract(s, c.x, c.y)) {
-              break;
-            } else if (s.busy <= 0) {
-              // Ô đang ngắm hết việc (vừa cày xong…): bấm tiếp là CHUYẾN của
-              // món đang cầm — làm hết việc của nó, khu nào gọn khu đó.
-              batDauChuyen(s);
-            }
-          } else batDauChuyen(s);
+          /* MỘT NGUỒN: `pressPlan` đã in nhãn lên nút; giờ nó nói làm gì.
+             Không có phép quét nào ở đây nữa — mọi "con vật trước, công cụ
+             trước tương tác, khu, chuyến" nằm trong src/game/hint.ts và được
+             sim kiểm. */
+          execute(s, pressPlan(s, content, pressCursor(s), pressOpts()));
           break;
         }
         case "pointer": {
@@ -2153,38 +2139,15 @@ async function boot() {
             break;
           }
           if (modal) break;
-          const c = targetTile(s, true);
-          if (!c) break;
-
-          /* NGƯỜI LÀM được hỏi riêng và hỏi TRƯỚC: `interactHint` chỉ biết
-             con vật, mà thẻ người làm ("đang làm gì, lương bao nhiêu") là thứ
-             người chơi mở nhiều nhất khi mới thuê.
-
-             Tìm quanh Ô ĐANG NGẮM trước, hụt thì tìm quanh CHÍNH NHÂN VẬT.
-             Chỉ đo từ ô ngắm là hụt liên tục: người chơi đứng sát bên phải một
-             người làm nhưng mặt quay xuống, ô ngắm nằm dưới chân, và khoảng
-             cách từ ô đó tới người làm vọt lên 1,41 ô — vừa đủ vượt ngưỡng.
-             Đo được đúng ca đó: cách nhau 0,88 ô mà bấm không ra gì. */
-          const px2 = Math.floor(s.player.x / TILE);
-          const py2 = Math.floor(s.player.y / TILE);
-          const nl =
-            (inReachOf(s, c.x, c.y) ? workerNear(s, c.x, c.y) : null) ?? workerNear(s, px2, py2);
-          if (nl) {
-            cardAnimal = cardAnimal === nl.id ? null : nl.id;
-            buzz("tap");
-            break;
-          }
-
-          /* Còn lại đi đúng cùng một hàm mà HUD dùng để in nhãn, nên nút không
-             bao giờ ghi một đằng mở một nẻo. Quanh CHÂN trước, rồi mới tới ô
-             đang ngắm — nút phụ nói về thứ mình đang đứng cạnh. */
-          const ih = interactHint(s, content, px2, py2) ?? interactHint(s, content, c.x, c.y);
+          /* Cùng một hàm HUD dùng để in nhãn (`infoHint`), nên nút phụ không
+             bao giờ ghi một đằng mở một nẻo. */
+          const ih = infoHint(s, content, pressCursor(s));
           if (!ih) {
             deny();
             break;
           }
           buzz("tap");
-          if (ih.what === "animal") cardAnimal = cardAnimal === ih.id ? null : ih.id;
+          if (ih.what === "animal" || ih.what === "worker") cardAnimal = cardAnimal === ih.id ? null : ih.id;
           else if (ih.what === "pen") menus.openPen(ih.id);
           else toasts.say(tileInfo(s, content, ih.x, ih.y) ?? "Không có gì ở đây", "info");
           break;
@@ -2250,11 +2213,21 @@ async function boot() {
       }));
     }
 
+    /* Nhãn hai nút là HÌNH CHIẾU của đúng cú bấm sẽ xảy ra — cùng `pressPlan`
+       / `infoHint`, cùng ô ngắm (`pressCursor`), cùng tuỳ chọn (`pressOpts`).
+       Tính TRƯỚC khi vẽ, vì ô nút sẽ tác động (`hint.at`) được vẽ dấu lên bản
+       đồ khi nó không phải ô đang ngắm — người chơi thấy nút sẽ dắt mình tới đâu. */
+    const hint: Hint | null = modal ? null : hintOf(pressPlan(s, content, pressCursor(s), pressOpts()));
+    const iHint = modal ? null : infoHint(s, content, pressCursor(s));
+    const hintAt = hint?.at ?? null;
+    const target = hintAt && (!cursor || hintAt.x !== cursor.x || hintAt.y !== cursor.y) ? hintAt : null;
+
     const wxDef = weatherDef(s, content);
     const fogUntil = wxDef.fogUntil ?? 0;
     renderer.draw(s, content, cursor, elapsed, {
       lineCells,
       navTarget: navT ? { x: navT.tx, y: navT.ty } : null,
+      target,
       fade,
       reduceMotion: document.body.dataset["motion"] === "reduce",
       weather: {
@@ -2270,13 +2243,6 @@ async function boot() {
       },
     });
 
-    const hint: Hint | null = settings.contextButton && cursor && !modal ? hintAt(s, content, cursor.x, cursor.y) : null;
-    /* Nút tương tác nhìn quanh CHÍNH NHÂN VẬT chứ không nhìn ô đang ngắm: nó
-       nói về thứ mình đang đứng cạnh, không phải thứ mình đang chỉ vào. */
-    const iHint = modal
-      ? null
-      : interactHint(s, content, Math.floor(s.player.x / TILE), Math.floor(s.player.y / TILE)) ??
-        (cursor ? interactHint(s, content, cursor.x, cursor.y) : null);
     const dangLam = run ? `${run.label}${run.area ? " · " + run.area.name : ""}` : null;
     hud.update(s, content, hint, iHint, dangLam);
 
@@ -2392,29 +2358,6 @@ async function boot() {
     minimap.update(s, content);
     devPanel.update(s, content);
   }, { onError: khiLoiKhungHinh });
-
-  /** Vật thể tương tác GẦN NHẤT quanh (x,y) — cùng luật với `interactHint`.
-   *  Quét cả hình vuông bán kính 2, không chỉ bốn ô kề: đứng CHÉO góc quầy hay
-   *  cách cái giếng một ô vì có hòn đá chen giữa vẫn phải bấm được. */
-  function nearbyInteract(s: GameState, x: number, y: number) {
-    let best: { kind: InteractKind; x: number; y: number } | null = null;
-    let bestD = Infinity;
-    for (let dy = -INTERACT_SCAN; dy <= INTERACT_SCAN; dy++)
-      for (let dx = -INTERACT_SCAN; dx <= INTERACT_SCAN; dx++) {
-        const k = interactAt(s, content, x + dx, y + dy);
-        if (!k) continue;
-        const dist = Math.hypot(
-          (x + dx) * TILE + TILE / 2 - s.player.x,
-          (y + dy) * TILE + TILE / 2 - s.player.y,
-        );
-        if (dist > AIM_REACH + TILE) continue;
-        if (dist < bestD) {
-          bestD = dist;
-          best = { kind: k, x: x + dx, y: y + dy };
-        }
-      }
-    return best;
-  }
 
   bootEl.classList.add("done");
   window.setTimeout(() => {

@@ -20,6 +20,7 @@
 ============================================================================ */
 
 import type { Content, Entity, GameState, InvSlot, VehicleDef } from "./types.ts";
+import { weatherDef } from "./weather.ts";
 import type { Draft } from "./state.ts";
 import { dEntity, randInt, toastText, touch } from "./state.ts";
 import { setStore } from "./storage.ts";
@@ -479,6 +480,9 @@ export function maybeSendBoat(d: Draft, content: Content): boolean {
   const def = content.vehicles["boat"];
   if (!def || !content.tiles.seaGate || !content.tiles.dock) return false;
   if (d.s.day % 3 !== 0) return false;
+  // Bão thì thuyền không ra khơi — và không bù ngày: nhịp ba ngày vẫn tính từ
+  // `day`, người chơi nhìn dự báo hôm trước là biết.
+  if (weatherDef(d.s, content).halt) return false;
   if (vehicleCount(d.s) >= MAX_VEHICLES) return false;
   return sendVehicle(d, content, "boat", { kind: "shop" }) !== null;
 }
@@ -494,6 +498,11 @@ export function maybeSendBuyer(d: Draft, content: Content): boolean {
   const r = randInt(d.s.seed, 0, 2);
   touch(d).seed = r.seed;
   if (r.v !== 0) return false; // khoảng một phần ba số ngày
+
+  /* Bão thì xe không tới. Xét SAU khi rút xúc xắc, để chuỗi seed của mọi ngày
+     y hệt như không có luật này — thêm một ngày bão không được làm ngày nắng
+     kế tiếp đổi kết quả. */
+  if (weatherDef(d.s, content).halt) return false;
 
   return sendVehicle(d, content, "buyer", { kind: "buy" }) !== null;
 }

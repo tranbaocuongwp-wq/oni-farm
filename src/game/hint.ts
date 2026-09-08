@@ -18,7 +18,9 @@ import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
-import { TILE, inReach, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
+import { TILE, inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
+import { runFor, type Run } from "./run.ts";
+import { workerNear } from "./workers.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 
 export type HintKind =
@@ -44,6 +46,8 @@ export interface Hint {
   ready: boolean;
   /** Lý do không làm được — hiện dưới nút để người chơi biết đổi vật phẩm. */
   why: string | null;
+  /** Ô mà cú bấm sẽ tác động (khi khác ô đang ngắm, HUD vẽ dấu ở đó). */
+  at?: { x: number; y: number };
 }
 
 export const LABEL: Record<Exclude<HintKind, null>, string> = {
@@ -195,67 +199,271 @@ function explain(state: GameState, content: Content, x: number, y: number): stri
   return null;
 }
 
-/**
- * Gợi ý cho NÚT NGỮ CẢNH (A). Nó bám theo THỨ ĐANG CẦM, không hơn:
- *   1. con vật đứng đè lên ô — thu sản phẩm / cho ăn
- *   2. việc làm được với vật phẩm đang cầm (thu hoạch luôn thắng, như useAt)
- *   3. không có gì → lý do
- *
- * Tương tác vật thể (cửa hàng, giường, giếng, kho) CÓ ở đây, nhưng chỉ qua
- * `contextAction` ở nấc cuối — tức là chỉ khi ô đang ngắm không có việc nào và
- * món trên tay cũng không dùng được vào đâu. Thứ tự ấy chữa đúng cái lỗi cũ:
- * đứng cạnh quầy thu mua cầm cái cuốc, bấm nút chính thì phải CÀY, không phải
- * mở bảng bán hàng — người chơi đang cày một luống dài, đi ngang qua quầy, và
- * cả nhịp làm việc gãy. Việc nhờ món đang cầm luôn thắng (xem `nhoMonDangCam`).
- *
- * Nút PHỤ giờ không mở cửa hàng nữa: nó chỉ TRA CỨU (xem `interactHint`).
- */
-export function hintAt(state: GameState, content: Content, x: number, y: number): Hint {
-  /* Con vật đứng ĐÈ LÊN ô được ưu tiên hơn mọi thứ khác trên ô đó: người chơi
-     nhìn thấy con bò chứ không nhìn thấy nền đất dưới chân nó, nên nút phải nói
-     về con bò. */
-  const an = animalNear(state, x, y);
-  if (an) {
-    const def = content.animals[an.def];
-    if (def) {
-      if (readyProduct(an, content) >= 0)
-        return { kind: "gather", label: LABEL.gather, ready: inReach(state, x, y), why: null };
-      /* Con vật ĐÓI thì nút KHÔNG mời cho ăn nữa: thức ăn chỉ vào bằng máng
-         (hoặc rắc xuống hồ), rồi con vật tự tới ăn. Nhãn cũ mời một thao tác
-         không còn tồn tại. */
-    }
-  }
+/* ============================================================================
+   CÚ BẤM — một nguồn cho cả NHÃN lẫn VIỆC.
 
-  /* Đang cầm CÔNG TRÌNH: nút ghi XÂY và mở chế độ quy hoạch, chứ không đặt
-     xuống ô đang ngắm. Đặt ở đây (chứ không trong `canUseAt`) vì nó không phụ
-     thuộc vào Ô nào cả — cầm công trình lên là đã ở trong ý định xây rồi. */
+   Trước Đợt 21, nhãn trên nút do `hintAt` tính, còn cú bấm trong `main.ts` đi
+   một bộ luật khác (`tryAnimal` → `canUseAt` → `tryInteract` → chuyến). Hai bộ
+   luật ấy trôi khỏi nhau theo từng đợt: nhãn ghi "ĐỔ MÁNG" mà bấm thì lắc đầu,
+   nhãn ghi "THU" con bò cách hai ô mà bấm lại đi cày, nhãn ghi "NGỦ" ở hai ô mà
+   reducer im lặng vì ngoài tầm. Không có gì buộc hai bộ luật phải khớp — cho
+   tới khi chỉ còn MỘT.
+
+   `pressPlan` trả lời đúng một câu: "bấm nút chính BÂY GIỜ thì chuyện gì xảy
+   ra" — dưới dạng một `Press` mà `main.ts` chỉ việc THỰC THI, còn `hintOf` chỉ
+   việc IN. Nhãn là hình chiếu của cú bấm, nên nó không thể nói khác.
+
+   Thuần: không tìm đường (chạy mỗi khung cho HUD), không đụng DOM.
+============================================================================ */
+
+/** Việc sẽ xảy ra khi bấm nút chính. */
+export type Press =
+  /** không làm gì; `kind` giữ lại cho ca "có việc nhưng hết sức" để nút vẫn ghi tên việc */
+  | { t: "deny"; why: string | null; kind?: Exclude<HintKind, null> }
+  /** cầm công trình → mở chế độ xây */
+  | { t: "build" }
+  /** dùng món đang cầm lên ô (x,y); `run` = chuyến sẽ bắt đầu sau nhát này (nếu có) */
+  | { t: "use"; kind: Exclude<UseKind, null>; x: number; y: number; run: Run | null }
+  /** thu sản phẩm của đúng con vật `id` */
+  | { t: "gather"; id: number; x: number; y: number }
+  /** tương tác với vật thể ở (x,y): cửa hàng, quầy, giường, giếng, kho, cửa nhà */
+  | { t: "interact"; kind: InteractKind; x: number; y: number }
+  /** mở sạp thuyền buôn đang cập bến */
+  | { t: "boat"; id: number }
+  /** đi tới (x,y) rồi làm `then` ở đó; `kind` để in nhãn; `dist` = số ô (Chebyshev) */
+  | { t: "go"; x: number; y: number; then: "use" | "gather" | "interact" | "boat"; kind: Exclude<HintKind, null>; dist: number }
+  /** bắt đầu CHUYẾN của món đang cầm (`runFor`); `why` = câu giải thích cho ô ngắm */
+  | { t: "run"; run: Run; why: string | null };
+
+export interface PressOptions {
+  /** nút ngữ cảnh bật (settings.contextButton): được nhìn quanh chân và chạy chuyến */
+  context: boolean;
+  /** được ĐI TỚI ô ở xa rồi làm (chỉ khi người chơi thật sự ngắm một ô) */
+  canGo: boolean;
+  /** lúc TỚI ĐÍCH của một cú `go`: chỉ nhận đúng loại việc đã hứa, không mở thứ khác */
+  only?: "use" | "gather" | "interact" | "boat" | "any";
+}
+
+const LABEL_TO_INTERACT: Partial<Record<Exclude<HintKind, null>, InteractKind>> = {
+  shop: "SHOP",
+  sell: "SELL",
+  craft: "CRAFT",
+  sleep: "SLEEP",
+  refill: "REFILL",
+  enter: "PORTAL",
+  store: "STORE",
+};
+
+/**
+ * Tầm với để TƯƠNG TÁC được — hỏi đúng luật reducer sẽ hỏi.
+ *
+ * MÚC (`REFILL`) đi qua `hasNearbyInteract` = `inReach` (1,6 ô từ tâm ô); các
+ * thứ còn lại đi qua `inInteractRange` (thêm cả tám ô kề). Trước đây UI dùng
+ * một luật thứ ba (2,8 ô) không khớp cái nào, nên "NGỦ" sáng ở hai ô mà bấm
+ * thì giường im lặng.
+ */
+function interactReady(state: GameState, kind: InteractKind, x: number, y: number): boolean {
+  return kind === "REFILL" ? inReach(state, x, y) : inInteractRange(state, x, y);
+}
+
+function chebyshev(state: GameState, x: number, y: number): number {
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+  return Math.max(Math.abs(px - x), Math.abs(py - y));
+}
+
+/**
+ * Bấm nút chính ở ô `cursor` thì chuyện gì xảy ra. Thứ tự là cả cái luật:
+ *
+ *   1. cầm CÔNG TRÌNH → mở chế độ xây. Cầm công trình lên là đã nói ý định;
+ *      cú bấm cũng làm thế từ Đợt 9, chỉ có nhãn từng nói khác (THU trước XÂY).
+ *   2. ô ngắm ở XA mà không được đi → rơi về ô TRƯỚC MẶT (đúng như cú bấm cũ).
+ *   3. con vật TỚI LỨA ngay ô ngắm → THU đúng con đó (một bán kính duy nhất
+ *      `animalNear` 1,4 ô — nhãn và cú bấm từng dùng hai bán kính khác nhau).
+ *   4. việc với MÓN ĐANG CẦM ở ô ngắm (`canUseAt`) — hết sức thì nói trước.
+ *   5. VẬT THỂ ở ô ngắm (cửa hàng, giường…) — người chơi chủ ý chỉ vào nó.
+ *   6. quanh CHÂN (`contextAction`): thuyền buôn, việc của khu, ô gần nhất làm
+ *      được với món đang cầm, vật thể trong hai ô.
+ *   7. CHUYẾN của món đang cầm.
+ *   8. không có gì → lý do.
+ */
+export function pressPlan(
+  state: GameState,
+  content: Content,
+  cursor: { x: number; y: number } | null,
+  opts: PressOptions,
+): Press {
+  const only = opts.only ?? "any";
+  const cho = (p: Press): Press => {
+    if (only === "any") return p;
+    if (p.t === only) return p;
+    if (p.t === "deny") return p;
+    return { t: "deny", why: null };
+  };
+  if (!cursor) return { t: "deny", why: null };
+  let x = cursor.x;
+  let y = cursor.y;
+
+  // 1. công trình
   const held = selectedItemId(state.inv, state.sel);
   const hi = held ? parseItem(held) : null;
-  if (hi?.kind === "build" && content.buildings[hi.ref])
-    return { kind: "build", label: LABEL.build, ready: true, why: null };
+  if (hi?.kind === "build" && content.buildings[hi.ref]) return cho({ t: "build" });
 
+  // 2. xa mà không được đi → ô trước mặt
+  let whyXa: string | null = null;
+  const xa = !inReach(state, x, y);
+  if (xa && !opts.canGo) {
+    const f = facingTile(state, TILE);
+    x = f.x;
+    y = f.y;
+    whyXa = "Xa quá — chạm để đi tới";
+  }
+  const goTo = (
+    tx: number,
+    ty: number,
+    then: "use" | "gather" | "interact" | "boat",
+    kind: Exclude<HintKind, null>,
+  ): Press => ({ t: "go", x: tx, y: ty, then, kind, dist: chebyshev(state, tx, ty) });
+
+  // 3. con vật tới lứa ngay ô ngắm
+  const an = animalNear(state, x, y);
+  if (an && content.animals[an.def] && readyProduct(an, content) >= 0) {
+    const ax = Math.floor(an.x / TILE);
+    const ay = Math.floor(an.y / TILE);
+    if (inReach(state, ax, ay)) return cho({ t: "gather", id: an.id, x: ax, y: ay });
+    if (opts.canGo) return cho(goTo(ax, ay, "gather", "gather"));
+  }
+
+  /* Một ứng viên của `contextAction` → cú bấm. Dùng ở hai chỗ (bước 4 và 6). */
+  const fromCtx = (ca: CtxAction): Press | null => {
+    if (ca.kind === "boat") {
+      const th = boatAt(state, Math.floor(state.player.x / TILE), Math.floor(state.player.y / TILE));
+      return th ? { t: "boat", id: th.id } : null;
+    }
+    if (ca.kind === "gather") {
+      if (ca.id !== undefined && inReach(state, ca.at.x, ca.at.y))
+        return { t: "gather", id: ca.id, x: ca.at.x, y: ca.at.y };
+      return goTo(ca.at.x, ca.at.y, "gather", "gather");
+    }
+    const ik = LABEL_TO_INTERACT[ca.kind];
+    if (ik) {
+      if (interactReady(state, ik, ca.at.x, ca.at.y)) return { t: "interact", kind: ik, x: ca.at.x, y: ca.at.y };
+      return goTo(ca.at.x, ca.at.y, "interact", ca.kind);
+    }
+    if (ca.kind === "pen") return null;
+    const uk = ca.kind as Exclude<UseKind, null>;
+    if (inReach(state, ca.at.x, ca.at.y))
+      return { t: "use", kind: uk, x: ca.at.x, y: ca.at.y, run: runAfter(state, content, uk, opts) };
+    return goTo(ca.at.x, ca.at.y, "use", uk);
+  };
+
+  // 4. món đang cầm lên ô ngắm
   const use = canUseAt(state, content, x, y, true);
   if (use !== null) {
+    /* Việc DỌN DẸP ở ô ngắm (nhổ, nhấc, chặt, đập — làm được cả bằng tay
+       không) KHÔNG được cướp lời một việc mà MÓN ĐANG CẦM sinh ra ở gần đó:
+       cầm bao cám mà ngắm vào bụi cỏ thì ý định vẫn là cho gà ăn. Đó là đúng
+       cảnh Cường tả ("bấm vô cái nó chạy đi nhổ cỏ"), và `contextAction` đã
+       có luật bậc cho nó — ở đây chỉ hỏi nó trước. */
+    if (DON_DEP.has(use) && opts.context) {
+      const ca = contextAction(state, content, x, y);
+      if (ca && nhoMonDangCam(ca.kind)) {
+        const p = fromCtx(ca);
+        if (p) return cho(p);
+      }
+    }
     /* HẾT NĂNG LƯỢNG phải nói TRƯỚC khi bấm. `canUseAt` cố ý không kiểm năng
        lượng (nó trả lời "ô này có việc gì", không phải "anh còn sức không"),
        nên trước đây ở 0 năng lượng nút vẫn ghi CÀY sáng xanh, `USE` vẫn khoá
        0,42 giây, rồi tới lúc cuốc chạm đất mới trượt — và cái nút chưa bao giờ
        nói vì sao. */
     const can = energyFor(content, use);
-    if (can > 0 && state.energy < can)
-      return { kind: use, label: LABEL[use], ready: false, why: "Hết năng lượng — về ngủ" };
-    return { kind: use, label: LABEL[use], ready: inReach(state, x, y), why: null };
+    if (can > 0 && state.energy < can) return { t: "deny", why: "Hết năng lượng — về ngủ", kind: use };
+    if (inReach(state, x, y)) return cho({ t: "use", kind: use, x, y, run: runAfter(state, content, use, opts) });
+    if (opts.canGo) return cho(goTo(x, y, "use", use));
   }
 
-  /* Không làm được gì với ĐÚNG ô này, nhưng có thể đang đứng trong một cái
-     KHU. Nút phải nói việc của CHỖ ĐANG ĐỨNG chứ không chỉ việc của một ô:
-     đứng giữa chuồng gà cầm bó rơm mà nút ghi "DÙNG" rồi bấm không ra gì là
-     nút đang giấu đúng việc người chơi định làm. `ready: false` nên nút sẽ
-     dắt nhân vật tới nơi rồi mới làm, đúng như bấm vào một ô ở xa. */
-  const ca = contextAction(state, content, x, y);
-  if (ca) return { kind: ca.kind, label: ca.label, ready: false, why: null };
+  /* THUYỀN BUÔN đang cập bến ngay cạnh: thắng mọi vật thể trên lưới. Con
+     thuyền nằm TRÊN mặt nước, nên ô người chơi ngắm vào nó chính là một ô
+     nước "MÚC được" — không xét thuyền trước thì đứng sát sạp mà nút ghi MÚC. */
+  if (opts.context) {
+    const th = boatAt(state, Math.floor(state.player.x / TILE), Math.floor(state.player.y / TILE));
+    if (th) return cho({ t: "boat", id: th.id });
+  }
 
-  return { kind: null, label: "DÙNG", ready: false, why: explain(state, content, x, y) };
+  /* 5. vật thể ngay ô ngắm — trừ khi ô ngắm là ô DƯỚI CHÂN: đứng trên cầu tàu
+     thì "ô ngắm" là mặt nước dưới ván, và MÚC ở đó không phải thứ người chơi
+     chỉ vào; để bước 6 xử lý (mặt nước kề, vật thể trong hai ô). */
+  const oChan = x === Math.floor(state.player.x / TILE) && y === Math.floor(state.player.y / TILE);
+  const vt = oChan ? null : interactAt(state, content, x, y);
+  if (vt) {
+    if (interactReady(state, vt, x, y)) return cho({ t: "interact", kind: vt, x, y });
+    if (opts.canGo) return cho(goTo(x, y, "interact", INTERACT_KIND[vt]));
+  }
+
+  // 6. quanh chân
+  if (opts.context) {
+    const ca = contextAction(state, content, x, y);
+    const p = ca ? fromCtx(ca) : null;
+    if (p) return cho(p);
+  }
+
+  const why = explain(state, content, x, y) ?? whyXa;
+
+  // 7. chuyến của món đang cầm
+  if (opts.context && only === "any" && !state.carry) {
+    const r = runFor(state, content);
+    if (r) return { t: "run", run: r, why };
+  }
+
+  return { t: "deny", why };
+}
+
+/** Chuyến sẽ tiếp tục sau một nhát `kind` — chỉ khi nhát ấy cùng loại với chuyến. */
+function runAfter(state: GameState, content: Content, kind: Exclude<UseKind, null>, opts: PressOptions): Run | null {
+  if (!opts.context) return null;
+  const r = runFor(state, content);
+  return r && (r.jobs as string[]).includes(kind) ? r : null;
+}
+
+/** Nhãn của một cú bấm — thứ HUD in lên nút. */
+export function hintOf(p: Press): Hint {
+  switch (p.t) {
+    case "deny":
+      return p.kind
+        ? { kind: p.kind, label: LABEL[p.kind], ready: false, why: p.why }
+        : { kind: null, label: "DÙNG", ready: false, why: p.why };
+    case "build":
+      return { kind: "build", label: LABEL.build, ready: true, why: null };
+    case "use":
+      return { kind: p.kind, label: LABEL[p.kind], ready: true, why: null, at: { x: p.x, y: p.y } };
+    case "gather":
+      return { kind: "gather", label: LABEL.gather, ready: true, why: null, at: { x: p.x, y: p.y } };
+    case "interact":
+      return { kind: INTERACT_KIND[p.kind], label: LABEL[INTERACT_KIND[p.kind]], ready: true, why: null, at: { x: p.x, y: p.y } };
+    case "boat":
+      return { kind: "boat", label: LABEL.boat, ready: true, why: null };
+    case "go":
+      return {
+        kind: p.kind,
+        label: LABEL[p.kind],
+        ready: false,
+        why: `Cách ${p.dist} ô — bấm để đi tới`,
+        at: { x: p.x, y: p.y },
+      };
+    case "run":
+      /* Nhãn giữ "DÙNG": chuyến chỉ lúc chạy mới biết còn việc hay không, và
+         câu về Ô ĐANG NGẮM ("Cày trước đã") vẫn là câu người chơi đang hỏi. */
+      return { kind: null, label: "DÙNG", ready: false, why: p.why };
+  }
+}
+
+/**
+ * Gợi ý cho NÚT NGỮ CẢNH (A) ở ô (x,y) — hình chiếu của `pressPlan` với mọi
+ * quyền bật (nút ngữ cảnh bật, được đi tới). Giữ chữ ký cũ cho HUD và test.
+ */
+export function hintAt(state: GameState, content: Content, x: number, y: number): Hint {
+  return hintOf(pressPlan(state, content, { x, y }, { context: true, canGo: true }));
 }
 
 /**
@@ -275,8 +483,37 @@ export function hintAt(state: GameState, content: Content, x: number, y: number)
  */
 export type InfoHint =
   | { what: "animal"; label: string; id: number }
+  | { what: "worker"; label: string; id: number }
   | { what: "pen"; label: string; id: string }
   | { what: "tile"; label: string; x: number; y: number };
+
+/**
+ * Nút PHỤ nói gì — MỘT hàm cho cả HUD lẫn cú bấm.
+ *
+ * Thứ tự là thứ tự cú bấm vẫn dùng từ Đợt 13, giờ HUD cũng đi đúng đường đó
+ * (trước đây HUD không hỏi người làm, nên nút ghi "BẢNG KHU" mà bấm ra thẻ
+ * người làm):
+ *   1. NGƯỜI LÀM quanh ô ngắm (nếu trong tầm), rồi quanh chân — thẻ "đang làm
+ *      gì, lương bao nhiêu" là thứ người chơi mở nhiều nhất khi mới thuê.
+ *   2. `interactHint` quanh CHÂN — nút phụ nói về thứ mình đang đứng cạnh.
+ *   3. `interactHint` ở ô ngắm.
+ */
+export function infoHint(
+  state: GameState,
+  content: Content,
+  cursor: { x: number; y: number } | null,
+): InfoHint | null {
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+  const nl =
+    (cursor && inReach(state, cursor.x, cursor.y) ? workerNear(state, cursor.x, cursor.y) : null) ??
+    workerNear(state, px, py);
+  if (nl) {
+    const ten = nl.worker?.name;
+    return { what: "worker", label: ten ? `XEM ${ten.toUpperCase()}` : "XEM NGƯỜI LÀM", id: nl.id };
+  }
+  return interactHint(state, content, px, py) ?? (cursor ? interactHint(state, content, cursor.x, cursor.y) : null);
+}
 
 export function interactHint(
   state: GameState,
@@ -375,9 +612,10 @@ export function tileInfo(
 /**
  * Việc nút CHÍNH sẽ làm khi Ô ĐANG NGẮM không có gì — và ô phải tới để làm.
  *
- * Đây là chỗ duy nhất trả lời câu "quanh đây có việc gì": `hintAt` gọi nó để
- * IN NHÃN, `main.ts` gọi nó để LÀM. Một nguồn, nên nút không bao giờ nói một
- * đằng làm một nẻo — cái lỗi khó chịu nhất mà một nút ngữ cảnh mắc phải.
+ * Đây là chỗ duy nhất trả lời câu "quanh đây có việc gì". `pressPlan` gọi nó
+ * ở nấc 6, và cả nhãn lẫn cú bấm đều đi qua `pressPlan` — một nguồn, nên nút
+ * không bao giờ nói một đằng làm một nẻo (từ Đợt 21; trước đó `main.ts` có bộ
+ * luật riêng và hai bên đã trôi khỏi nhau).
  *
  * Thứ tự có lý do:
  *   1. CON VẬT trong tầm đang tới lứa. Người chơi nhìn thấy con bò trước khi
@@ -387,7 +625,13 @@ export function tileInfo(
  *      thì nút vẫn ghi CÀY và dắt sang đúng ô đất.
  *   3. Việc của cả KHU (đổ máng, thu cả đàn) — rộng nhất nên xét cuối.
  */
-export type CtxAction = { kind: Exclude<HintKind, null>; label: string; at: { x: number; y: number } };
+export type CtxAction = {
+  kind: Exclude<HintKind, null>;
+  label: string;
+  at: { x: number; y: number };
+  /** con vật cụ thể (chỉ với `gather`) — để cú bấm thu ĐÚNG con nút đang nói */
+  id?: number;
+};
 
 export function contextAction(
   state: GameState,
@@ -411,70 +655,86 @@ export function contextAction(
   let best: CtxAction | null = null;
   let bestBac = 9;
   let bestD = Infinity;
-  const xet = (kind: Exclude<HintKind, null>, at: { x: number; y: number }) => {
+  const xet = (kind: Exclude<HintKind, null>, at: { x: number; y: number }, id?: number) => {
     const bac = nhoMonDangCam(kind) ? 0 : 1;
-    const d = Math.hypot(at.x - px, at.y - py);
+    /* Ứng viên nằm ĐÚNG Ô ĐANG NGẮM thắng mọi cuộc hoà trong cùng bậc: người
+       chơi đang chỉ vào nó. Trước đây hoà thì thứ được xét TRƯỚC thắng — một
+       luật không ai đoán được từ ngoài. */
+    const d = at.x === x && at.y === y ? -1 : Math.hypot(at.x - px, at.y - py);
     if (bac > bestBac || (bac === bestBac && d >= bestD)) return;
     bestBac = bac;
     bestD = d;
-    best = { kind, label: LABEL[kind], at };
+    best = { kind, label: LABEL[kind], at, ...(id !== undefined ? { id } : {}) };
   };
 
   // 1. CON VẬT quanh mình — vắt sữa. (Cho ăn đi đường MÁNG ở bước 2.)
-  for (const [ax, ay] of [
-    [x, y],
-    [px, py],
-  ] as [number, number][]) {
-    const an = animalNear(state, ax, ay, 2.2);
+  //    Quanh ô ngắm: cùng bán kính 1,4 với cú bấm; quanh chân: rộng hơn một
+  //    chút (2,2) để "con bò ngay bên cạnh" vẫn được kể. Trả kèm `id`, nên cú
+  //    bấm thu ĐÚNG con này chứ không quét lại rồi vớ phải con khác.
+  for (const [ax, ay, r] of [
+    [x, y, 1.4],
+    [px, py, 2.2],
+  ] as [number, number, number][]) {
+    const an = readyAnimalNear(state, content, ax, ay, r);
     if (!an) continue;
-    const def = content.animals[an.def];
-    if (!def) continue;
-    const at = { x: Math.floor(an.x / TILE), y: Math.floor(an.y / TILE) };
-    if (readyProduct(an, content) >= 0) xet("gather", at);
+    xet("gather", { x: Math.floor(an.x / TILE), y: Math.floor(an.y / TILE) }, an.id);
   }
 
   // 2. Việc của cả KHU (đổ máng, rắc hồ, thu cả đàn) — lề rộng, xem `penAction`.
   const pa = penAction(state, content, x, y);
   if (pa) xet(pa.kind, pa.at);
 
-  /* 3. Ô ĐANG NGẮM có vật thì câu trả lời phải nói về NÓ.
-
-     Một cái cây, một luống rau, một công trình — hoặc mình đang vác đồ. Người
-     chơi CHỦ Ý chỉ vào đó, và câu "Cần rìu" / "Lùi ra rồi đặt" đúng là thứ họ
-     đang hỏi. Đổi nhãn sang một việc ở ô khác lúc đó là nuốt mất câu trả lời.
-
-     Ngoại lệ: việc thuộc bậc 1 vẫn được phép thắng — cầm bao cám mà ngắm vào
-     bụi cỏ thì ý định vẫn là cho gà ăn, không phải nhổ bụi cỏ ấy. */
-  /* THUYỀN BUÔN đang cập bến — xét TRƯỚC cửa thoát sớm ngay dưới.
+  /* 3. THUYỀN BUÔN đang cập bến.
 
      Cái sạp là CHÍNH CON THUYỀN, không phải một ô nào cả, nên nó không đi qua
      `interactNear` (thứ chỉ biết đọc vật thể trên lưới) mà hỏi thẳng danh sách
      thực thể. Vì sao không đặt một vật thể "sạp" lên ô bến cho gọn: cái sạp
      chỉ tồn tại trong lúc con thuyền còn đó, mà lưới ô nằm trong save và không
      ai dọn nó đi khi thuyền nhổ neo — một cái sạp ma đứng lại giữa biển là thứ
-     không cách nào sửa từ phía người chơi.
-
-     Và nó phải đứng TRƯỚC bước 3, vì người mua đứng trên CẦU TÀU: ô dưới chân
-     có vật thể, nên bước 3 trả `null` và cả câu trả lời bị nuốt. Đứng ngay
-     cạnh con thuyền mà nút ghi "DÙNG" là đúng cảnh ấy. */
+     không cách nào sửa từ phía người chơi. */
   const th = boatAt(state, px, py);
   if (th) xet("boat", { x: Math.floor(th.x / TILE), y: Math.floor(th.y / TILE) });
+  /* Thuyền thắng mọi thứ cùng bậc quanh chân — nó chỉ ghé vài giờ mỗi ba
+     ngày, còn mặt nước để MÚC quanh bến thì lúc nào cũng có. */
   if (th && bestBac > 0) return best;
 
-  const t0 = tileAt(state, x, y);
-  const oNgamCoVat = !!state.carry || !!(t0 && (t0.prop || t0.crop || t0.b));
-  if (oNgamCoVat && bestBac > 0) return null;
+  /* 4. Ô ĐANG NGẮM có vật thì câu trả lời phải nói về NÓ.
 
-  /* 4. Quét quanh CHÂN trong `CTX_RADIUS` ô.
+     Một cái cây, một luống rau, một công trình — hoặc mình đang vác đồ. Người
+     chơi CHỦ Ý chỉ vào đó, và câu "Cần rìu" / "Lùi ra rồi đặt" đúng là thứ họ
+     đang hỏi. Đổi nhãn sang một việc ở ô khác lúc đó là nuốt mất câu trả lời.
+
+     Ba ngoại lệ, và cả ba đều là ca người chơi từng thấy nút "DÙNG" trống:
+       · việc thuộc bậc 0 vẫn thắng — cầm bao cám mà ngắm vào bụi cỏ thì ý
+         định vẫn là cho gà ăn;
+       · ô dưới CHÂN không tính — đứng trên cầu tàu, ô ngắm rơi vào chính ô
+         mình đứng, mà cầu tàu là một "vật";
+       · vật ĐI XUYÊN được và không có gì để nói (cầu, cầu tàu: không đập,
+         không tương tác) không tính — chúng là nền, không phải vật.
+     Và cửa thoát này chỉ chặn phép QUÉT ô làm việc (bước 5), không chặn vật
+     thể trong hai ô (bước 6): đứng cạnh cái giếng thì "MÚC" là câu trả lời
+     dù có đang ngắm vào một gốc cây. */
+  const t0 = tileAt(state, x, y);
+  const oChan = x === px && y === py;
+  const pd = t0?.prop ? propDef(content, t0.prop) : null;
+  const vatNen = !!pd && pd.solid === false && !pd.hits && !pd.interact;
+  const oNgamCoVat = !oChan && !!t0 && ((!!t0.prop && !vatNen) || !!t0.crop || !!t0.b);
+  /* Đang VÁC thì không quét gì thêm: hai tay bận, chỉ còn ĐẶT XUỐNG ở ô ngắm
+     (`canUseAt` lo) và câu "vì sao không đặt được ở đây" (`explain` lo). */
+  if (state.carry) return best;
+
+  /* 5. Quét quanh CHÂN trong `CTX_RADIUS` ô.
      `nearestTarget` hỏi `canUseAt` với đúng ô hotbar đang chọn — không giả định
      một món khác, không đổi ô. */
-  const gan = nearestTarget(state, content, null, null, {
-    radius: CTX_RADIUS,
-    requireReach: false,
-  });
-  if (gan && !DON_DEP.has(gan.kind)) xet(gan.kind, { x: gan.x, y: gan.y });
+  if (!oNgamCoVat || bestBac === 0) {
+    const gan = nearestTarget(state, content, null, null, {
+      radius: CTX_RADIUS,
+      requireReach: false,
+    });
+    if (gan && !DON_DEP.has(gan.kind)) xet(gan.kind, { x: gan.x, y: gan.y });
+  }
 
-  /* 5. VẬT THỂ BIẾT NÓI CHUYỆN quanh chân: cửa hàng, quầy bán, bàn chế tạo,
+  /* 6. VẬT THỂ BIẾT NÓI CHUYỆN quanh chân: cửa hàng, quầy bán, bàn chế tạo,
      giường, giếng, kho, cửa nhà.
 
      Trước đây đây là việc của nút PHỤ. Cường tách lại cho đúng vai: "một nút
@@ -497,6 +757,29 @@ export function contextAction(
   return best;
 }
 
+
+/**
+ * Con vật TỚI LỨA gần (x,y) nhất trong `r` ô — không phải con gần nhất bất kỳ.
+ *
+ * `animalNear` trả về con gần nhất rồi mới hỏi tới lứa chưa: hai con bò, con
+ * kề chân chưa tới lứa, con cách hai ô tới lứa — nút im. Hỏi đúng câu "con
+ * nào THU được" thì con thứ hai được kể.
+ */
+function readyAnimalNear(state: GameState, content: Content, x: number, y: number, r: number): Entity | null {
+  const cx = x * TILE + TILE / 2;
+  const cy = y * TILE + TILE / 2;
+  let best: Entity | null = null;
+  let bestD = Infinity;
+  for (const e of state.entities) {
+    if (e.map !== state.mapId || e.kind !== "animal" || !content.animals[e.def]) continue;
+    const d = Math.hypot(e.x - cx, e.y - cy) / TILE;
+    if (d > r || d >= bestD) continue;
+    if (readyProduct(e, content) < 0) continue;
+    bestD = d;
+    best = e;
+  }
+  return best;
+}
 
 /**
  * THUYỀN BUÔN đang cập bến trong tầm với của (x,y), hoặc null.
@@ -587,7 +870,6 @@ export function nhoMonDangCam(kind: Exclude<HintKind, null>): boolean {
     case "water":
     case "till":
     case "cure":
-    case "pull":
     case "build":
     case "putdown":
       return true;

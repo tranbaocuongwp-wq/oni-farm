@@ -542,6 +542,8 @@ export function newDay(d: Draft, content: Content, opts: NewDayOptions): void {
   // ---- 1b. thời tiết hôm nay ---------------------------------------------
   rollWeather(d, content);
   const todayWet = weatherDef(d.s, content).wet;
+  // Bão: nói ngay lúc thức dậy vì sao xe không tới và người làm đứng trước kho.
+  if (weatherDef(d.s, content).halt) toastKey(d, content, "stormHalt", "bad");
 
   // Lấy cửa sổ cho MỌI bản đồ đúng một lần, theo thứ tự tất định.
   const views = mapViews(d, content);

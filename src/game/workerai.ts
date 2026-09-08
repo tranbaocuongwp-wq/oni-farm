@@ -34,6 +34,7 @@ import {
 } from "./workers.ts";
 import { animalNear, readyProduct } from "./animals.ts";
 import { canPourFromStore, pourFromStore } from "./pen.ts";
+import { weatherMood } from "./weather.ts";
 import { cropInSeason, tileAllSeason } from "./season.ts";
 import { isTillable } from "./world.ts";
 
@@ -76,6 +77,51 @@ export function workerStep(
     if (e.ai.phase === "rest") {
       w.energy = cfg.energyMax;
       e.ai.phase = "idle";
+      return true;
+    }
+  }
+
+  /* ---- BÃO thì TRÚ ---------------------------------------------------------
+     Cổng đứng TRƯỚC thang ưu tiên việc (`pickTask`), như nhánh nghỉ mệt — nên
+     thang vẫn cố định và người chơi vẫn đoán được: trời bão (content `halt`)
+     thì người làm về đứng ở ô giao nhận trước cửa kho (`tiles.dropoff`) và
+     đứng đó cho tới sáng. Không hồi năng lượng (đó là việc của `rest`), không
+     ghi sổ đen, không tốn ngân sách A* nếu đã tới nơi. Sang ngày `newDay` xoá
+     `until`/`path` nên hết bão là tự về `idle`. */
+  if (weatherMood(d.s, content).halt) {
+    const o = content.tiles.dropoff;
+    if (o && o.map === d.s.mapId) {
+      if (atTile(e, o.x, o.y)) {
+        e.ai.phase = "shelter";
+        e.ai.until = 0.5;
+        e.ai.path = [];
+        e.ai.tx = -1;
+        e.ai.ty = -1;
+        return true;
+      }
+      if (e.ai.phase === "shelter" && e.ai.path.length) return true; // đang đi tới
+      if (!takeBudget() || dangNghi(d.s.minutes, e.ai.planAt)) {
+        e.ai.phase = "shelter";
+        e.ai.until = 0.5;
+        return true;
+      }
+      e.ai.planAt = d.s.minutes;
+      const cx = Math.floor(e.x / TILE);
+      const cy = Math.floor(e.y / TILE);
+      const path = findPath(d.s, content, cx, cy, new Set([idx(d.s.w, o.x, o.y)]), {
+        maxNodes: MAX_NODES_ACTOR,
+        box: cfg.box,
+        leash: {
+          x: Math.round((cx + o.x) / 2),
+          y: Math.round((cy + o.y) / 2),
+          r: Math.max(LEASH_TILES, Math.max(Math.abs(cx - o.x), Math.abs(cy - o.y)) / 2 + 6),
+        },
+      });
+      e.ai.phase = "shelter";
+      e.ai.tx = -1;
+      e.ai.ty = -1;
+      e.ai.path = path && path.length ? path.slice(0, MAX_PATH) : [];
+      if (!e.ai.path.length) e.ai.until = 2; // không có đường: đứng tại chỗ chờ
       return true;
     }
   }

@@ -29,6 +29,7 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 
 | Đợt | Core | Content | Nội dung | Kịch bản mới | Đột biến đã cấy |
 |---|---|---|---|---|---|
+| 21 | 1.48.0 | 1.48.0 | **NÚT NGỮ CẢNH MỘT NGUỒN**: `pressPlan` (hint.ts) quyết định cú bấm, `hintOf` in nhãn từ chính nó — hết cảnh nhãn "ĐỔ MÁNG"/"THU"/"NGỦ" mà bấm lắc đầu; `main.ts` xoá bộ luật riêng (`nearbyInteract`, `actOnTile`); một ô ngắm, một tầm với, một bán kính con vật; nút phụ biết người làm; dấu ô đích trên bản đồ; dòng "Cách N ô". **THỜI TIẾT CÓ HÀNH VI** (content `speedMul`/`shelter`/`halt`): mưa bão làm chậm mọi thứ ngoài trời, vật nuôi trú (đói vẫn ăn khi mưa, bão thì không), người làm về đứng trước kho, xe thu mua và thuyền không ghé ngày bão; cây/bụi/cỏ lay theo `wind`, mưa nghiêng, lá bay, vũng nước, giọt bắn dưới chân, bò co ro. **CẦU CÓ LAN CAN** theo cạnh giáp nước (lan can dưới vẽ đè lên người), **XE 32×32** hai khung bánh, thuyền có buồm nhấp nhô | 146–147 | 9 |
 | 20 | 1.47.0 | 1.47.0 | **THUYỀN BUÔN**: ghé bến biển ba ngày một lần, bán gỗ/đá/sợi cỏ — thứ cửa hàng trên bờ không bao giờ có. Dùng chung bộ máy với xe tải, khác đúng một cờ `sea`; kéo theo bốn chỗ từng ngầm định "xe chạy trên cạn" (sinh ở cổng nào, đi bằng luật nào, hộp va chạm hỏi luật nào, bất biến hiểu nước là gì) | 145 | 5 |
 | 19 | 1.46.0 | 1.46.0 | Xe vào từ cổng ở mép PHẢI, vòng qua rừng Nam và **qua sông** rồi mới lên kho (80 bước); tách CẦU ĐƯỜNG (xe chạy được) khỏi cầu tàu đi bộ; bất biến thôi chặn xe ở trần đường đi của con vật | 144 | 3 |
 | 18 | 1.45.0 | 1.45.0 | Cổng ra MÉP PHẢI bản đồ — xe thôi hiện ra giữa đồng (Đợt 17 nối đất xuống dưới làm cổng cũ thành ra giữa bản đồ); biển hiệu gắn thẳng lên mặt tiền công trình lớn thay cho tấm ván cắm bên cạnh; sông có bốn lối qua thay vì một; gỡ một khối kiểm biển bị **lặp nguyên văn** trong `validatePack` | 143 | 3 |
@@ -50,6 +51,8 @@ Vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md) ·
 Theo thứ tự Cường chốt. Mỗi đợt đã khảo sát xong, sẽ chi tiết hoá ngay trước khi
 bắt tay.
 
+- **Khách ghé thăm.** Cường: "đôi lúc sẽ có vài người liên lạc hỏi thăm" — NPC
+  ghé nông trại, có lời thoại. Chưa khảo sát.
 - **Đợt 18 · Bỏ hệ nhiệm vụ · sổ tay khám phá.** Tiền là cổng duy nhất của cả
   game nên gỡ được sạch; `discovered` ghi ở một chỗ duy nhất trong `commit()`.
   (Vốn là Đợt 15; Cường chuyển Đợt 15 sang tối ưu hiệu năng, rồi Đợt 16 sang

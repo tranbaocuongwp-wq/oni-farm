@@ -23,7 +23,9 @@ import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
 import { grazeNight } from "./graze.ts";
-import { PHUT_MOI_DIEM, eatFromTroughNight, pourSpotIn, troughMax, troughStock } from "./pen.ts";
+import { weatherMood } from "./weather.ts";
+import { propDef } from "./world.ts";
+import { PHUT_MOI_DIEM, eatFromTroughNight, penOf, pourSpotIn, troughMax, troughStock } from "./pen.ts";
 
 /**
  * Một NGÀY GAME dài bao nhiêu phút.
@@ -170,10 +172,10 @@ export function animalStats(e: Entity, content: Content): AnimalStats | null {
 /* --------------------------------------------------------------- dáng & cảm xúc */
 
 /** Dáng đứng, đọc được từ xa. Tên thuần chuỗi vì `game/` không được biết `art/`. */
-export type PoseName = "walk" | "eat" | "sleep";
+export type PoseName = "walk" | "eat" | "sleep" | "huddle";
 
 /** Ký hiệu nổi trên đầu. `null` = không có gì đáng báo. */
-export type EmoteName = "hungry" | "ready" | "love" | "sleep" | null;
+export type EmoteName = "hungry" | "ready" | "love" | "sleep" | "wet" | null;
 
 /** Từ giờ này trở đi coi là ĐÊM — con vật nằm ngủ. 20:00. */
 const NIGHT_FROM = 20 * 60;
@@ -185,6 +187,25 @@ const NIGHT_FROM = 20 * 60;
  * chơi (`isHungry`, `readyProduct`) — nếu renderer tự diễn giải lại thì bong
  * bóng "tới lứa" sẽ có ngày nói dối, mà nói dối đúng ở chỗ người chơi tin nhất.
  */
+/** Con vật đang đứng KỀ một gốc cây (vật thể `tall`) không — chỗ trú mưa của loài thả rông. */
+function keCay(s: GameState, content: Content, e: Entity): boolean {
+  const cx = Math.floor(e.x / TILE);
+  const cy = Math.floor(e.y / TILE);
+  for (const [dx, dy] of [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ] as [number, number][]) {
+    const x = cx + dx;
+    const y = cy + dy;
+    if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;
+    const t = s.tiles[y * s.w + x];
+    if (t?.prop && propDef(content, t.prop)?.tall) return true;
+  }
+  return false;
+}
+
 export function animalMood(
   s: GameState,
   content: Content,
@@ -194,7 +215,10 @@ export function animalMood(
   const dem = s.minutes >= NIGHT_FROM || s.minutes < (content.balance.dayStartMinutes ?? 360);
   const dangDi = e.ai.path.length > 0;
 
-  const pose: PoseName = dangDi ? "walk" : dem ? "sleep" : "eat";
+  /* Mưa bão (content `shelter`) mà đứng ngoài trời thì CO RO chứ không gặm
+     — cùng nguồn với luật trú trong `actorStep`, nên dáng không nói khác việc. */
+  const troi = weatherMood(s, content);
+  const pose: PoseName = dangDi ? "walk" : dem ? "sleep" : troi.shelter ? "huddle" : "eat";
 
   let emote: EmoteName = null;
   // Gà vịt cũng báo đói: từ khi cỏ là thức ăn thật thì chúng cũng chết đói
@@ -206,6 +230,10 @@ export function animalMood(
   // để vui mắt trong vài phút game.
   else if (def && def.fedMinutes > 0 && e.animal.fed > def.fedMinutes * 0.94) emote = "love";
   else if (pose === "sleep") emote = "sleep";
+  /* Ướt: đang trú mà không có chuồng để về và không nép được gốc cây nào
+     (`penOf` null và không kề cây) — hình giọt nước, để người chơi biết con
+     này cần một cái chuồng. */
+  else if (pose === "huddle" && !penOf(content, e) && !keCay(s, content, e)) emote = "wet";
 
   return { pose, emote };
 }

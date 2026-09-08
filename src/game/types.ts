@@ -379,6 +379,8 @@ export interface PropDef {
   solid: boolean;
   /** Cao 2 ô (cây lớn) — renderer vẽ tràn lên ô phía trên. */
   tall?: boolean;
+  /** Lay theo gió (chỉ lớp vẽ): 0..2, nhân với `weather.wind`. Không khai = đứng yên. */
+  sway?: number;
   /**
    * CÔNG TRÌNH NHIỀU Ô tự nối: mỗi ô nhìn hai ô kề TRÁI–PHẢI cùng id để chọn
    * hình (đầu trái · thân · đầu phải · đứng một mình).
@@ -744,8 +746,14 @@ export interface WeatherDef {
   wet: boolean;
   /** nhân tốc độ lớn của cây trồng, cỏ, bụi, cây con (1 = bình thường) */
   growMul: number;
-  /** 0..1 — gió, chỉ dùng để vẽ cây lay */
+  /** 0..1 — gió: cây lay, lá bay, mưa nghiêng (chỉ lớp vẽ) */
   wind: number;
+  /** nhân tốc độ đi của MỌI thứ ngoài trời (người chơi, vật nuôi, người làm, xe); 1 = bình thường */
+  speedMul?: number;
+  /** vật nuôi TRÚ: có chuồng thì về/ở trong chuồng, thả rông thì đứng nép gốc cây; không lang thang, không tuần */
+  shelter?: boolean;
+  /** NGƯNG việc ngoài trời: người làm về đứng trước cửa kho; xe thu mua và thuyền buôn không ghé; vật nuôi không ra bãi cỏ */
+  halt?: boolean;
   /** nắng gắt: quá `noonDryMinutes` thì ô ẩm khô, cây chưa tưới trông héo */
   hot?: boolean;
   /** nhân xác suất nhiễm bệnh */

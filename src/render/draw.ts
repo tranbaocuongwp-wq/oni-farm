@@ -56,6 +56,7 @@ import { parseItem } from "../game/items.ts";
 import { animalMood } from "../game/animals.ts";
 import type { Camera } from "./camera.ts";
 import type { EmoteKind } from "../art/atlas.ts";
+import { hash2 } from "../core/rng.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
 const LETTERBOX = "#0b0907";
@@ -71,7 +72,7 @@ export interface Cursor {
 }
 
 /** Loại hiệu ứng hạt. Mỗi loại một màu và một kiểu chuyển động. */
-export type BurstKind = "dust" | "water" | "leaf" | "spark" | "stone" | "coin";
+export type BurstKind = "dust" | "water" | "leaf" | "spark" | "stone" | "coin" | "blow" | "splash";
 
 /** Thời tiết đã rút gọn cho renderer — main tính từ content + state. */
 export interface WeatherFx {
@@ -96,6 +97,8 @@ export interface WeatherFx {
 export interface DrawOptions {
   /** Ô ĐÍCH đang đi tới (bấm-để-đi) — vẽ dấu vòng vàng. */
   navTarget: { x: number; y: number } | null;
+  /** Ô mà NÚT CHÍNH sẽ tác động khi nó KHÁC ô đang ngắm (con vật kề, máng của khu…). */
+  target: { x: number; y: number } | null;
   /** 0..1: độ mờ đen khi chuyển ngày (main điều khiển), 0 = không phủ. */
   fade: number;
   /** Tắt nhấp nháy/lấp lánh/hạt cho ai say chuyển động. */
@@ -167,7 +170,26 @@ const BURST: Record<BurstKind, { colors: string[]; n: number; speed: number; up:
   spark: { colors: ["#ffd84a", "#ffffff", "#f59e0b"], n: 10, speed: 34, up: 30, gravity: 20, ttl: 0.5, size: 1 },
   stone: { colors: ["#a2a8b1", "#6b7078", "#ffffff"], n: 7, speed: 30, up: 36, gravity: 120, ttl: 0.45, size: 1 },
   coin: { colors: ["#ffd84a", "#c9931a", "#fff4b0"], n: 6, speed: 18, up: 44, gravity: 70, ttl: 0.7, size: 2 },
+  /** lá bị GIÓ cuốn khỏi tán cây: ít hạt, nhẹ, sống lâu — gió (windX) mới là thứ đẩy nó đi */
+  blow: { colors: ["#7cc25a", "#4da04a", "#c9a227"], n: 2, speed: 8, up: 12, gravity: 14, ttl: 1.6, size: 1 },
+  /** giọt bắn dưới chân người đi trong mưa */
+  splash: { colors: ["#a8d4ff", "#dff1ff"], n: 3, speed: 12, up: 16, gravity: 120, ttl: 0.28, size: 1 },
 };
+
+/**
+ * Cạnh nào của ô cầu (x,y) cần LAN CAN: ô kề là NƯỚC (hoặc ngoài bản đồ) và
+ * không phải cùng loại cầu. Đầu cầu tiếp đất → mở.
+ */
+function bridgeRail(s: GameState, x: number, y: number, prop: string) {
+  const ke = (dx: number, dy: number): boolean => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= s.w || ny >= s.h) return true;
+    const t = s.tiles[ny * s.w + nx]!;
+    return t.g === "water" && t.prop !== prop;
+  };
+  return { up: ke(0, -1), down: ke(0, 1), left: ke(-1, 0), right: ke(1, 0) };
+}
 
 /** Mức đầy 0..3 của một chỗ chứa thức ăn, suy từ số phần còn lại. */
 function mucAn(content: Content, n: number): number {
@@ -189,6 +211,11 @@ export function createRenderer(
 
   const particles: Particle[] = [];
   let lastTime = 0;
+  /** Lực gió ngang (px/s²) tác động lên MỌI hạt — lá bay xiêu theo gió, bụi cũng thế. */
+  let windX = 0;
+  /** nhịp cuối đã thả lá / bắn giọt — để mỗi nhịp chỉ một lần */
+  let laBeat = -1;
+  let giotBeat = -1;
 
   /** Ghim một toạ độ world về đúng lưới pixel THIẾT BỊ (mịn hơn world px đúng
    *  bằng scale×dpr lần). Dùng cho những thứ DI CHUYỂN mượt: nhân vật, hạt. */
@@ -244,9 +271,12 @@ export function createRenderer(
 
   /* ---- hạt hiệu ứng ---- */
   function burst(kind: BurstKind, tx: number, ty: number) {
+    burstAt(kind, tx * TILE + TILE / 2, ty * TILE + TILE / 2);
+  }
+
+  /** Như `burst` nhưng tại một điểm world px — cho hạt bám theo thứ đang đi. */
+  function burstAt(kind: BurstKind, cx: number, cy: number) {
     const def = BURST[kind];
-    const cx = tx * TILE + TILE / 2;
-    const cy = ty * TILE + TILE / 2;
     for (let i = 0; i < def.n; i++) {
       // tất định theo chỉ số hạt là đủ — đây là trang trí, không cần seed của state
       const ang = (i / def.n) * Math.PI * 2 + ((i * 7) % 5) * 0.13;
@@ -276,6 +306,7 @@ export function createRenderer(
         continue;
       }
       p.vy += p.gravity * dt;
+      p.vx += windX * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
     }
@@ -344,6 +375,7 @@ export function createRenderer(
     x1: number,
     y1: number,
     waterFrame: number,
+    mua: boolean,
   ) {
     const { rx, ry } = camera;
     const shoreFrame = Math.floor(waterFrame / 2) % 2;
@@ -382,6 +414,10 @@ export function createRenderer(
                   ? atlas.concrete
                   : atlas.grass;
         g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
+        /* VŨNG NƯỚC trên lối đi khi trời mưa: một phần năm số ô, chọn theo băm
+           toạ độ nên vũng nào ở đâu là ở đó suốt cơn mưa — không nhảy múa. */
+        if (mua && t.g === "path" && hash2(x, y, 7) % 5 === 0)
+          g.drawImage(atlas.puddle[hash2(x, y, 9) % 2]!, px, py);
 
         /* GỜ ĐẤT ở mép giáp nước. Vẽ ngay sau nền và TRƯỚC mọi thứ đặt lên ô,
            để luống cày / sàn nhà kính vẫn đè lên được như thường. Bốn phép tra
@@ -491,6 +527,10 @@ export function createRenderer(
              cái hộp giống hệt đứng cạnh nhau. Cùng khuôn với hàng rào tự nối,
              chỉ khác là nó chỉ nhìn ngang — xem `makeBlockTile`. */
           const khoi = content.props[t.prop]?.block ? atlas.blocks[t.prop] : undefined;
+          /* CẦU có LAN CAN ở cạnh giáp nước (Đợt 21). Đọc bản đồ chứ không đọc
+             "cùng prop": đầu cầu tiếp đất phải MỞ, nếu không người đi xuyên
+             qua lan can khi lên cầu. */
+          const lanCan = def?.bridge ? bridgeRail(s, x, y, t.prop) : null;
           const img = khoi
             ? khoi.get(
                 blockVariantKey(
@@ -498,11 +538,30 @@ export function createRenderer(
                   s.tiles[y * s.w + x + 1]?.prop === t.prop && x < s.w - 1,
                 ),
               )
-            : t.prop === "trough"
-              ? atlas.trough(t.troughId ?? null, mucAn(content, t.trough ?? 0))
-              : atlas.props[t.prop];
+            : lanCan
+              ? (atlas.propMask[t.prop]?.get(tileMaskKey(lanCan)) ?? atlas.props[t.prop])
+              : t.prop === "trough"
+                ? atlas.trough(t.troughId ?? null, mucAn(content, t.trough ?? 0))
+                : atlas.props[t.prop];
+          /* Lan can cạnh DƯỚI vẽ SAU người đứng trên ô: base `y*TILE + TILE + 5`
+             — actor trên ô này có base ≤ y*16+20,99 (bị đè), actor ở ô dưới có
+             base ≥ y*16+21 (thắng). Đây là lần đầu `items` được dùng cho một
+             lớp phủ đè lên actor. */
+          if (lanCan?.down) {
+            const over = atlas.propOver[t.prop];
+            if (over) items.push({ base: y * TILE + TILE + 5, run: () => g.drawImage(over, px, py) });
+          }
           if (img) {
             const oy = def?.tall ? py - TILE : py;
+            /* CÂY, BỤI, CỎ lay theo gió (`prop.sway` × `weather.wind`), cùng
+               công thức với cây trồng bên dưới: cắt hai lát, lát trên dịch
+               ngang theo sin lệch pha theo toạ độ ô. Trước Đợt 21 chỉ cây
+               trồng lay còn cả rừng đứng chết — bão mà rừng im là bão giả. */
+            const lay = def?.sway ?? 0;
+            const dich =
+              lay > 0 && wind > 0
+                ? Math.round(Math.sin(timeSec * 2.4 + x * 0.7 + y * 0.5) * 1.5 * wind * lay)
+                : 0;
             /* Vật thể ĐI QUA ĐƯỢC thì xếp lớp theo MÉP TRÊN của ô, không phải
                mép dưới.
                Vì sao: người chơi ĐỨNG ĐƯỢC lên chính cái ô đó — cầu gỗ, bụi cỏ,
@@ -514,7 +573,18 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
+            if (dich === 0) items.push({ base: lopVat, run: () => g.drawImage(img, px, oy) });
+            else {
+              const h = img.height;
+              const split = Math.max(4, h - 8);
+              items.push({
+                base: lopVat,
+                run: () => {
+                  g.drawImage(img, 0, 0, img.width, split, px + dich, oy, img.width, split);
+                  g.drawImage(img, 0, split, img.width, h - split, px, oy + split, img.width, h - split);
+                },
+              });
+            }
             const full = def?.hits ?? 0;
             if (full > 1 && t.hp > 0 && t.hp < full) {
               const hp = t.hp;
@@ -667,11 +737,15 @@ export function createRenderer(
       const img = e.worker
         ? atlas.worker(e.worker.skin, e.dir, moving ? 1 + (Math.floor(e.anim * 8) % 4) : 0)
         : e.kind === "vehicle"
-          ? atlas.vehicle(e.def, e.dir)
+          ? atlas.vehicle(e.def, e.dir, moving ? Math.floor(e.anim * 8) % 2 : 0)
           : atlas.animal(e.def, e.dir, frame, mood?.pose ?? "walk");
       if (!img) continue;
-      const px = snapDev(e.x - camera.rx) - TILE / 2;
-      const py = snapDev(e.y - camera.ry) - TILE + 3;
+      /* Neo theo KÍCH THƯỚC hình, không theo TILE: xe nay 32×32. Tâm thân ở
+         `e.y − 5`, bóng ở `e.y + 2` — đúng chỗ của bản 16×16 cũ, nên xe to lên
+         mà không nhảy vị trí. Thuyền nhấp nhô ±1px theo đồng hồ vẽ (trang trí). */
+      const nhap = e.kind === "vehicle" && content.vehicles[e.def]?.sea ? Math.round(Math.sin(timeSec * 2 + e.id)) : 0;
+      const px = snapDev(e.x - camera.rx) - img.width / 2;
+      const py = snapDev(e.y - camera.ry) - img.height / 2 - 5 + nhap;
       // Người làm mệt cũng báo bằng lớp phủ giống con vật đói — một ký hiệu
       // cho một ý "cái này đang cần bạn để mắt tới".
       const doi = e.worker
@@ -682,7 +756,9 @@ export function createRenderer(
       const emo: EmoteKind | null = e.worker
         ? e.worker.energy <= content.workers.restBelow
           ? "tired"
-          : null
+          : e.ai.phase === "shelter"
+            ? "wet"
+            : null
         : (mood?.emote ?? null);
       /* Bong bóng nhấp nhô nhẹ và KHÔNG theo `e.anim`: `anim` chỉ chạy khi con
          vật đi, nên con đang nằm ngủ sẽ có cái bóng chết cứng. Dùng đồng hồ
@@ -694,8 +770,8 @@ export function createRenderer(
           g.drawImage(img, px, py);
           // Đói thì báo NGAY trên con vật, dùng lại đúng lớp phủ của cây bệnh —
           // người chơi đã học nghĩa của nó rồi, không phải học thêm ký hiệu mới.
-          if (doi) g.drawImage(atlas.sickOverlay, px, py);
-          if (emo) g.drawImage(atlas.emote(emo), px + 4, py - 9 + eBob);
+          if (doi) g.drawImage(atlas.sickOverlay, px + img.width / 2 - TILE / 2, py + img.height - TILE);
+          if (emo) g.drawImage(atlas.emote(emo), px + img.width / 2 - 4, py - 9 + eBob);
         },
       });
     }
@@ -784,7 +860,7 @@ export function createRenderer(
    * từng vệt hash theo (chỉ số, nhịp) — không state, không Math.random, và cùng
    * khung hình thì cùng hình.
    */
-  function drawRain(timeSec: number, storm: boolean) {
+  function drawRain(timeSec: number, storm: boolean, wind: number) {
     const vp = camera.viewport;
     const n = storm ? 110 : 60;
     const beat = Math.floor(timeSec * 10);
@@ -793,8 +869,11 @@ export function createRenderer(
     for (let i = 0; i < n; i++) {
       const hx = ((i * 73856093) ^ (beat * 19349663)) >>> 0;
       const hy = ((i * 83492791) ^ (beat * 2654435761)) >>> 0;
-      const x = (hx % (w + 16)) - 8;
-      const y = ((hy % (h + 16)) - 8 + ((timeSec * 140) % 16)) % (h + 16);
+      /* Mưa NGHIÊNG theo gió: hạt rơi 16px thì trôi ngang `wind × 6`px —
+         bão thổi gần 45°, mưa thường hơi xiên, không gió thì rơi thẳng. */
+      const roi = (timeSec * 140) % 16;
+      const x = (hx % (w + 16)) - 8 + Math.round(roi * wind * 0.4);
+      const y = ((hy % (h + 16)) - 8 + roi) % (h + 16);
       const f = (i + beat) % 3;
       g.drawImage(atlas.rainDrop[f]!, Math.round(x), Math.round(y));
     }
@@ -1156,8 +1235,44 @@ export function createRenderer(
 
     drawVoid(s);
     const { x0, y0, x1, y1 } = camera.visibleTiles(s.w, s.h);
-    const waterFrame = Math.max(0, Math.floor(timeSec * 4));
-    drawGround(s, content, x0, y0, x1, y1, waterFrame);
+    // Gió mạnh thì mặt nước gợn nhanh hơn — cùng một dải khung, nhịp khác.
+    const gio = opts.reduceMotion ? 0 : opts.weather.wind;
+    const waterFrame = Math.max(0, Math.floor(timeSec * (4 + 4 * gio)));
+    windX = opts.weather.outdoor ? gio * 40 : 0;
+    drawGround(s, content, x0, y0, x1, y1, waterFrame, opts.weather.outdoor && opts.weather.rain);
+
+    /* LÁ BAY: gió từ 0,5 trở lên, mỗi 0,6 giây thả hai chiếc lá từ MỘT tán cây
+       trong khung hình (chọn bằng băm nhịp, nên cùng cảnh cùng lúc là cùng cây).
+       Hạt bị `windX` cuốn đi — đây là chỗ duy nhất gió "sờ" được. */
+    if (gio >= 0.5 && opts.weather.outdoor) {
+      const beat = Math.floor(timeSec / 0.6);
+      if (beat !== laBeat) {
+        laBeat = beat;
+        let dem = 0;
+        for (let y = y0; y <= y1; y++)
+          for (let x = x0; x <= x1; x++) {
+            const t = s.tiles[y * s.w + x];
+            if (t?.prop && content.props[t.prop]?.tall) dem++;
+          }
+        if (dem > 0) {
+          let k = hash2(beat, 3, 11) % dem;
+          for (let y = y0; y <= y1; y++)
+            for (let x = x0; x <= x1; x++) {
+              const t = s.tiles[y * s.w + x];
+              if (!(t?.prop && content.props[t.prop]?.tall)) continue;
+              if (k-- === 0) burstAt("blow", x * TILE + TILE / 2, y * TILE - 6);
+            }
+        }
+      }
+    }
+    /* GIỌT BẮN dưới chân người đi trong mưa — bốn lần một giây, chỉ khi đang đi. */
+    if (opts.weather.outdoor && opts.weather.rain && !opts.reduceMotion && s.player.moving) {
+      const beat = Math.floor(timeSec / 0.25);
+      if (beat !== giotBeat) {
+        giotBeat = beat;
+        burstAt("splash", s.player.x, s.player.y + 6);
+      }
+    }
 
     // Ô đang nhắm — vẽ DƯỚI lớp vật thể để không che mất cây.
     if (cursor) {
@@ -1168,6 +1283,15 @@ export function createRenderer(
         cursor.x * TILE - camera.rx,
         cursor.y * TILE - camera.ry,
       );
+      g.globalAlpha = 1;
+    }
+    /* Ô nút chính SẼ TÁC ĐỘNG khi nó không phải ô đang ngắm: cùng hình con
+       trỏ nhưng mờ hơn và không nhấp nháy — "nút nói về ô này", chưa phải
+       "đang chỉ vào ô này". Không có nó thì nhãn "ĐỔ MÁNG" hiện lên mà người
+       chơi không biết cái máng ở đâu. */
+    if (opts.target) {
+      g.globalAlpha = 0.55;
+      g.drawImage(atlas.cursorOk, opts.target.x * TILE - camera.rx, opts.target.y * TILE - camera.ry);
       g.globalAlpha = 1;
     }
     // Dấu đích đang đi tới: vòng vàng co lại. Khác con trỏ để người chơi phân
@@ -1207,7 +1331,7 @@ export function createRenderer(
     for (const it of items) it.run();
 
     drawParticles();
-    if (opts.weather.outdoor && opts.weather.rain && !opts.reduceMotion) drawRain(timeSec, opts.weather.storm);
+    if (opts.weather.outdoor && opts.weather.rain && !opts.reduceMotion) drawRain(timeSec, opts.weather.storm, gio);
 
     g.restore();
 

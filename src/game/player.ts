@@ -13,6 +13,7 @@ import type { Content, Dir } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dPlayer } from "./state.ts";
 import { PLAYER_SPEED, blockedAt, nudgeOutOfSolid, speedMulAt } from "./world.ts";
+import { weatherMood } from "./weather.ts";
 
 export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
   if (nx === 0 && ny === 0) return fallback;
@@ -55,10 +56,13 @@ export function movePlayer(
 
   const len = Math.sqrt(dx * dx + dy * dy);
   // Nền dưới chân quyết định tốc độ: đường nhựa đi nhanh hơn cỏ.
+  // Và TRỜI: mưa bão làm chậm mọi thứ ngoài trời (content quyết định bao nhiêu).
   const base =
     (run
       ? (content.balance.runSpeed ?? PLAYER_SPEED)
-      : (content.balance.moveSpeed ?? PLAYER_SPEED)) * speedMulAt(d.s, content, x, y);
+      : (content.balance.moveSpeed ?? PLAYER_SPEED)) *
+    speedMulAt(d.s, content, x, y) *
+    weatherMood(d.s, content).speedMul;
   // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
   const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
   const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;

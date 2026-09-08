@@ -37,6 +37,23 @@ mắt thấy đúng thứ tự *vung → chạm → kết quả*, và bấm lo�
 > không thể biết nhát này ăn hay trượt. Chỗ nào cần biết thì đếm bộ đếm thống kê,
 > đừng so state ngay lập tức. Xem [`GIAI-THUAT.md`](GIAI-THUAT.md#8-tự-động-làm).
 
+### Thời tiết đổi hành vi
+
+Mỗi ngày một kiểu thời tiết (content `weather.json`), và từ Đợt 21 kiểu ấy không
+chỉ nhân lên tốc độ cây lớn mà còn đổi **việc mọi người và mọi con vật làm**,
+qua đúng ba cờ, đều **tắt khi ở trong nhà**:
+
+| Cờ | Mưa | Bão | Nghĩa |
+|---|---|---|---|
+| `speedMul` | 0,85 | 0,7 | mọi thứ ngoài trời đi chậm lại: người chơi, vật nuôi, người làm, xe, thuyền |
+| `shelter` | ✓ | ✓ | vật nuôi **trú**: có chuồng thì về/ở yên trong chuồng (co ro, không loanh quanh), thả rông thì nép gốc cây gần nhất. Con **đói vẫn ra ăn** — mưa dầm ba ngày mà nhịn là mất trứng |
+| `halt` | — | ✓ | **ngưng việc ngoài trời**: người làm về đứng ở ô giao nhận trước kho tới sáng (không tốn sức, không hồi sức); xe thu mua và thuyền buôn **không ghé** (thuyền không bù ngày); con đói cũng **không** ra bãi cỏ — một ngày, chịu được |
+
+Ba cờ đọc thuần từ content, **không rút một hạt ngẫu nhiên nào** — xúc xắc xe
+thu mua vẫn được rút ngày bão rồi mới bị gác, để thêm luật bão không làm ngày
+nắng kế tiếp đổi kết quả. Gió (`wind`) vẫn chỉ là **lớp vẽ**: cây lay, mưa
+nghiêng, lá bay, vũng nước — không vào luật.
+
 ### Ngủ và sang ngày
 
 Ngủ trên **giường** (không phải cửa nhà). Thứ tự khi sang ngày là **hợp đồng, không
@@ -168,6 +185,10 @@ Hàm chọn việc **dùng chung** với nút "tự động làm" của người
 dùng hai chỗ — tách hai đường thì hai thứ tự ưu tiên sẽ trôi khỏi nhau mà không ai
 nhận ra.
 
+**Bão thì trú** (content `halt`): là một **cổng đứng trước** thang ưu tiên, như
+nhánh nghỉ mệt — không xen vào thang, nên thang vẫn cố định và người chơi vẫn đoán
+được: trời bão, người làm về đứng ở ô giao nhận trước kho cho tới sáng.
+
 ---
 
 ## 5. Mua bán và xe cộ
@@ -185,6 +206,8 @@ Xe **chỉ đi trên đường nhựa và lối đi**, không lội qua ruộng 
 thì xe xếp hàng ngoài đường.
 
 **Xe thu mua** ghé lấy nông sản trong kho, trả cao hơn quầy một chút (`buyBonus`).
+**Thuyền buôn** ghé bến biển ba ngày một lần bán gỗ/đá/sợi cỏ. Ngày **bão**
+(`halt`) cả hai không tới, và thuyền không bù ngày — nhịp vẫn tính từ `day`.
 
 Cửa hàng bán **mọi thứ ngay từ đầu** — có tiền là mua được. Không có "??? chưa mở
 khoá": bày ra bốn ô khoá là bày bốn lời hứa mà người chơi không làm gì được với
@@ -228,6 +251,15 @@ nghĩa.
 **Một lúc chỉ một chế độ** — chạm, tay cầm, hoặc bàn phím+chuột — và nó theo
 **thiết bị vừa được dùng**, không theo "máy có màn cảm ứng hay không". Chi tiết ở
 [`MOBILE-UX.md`](MOBILE-UX.md).
+
+**Nút chính là MỘT NGUỒN** (Đợt 21): `pressPlan` trong `src/game/hint.ts` trả
+về đúng một `Press` — *dùng ở ô này / thu con này / mở vật thể này / đi tới rồi
+làm / chuyến / từ chối kèm lý do* — và **cả nhãn trên nút lẫn cú bấm** đều đi
+từ nó. Thứ tự: công trình đang cầm → con vật tới lứa ở ô ngắm → việc của món
+đang cầm ở ô ngắm → thuyền buôn kề bên → vật thể ở ô ngắm → quanh chân
+(việc của khu, ô gần nhất làm được, vật thể trong hai ô) → chuyến → lý do. Ô ngắm
+là **một** ô cho cả HUD lẫn cú bấm; tầm với là **một** luật (của reducer); con vật
+là **một** bán kính. Nhãn không thể nói khác cú bấm vì nó là hình chiếu của cú bấm.
 
 Ba cách làm việc, khác nhau ở đúng một điểm:
 

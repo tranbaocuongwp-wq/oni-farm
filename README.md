@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 139 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 147 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -161,7 +161,7 @@ src/
   content/     ⭐ LÀN NHANH — dữ liệu thuần, đẩy OTA được, không cần build lại
   core/        ⭐ LÀN CHẬM  — engine, store, save, OTA; phải phát hành mới đổi được
   game/        ⚠️ KHÔNG chạm DOM — logic thuần, chạy thẳng trong Node để test
-  game/hint.ts ⚠️ gợi ý hành động theo ngữ cảnh cho nút chính — thuần, có test
+  game/hint.ts ⚠️ `pressPlan`: MỘT nguồn cho cả nhãn lẫn cú bấm của nút chính — thuần, có test
   art/         sinh toàn bộ pixel art bằng code (viền, 6 khung nhân vật, autotile bờ/mép, icon HUD)
   render/      vẽ canvas, chỉ ĐỌC state; hạt hiệu ứng + lấp lánh + viền rừng là trang trí, không vào state
   ui/          HUD + modal + tutorial bằng DOM
@@ -1006,6 +1006,54 @@ của phần còn lại:
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
 
+### Đợt 21: nút ngữ cảnh một nguồn, thời tiết có hành vi, cầu lan can và xe to (core 1.48 · content 1.48)
+
+Cường: "nút ngữ cảnh… vài tình huống vẫn còn rối", "thêm hành động cho nhân vật, động vật, cảnh
+quan ảnh hưởng bởi thời tiết gió bão trời mưa", "cầu có lan can, xe to hơn".
+
+#### Nút chính nói một đằng làm một nẻo — vì nó có HAI bộ luật
+
+Khảo sát chỉ ra gốc: nhãn do `hintAt` → `contextAction` tính, còn cú bấm trong `main.ts` đi một bộ
+luật khác (`tryAnimal` bán kính 1,4 / `canUseAt` / `tryInteract` qua `nearbyInteract` với công thức
+khoảng cách riêng 2,8 ô / chuyến). `contextAction` **không có một lời gọi nào ngoài hint.ts**. Thêm
+vào đó: HUD tính nhãn cho ô đang rê chuột, cú bấm dùng ô trước mặt; reducer đo tầm bằng 1,6 ô còn UI
+bằng 2,8; XÂY và THU ngược thứ tự giữa nhãn và bấm. Mười một ca rối, cùng một nguyên nhân.
+
+Sửa bằng cách **bỏ một bộ luật**: `pressPlan(state, content, cursor, opts)` trong `src/game/hint.ts`
+trả về đúng một `Press` (`deny · build · use · gather · interact · boat · go · run`), `main.ts` chỉ còn
+`execute(press)`, và nhãn là `hintOf(press)`. Ba thứ chỉ còn một: ô ngắm (`pressCursor`), tầm với
+(luật của reducer), bán kính con vật. Khi nút nói về một ô khác ô ngắm, bản đồ vẽ dấu mờ ở ô đó và
+dòng dưới nút ghi "Cách N ô — bấm để đi tới". Nút phụ cũng vậy: `infoHint` biết cả người làm, HUD và
+cú bấm cùng gọi nó. Kịch bản 146 dựng 11 tình huống, mỗi ca `deepEq(hintOf(press), hintAt())` — cấy 5
+lỗi (XÂY sau THU, bỏ kiểm tầm, cửa thoát cũ, con gần nhất thay vì con tới lứa, dọn dẹp cướp lời) đều
+đỏ đúng ca. Tiện thể: NGỦ nay đi qua `INTERACT` nên có cả diễn hoạt leo lên giường lẫn kiểm tầm —
+trước đây nút chính dispatch `SLEEP` thẳng và bỏ qua cả hai.
+
+#### Thời tiết đổi hành vi, bằng ba cờ trong content
+
+`weather.json` thêm `speedMul` (mọi thứ ngoài trời chậm lại), `shelter` (vật nuôi trú), `halt`
+(người làm về đứng trước kho, xe thu mua và thuyền không ghé, con đói cũng không ra bãi cỏ). Mưa:
+0,85 + trú; bão: 0,7 + trú + ngưng. Tất cả tắt trong nhà (`weatherMood`). Hai quyết định đáng ghi:
+con **đói vẫn ra ăn khi mưa** (mưa dầm tối đa 3 ngày mà nhịn là mất trứng), và xúc xắc xe thu mua
+**vẫn được rút** ngày bão rồi mới gác — gác trước xúc xắc là làm ngày nắng kế tiếp đổi kết quả so với
+bản cũ, mà kịch bản 41 không bắt được vì nó chỉ so cùng seed với chính nó. Kịch bản 147 đo tốc độ
+bò và người chơi (tỉ lệ đúng 0,7, trong nhà thì không), bò đói máng cạn ở lì trong chuồng ngày bão
+nhưng ra ăn ngày mưa, bò no ngày mưa không đi một bước, người làm về ô trước kho với năng lượng không
+đổi, 12 ngày bão không xe không thuyền — và chuỗi seed kho-có-hàng khác kho-trống. Lớp vẽ: cây/bụi/cỏ
+lay theo `prop.sway × wind`, mưa nghiêng, lá bay từ tán cây (hạt chịu lực ngang `windX`), mặt nước
+gợn nhanh hơn, vũng nước trên lối đi, giọt bắn dưới chân, bò co ro (`pose: "huddle"`), người làm
+trú có bong bóng giọt nước.
+
+#### Cầu có lan can, xe hai ô
+
+Lan can theo **cạnh giáp nước** chứ không theo "không cùng prop" — đầu cầu tiếp đất phải mở, nếu
+không người đi xuyên lan can khi lên cầu (`bridgeRail` đọc bản đồ, atlas dựng sẵn 16 biến thể). Lan
+can cạnh DƯỚI là một hình riêng đẩy vào `items` với `base = y·16 + 16 + 5` — nằm sau người đứng trên ô,
+trước người ở ô dưới; đây là lần đầu danh sách vẽ có một lớp phủ đè lên actor. Cầu đường: vạch giữa
+chỉ vẽ ở mối nối hai cột. Xe: canvas 32×32, thân 24×13 (một rưỡi ô), hai khung bánh, ba dáng suy từ
+content (thuyền có buồm và nhấp nhô; xe thu mua sàn phẳng chở kiện; xe giao hàng thùng kín); hộp va
+chạm giữ 13×11 nên đường 1 ô vẫn đi được; neo theo kích thước hình nên xe không nhảy vị trí.
+
 ### Đợt 15: bản đồ nhỏ thôi vẽ lại cả bản đồ mỗi khung, A* nhanh gấp ba (core 1.41)
 
 Đợt này bắt đầu bằng một câu hỏi mở — "game có chậm không" — nên việc đầu tiên là
@@ -1522,9 +1570,9 @@ không":
 * Ô **đất trống**: đứng trên ngõ cầm cuốc, ngắm vào chính con ngõ dưới chân, mà ruộng ngay bên
   cạnh — "Ngoài khu ruộng" đúng nhưng vô ích, còn "CÀY" thì làm được việc.
 
-Nhãn vẫn không nói dối: nó hứa cày, và ô nó dắt tới đúng là ô cày được. `hintAt` gọi
-`contextAction` để **in nhãn**, `main.ts` gọi chính nó để **làm** — một nguồn, nên nút không bao
-giờ nói một đằng làm một nẻo.
+Nhãn vẫn không nói dối: nó hứa cày, và ô nó dắt tới đúng là ô cày được. (Từ Đợt 21 cả nhãn
+lẫn cú bấm đi qua `pressPlan` — xem mục Đợt 21; câu "một nguồn" ở đây từng đúng rồi trôi mất khi
+`main.ts` mọc thêm bộ luật riêng.)
 
 ### Chở cá tới tận ao, và BẢNG KHU (core 1.22)
 

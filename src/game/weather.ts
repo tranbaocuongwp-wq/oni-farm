@@ -58,6 +58,36 @@ export function isOutdoor(content: Content, mapId: string): boolean {
 }
 
 /**
+ * Thời tiết đang ảnh hưởng HÀNH VI trên bản đồ đang chơi thế nào.
+ *
+ * Ba con số, tất cả đọc từ content (`weather.json`), và tất cả tắt khi đứng
+ * TRONG NHÀ — mưa ngoài sân không làm ai chậm lại trong phòng ngủ.
+ *
+ * Đọc thuần, không rút một hạt ngẫu nhiên nào: hành vi theo thời tiết vì thế
+ * vẫn tất định (cùng seed → cùng ngày mưa → cùng con bò về chuồng cùng lúc).
+ */
+export interface WeatherMood {
+  /** nhân tốc độ đi (0.3..1) */
+  speedMul: number;
+  /** vật nuôi trú, không lang thang */
+  shelter: boolean;
+  /** ngưng việc ngoài trời: người làm trú, xe không tới, không ra bãi cỏ */
+  halt: boolean;
+}
+const TROI_YEN: WeatherMood = { speedMul: 1, shelter: false, halt: false };
+
+export function weatherMood(state: GameState, content: Content): WeatherMood {
+  if (!isOutdoor(content, state.mapId)) return TROI_YEN;
+  const w = weatherDef(state, content);
+  const mul = w.speedMul ?? 1;
+  return {
+    speedMul: Number.isFinite(mul) ? Math.min(1, Math.max(0.3, mul)) : 1,
+    shelter: !!w.shelter,
+    halt: !!w.halt,
+  };
+}
+
+/**
  * Rút thăm một kiểu theo weight. Trả id và seed mới.
  *
  * `over` là trọng số RIÊNG CỦA MÙA, ghi đè weight gốc cho những kiểu nó nhắc

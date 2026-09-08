@@ -35,6 +35,8 @@ import { vehicleStep } from "./vehicles.ts";
 import { patrolCatch, isHungry } from "./animals.ts";
 import { grazeHere, nearestGraze } from "./graze.ts";
 import { eatFromTrough, penGoal, penOf, penWander } from "./pen.ts";
+import { weatherMood } from "./weather.ts";
+import { shelterSpot } from "./graze.ts";
 
 /** Trần số thực thể. Đủ cho một nông trại đông đúc, đủ thấp để 64 phép so mỗi
  *  khung hình vẫn rẻ hơn một lần `blockedAt`. */
@@ -306,6 +308,11 @@ function dirOf(dx: number, dy: number, cur: Dir): Dir {
 export function moveActors(d: Draft, content: Content, dt: number): void {
   if (!(dt > 0)) return;
   const s = d.s;
+  /* Mưa bão làm CẢ ĐÀN chậm lại — một hệ số cho mọi thứ trên bản đồ, tính
+     một lần mỗi khung. Nhân vào bước chứ không vào `speed` của content, cùng lý
+     do với vành dè chừng bên dưới. Hệ số ≤ 1 nên A* (ước lượng bằng tốc độ
+     content) vẫn không bao giờ đoán thấp. */
+  const troi = weatherMood(s, content).speedMul;
   for (let i = 0; i < s.entities.length; i++) {
     const cur = s.entities[i]!;
     if (cur.map !== s.mapId) continue;
@@ -337,7 +344,7 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
        của content: content nói con vật đi nhanh bao nhiêu, còn đây là chuyện
        nó đang dè chừng — hai thứ khác nhau, và trộn vào nhau thì mỗi lần chỉnh
        cân bằng lại phải nhớ trừ hao cho cái vành này. */
-    const step = Math.min(len, def.speed * dt);
+    const step = Math.min(len, def.speed * dt * troi);
     const nx = cur.x + (dx / len) * step;
     const ny = cur.y + (dy / len) * step;
     let mx = cur.x;
@@ -535,15 +542,42 @@ export function actorStep(d: Draft, content: Content, tuiChung: { left: number }
     if (khu && khu.map !== s.mapId) khu = null;
     if (cur.kind === "animal") g = penGoal(s, content, cur, doi);
 
+    /* TRỜI XẤU thì TRÚ. Đọc từ content (`weather.shelter` / `halt`), chỉ ngoài
+       trời, và chỉ cho VẬT NUÔI — sâu bọ phá hoại mặc kệ mưa gió.
+
+         · mưa (`shelter`): có chuồng thì `penGoal` đã dắt về; ở trong rồi thì
+           đứng yên (co ro), không loanh quanh. Thả rông thì ra nép gốc cây gần
+           nhất. Con ĐÓI vẫn được ra bãi cỏ — mưa dầm ba ngày mà nhịn là mất
+           trứng, mà không ai muốn con gà chết vì một cơn mưa.
+         · bão (`halt`): kể cả đói cũng không ra — một ngày, chịu được.
+       Con chó cũng thế: `penGoal` đưa nó về nhà chó, rồi nó nằm đó — không
+       tuần, không đuổi chuột giữa bão. */
+    const troi = weatherMood(s, content);
+    const tru = cur.kind === "animal" && !!dinhDuong && dinhDuong.job !== "pest" && troi.shelter;
+
     /* Đói thì nhắm thẳng vào bãi cỏ gần nhất thay vì lang thang. Bán kính hẹp
        (8 ô) cho ban ngày: con vật đi trong vài phút game thì không thể băng cả
        nông trại, và quét rộng mỗi bước cho từng con là thứ giết fps trước tiên.
        Đêm thì `grazeNight` quét rộng hơn hẳn — cả một đêm thì nó đi được xa. */
-    if (!g && doi && dinhDuong) {
+    if (!g && doi && dinhDuong && !(tru && troi.halt)) {
       g = nearestGraze(s, content, dinhDuong, cur, 8);
     }
 
-    if (!g && animalDef(content, cur.def)?.job === "patrol") {
+    if (!g && tru) {
+      if (!khu) {
+        const nep = shelterSpot(s, content, cur, def.box);
+        if (nep && (nep.x !== Math.floor(cur.x / TILE) || nep.y !== Math.floor(cur.y / TILE))) g = nep;
+      }
+      if (!g) {
+        // Đã ở chỗ trú (trong chuồng, dưới gốc cây, hoặc không có chỗ nào): đứng yên.
+        e.ai.phase = "idle";
+        e.ai.until = 2 + roll(e) * 4;
+        e.ai.planAt = s.minutes;
+        continue;
+      }
+    }
+
+    if (!g && !tru && animalDef(content, cur.def)?.job === "patrol") {
       let bestD = Infinity;
       for (const p of s.entities) {
         if (p.map !== s.mapId || animalDef(content, p.def)?.job !== "pest") continue;

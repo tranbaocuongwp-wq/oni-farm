@@ -25,8 +25,9 @@ game, không thư viện tiện ích.
 ```
 
 Core **không bao giờ** viết `switch (id)` cho một cây hay một loài cụ thể. Nó chỉ
-biết các **hệ số**: `growMul`, `diseaseMul`, `feed`, `housing`, `pen`. Ý nghĩa
-"mưa", "bão", "con bò" là chuyện của content. Thêm một kiểu thời tiết mới, một
+biết các **hệ số**: `growMul`, `diseaseMul`, `speedMul`, `shelter`, `halt`,
+`feed`, `housing`, `pen`. Ý nghĩa "mưa", "bão", "con bò" là chuyện của content —
+kể cả chuyện *bão thì ai trú, ai không tới* (Đợt 21): core chỉ đọc ba cờ. Thêm một kiểu thời tiết mới, một
 loài mới, một mùa thứ năm — **không sửa một dòng mã nào**.
 
 Chi tiết vận hành: [`CONTENT.md`](CONTENT.md) · [`OTA.md`](OTA.md).
@@ -119,7 +120,7 @@ Bản đồ không đổi gì trong đêm thì **giữ nguyên tham chiếu cũ*
 ## 5. Tất định — xương sống của cả dự án
 
 Bất biến: **cùng seed + cùng chuỗi action = state y hệt.** Save, replay, và toàn
-bộ 139 kịch bản sim đều dựa vào nó.
+bộ 147 kịch bản sim đều dựa vào nó.
 
 Hai luật giữ nó:
 
@@ -224,7 +225,7 @@ Chi tiết đồ hoạ và UX chạm: [`MOBILE-UX.md`](MOBILE-UX.md).
 
 | Lệnh | Việc |
 |---|---|
-| `npm run test:sim` | **139 kịch bản** mô phỏng, Node thuần, ~25 giây |
+| `npm run test:sim` | **147 kịch bản** mô phỏng, Node thuần, ~30 giây |
 | `npm run test:ota` | cổng tương thích + schema content pack |
 | `npm run test:all` | typecheck + cả hai |
 | `npm run bench` | bảng chi phí phần mô phỏng trên cảnh nặng cố định |

@@ -26,7 +26,7 @@
 import type { AnimalDef, Content, Entity, GameState, Tile } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { dEntity } from "./state.ts";
-import { TILE, idx } from "./world.ts";
+import { TILE, idx, blockedForActor, propDef } from "./world.ts";
 
 /**
  * Đủ để đọc một lưới ô: `GameState` và `MapView` đều vừa khuôn này.
@@ -197,4 +197,54 @@ export function grazeNight(
 /** Chỉ số ô của một điểm ăn được, dùng làm đích cho A*. */
 export function grazeGoal(s: GameState, spot: { x: number; y: number }): number {
   return idx(s.w, spot.x, spot.y);
+}
+
+/**
+ * Chỗ TRÚ MƯA cho con vật thả rông: ô đứng được KỀ một gốc cây (vật thể
+ * `tall`) gần nhất trong 8 ô. Quét vòng từ trong ra như `nearestGraze`, và
+ * hỏi `blockedForActor` với đúng hộp của loài — trả về một ô mà nó không đứng
+ * được là vỡ bất biến "không nằm trong ô đặc" ngay bước sau.
+ *
+ * Không có cây nào gần → null: con vật đứng yên tại chỗ (co ro giữa sân còn
+ * hơn chạy đi tìm cây ở đầu kia nông trại trong mưa).
+ */
+export function shelterSpot(
+  s: GameState,
+  content: Content,
+  e: Entity,
+  box: { w: number; h: number },
+): { x: number; y: number } | null {
+  const cx = Math.floor(e.x / TILE);
+  const cy = Math.floor(e.y / TILE);
+  const keCay = (x: number, y: number): boolean => {
+    for (const [dx, dy] of [
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+    ] as [number, number][]) {
+      const t = s.tiles[idx(s.w, x + dx, y + dy)];
+      if (!t?.prop) continue;
+      if (x + dx < 0 || y + dy < 0 || x + dx >= s.w || y + dy >= s.h) continue;
+      if (propDef(content, t.prop)?.tall) return true;
+    }
+    return false;
+  };
+  const dungDuoc = (x: number, y: number): boolean => {
+    const t = s.tiles[idx(s.w, x, y)];
+    if (!t || t.g === "water" || t.tilled || t.crop) return false;
+    return !blockedForActor(s, content, x * TILE + TILE / 2, y * TILE + TILE / 2, box.w, box.h, false);
+  };
+  if (keCay(cx, cy) && dungDuoc(cx, cy)) return { x: cx, y: cy };
+  for (let r = 1; r <= 8; r++) {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx;
+        const y = cy + dy;
+        if (x < 0 || y < 0 || x >= s.w || y >= s.h) continue;
+        if (keCay(x, y) && dungDuoc(x, y)) return { x, y };
+      }
+  }
+  return null;
 }

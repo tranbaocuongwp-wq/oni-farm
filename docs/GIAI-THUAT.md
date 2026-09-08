@@ -178,6 +178,7 @@ Ba nguồn, tách bạch:
 | `state.seed` | theo **sự kiện** | thời tiết, bệnh, cỏ lan, sản lượng, sinh thực thể |
 | `entity.seed` | mỗi con tự advance | hành vi lang thang của **từng** con |
 | — | | vị trí decor: hàm **thuần** của `(x, y)`, không rút gì |
+| — | | **hành vi theo thời tiết** (chậm, trú, người làm về kho, xe không tới): đọc thuần `weatherDef`, không rút gì — kịch bản 147 khoá cả chuyện xúc xắc xe thu mua vẫn được rút ngày bão |
 
 Vì sao tách: xem [`KIEN-TRUC.md`](KIEN-TRUC.md#5-tất-định--xương-sống-của-cả-dự-án).
 

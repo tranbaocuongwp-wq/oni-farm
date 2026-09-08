@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — kiểu thời tiết. Mỗi ngày đúng MỘT kiểu, rút thăm theo weight từ seed của ván nên tái lập được; ngày mai được rút sẵn để HUD hiện dự báo. Mọi số là HỆ SỐ nhân lên luật có sẵn: wet = sáng ra mọi ô đã cày ngoài trời ẩm và đêm không khô; growMul nhân tốc độ lớn của cây trồng, cỏ, bụi, cây con; hot = quá balance.noonDryMinutes thì ô ẩm khô (trừ ô tự tưới) và cây chưa tưới trông héo; diseaseMul nhân balance.diseaseChance; streak = hôm sau có chance vẫn giữ kiểu này, tối đa max ngày liên tiếp (mưa dầm); storm.cropChance = mỗi cây có xác suất lùi một giai đoạn, và vật thể có stormFell bị quật; fogUntil = sương phủ tới phút này; wind chỉ để vẽ cây lay.",
+  "$comment": "LÀN NHANH — kiểu thời tiết. Mỗi ngày đúng MỘT kiểu, rút thăm theo weight từ seed của ván nên tái lập được; ngày mai được rút sẵn để HUD hiện dự báo. Mọi số là HỆ SỐ nhân lên luật có sẵn: wet = sáng ra mọi ô đã cày ngoài trời ẩm và đêm không khô; growMul nhân tốc độ lớn của cây trồng, cỏ, bụi, cây con; hot = quá balance.noonDryMinutes thì ô ẩm khô (trừ ô tự tưới) và cây chưa tưới trông héo; diseaseMul nhân balance.diseaseChance; streak = hôm sau có chance vẫn giữ kiểu này, tối đa max ngày liên tiếp (mưa dầm); storm.cropChance = mỗi cây có xác suất lùi một giai đoạn, và vật thể có stormFell bị quật; fogUntil = sương phủ tới phút này; wind = gió 0..1, chỉ cho lớp vẽ (cây lay, lá bay, mưa nghiêng); speedMul = mọi thứ ngoài trời đi chậm lại (người chơi, vật nuôi, người làm, xe); shelter = vật nuôi trú (có chuồng thì về chuồng và ở yên, thả rông thì nép gốc cây; con ĐÓI vẫn ra ăn); halt = ngưng việc ngoài trời (người làm về đứng trước cửa kho, xe thu mua và thuyền buôn không ghé, vật nuôi không ra bãi cỏ dù đói).",
   "firstDay": "sunny",
   "weathers": [
     {
@@ -41,7 +41,9 @@
       "streak": {
         "max": 3,
         "chance": 0.5
-      }
+      },
+      "speedMul": 0.85,
+      "shelter": true
     },
     {
       "id": "storm",
@@ -53,7 +55,10 @@
       "diseaseMul": 1.4,
       "storm": {
         "cropChance": 0.08
-      }
+      },
+      "speedMul": 0.7,
+      "shelter": true,
+      "halt": true
     },
     {
       "id": "fog",

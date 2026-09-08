@@ -203,21 +203,43 @@ Dùng `askConfirm()` trong `menus.ts`.
 
 ## 4. Nút hành động theo ngữ cảnh (`src/game/hint.ts`)
 
-Hàm thuần `hintAt(state, content, x, y)` → `{ kind, label, ready, why }`.
+**Một nguồn** (Đợt 21). Hàm thuần `pressPlan(state, content, cursor, opts)` trả
+về đúng một `Press`:
 
-Thứ tự ưu tiên **trùng với reducer**:
+```
+deny{why}  build  use{kind,x,y,run}  gather{id}  interact{kind,x,y}  boat{id}
+go{x,y,then,kind,dist}  run{run}
+```
 
-1. Có vật thể tương tác ở ô hoặc 4 ô kề → MUA / BÁN / CHẾ / NGỦ / MÚC / VÀO.
-2. `canUseAt(..., ignoreReach = true)` → THU / CÀY / TƯỚI / GIEO / ĐẶT / CHẶT / ĐẬP
-   (thu hoạch luôn thắng, như `useAt`).
-3. Không có gì → `label: "DÙNG"`, `why` là câu ngắn ưu tiên nói về **vật phẩm đang
-   cầm** ("Cày trước đã", "Đã tưới rồi", "Hết nước — ra giếng", "Cần Rìu gỗ"…).
+`main.ts` chỉ còn một `execute(press)` — không quét gì, không có luật riêng — và
+HUD in `hintOf(press)` → `{ kind, label, ready, why, at }`. Nhãn là **hình chiếu**
+của cú bấm, nên không thể nói khác. Trước Đợt 21 hai bên là hai bộ luật và đã
+trôi khỏi nhau: nhãn "ĐỔ MÁNG" mà bấm lắc đầu, "THU" con bò cách hai ô mà bấm đi
+cày, "NGỦ" ở hai ô mà giường im lặng (UI đo tầm bằng 2,8 ô, reducer bằng 1,6).
 
-`ready` = trong tầm với. CSS tô nút: xanh sáng khi `ready`, xanh dương khi phải đi
-tới, vàng khi THU, xám khi không có gì. Test: `scripts/sim.mjs` kịch bản 37.
+Thứ tự trong `pressPlan` (xem chú thích ở hàm):
+1. cầm công trình → XÂY
+2. ô ngắm xa mà không được đi → rơi về ô trước mặt
+3. con vật tới lứa ở ô ngắm → THU đúng con (`id`)
+4. việc của món đang cầm ở ô ngắm (hết sức thì `deny` kèm lý do, nhãn vẫn ghi việc);
+   việc DỌN DẸP ở ô ngắm nhường một việc bậc 0 của món đang cầm ở gần
+5. thuyền buôn kề bên → THUYỀN BUÔN
+6. vật thể ở ô ngắm (không phải ô dưới chân) → MUA / BÁN / NGỦ / MÚC / VÀO / KHO
+7. quanh chân (`contextAction`): việc của khu, ô gần nhất làm được, vật thể trong 2 ô
+8. chuyến của món đang cầm (nhãn vẫn "DÙNG", `why` nói về ô ngắm)
+9. `deny{why}`
 
-Vì hàm gọi đúng những hàm mà reducer gọi, nhãn **không thể lệch** với luật chơi.
-Thêm một loại hành động mới = thêm một dòng vào `LABEL`, kèm test.
+Ba thứ **chỉ có một**: ô ngắm (`pressCursor` — cùng ô cho HUD và cú bấm), tầm với
+(`inReach` / `inInteractRange` của reducer; MÚC theo `inReach`), bán kính con vật
+(1,4 ô). Khi `hint.at` khác ô ngắm, renderer vẽ dấu mờ ở ô đó (`DrawOptions.target`)
+và `why` ghi "Cách N ô — bấm để đi tới".
+
+Nút PHỤ: `infoHint(state, content, cursor)` — người làm quanh ô ngắm/chân → thẻ
+người làm; rồi `interactHint` quanh chân, rồi ô ngắm. Cũng một hàm cho HUD và cú bấm.
+
+Test: `scripts/sim.mjs` 146 (11 tình huống, mỗi ca `deepEq(hintOf(press), hintAt())`),
+cùng 37/79/80/99/100/102/107/133/135/140/141/145. Thêm một loại hành động mới = thêm
+một nhánh `Press`, một dòng `LABEL`, một nhánh `execute`, kèm test.
 
 ---
 
@@ -248,12 +270,15 @@ Thêm một loại hành động mới = thêm một dòng vào `LABEL`, kèm te
 | Cây trồng | vẽ theo tham số `crops.json > art`, viền, quả chỉ khi chín. Renderer thêm sao lấp lánh (`atlas.sparkle`) lệch pha theo toạ độ. |
 | Autotile ở lớp vẽ | `atlas.shore[side][frame]` cho nước giáp đất; `atlas.soilEdge[side]` cho đất cày giáp ô chưa cày; `atlas.voidOut/voidIn` ngoài biên. State không lưu gì. |
 | Icon HUD | `atlas.ui(name)` 12×12: coin, day, sun, moon, energy, water, goal. |
-| Con trỏ & dấu đích | `cursorOk/cursorNo` (ô ngắm) khác `navMark[3]` (đích đang đi) để phân biệt "sẽ làm ở đó" và "sẽ tới đó". |
+| Con trỏ & dấu đích | `cursorOk/cursorNo` (ô ngắm) khác `navMark[3]` (đích đang đi) để phân biệt "sẽ làm ở đó" và "sẽ tới đó". `DrawOptions.target` vẽ `cursorOk` mờ ở ô nút chính sẽ tác động khi nó khác ô ngắm. |
+| Xe | 32×32 (`VEHICLE_SIZE`), thân 24×13 — một rưỡi ô, to hơn hẳn người; hộp va chạm vẫn 13×11 (content) nên đường 1 ô vẫn đi được. Hai khung bánh theo `e.anim`. Ba dáng suy từ content: `sea` → thuyền (buồm, nhấp nhô ±1px theo `timeSec`), có `buyBonus` → sàn phẳng chở kiện, còn lại thùng kín. Vẽ một hình hướng phải rồi xoay/lật. Neo: `px = e.x − w/2`, `py = e.y − h/2 − 5`. |
+| Cầu (`prop.bridge`) | `atlas.propMask[id]` 16 biến thể theo cạnh có LAN CAN (`bridgeRail` trong draw.ts: ô kề là nước và không cùng cầu; đầu cầu tiếp đất thì mở). Lan can cạnh DƯỚI là `atlas.propOver[id]`, đẩy vào `items` với `base = y·16 + 16 + 5` để vẽ **đè lên** người/xe đứng trên ô — lần đầu `items` có một lớp phủ sau actor. |
+| Gió (`weather.wind`, chỉ lớp vẽ) | prop có `sway` (cây 1, bụi 0,7, cỏ 0,4–0,8) lắc theo sin lệch pha theo ô; mưa nghiêng `roi × wind × 0,4`; lá bay (`burst "blow"` từ một tán cây mỗi 0,6s khi wind ≥ 0,5, hạt chịu lực ngang `windX`); mặt nước gợn nhanh hơn; vũng nước trên lối đi (`atlas.puddle`, băm toạ độ); giọt bắn dưới chân người đi trong mưa. Tất cả tắt với `reduceMotion`, không vào state. |
 
 Bảng màu `P` là chỗ duy nhất đổi tông. Màu của vật thể/cây/công trình vẫn lấy từ
 content (`art.body/dark/accent`) nên OTA đổi được.
 
-**Hiệu ứng hạt** (`render/draw.ts`): 6 loại (`dust water leaf spark stone coin`),
+**Hiệu ứng hạt** (`render/draw.ts`): 8 loại (`dust water leaf spark stone coin blow splash`),
 tất định theo chỉ số hạt, trần 240 hạt, tự tắt khi `reduceMotion`.
 
 **Chuyển ngày**: `main.ts` giữ mốc `dayFadeAt`; renderer phủ đen 0,35s rồi mở sáng
@@ -286,7 +311,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 73 kịch bản sim (37 hint · 38 settings · 17 hiệu lực trễ · 39 SWAP · 40 nearestTarget · 72 tay cầm · 73 chỗ ngồi) + OTA
+npm run test:all       # typecheck + 147 kịch bản sim (146 nút một nguồn · 147 thời tiết đổi hành vi · 37 hint · 72 tay cầm …) + OTA
 npm run build
 ```
 
@@ -296,7 +321,8 @@ Những thứ phải đúng ở mọi khổ:
 
 - [ ] nhân vật ở tâm, không bị HUD/toast che
 - [ ] nút hành động đổi nhãn CÀY → GIEO → TƯỚI khi đổi hotbar trên cùng một ô
-- [ ] giữ nút 3s trên lối đi giữa 6 ô cỏ → cả 6 ô được cày, nhân vật giơ cuốc rồi mới thấy đất lật
+- [ ] cầm cám đứng ngoài chuồng gà: nút ghi ĐỔ MÁNG, dòng dưới "Cách N ô", trên bản đồ có dấu mờ ở cái máng; bấm là đi tới máng rồi đổ
+- [ ] ép Bão bằng bảng gỡ lỗi: mưa nghiêng, cây lay, bò trong chuồng co ro, người làm đứng trước kho, sáng ra toast "xe và thuyền không ghé"
 - [ ] hotbar 10 ô + nút balo vừa một hàng ở 360px; kéo hạt từ hotbar xuống balo và ngược lại
 - [ ] chạm kép trên canvas, véo hai ngón: `visualViewport.scale` vẫn 1
 - [ ] hotbar không đè lên cụm nút; ngang thì hotbar không chui dưới nút
