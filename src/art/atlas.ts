@@ -1319,21 +1319,6 @@ function makeWaterfall(art: PropArt): HTMLCanvasElement {
   return outline(s, shade(art.dark, 0.7), 1).c;
 }
 
-function makeWell(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.shadow(8, 14, 6, 2);
-  s.rect(2, 8, 12, 6, art.dark);
-  s.rect(3, 9, 10, 4, art.body);
-  s.rect(4, 10, 8, 2, art.accent);
-  s.px(5, 10, P.waterFoam);
-  s.hline(2, 8, 12, art.body);
-  s.vline(3, 3, 5, P.wood);
-  s.vline(12, 3, 5, P.wood);
-  s.rect(1, 1, 14, 3, P.roof);
-  s.hline(1, 1, 14, P.roofLight);
-  s.px(8, 4, P.woodDark);
-  return outline(s).c;
-}
 
 /** Giường — chỉ chỗ này mới ngủ được, không phải cái cửa. */
 function makeBed(art: PropArt): HTMLCanvasElement {
@@ -1608,99 +1593,133 @@ export interface PropArt {
   accent: string;
 }
 
+/* ---------------------------------------------------------------------------
+   NHÀ — Cường: "mấy cái công trình toà nhà" (chưa vẽ lại).
+
+   Nhà là công trình NHIỀU Ô: mỗi ô tự biết bốn hàng xóm của nó (`Neighbors`) và
+   vẽ đúng mảnh mình cần, nên một cái nhà 8×3 hay 3×2 đều dựng từ cùng một hàm.
+   Ô không có hàng xóm phía trên là MÁI, còn lại là TƯỜNG.
+
+   Bản trước vẽ mái bằng mấy vạch ngang và tường bằng một mảng phẳng. Ở nét HD
+   thì cả hai đọc ra là giấy dán tường. Nay mái có NGÓI xếp so le từng hàng
+   (hàng dưới đè lên hàng trên, đúng cách lợp thật), tường có ván ốp ngang và
+   chân tường, cửa sổ có khung, bậu và một vệt phản chiếu chéo.
+--------------------------------------------------------------------------- */
 function makeHouseTile(n: Neighbors, door: boolean): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   const isRoof = !n.up;
 
   if (isRoof) {
-    s.rect(0, 0, TILE, TILE, P.roof);
-    for (let y = 1; y < TILE; y += 4) {
-      s.hline(0, y, TILE, P.roofDark);
-      for (let x = (y / 4) % 2 === 0 ? 0 : 2; x < TILE; x += 4) s.vline(x, y, 3, P.roofDark);
+    for (let y = 0; y < TILE; y += Q) for (let x = 0; x < TILE; x += Q) s.dot(x, y, P.roof);
+    /* NGÓI: bốn hàng, mỗi hàng lệch nửa viên so với hàng trên. Mép dưới mỗi
+       viên tối hẳn — đó là cái bóng viên dưới hắt lên viên trên, và cũng là
+       thứ duy nhất làm mái có ĐỘ DÀY thay vì là một mảng màu. */
+    const cao = 4;
+    const rong = 5;
+    for (let hy = 0; hy < TILE; hy += cao) {
+      const lech = ((hy / cao) % 2) * (rong / 2);
+      for (let x = -rong; x < TILE + rong; x += rong) {
+        const vx = x + lech;
+        // khe dọc giữa hai viên
+        for (let d = 0; d < cao - Q; d += Q) s.dot(vx, hy + d, P.roofDark);
+        // mép dưới viên: bóng
+        for (let d = 0; d < rong; d += Q) {
+          s.dot(vx + d, hy + cao - Q, P.roofDark);
+          s.dot(vx + d, hy + cao - Q * 2, shade(P.roof, 0.86));
+        }
+        // đỉnh viên bắt nắng
+        for (let d = Q; d < rong - Q; d += Q) s.dot(vx + d, hy, shade(P.roofLight, 1.02));
+      }
     }
-    s.hline(0, 0, TILE, P.roofLight);
-    s.hline(0, 1, TILE, P.roofLight);
-    if (!n.left) s.vline(0, 0, TILE, P.roofDark);
-    if (!n.right) s.vline(TILE - 1, 0, TILE, P.roofDark);
-    // diềm mái nhô ra ở hàng dưới cùng của mái
+    // NÓC: hai hàng ngói úp chạy suốt đỉnh mái
+    for (let x = 0; x < TILE; x += Q) {
+      s.dot(x, 0, P.roofLight);
+      s.dot(x, Q, P.roofLight);
+      s.dot(x, Q * 2, shade(P.roofLight, 0.8));
+    }
+    for (let x = 0; x < TILE; x += 2) s.dot(x, Q, shade(P.roofLight, 0.75));
+    if (!n.left) for (let y = 0; y < TILE; y += Q) s.dot(0, y, P.roofDark);
+    if (!n.right) for (let y = 0; y < TILE; y += Q) s.dot(TILE - Q, y, P.roofDark);
+    // DIỀM MÁI nhô ra ở hàng dưới cùng, có ván diềm và bóng đổ xuống tường
     if (n.down) {
-      s.hline(0, TILE - 2, TILE, P.roofLight);
-      s.hline(0, TILE - 1, TILE, P.roofDark);
+      for (let x = 0; x < TILE; x += Q) {
+        s.dot(x, TILE - 1.5, P.roofLight);
+        s.dot(x, TILE - 1, P.roofDark);
+        s.dot(x, TILE - Q, shade(P.roofDark, 0.7));
+      }
     }
-    // tấm pin nhỏ trên mái — nhà "hiện đại"
+    // TẤM PIN trên mái — nhà "hiện đại", đặt ở một góc cố định nên không lặp
     if (!n.left && n.right) {
-      s.rect(3, 4, 6, 4, "#1e3a5f");
-      s.hline(3, 4, 6, "#4fa3e3");
-      s.vline(6, 4, 4, "#0f1f36");
+      for (let y = 4; y < 9; y += Q) for (let x = 3; x < 10; x += Q) s.dot(x, y, "#16304f");
+      for (let x = 3; x < 10; x += Q) s.dot(x, 4, "#4fa3e3");
+      for (let x = 3.5; x < 10; x += 2) for (let y = 4; y < 9; y += Q) s.dot(x, y, "#0d1c30");
+      for (let x = 3; x < 10; x += Q) s.dot(x, 9 - Q, "#0a1420");
+      s.dot(4, 5, "#9fd0e8");
+      s.dot(4.5, 5, "#9fd0e8");
     }
     return s.c;
   }
 
-  s.rect(0, 0, TILE, TILE, P.wall);
-  s.hline(0, 0, TILE, P.wallDark);
-  if (!n.left) s.vline(0, 0, TILE, P.wallTrim);
-  if (!n.right) s.vline(TILE - 1, 0, TILE, P.wallTrim);
+  // ---- TƯỜNG: ván ốp ngang, có khe và chân tường
+  for (let y = 0; y < TILE; y += Q) for (let x = 0; x < TILE; x += Q) s.dot(x, y, P.wall);
+  for (let y = 2; y < TILE; y += 3) {
+    for (let x = 0; x < TILE; x += Q) {
+      s.dot(x, y, P.wallDark);
+      s.dot(x, y - Q, shade(P.wall, 0.96));
+    }
+  }
+  for (let x = 0; x < TILE; x += Q) s.dot(x, 0, P.wallDark);
+  if (!n.left) for (let y = 0; y < TILE; y += Q) s.dot(0, y, P.wallTrim);
+  if (!n.right) for (let y = 0; y < TILE; y += Q) s.dot(TILE - Q, y, P.wallTrim);
   if (!n.down) {
-    s.hline(0, TILE - 1, TILE, P.wallTrim);
-    s.hline(0, TILE - 2, TILE, P.wallDark);
+    // chân tường: một dải gỗ đậm, và bóng sát đất
+    for (let x = 0; x < TILE; x += Q) {
+      s.dot(x, TILE - 1.5, P.wallTrim);
+      s.dot(x, TILE - 1, P.wallTrim);
+      s.dot(x, TILE - Q, shade(P.wallTrim, 0.6));
+    }
   }
 
   if (door) {
-    // cửa kính lớn kiểu nhà hiện đại, có bậc thềm
-    s.rect(3, 2, 10, 14, P.roofDark);
-    s.rect(4, 3, 8, 12, P.glass);
-    s.rect(4, 3, 8, 4, P.glassLight);
-    s.vline(8, 3, 12, P.roofDark);
-    s.px(6, 10, P.gold);
-    s.px(9, 10, P.gold);
-    s.hline(2, TILE - 1, 12, P.pathDark);
+    /* CỬA KÍNH lớn: khung gỗ, hai cánh, tay nắm đồng, và bậc thềm đá. */
+    for (let y = 1.5; y < TILE - 0.5; y += Q)
+      for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, P.roofDark);
+    for (let y = 2.5; y < TILE - 1.5; y += Q)
+      for (let x = 3.5; x < 12.5; x += Q) s.dot(x, y, P.glass);
+    // phản chiếu chéo trên mặt kính
+    for (let i = 0; i < 14; i++) {
+      const x = 4 + i * 0.5;
+      for (let d = 0; d < 2.5; d += Q) if (x - d > 3.5) s.dot(x - d, 3 + d, P.glassLight);
+    }
+    for (let y = 2.5; y < TILE - 1.5; y += Q) s.dot(8, y, P.roofDark); // khe hai cánh
+    s.dot(7.5, 9, P.gold);
+    s.dot(7.5, 9.5, P.gold);
+    s.dot(8.5, 9, P.gold);
+    s.dot(8.5, 9.5, P.gold);
+    // bậc thềm
+    for (let x = 1.5; x < 14.5; x += Q) {
+      s.dot(x, TILE - 1, P.pathDark);
+      s.dot(x, TILE - Q, shade(P.pathDark, 0.72));
+    }
   } else {
-    // cửa sổ băng ngang có khung gỗ
-    s.rect(2, 4, 12, 7, P.wallTrim);
-    s.rect(3, 5, 10, 5, P.glass);
-    s.rect(3, 5, 10, 2, P.glassLight);
-    s.vline(8, 5, 5, P.wallTrim);
-    s.px(4, 6, "#ffffff");
+    /* CỬA SỔ băng ngang: khung gỗ, bậu cửa nhô ra, chia bốn ô kính. */
+    for (let y = 3.5; y < 11; y += Q) for (let x = 1.5; x < 14.5; x += Q) s.dot(x, y, P.wallTrim);
+    for (let y = 4.5; y < 10; y += Q) for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, P.glass);
+    for (let y = 4.5; y < 7; y += Q) for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, P.glassLight);
+    for (let y = 4.5; y < 10; y += Q) s.dot(8, y, P.wallTrim);
+    for (let x = 2.5; x < 13.5; x += Q) s.dot(x, 7, P.wallTrim);
+    // bậu cửa nhô ra và đổ bóng
+    for (let x = 1; x < 15; x += Q) {
+      s.dot(x, 11, P.wallTrim);
+      s.dot(x, 11.5, shade(P.wallTrim, 0.62));
+    }
+    s.dot(3, 5, "#ffffff");
+    s.dot(3.5, 5, "#ffffff");
   }
   return s.c;
 }
 
-function makeShop(): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.shadow(8, 15, 6, 1.6);
-  s.rect(2, 1, 12, 14, P.metalDark);
-  s.rect(3, 2, 10, 12, P.metal);
-  s.rect(4, 3, 8, 7, P.glass);
-  s.rect(4, 3, 8, 2, P.glassLight);
-  s.rect(5, 6, 2, 3, "#6cc94f");
-  s.rect(8, 6, 2, 3, "#e8452f");
-  s.rect(11, 6, 1, 3, "#f08a1d");
-  s.rect(4, 11, 8, 2, P.metalDark);
-  s.px(12, 4, "#4ade80");
-  s.rect(1, 0, 14, 2, P.cap);
-  s.hline(1, 0, 14, P.capLight);
-  return outline(s).c;
-}
 
-function makeCounter(): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.shadow(8, 15, 7, 1.6);
-  s.rect(1, 7, 14, 8, P.woodDark);
-  s.rect(2, 8, 12, 6, P.wood);
-  s.hline(2, 8, 12, "#a67a4a");
-  s.rect(3, 2, 10, 5, P.metalDark);
-  s.rect(4, 3, 8, 3, "#1e2a3a");
-  s.px(5, 4, "#4ade80");
-  s.px(6, 4, "#4ade80");
-  s.px(8, 4, P.gold);
-  s.px(10, 4, "#4ade80");
-  s.rect(9, 5, 4, 2, P.metal);
-  // vài nông sản bày trên quầy
-  s.px(4, 10, "#e8452f");
-  s.px(6, 11, "#9be86b");
-  s.px(9, 10, "#f08a1d");
-  return outline(s).c;
-}
 
 /* --- địa hình tự nhiên mới (core 1.3): khúc gỗ, cỏ non/dày, bụi nhỏ/lớn --- */
 
@@ -1709,59 +1728,211 @@ function makeCounter(): HTMLCanvasElement {
  * hình. Id lạ (content mới đẩy qua OTA, core chưa biết vẽ) vẫn ra một hình cọc
  * dễ nhận, chứ không làm trắng màn hình.
  */
-/**
- * Tường nhà kho — tôn múi ngang, xám kim loại.
- *
- * Không dùng autotile như ngôi nhà: kho là một khối chữ nhật đặc, và mái đã
- * được gợi ý bằng dải sáng ở hàng trên cùng, nên ô nào cũng vẽ giống nhau vẫn
- * ra hình cái nhà kho. Đỡ được 32 biến thể mà mắt không nhận ra khác biệt.
- */
+
+
+
+/* ---------------------------------------------------------------------------
+   KHO — tôn múi. Ở nét HD, "sọc dọc xen kẽ" của bản trước đọc ra là giấy kẻ ô;
+   tôn múi thật có SƯỜN nổi: mỗi múi một mặt bắt nắng, một mặt khuất, và một khe
+   tối giữa hai múi. Ba tông cạnh nhau là đủ để tấm tôn có hình khối.
+--------------------------------------------------------------------------- */
 function makeWarehouse(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.rect(0, 0, TILE, TILE, art.body);
-  // tôn múi: sọc dọc xen kẽ
-  for (let x = 0; x < TILE; x += 3) s.vline(x, 0, TILE, art.dark);
-  // dải sáng trên cùng = mép mái
-  s.hline(0, 0, TILE, art.accent);
-  s.hline(0, 1, TILE, art.dark);
+  const s = makeWarehouseSurface(art);
+  // vệt gỉ và đinh tán rải theo băm toạ độ — tất định, không lặp thành hoa văn
+  for (let i = 0; i < 5; i++) {
+    const x = (hash2(i, 3, 41) % (TILE * ART)) / ART;
+    const y = 3 + (hash2(i, 5, 17) % ((TILE - 4) * ART)) / ART;
+    s.dot(x, y, shade(art.dark, 0.85));
+  }
   return s.c;
 }
 
-/** Cửa kho — cửa cuốn kim loại, có tay nắm vàng cho dễ nhận ra là chỗ bấm. */
+/** Cửa kho — cửa cuốn kim loại, có nan ngang, ray hai bên và tay nắm đồng. */
 function makeStoreDoor(art: PropArt): HTMLCanvasElement {
-  const s = surface(TILE, TILE);
-  s.rect(0, 0, TILE, TILE, art.body);
-  for (let x = 0; x < TILE; x += 3) s.vline(x, 0, TILE, art.dark);
-  s.hline(0, 0, TILE, art.accent);
-  s.hline(0, 1, TILE, art.dark);
-  // khung cửa cuốn
-  s.rect(3, 4, 10, 12, art.dark);
-  for (let y = 5; y < TILE; y += 2) s.hline(4, y, 8, art.body);
-  s.rect(7, 10, 2, 2, art.accent);
-  return s.c;
+  const s = makeWarehouseSurface(art);
+  // hốc cửa
+  for (let y = 3.5; y < TILE; y += Q)
+    for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, shade(art.dark, 0.6));
+  // ray hai bên
+  for (let y = 3.5; y < TILE; y += Q) {
+    s.dot(2.5, y, art.dark);
+    s.dot(13, y, art.dark);
+  }
+  // nan cuốn: mỗi nan một mặt sáng một mặt tối
+  for (let y = 4.5; y < TILE - 0.5; y += 1.5) {
+    for (let x = 3; x < 13; x += Q) {
+      s.dot(x, y, lighten(art.body));
+      s.dot(x, y + 0.5, art.body);
+      s.dot(x, y + 1, shade(art.dark, 0.8));
+    }
+  }
+  // tay nắm
+  for (let x = 7; x < 9.5; x += Q) {
+    s.dot(x, 10.5, art.accent);
+    s.dot(x, 11, shade(art.accent, 0.7));
+  }
+  return outline(s, shade(art.dark, 0.55), 1).c;
 }
 
-/** NHÀ CHÓ — mái dốc, cửa vòm tối, một tấm ván tên treo dưới mái.
- *  Nhỏ hơn nhà người rõ rệt: chừa hai cột trống hai bên để đọc ra là "cái
- *  chuồng đặt trong sân", không phải một căn nhà tí hon. */
+/** Nền tôn dùng chung cho kho và cửa kho — cùng một tấm tôn, khác cái cửa. */
+function makeWarehouseSurface(art: PropArt): Surface {
+  const s = surface(TILE, TILE);
+  const sang = lighten(art.body);
+  for (let x = 0; x < TILE; x += Q) {
+    const pha = (Math.floor(x * ART) % 6) / 6;
+    const mau = pha < 0.18 ? art.dark : pha < 0.5 ? sang : pha < 0.85 ? art.body : shade(art.body, 0.82);
+    for (let y = 0; y < TILE; y += Q) s.dot(x, y, mau);
+  }
+  for (let x = 0; x < TILE; x += Q) {
+    s.dot(x, 0, art.accent);
+    s.dot(x, Q, lighten(art.accent));
+    s.dot(x, 1, art.dark);
+    s.dot(x, 1.5, shade(art.dark, 0.75));
+  }
+  return s;
+}
+
+/** CỬA HÀNG — mặt tiền kính, mái hiên sọc, biển hiệu, hàng bày trong tủ. */
+function makeShop(): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 15, 6.5, 1.6);
+  // thân nhà
+  for (let y = 1; y < 15.5; y += Q) for (let x = 1.5; x < 14.5; x += Q) s.dot(x, y, P.metal);
+  for (let y = 1; y < 15.5; y += Q) {
+    s.dot(1.5, y, P.metalDark);
+    s.dot(14, y, P.metalDark);
+  }
+  // TỦ KÍNH: khung, kính, và ba dãy hàng bày bên trong
+  for (let y = 4; y < 11; y += Q) for (let x = 3; x < 13; x += Q) s.dot(x, y, P.glass);
+  for (let y = 4; y < 6.5; y += Q) for (let x = 3; x < 13; x += Q) s.dot(x, y, P.glassLight);
+  for (const [hx, mau] of [[4, "#6cc94f"], [7, "#e8452f"], [10, "#f08a1d"]] as const) {
+    for (let y = 7; y < 9.5; y += Q) for (let x = hx; x < hx + 2; x += Q) s.dot(x, y, mau);
+    for (let x = hx; x < hx + 2; x += Q) s.dot(x, 7, lighten(mau));
+    for (let x = hx; x < hx + 2; x += Q) s.dot(x, 9.5, shade(mau, 0.7));
+  }
+  // kệ ngang
+  for (let x = 3; x < 13; x += Q) s.dot(x, 10, P.metalDark);
+  // khung tủ
+  for (let y = 3.5; y < 11; y += Q) { s.dot(3, y, P.metalDark); s.dot(12.5, y, P.metalDark); }
+  for (let x = 3; x < 13; x += Q) { s.dot(x, 3.5, P.metalDark); s.dot(x, 11, P.metalDark); }
+  // MÁI HIÊN sọc, mép dưới răng cưa
+  for (let x = 0.5; x < 15.5; x += Q) {
+    const soc = Math.floor(x * ART / 3) % 2 === 0;
+    for (let y = 0; y < 2.5; y += Q) s.dot(x, y, soc ? P.cap : "#f2ede2");
+  }
+  for (let x = 0.5; x < 15.5; x += 1) {
+    s.dot(x, 2.5, shade(P.cap, 0.7));
+    s.dot(x + 0.5, 3, shade(P.cap, 0.7));
+  }
+  for (let x = 0.5; x < 15.5; x += Q) s.dot(x, 0, P.capLight);
+  // đèn hiệu xanh — dấu "đang mở cửa"
+  s.dot(12, 12, "#4ade80");
+  s.dot(12.5, 12, "#4ade80");
+  return outline(s, P.outline, 1).c;
+}
+
+/** QUẦY THU MUA — bàn gỗ, cân, máy tính tiền, và nông sản xếp trên mặt quầy. */
+function makeCounter(): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 15, 7, 1.6);
+  // MẶT QUẦY: ván gỗ ngang, mép trước dày
+  for (let y = 7; y < 14.5; y += Q) for (let x = 1; x < 15; x += Q) s.dot(x, y, P.wood);
+  for (let y = 8; y < 14; y += 2) for (let x = 1; x < 15; x += Q) s.dot(x, y, shade(P.wood, 0.85));
+  for (let x = 1; x < 15; x += Q) {
+    s.dot(x, 7, lighten(P.wood));
+    s.dot(x, 14, P.woodDark);
+    s.dot(x, 14.5, shade(P.woodDark, 0.7));
+  }
+  // CÂN bàn: đĩa cân và mặt số
+  for (let y = 4.5; y < 7; y += Q) for (let x = 2; x < 6; x += Q) s.dot(x, y, P.metalDark);
+  for (let x = 1.5; x < 6.5; x += Q) s.dot(x, 4.5, P.metal);
+  s.dot(3.5, 5.5, "#e8e8e8");
+  s.dot(4, 5.5, "#e8e8e8");
+  s.dot(3.5, 6, P.gold);
+  // MÁY TÍNH TIỀN: màn hình xanh, phím
+  for (let y = 2.5; y < 7; y += Q) for (let x = 8; x < 13.5; x += Q) s.dot(x, y, P.metalDark);
+  for (let y = 3; y < 5; y += Q) for (let x = 8.5; x < 13; x += Q) s.dot(x, y, "#16283a");
+  s.dot(9, 3.5, "#4ade80"); s.dot(9.5, 3.5, "#4ade80"); s.dot(10.5, 3.5, P.gold);
+  for (let x = 8.5; x < 13; x += 1) { s.dot(x, 5.5, P.metal); s.dot(x, 6.2, P.metal); }
+  // NÔNG SẢN xếp trên quầy
+  for (const [cx, mau] of [[3, "#e8452f"], [6, "#9be86b"], [11.5, "#f08a1d"]] as const) {
+    s.ell(cx, 10.5, 1.3, 1.1, shade(mau, 0.7));
+    s.ell(cx, 10.2, 1.3 - Q, 1.1 - Q, mau);
+    s.dot(cx - 0.5, 9.8, lighten(mau));
+  }
+  return outline(s, P.outline, 1).c;
+}
+
+/** NHÀ CHÓ — mái dốc lợp ván, cửa vòm tối, ván tên treo dưới mái. */
 function makeKennel(art: PropArt): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.shadow(8, 15, 5, 1.6);
-  // thân
-  s.rect(2, 7, 12, 8, art.body);
-  s.hline(2, 14, 12, art.dark);
-  // mái dốc: hai bậc mỗi bên, đỉnh ở giữa
-  s.rect(1, 5, 14, 2, art.dark);
-  s.rect(3, 3, 10, 2, art.dark);
-  s.rect(5, 2, 6, 1, art.accent);
-  // cửa vòm
-  s.rect(6, 9, 4, 6, "#1c1410");
-  s.rect(6, 8, 4, 1, "#1c1410");
-  s.px(5, 10, "#1c1410");
-  s.px(10, 10, "#1c1410");
+  // thân: ván dọc
+  for (let y = 6.5; y < 15; y += Q) for (let x = 2; x < 14; x += Q) s.dot(x, y, art.body);
+  for (let x = 3; x < 14; x += 2) for (let y = 6.5; y < 15; y += Q) s.dot(x, y, shade(art.body, 0.86));
+  for (let x = 2; x < 14; x += Q) {
+    s.dot(x, 14.5, art.dark);
+    s.dot(x, 15 - Q, shade(art.dark, 0.7));
+  }
+  /* MÁI DỐC: hai mặt nghiêng gặp nhau ở nóc, mỗi mặt lợp ván ngang. Bản trước
+     là ba hình chữ nhật xếp bậc thang — ở HD nó đọc ra là cái bánh kem. */
+  for (let d = 0; d <= 4.5; d += Q) {
+    const w = 6.5 - d * 1.1;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, 6.5 - d, x < 0 ? art.dark : shade(art.dark, 0.82));
+    if (Math.floor(d * ART) % 3 === 0)
+      for (let x = -w; x <= w; x += Q) s.dot(8 + x, 6.5 - d, shade(art.dark, 0.62));
+  }
+  for (let x = -1.5; x <= 1.5; x += Q) s.dot(8 + x, 2, art.accent); // nóc
+  // CỬA VÒM
+  for (let y = 8; y < 15; y += Q) {
+    const w = y < 9.5 ? 2 * Math.sin(Math.PI * ((y - 7.5) / 2.5)) + 0.8 : 2.2;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, "#171210");
+  }
+  for (let y = 8.5; y < 15; y += Q) s.dot(8 - 2.2, y, shade(art.body, 0.6));
   // ván tên
-  s.rect(11, 8, 3, 2, art.accent);
-  return outline(s).c;
+  for (let y = 7.5; y < 9; y += Q) for (let x = 11; x < 13.5; x += Q) s.dot(x, y, art.accent);
+  for (let x = 11; x < 13.5; x += Q) s.dot(x, 9, shade(art.accent, 0.65));
+  return outline(s, P.outline, 1).c;
+}
+
+/** GIẾNG — thành đá xếp, mái ngói nhỏ, ròng rọc và cái gàu treo. */
+function makeWell(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6, 2);
+  // THÀNH GIẾNG: đá xếp so le, hai hàng
+  for (let y = 8; y < 14; y += Q) for (let x = 2; x < 14; x += Q) s.dot(x, y, art.body);
+  for (let hy = 8; hy < 14; hy += 2.5) {
+    const lech = ((hy - 8) / 2.5) % 2 ? 1.25 : 0;
+    for (let x = 2 + lech; x < 14; x += 2.5) for (let d = 0; d < 2; d += Q) s.dot(x, hy + d, art.dark);
+    for (let x = 2; x < 14; x += Q) s.dot(x, hy, shade(art.body, 0.8));
+  }
+  for (let x = 2; x < 14; x += Q) {
+    s.dot(x, 8, lighten(art.body));
+    s.dot(x, 13.5, art.dark);
+  }
+  // MẶT NƯỚC trong lòng giếng
+  for (let y = 9.5; y < 12; y += Q) for (let x = 4; x < 12; x += Q) s.dot(x, y, "#2a5fb0");
+  for (let x = 4.5; x < 11.5; x += 1.5) s.dot(x, 10, P.waterFoam);
+  for (let x = 4; x < 12; x += Q) s.dot(x, 9.5, "#1b3f78");
+  // HAI CỘT và MÁI
+  for (let y = 3; y < 8.5; y += Q) {
+    for (const cx of [3, 12.5]) {
+      s.dot(cx, y, P.wood);
+      s.dot(cx + 0.5, y, P.woodDark);
+    }
+  }
+  for (let d = 0; d <= 2.5; d += Q) {
+    const w = 7 - d * 1.6;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, 3 - d + 1, x < 0 ? P.roof : shade(P.roof, 0.85));
+  }
+  for (let x = -7; x <= 7; x += Q) s.dot(8 + x, 4, P.roofDark);
+  for (let x = -2; x <= 2; x += Q) s.dot(8 + x, 1, P.roofLight);
+  // TRỤC QUAY và GÀU
+  for (let x = 3; x < 13; x += Q) s.dot(x, 5.5, P.woodDark);
+  for (let d = 0; d < 2; d += Q) s.dot(8, 5.5 + d, "#c9c4b6"); // dây
+  for (let y = 7; y < 8.5; y += Q) for (let x = 7; x < 9.2; x += Q) s.dot(x, y, P.wood);
+  for (let x = 7; x < 9.2; x += Q) s.dot(x, 7, lighten(P.wood));
+  return outline(s, P.outline, 1).c;
 }
 
 function makeProp(id: string, art: PropArt): HTMLCanvasElement {
