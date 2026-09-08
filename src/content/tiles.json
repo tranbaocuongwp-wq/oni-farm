@@ -190,6 +190,78 @@
     "f": {
       "ground": "grass",
       "prop": "rock_flat"
+    },
+    "I": {
+      "ground": "grass",
+      "prop": "rock_tall"
+    },
+    "a": {
+      "ground": "grass",
+      "prop": "rock_crystal"
+    },
+    "c": {
+      "ground": "grass",
+      "prop": "rock_split"
+    },
+    "h": {
+      "ground": "grass",
+      "prop": "rock_sand"
+    },
+    "i": {
+      "ground": "grass",
+      "prop": "rock_dark"
+    },
+    "j": {
+      "ground": "grass",
+      "prop": "rock_sea"
+    },
+    "l": {
+      "ground": "grass",
+      "prop": "log_moss"
+    },
+    "p": {
+      "ground": "grass",
+      "prop": "log_hollow"
+    },
+    "q": {
+      "ground": "grass",
+      "prop": "log_split"
+    },
+    "r": {
+      "ground": "grass",
+      "prop": "branch"
+    },
+    "x": {
+      "ground": "grass",
+      "prop": "branch_pile"
+    },
+    "y": {
+      "ground": "grass",
+      "prop": "stump_moss"
+    },
+    "z": {
+      "ground": "grass",
+      "prop": "stump_burnt"
+    },
+    "1": {
+      "ground": "grass",
+      "prop": "deadfall"
+    },
+    "2": {
+      "ground": "grass",
+      "prop": "driftwood"
+    },
+    "3": {
+      "ground": "grass",
+      "prop": "roots"
+    },
+    "4": {
+      "ground": "grass",
+      "prop": "twigs"
+    },
+    "5": {
+      "ground": "grass",
+      "prop": "logpile"
     }
   },
   "spawn": {

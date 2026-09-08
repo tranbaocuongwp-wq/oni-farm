@@ -680,6 +680,348 @@
         "dark": "#666c74",
         "accent": "#a8aeb6"
       }
+    },
+    {
+      "id": "rock_tall",
+      "name": "Cột đá",
+      "solid": true,
+      "hits": 7,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 4,
+          "max": 6
+        }
+      ],
+      "art": {
+        "body": "#8a8f98",
+        "dark": "#5c6169",
+        "accent": "#a8aeb6"
+      }
+    },
+    {
+      "id": "rock_crystal",
+      "name": "Đá pha lê",
+      "solid": true,
+      "hits": 5,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#7f8f9e",
+        "dark": "#4f5b66",
+        "accent": "#8fd8f0"
+      }
+    },
+    {
+      "id": "rock_split",
+      "name": "Đá nứt đôi",
+      "solid": true,
+      "hits": 4,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 3,
+          "max": 5
+        }
+      ],
+      "art": {
+        "body": "#93999f",
+        "dark": "#5f656b",
+        "accent": "#b0b6bc"
+      }
+    },
+    {
+      "id": "rock_sand",
+      "name": "Đá sa thạch",
+      "solid": true,
+      "hits": 3,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 2,
+          "max": 4
+        }
+      ],
+      "art": {
+        "body": "#c9a878",
+        "dark": "#967c52",
+        "accent": "#e0c79a"
+      }
+    },
+    {
+      "id": "rock_dark",
+      "name": "Đá bazan",
+      "solid": true,
+      "hits": 6,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 4,
+          "max": 7
+        }
+      ],
+      "art": {
+        "body": "#4e535c",
+        "dark": "#2f333a",
+        "accent": "#6f757e"
+      }
+    },
+    {
+      "id": "rock_sea",
+      "name": "Đá biển",
+      "solid": true,
+      "hits": 4,
+      "tool": "MINE",
+      "drops": [
+        {
+          "id": "item:stone",
+          "min": 2,
+          "max": 4
+        }
+      ],
+      "art": {
+        "body": "#7f8a8f",
+        "dark": "#525b60",
+        "accent": "#9ab86a"
+      }
+    },
+    {
+      "id": "log_moss",
+      "name": "Khúc gỗ rêu",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#8a5c34",
+        "dark": "#5a3b21",
+        "accent": "#5f9e4a"
+      }
+    },
+    {
+      "id": "log_hollow",
+      "name": "Khúc gỗ rỗng",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#96683c",
+        "dark": "#5a3b21",
+        "accent": "#2a1d12"
+      }
+    },
+    {
+      "id": "log_split",
+      "name": "Khúc gỗ chẻ",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 4
+        }
+      ],
+      "art": {
+        "body": "#a8783f",
+        "dark": "#6b4a26",
+        "accent": "#d8b276"
+      }
+    },
+    {
+      "id": "branch",
+      "name": "Cành gãy",
+      "solid": false,
+      "hits": 1,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "art": {
+        "body": "#7a5a38",
+        "dark": "#4f3a22",
+        "accent": "#9c7a4e"
+      }
+    },
+    {
+      "id": "branch_pile",
+      "name": "Đống cành",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#8a6a44",
+        "dark": "#57402a",
+        "accent": "#a88a5e"
+      }
+    },
+    {
+      "id": "stump_moss",
+      "name": "Gốc cây rêu",
+      "solid": true,
+      "hits": 3,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#6b4a2c",
+        "dark": "#402b19",
+        "accent": "#5f9e4a"
+      }
+    },
+    {
+      "id": "stump_burnt",
+      "name": "Gốc cây cháy",
+      "solid": true,
+      "hits": 3,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "art": {
+        "body": "#4a423c",
+        "dark": "#251f1b",
+        "accent": "#8a8078"
+      }
+    },
+    {
+      "id": "deadfall",
+      "name": "Cây đổ",
+      "solid": true,
+      "hits": 4,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 4,
+          "max": 6
+        }
+      ],
+      "art": {
+        "body": "#8f7a5e",
+        "dark": "#5c4c38",
+        "accent": "#a89a80"
+      }
+    },
+    {
+      "id": "driftwood",
+      "name": "Gỗ trôi",
+      "solid": true,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 2,
+          "max": 3
+        }
+      ],
+      "art": {
+        "body": "#b8ab96",
+        "dark": "#8a7f6c",
+        "accent": "#d8cfbc"
+      }
+    },
+    {
+      "id": "roots",
+      "name": "Rễ trồi",
+      "solid": false,
+      "hits": 2,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 2
+        }
+      ],
+      "art": {
+        "body": "#6b4a2c",
+        "dark": "#402b19",
+        "accent": "#8a6440"
+      }
+    },
+    {
+      "id": "twigs",
+      "name": "Cành khô",
+      "solid": false,
+      "hits": 1,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 1,
+          "max": 1
+        }
+      ],
+      "art": {
+        "body": "#8a7550",
+        "dark": "#5c4d34",
+        "accent": "#a89468"
+      }
+    },
+    {
+      "id": "logpile",
+      "name": "Đống củi",
+      "solid": true,
+      "hits": 3,
+      "tool": "CHOP",
+      "drops": [
+        {
+          "id": "item:wood",
+          "min": 4,
+          "max": 6
+        }
+      ],
+      "art": {
+        "body": "#a0733f",
+        "dark": "#684a28",
+        "accent": "#c9a06a"
+      }
     }
   ]
 }

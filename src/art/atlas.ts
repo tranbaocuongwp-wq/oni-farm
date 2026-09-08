@@ -2092,6 +2092,438 @@ function makeWell(art: PropArt): HTMLCanvasElement {
   return outline(s, P.outline, 1).c;
 }
 
+
+/* ---------------------------------------------------------------------------
+   MƯỜI MỘT LOẠI ĐÁ và MƯỜI LĂM THỨ GỖ CHẾT — Cường: "đá lớn đá nhỏ 10 mấy loại
+   khác nhau", "cây chết cành cây khúc cây ngang đường 10 tới 15 loại khác nhau".
+
+   Một nông trại chỉ có đúng một hòn đá xám và một khúc gỗ nâu thì mọi chỗ có đá
+   đều trông giống nhau, và mắt thôi để ý tới địa hình. Nhiều loại KHÔNG phải là
+   nhiều bảng màu: mỗi thứ dưới đây khác ở BÓNG DÁNG (cột đá dựng đứng khác hẳn
+   phiến đá nằm), và phần lớn còn khác ở VIỆC CHÚNG LÀM (đá bazan đập sáu nhát,
+   cành khô nhặt một nhát và đi qua được).
+--------------------------------------------------------------------------- */
+
+/** Khối đá gãy góc dùng chung: quét từng hàng, hai mép tối, mặt trên bắt nắng. */
+function khoiDa(
+  s: Surface,
+  cx: number,
+  yTren: number,
+  yDuoi: number,
+  rong: (u: number) => number,
+  mau: string,
+  toi: string,
+  sang: string,
+): void {
+  const h = yDuoi - yTren;
+  for (let y = yTren; y <= yDuoi; y += Q) {
+    const w = rong((y - yTren) / h);
+    if (w <= 0) continue;
+    for (let x = -w; x <= w; x += Q) s.dot(cx + x, y, mau);
+    s.dot(cx - w, y, toi);
+    s.dot(cx + w, y, toi);
+    if (y < yTren + h * 0.45) s.dot(cx - w + Q, y, sang);
+  }
+}
+
+/** CỘT ĐÁ — khối đứng cao, đỉnh vát, chân loe. Bóng dáng thẳng đứng duy nhất. */
+function makeRockTall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 4, 1.6);
+  khoiDa(s, 8, 1.5, 14, (u) => 2.2 + u * 2.6 + (u > 0.85 ? 1 : 0), art.body, art.dark, art.accent);
+  // hai vết nứt dọc
+  for (let d = 0; d < 8; d += Q) s.dot(7 + d * 0.12, 3.5 + d, art.dark);
+  for (let d = 0; d < 5; d += Q) s.dot(10 - d * 0.1, 6 + d, art.dark);
+  return outline(s, shade(art.dark, 0.55), 1).c;
+}
+
+/** ĐÁ PHA LÊ — bệ đá xám, ba tinh thể sáu cạnh mọc lên, trong và sáng. */
+function makeRockCrystal(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 5, 1.7);
+  khoiDa(s, 8, 9, 14, (u) => 3.2 + u * 1.8, art.body, art.dark, lighten(art.body));
+  const tinh: [number, number, number][] = [
+    [6, 8.5, 4.5],
+    [9.5, 8, 6],
+    [11.5, 9.5, 3.2],
+  ];
+  for (const [cx, cy, cao] of tinh) {
+    for (let d = 0; d <= cao; d += Q) {
+      const u = d / cao;
+      const w = Math.max(Q, 1.35 * (1 - u * 0.85));
+      for (let x = -w; x <= w; x += Q) s.dot(cx + x, cy - d, x < 0 ? art.accent : shade(art.accent, 0.78));
+      s.dot(cx - w, cy - d, shade(art.accent, 0.6));
+      s.dot(cx + w, cy - d, shade(art.accent, 0.6));
+    }
+    // mặt vát ở đỉnh và một tia sáng bên trong
+    s.dot(cx, cy - cao - Q, "#eafcff");
+    for (let d = cao * 0.2; d < cao * 0.75; d += Q) s.dot(cx - 0.5, cy - d, "#dff6ff");
+  }
+  return outline(s, shade(art.dark, 0.55), 1).c;
+}
+
+/** ĐÁ NỨT ĐÔI — hai nửa tách ra, khe giữa tối hẳn. */
+function makeRockSplit(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6, 1.8);
+  khoiDa(s, 4.5, 5.5, 14, (u) => 1.6 + u * 2.2, art.body, art.dark, art.accent);
+  khoiDa(s, 11.5, 6.5, 14, (u) => 1.4 + u * 2, shade(art.body, 0.92), art.dark, art.accent);
+  // khe nứt: hai mặt trong tối, hở dần về phía trên
+  for (let y = 5.5; y <= 14; y += Q) {
+    const w = 0.6 + (14 - y) * 0.12;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, shade(art.dark, 0.55));
+  }
+  return outline(s, shade(art.dark, 0.55), 1).c;
+}
+
+/** ĐÁ SA THẠCH — khối bè, VÂN NGANG từng lớp: đá trầm tích thì có thớ. */
+function makeRockSand(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 6.5, 1.8);
+  khoiDa(s, 8, 6.5, 14, (u) => 4 + u * 2.2, art.body, art.dark, art.accent);
+  for (let y = 7.5; y < 14; y += 1.5) {
+    const w = 4 + ((y - 6.5) / 7.5) * 2.2 - 0.5;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, shade(art.body, 0.86));
+    for (let x = -w + 1; x <= w - 1; x += Q) s.dot(8 + x, y - Q, art.accent);
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** ĐÁ BAZAN — sẫm, mặt gãy thành cột lục giác. Loại cứng nhất, đập sáu nhát. */
+function makeRockDark(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14.5, 5.5, 1.8);
+  khoiDa(s, 8, 4.5, 14, (u) => 3 + u * 2.4, art.body, art.dark, art.accent);
+  /* Mặt gãy thành CỘT: ba đường dọc và hai đường xiên chia mặt đá thành những
+     ô nhiều cạnh. Đây là nét riêng của đá núi lửa, và nó cũng là thứ duy nhất
+     tách con này khỏi "một hòn đá màu tối". */
+  for (const [x0, y0, dx] of [[6.5, 5.5, 0.1], [9.5, 5, -0.08], [8, 7.5, 0.05]] as const)
+    for (let d = 0; d < 6.5; d += Q) s.dot(x0 + dx * d, y0 + d, shade(art.dark, 0.7));
+  for (let d = 0; d < 4; d += Q) s.dot(5.5 + d, 9 - d * 0.3, shade(art.dark, 0.7));
+  for (let d = 0; d < 3.5; d += Q) s.dot(10 + d, 10 + d * 0.25, shade(art.dark, 0.7));
+  return outline(s, shade(art.dark, 0.5), 1).c;
+}
+
+/** ĐÁ BIỂN — đá ướt bám rong và mấy con hà trắng ở chân. */
+function makeRockSea(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x3ba9);
+  s.shadow(8, 14.5, 5.5, 1.8);
+  khoiDa(s, 8, 6, 14, (u) => 3.4 + u * 2.2, art.body, art.dark, lighten(art.body));
+  // rong bám mặt trên
+  for (let i = 0; i < 10; i++) {
+    const cx = 5 + rnd() * 6;
+    const cy = 6.5 + rnd() * 2.4;
+    const r = 0.7 + rnd() * 0.8;
+    for (let dy = -r; dy <= r; dy += Q)
+      for (let dx = -r; dx <= r; dx += Q)
+        if (dx * dx + dy * dy <= r * r) s.dot(cx + dx, cy + dy, dy < 0 ? lighten(art.accent) : art.accent);
+  }
+  // hà bám chân đá
+  for (let i = 0; i < 7; i++) {
+    const x = 4 + rnd() * 8;
+    const y = 11.5 + rnd() * 2;
+    s.dot(x, y, "#e6e2d8");
+    s.dot(x, y + Q, "#b8b2a4");
+  }
+  return outline(s, shade(art.dark, 0.55), 1).c;
+}
+
+/** Một KHÚC GỖ nằm ngang: trụ tròn, mặt cắt có vòng năm ở một đầu. */
+function khucGo(
+  s: Surface,
+  x0: number,
+  x1: number,
+  cy: number,
+  r: number,
+  mau: string,
+  toi: string,
+  ruot: string,
+): void {
+  for (let x = x0; x <= x1; x += Q) {
+    for (let y = -r; y <= r; y += Q) s.dot(x, cy + y, mau);
+    s.dot(x, cy - r, lighten(mau));
+    s.dot(x, cy + r, toi);
+    s.dot(x, cy - r + Q, mau);
+  }
+  // MẶT CẮT ở đầu phải: vòng năm đồng tâm — thứ nói "đây là chỗ vừa bị cưa"
+  for (let y = -r; y <= r; y += Q) {
+    for (let d = 0; d < 1.4; d += Q) s.dot(x1 + d, cy + y, ruot);
+  }
+  for (const rr of [r * 0.32, r * 0.62, r * 0.9]) {
+    for (let a = 0; a < Math.PI * 2; a += 0.22)
+      s.dot(x1 + 0.7 + Math.cos(a) * 0.4, cy + Math.sin(a) * rr, toi);
+  }
+  s.dot(x1 + 0.7, cy, toi);
+}
+
+/** KHÚC GỖ RÊU — nằm lâu ngày, mặt trên phủ rêu và mọc mấy tai nấm. */
+function makeLogMoss(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x77b3);
+  s.shadow(8, 13.5, 6.5, 1.6);
+  khucGo(s, 1.5, 12.5, 10.5, 2.6, art.body, art.dark, "#c9a06a");
+  for (let i = 0; i < 16; i++) {
+    const x = 2 + rnd() * 10;
+    const r = 0.6 + rnd() * 0.7;
+    for (let dy = -r; dy <= r; dy += Q)
+      for (let dx = -r; dx <= r; dx += Q)
+        if (dx * dx + dy * dy <= r * r) s.dot(x + dx, 8.4 + dy * 0.8, dy < 0 ? lighten(art.accent) : art.accent);
+  }
+  // ba tai nấm mọc trên lưng khúc gỗ
+  for (const [mx, mr] of [[4, 1.3], [7, 1], [10.5, 0.9]] as const) {
+    s.ell(mx, 7.4, mr, mr * 0.6, "#c96a3a");
+    s.ell(mx, 7.2, mr - Q, mr * 0.6 - Q, "#e08a56");
+    for (let d = 0; d < 1; d += Q) s.dot(mx, 7.6 + d, "#e8dcc0");
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** KHÚC GỖ RỖNG — ruột mục thành một cái hang tối; thú nhỏ chui vừa. */
+function makeLogHollow(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 13.5, 6.5, 1.6);
+  khucGo(s, 1.5, 12.5, 10.5, 2.8, art.body, art.dark, "#b8905c");
+  // miệng hang ở đầu phải
+  for (let y = -1.9; y <= 1.9; y += Q) {
+    const w = 1.4 * Math.sqrt(Math.max(0, 1 - (y / 1.9) ** 2));
+    for (let x = -w; x <= w; x += Q) s.dot(12.6 + x, 10.5 + y, art.accent);
+  }
+  for (let y = -1.6; y <= 1.6; y += Q) s.dot(11.6, 10.5 + y, shade(art.dark, 0.7));
+  // vỏ cây bong tróc
+  for (const [x, w] of [[3.5, 2], [6.5, 1.5], [9, 2.5]] as const)
+    for (let d = 0; d < w; d += Q) s.dot(x + d, 9.2, shade(art.dark, 0.85));
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** KHÚC GỖ CHẺ — bổ dọc làm đôi, lộ ruột gỗ sáng và thớ dọc. */
+function makeLogSplit(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 13.5, 6, 1.6);
+  // nửa dưới nằm ngửa, lộ mặt chẻ
+  for (let x = 2; x <= 13; x += Q) {
+    for (let y = -2.2; y <= 1.2; y += Q) s.dot(x, 11 + y, y < -0.6 ? art.accent : art.body);
+    s.dot(x, 8.8, lighten(art.accent));
+    s.dot(x, 12.2, art.dark);
+  }
+  // thớ gỗ chạy dọc mặt chẻ
+  for (let y = -1.8; y <= -0.8; y += 0.5)
+    for (let x = 2.5; x <= 12.5; x += Q) s.dot(x, 11 + y, shade(art.accent, 0.86));
+  // nửa trên kê chéo lên
+  khucGo(s, 3.5, 11, 6.4, 1.8, art.body, art.dark, art.accent);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** CÀNH GÃY — một nhánh trơ có hai nhánh con. Đi qua được. */
+function makeBranch(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 13, 5, 1.2);
+  for (let d = 0; d < 12; d += Q) {
+    const x = 2 + d;
+    const y = 11.5 - Math.sin(d * 0.24) * 2.2;
+    for (let w = 0; w < 0.9; w += Q) s.dot(x, y + w, art.body);
+    s.dot(x, y, art.accent);
+    s.dot(x, y + 0.9, art.dark);
+  }
+  for (const [x0, y0, k, len] of [[5.5, 10.2, -1, 3], [9, 9.6, 1, 2.4]] as const)
+    for (let d = 0; d < len; d += Q) {
+      s.dot(x0 + d * 0.7, y0 + k * d * 0.7, art.body);
+      s.dot(x0 + d * 0.7, y0 + k * d * 0.7 + Q, art.dark);
+    }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** ĐỐNG CÀNH — mấy nhánh chất chéo lên nhau. */
+function makeBranchPile(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x51c8);
+  s.shadow(8, 13.5, 6, 1.5);
+  for (let i = 0; i < 7; i++) {
+    const x0 = 2 + rnd() * 3;
+    const y0 = 9 + rnd() * 4;
+    const goc = -0.5 + rnd() * 1;
+    const dai = 5 + rnd() * 5;
+    const mau = i % 2 ? art.body : shade(art.body, 0.86);
+    for (let d = 0; d < dai; d += Q) {
+      const x = x0 + Math.cos(goc) * d;
+      const y = y0 + Math.sin(goc) * d;
+      s.dot(x, y, mau);
+      s.dot(x, y + Q, art.dark);
+      if (d < Q * 2) s.dot(x, y, art.accent);
+    }
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** GỐC CÂY RÊU — gốc cũ phủ rêu, có nấm mọc quanh chân. */
+function makeStumpMoss(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x2c71);
+  s.shadow(8, 14, 5.5, 1.8);
+  // thân gốc, có bờ rễ loe
+  for (let y = 7; y <= 14; y += Q) {
+    const w = 3.6 + ((y - 7) / 7) * 1.8;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, art.body);
+    s.dot(8 - w, y, art.dark);
+    s.dot(8 + w, y, art.dark);
+    s.dot(8 - w + Q, y, lighten(art.body));
+  }
+  // mặt cắt trên, có vòng năm
+  s.ell(8, 6.8, 3.8, 1.6, art.dark);
+  s.ell(8, 6.6, 3.4, 1.3, "#c9a06a");
+  for (const rr of [1.1, 2.2, 3]) s.ell(8, 6.6, rr, rr * 0.4, shade("#c9a06a", 0.82));
+  // rêu phủ mép trên và đổ xuống một bên
+  for (let i = 0; i < 14; i++) {
+    const cx = 5 + rnd() * 6;
+    const cy = 6 + rnd() * 3;
+    const r = 0.6 + rnd() * 0.7;
+    for (let dy = -r; dy <= r; dy += Q)
+      for (let dx = -r; dx <= r; dx += Q)
+        if (dx * dx + dy * dy <= r * r && cy + dy > 5.6) s.dot(cx + dx, cy + dy, dy < 0 ? lighten(art.accent) : art.accent);
+  }
+  // nấm ở chân gốc
+  for (const [mx, my] of [[3.5, 13], [12.5, 13.5]] as const) {
+    s.ell(mx, my, 1.2, 0.7, "#c04a48");
+    s.ell(mx, my - Q, 1.2 - Q, 0.7 - Q, "#e06a62");
+    for (let d = 0; d < 1; d += Q) s.dot(mx, my + 0.4 + d, "#e8dcc0");
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** GỐC CÂY CHÁY — than đen, mép cháy xém, tro rải quanh chân. */
+function makeStumpBurnt(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x8d40);
+  s.shadow(8, 14, 5, 1.8);
+  for (let y = 6.5; y <= 14; y += Q) {
+    const w = 3.2 + ((y - 6.5) / 7.5) * 1.6;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, art.body);
+    s.dot(8 - w, y, art.dark);
+    s.dot(8 + w, y, art.dark);
+  }
+  /* MÉP TRÊN GÃY NHỌN: cây cháy thì ngọn gãy nham nhở, không phải bị cưa
+     phẳng. Đây là thứ tách nó khỏi một cái gốc cây bình thường sơn đen. */
+  for (let x = -3.4; x <= 3.4; x += Q) {
+    const cao = 6.5 - Math.abs(Math.sin(x * 1.7)) * 1.6 - (rnd() > 0.7 ? 0.5 : 0);
+    for (let y = cao; y < 7; y += Q) s.dot(8 + x, y, art.dark);
+    s.dot(8 + x, cao, "#1b1714");
+  }
+  // vệt than nứt và tro
+  for (let i = 0; i < 9; i++) {
+    const x = 5 + rnd() * 6;
+    const y = 8 + rnd() * 5;
+    s.dot(x, y, "#1b1714");
+    if (rnd() > 0.6) s.dot(x, y + Q, art.accent);
+  }
+  for (let i = 0; i < 8; i++) s.dot(3 + rnd() * 10, 13.5 + rnd() * 1.2, art.accent);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** CÂY ĐỔ — thân to nằm chéo qua ô, rễ bật lên ở một đầu. */
+function makeDeadfall(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 13.5, 7, 1.8);
+  // thân nằm chéo
+  for (let d = 0; d <= 14; d += Q) {
+    const x = 1 + d;
+    const y = 12 - d * 0.34;
+    for (let w = -2.4; w <= 2.4; w += Q) s.dot(x, y + w, art.body);
+    s.dot(x, y - 2.4, lighten(art.body));
+    s.dot(x, y + 2.4, art.dark);
+  }
+  // thớ vỏ dọc thân
+  for (const off of [-1.2, 0.2, 1.4])
+    for (let d = 1; d < 13; d += Q) s.dot(1 + d, 12 - d * 0.34 + off, shade(art.body, 0.84));
+  // BẦU RỄ bật lên ở đầu trái — cái nói "cây này bị bật gốc", không phải bị cưa
+  for (let i = 0; i < 9; i++) {
+    const goc = Math.PI * (0.62 + (i / 8) * 0.76);
+    for (let d = 0; d < 3.5; d += Q) {
+      const x = 2 + Math.cos(goc) * d;
+      const y = 11.5 + Math.sin(goc) * d;
+      s.dot(x, y, art.accent);
+      s.dot(x, y + Q, shade(art.accent, 0.66));
+    }
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** GỖ TRÔI — bạc phếch vì nước biển, nhẵn, có lỗ mọt. */
+function makeDriftwood(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x6f2a);
+  s.shadow(8, 13.5, 6, 1.4);
+  for (let d = 0; d <= 13; d += Q) {
+    const x = 1.5 + d;
+    const y = 11 + Math.sin(d * 0.4) * 0.9;
+    const r = 1.6 - Math.abs(d / 13 - 0.5) * 1.1;
+    for (let w = -r; w <= r; w += Q) s.dot(x, y + w, art.body);
+    s.dot(x, y - r, art.accent);
+    s.dot(x, y + r, art.dark);
+  }
+  // hai nhánh cụt và mấy lỗ mọt
+  for (let d = 0; d < 3; d += Q) s.dot(6 + d * 0.5, 10.5 - d, art.body);
+  for (let d = 0; d < 2.2; d += Q) s.dot(10 - d * 0.4, 12 + d * 0.6, art.body);
+  for (let i = 0; i < 6; i++) s.dot(3 + rnd() * 9, 10.4 + rnd() * 1.4, art.dark);
+  return outline(s, shade(art.dark, 0.65), 1).c;
+}
+
+/** RỄ TRỒI — mấy sống rễ nổi lên khỏi mặt đất. Đi qua được. */
+function makeRoots(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  for (let i = 0; i < 4; i++) {
+    const y0 = 6.5 + i * 2.2;
+    const bien = i % 2 ? 1 : -1;
+    for (let d = 0; d <= 13; d += Q) {
+      const x = 1.5 + d;
+      const y = y0 + Math.sin(d * 0.32 + i) * 1.1 * bien;
+      s.dot(x, y, art.body);
+      s.dot(x, y + Q, art.dark);
+      if (Math.floor(d * ART) % 7 === 0) s.dot(x, y - Q, art.accent);
+    }
+  }
+  return outline(s, shade(art.dark, 0.7), 1).c;
+}
+
+/** CÀNH KHÔ — dăm que nhỏ rải trên cỏ. Nhặt một nhát, đi qua được. */
+function makeTwigs(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x9a4e);
+  for (let i = 0; i < 9; i++) {
+    const x0 = 2 + rnd() * 10;
+    const y0 = 6 + rnd() * 7;
+    const goc = rnd() * Math.PI;
+    const dai = 1.8 + rnd() * 2.6;
+    for (let d = 0; d < dai; d += Q) {
+      s.dot(x0 + Math.cos(goc) * d, y0 + Math.sin(goc) * d, i % 3 ? art.body : art.accent);
+      s.dot(x0 + Math.cos(goc) * d, y0 + Math.sin(goc) * d + Q, art.dark);
+    }
+  }
+  return outline(s, shade(art.dark, 0.72), 1).c;
+}
+
+/** ĐỐNG CỦI — củi xếp thành chồng, đầu khúc quay ra ngoài. */
+function makeLogPile(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 6.5, 1.7);
+  /* Xếp ba hàng, hàng trên lệch nửa khúc. Nhìn thẳng vào ĐẦU khúc nên mỗi khúc
+     là một mặt cắt tròn có vòng năm — đó là hình một đống củi xếp gọn, khác
+     hẳn một mớ cành chất bừa (`branch_pile`). */
+  for (let hang = 0; hang < 3; hang++) {
+    const cy = 13 - hang * 2.4;
+    const lech = (hang % 2) * 1.2;
+    for (let i = 0; i < 5; i++) {
+      const cx = 3 + lech + i * 2.4;
+      if (cx > 13.5) continue;
+      s.ell(cx, cy, 1.2, 1.15, art.dark);
+      s.ell(cx, cy - Q, 1.2 - Q, 1.15 - Q, art.accent);
+      s.ell(cx, cy, 0.55, 0.5, shade(art.accent, 0.82));
+      s.dot(cx, cy, art.dark);
+      s.dot(cx - 0.5, cy - 0.5, lighten(art.accent));
+    }
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
 function makeProp(id: string, art: PropArt, kieu = 0): HTMLCanvasElement {
   switch (id) {
     case "door": return makeDoor(art, kieu);
@@ -2125,6 +2557,24 @@ function makeProp(id: string, art: PropArt, kieu = 0): HTMLCanvasElement {
     case "rock_ore": return makeRockOre(art);
     case "rock_pile": return makeRockPile(art);
     case "rock_flat": return makeRockFlat(art);
+    case "rock_tall": return makeRockTall(art);
+    case "rock_crystal": return makeRockCrystal(art);
+    case "rock_split": return makeRockSplit(art);
+    case "rock_sand": return makeRockSand(art);
+    case "rock_dark": return makeRockDark(art);
+    case "rock_sea": return makeRockSea(art);
+    case "log_moss": return makeLogMoss(art);
+    case "log_hollow": return makeLogHollow(art);
+    case "log_split": return makeLogSplit(art);
+    case "branch": return makeBranch(art);
+    case "branch_pile": return makeBranchPile(art);
+    case "stump_moss": return makeStumpMoss(art);
+    case "stump_burnt": return makeStumpBurnt(art);
+    case "deadfall": return makeDeadfall(art);
+    case "driftwood": return makeDriftwood(art);
+    case "roots": return makeRoots(art);
+    case "twigs": return makeTwigs(art);
+    case "logpile": return makeLogPile(art);
     case "pine": return makePine(art);
     case "birch": return makeBirch(art);
     case "palm": return makePalm(art);
