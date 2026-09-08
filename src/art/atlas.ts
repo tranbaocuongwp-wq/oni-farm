@@ -5282,96 +5282,202 @@ function makeVehicle(
   const doc = dir === "up" || dir === "down";
   const flip = dir === "left" || dir === "up";
   const L = 24; // chiều dài thân
-  const Wd = style === "boat" ? 11 : 13; // bề ngang thân
+  const Wd = style === "boat" ? 10 : 13; // bề ngang thân
   const toi = art.dark;
   const sang = lighten(art.body);
+  const rat = shade(art.dark, 0.6);
 
   /* Vẽ MỘT lần ở dáng NGANG hướng PHẢI, rồi xoay/lật cho ba hướng còn lại —
      một hình nguồn, bốn hướng, không chép tay bốn lần. */
-  const x0 = Math.round((S - L) / 2);
-  const y0 = Math.round((S - Wd) / 2) - 2;
-  const y1 = y0 + Wd - 1;
+  const x0 = (S - L) / 2;
+  const y0 = (S - Wd) / 2 - 2;
+  const y1 = y0 + Wd;
+  const gy = (y0 + y1) / 2; // trục dọc thân
 
-  s.shadow(S / 2, y1 + 3, L / 2 - 1, 2);
+  s.shadow(S / 2, y1 + 2.5, L / 2 - 1, 2);
 
   if (style === "boat") {
-    // thân: mũi nhọn bên phải, đuôi vuông bên trái
-    for (let x = 0; x < L; x++) {
-      const t = x / (L - 1);
-      const co = t > 0.72 ? Math.round(((t - 0.72) / 0.28) * (Wd / 2 - 1)) : 0; // mũi thu hẹp
-      s.vline(x0 + x, y0 + co, Wd - co * 2, art.body);
-      s.px(x0 + x, y0 + co, sang);
-      s.px(x0 + x, y1 - co, toi);
+    /* THUYỀN nhìn TỪ TRÊN XUỐNG — Cường: "mấy cái tàu nữa kìa".
+
+       Bản trước vẽ nó như nhìn ngang: một hình chữ nhật bo một đầu, cắm cái que
+       làm cột và sáu vạch màu gọi là buồm. Nhưng cả bản đồ nhìn từ trên, nên
+       cái buồm nhìn từ trên phải là một CÁNH CUNG PHỒNG chạy dọc từ cột về lái,
+       không phải một hình tam giác dựng đứng. Vẽ đúng góc nhìn là thứ làm con
+       thuyền hết "kì".
+
+       Buồm màu VẢI BẠT chứ không lấy `accent`: `accent` của thuyền là màu gỗ
+       lái, nên dùng nó thì con thuyền căng một lá buồm nâu. */
+    const nuaW = (t: number) => {
+      // nửa bề ngang vỏ tại vị trí dọc `t` (0 = lái, 1 = mũi)
+      if (t < 0.1) return (Wd / 2) * (0.62 + t * 3.2);
+      if (t > 0.58) return (Wd / 2) * Math.pow(Math.max(0, 1 - (t - 0.58) / 0.44), 0.6);
+      return Wd / 2;
+    };
+    // ---- VỎ
+    for (let x = 0; x <= L; x += Q) {
+      const r = nuaW(x / L);
+      if (r <= Q) continue;
+      for (let y = -r; y <= r; y += Q) s.dot(x0 + x, gy + y, art.body);
+      s.dot(x0 + x, gy - r, sang);
+      s.dot(x0 + x, gy + r, toi);
     }
-    s.rect(x0, y0, 1, Wd, toi); // đuôi
-    // ván sàn
-    for (let x = x0 + 3; x < x0 + L - 7; x += 4) s.vline(x, y0 + 2, Wd - 4, shade(art.body, 0.85));
-    // ca-bin gần đuôi, kính hướng mũi
-    s.rect(x0 + 3, y0 + 2, 6, Wd - 4, toi);
-    s.rect(x0 + 7, y0 + 3, 1, Wd - 6, art.glass);
-    // cột buồm + buồm (màu accent) cắm giữa thân
-    const mx = x0 + 13;
-    s.vline(mx, y0 - 6, Wd + 4, "#4a3320");
-    for (let k = 0; k < 6; k++) s.hline(mx + 1, y0 - 5 + k, 1 + k, art.accent);
-    s.hline(mx + 1, y0 + 1, 6, shade(art.accent, 0.8));
-    // gợn nước hai bên mạn, đổi theo khung
-    const w = frame === 0 ? 0 : 2;
-    s.px(x0 - 1 + w, y0 - 1, "#dff1ff");
-    s.px(x0 + 8 - w, y1 + 2, "#dff1ff");
-    s.px(x0 + L - 4 + w, y1 + 1, "#dff1ff");
+    // MẠN nổi gờ hai bên + tấm ván chắn ở lái
+    for (let x = 0; x <= L; x += Q) {
+      const r = nuaW(x / L);
+      if (r <= Q * 2) continue;
+      s.dot(x0 + x, gy - r + Q, shade(art.body, 0.86));
+      s.dot(x0 + x, gy + r - Q, shade(art.body, 0.78));
+    }
+    for (let y = -nuaW(0); y <= nuaW(0); y += Q) {
+      s.dot(x0, gy + y, toi);
+      s.dot(x0 + Q, gy + y, rat);
+    }
+    // KHOANG trong lòng thuyền: một vệt tối để thuyền có chiều sâu
+    for (let x = 2; x < L * 0.62; x += Q) {
+      const r = nuaW(x / L) - 1.8;
+      if (r <= 0) continue;
+      for (let y = -r; y <= r; y += Q) s.dot(x0 + x, gy + y, shade(art.body, 0.72));
+      s.dot(x0 + x, gy - r, shade(art.body, 0.6));
+    }
+    // VÁN SÀN ngang khoang
+    for (let x = 3; x < L * 0.6; x += 2.5) {
+      const r = nuaW(x / L) - 1.8;
+      if (r <= 0) continue;
+      for (let y = -r; y <= r; y += Q) s.dot(x0 + x, gy + y, shade(art.body, 0.62));
+    }
+    // ---- CỘT và BUỒM
+    const mx = x0 + L * 0.58;
+    const vai = "#f2ecd8";
+    const vaiToi = "#cdc3a6";
+    /* Buồm: mặt phẳng giữa CẦN BUỒM (chạy từ cột về lái, trên trục thuyền) và
+       một cung phồng ra mạn trái vì gió. Vẽ từng cột dọc, tô từ trục ra tới
+       cung — thế là ra đúng cái hình quả lê mà mọi bức ảnh chụp từ trên cao
+       của một con thuyền buồm đều cho thấy. */
+    const dai = L * 0.44;
+    for (let d = 0; d <= dai; d += Q) {
+      const u = d / dai;
+      const phong = Math.sin(Math.pow(u, 0.75) * Math.PI) * (Wd * 0.72);
+      const x = mx - d;
+      for (let y = 0; y <= phong; y += Q) s.dot(x, gy - y, y > phong - Q ? vaiToi : vai);
+      // nếp vải chạy theo chiều gió
+      if (Math.floor(d * ART) % 5 === 0)
+        for (let y = phong * 0.25; y <= phong * 0.85; y += Q) s.dot(x, gy - y, vaiToi);
+    }
+    // cần buồm nằm trên trục, và cột dựng ở mũi cần
+    for (let d = 0; d <= dai; d += Q) s.dot(mx - d, gy, "#5a4028");
+    for (let y = -1.5; y <= 1.5; y += Q) {
+      s.dot(mx, gy + y, "#6b4a2c");
+      s.dot(mx + Q, gy + y, "#3a2718");
+    }
+    // dây lèo từ chót cần về lái
+    for (let i = 0; i <= 10; i++) s.dot(mx - dai - i * 0.35, gy + i * 0.16, "#e8dcc0");
+    // ---- BÁNH LÁI ở lái
+    for (let y = -1.6; y <= 1.6; y += Q) s.dot(x0 - 0.8, gy + y, art.accent);
+    for (let d = 0; d < 1.6; d += Q) s.dot(x0 - 0.8 - d, gy, shade(art.accent, 0.7));
+    // ---- SÓNG MŨI và vệt nước sau lái, đổi theo khung
+    const w = frame === 0 ? 0 : 1;
+    for (let i = 0; i < 4; i++) {
+      const x = x0 + L + i * 0.5 + w * 0.5;
+      const r = 0.8 + i * 0.8;
+      s.dot(x, gy - r, "#dff1ff");
+      s.dot(x, gy + r, "#dff1ff");
+    }
+    for (let i = 0; i < 6; i++) s.dot(x0 - 2.5 - i * 0.75 - w, gy + (i % 2 ? 0.5 : -0.5), "#cfe8fa");
   } else {
-    // ca-bin ở đầu PHẢI, dài 8; phần sau là thùng (24-9)
-    const cabW = 8;
+    /* XE — ca-bin ở đầu PHẢI. Thêm ở Đợt 24: vòm bánh, lốp có gai, kính có
+       khung và một vệt phản chiếu, lưới tản nhiệt, gương chiếu hậu, ống xả. */
+    const cabW = 8.5;
     const cx0 = x0 + L - cabW;
-    // thùng / sàn
+
+    // ---- BÁNH vẽ TRƯỚC thân: thân đè lên nên chỉ thấy phần nhô ra ngoài vòm
+    const banh = "#1c1a18";
+    const vanh = "#4a4540";
+    const gai = frame === 0 ? "#2e2a27" : "#565049";
+    for (const bx of [x0 + 3, cx0 + 0.5]) {
+      for (const by of [y0 - 1.5, y1 - 0.5]) {
+        for (let x = 0; x < 5; x += Q)
+          for (let y = 0; y < 2.5; y += Q) s.dot(bx + x, by + y, banh);
+        for (let x = 0.5; x < 4.5; x += 1) s.dot(bx + x + (frame ? Q : 0), by + 0.5, gai);
+        for (let x = 0.5; x < 4.5; x += 1) s.dot(bx + x + (frame ? Q : 0), by + 1.5, gai);
+        s.dot(bx + 2, by + 1, vanh);
+      }
+    }
+
     if (style === "box") {
-      s.rect(x0, y0, L - cabW - 1, Wd, art.body);
-      s.hline(x0, y0, L - cabW - 1, sang);
-      s.hline(x0, y1, L - cabW - 1, toi);
-      s.vline(x0, y0, Wd, toi);
-      s.vline(x0 + L - cabW - 2, y0, Wd, toi);
-      // sọc accent dọc thùng
-      s.hline(x0 + 1, y0 + Math.round(Wd / 2), L - cabW - 3, art.accent);
+      // THÙNG KÍN: có gân dọc và cửa sau hai cánh
+      for (let x = 0; x < L - cabW - 1; x += Q)
+        for (let y = y0; y <= y1; y += Q) s.dot(x0 + x, y, art.body);
+      for (let x = 0; x < L - cabW - 1; x += Q) {
+        s.dot(x0 + x, y0, sang);
+        s.dot(x0 + x, y0 + Q, sang);
+        s.dot(x0 + x, y1, toi);
+      }
+      for (let x = 2; x < L - cabW - 2; x += 2.5)
+        for (let y = y0 + 1; y <= y1 - 1; y += Q) s.dot(x0 + x, y, shade(art.body, 0.86));
+      // sọc accent chạy dọc thùng — chỗ dán tên hãng
+      for (let x = 0.5; x < L - cabW - 2; x += Q) {
+        s.dot(x0 + x, gy - Q, art.accent);
+        s.dot(x0 + x, gy, shade(art.accent, 0.8));
+      }
+      // cửa sau
+      for (let y = y0; y <= y1; y += Q) {
+        s.dot(x0, y, toi);
+        s.dot(x0 + Q, y, rat);
+      }
+      s.dot(x0 + Q, gy - 1, art.accent);
+      s.dot(x0 + Q, gy + 1, art.accent);
     } else {
-      // sàn phẳng tối, thành thấp, hai kiện hàng
-      s.rect(x0, y0 + 1, L - cabW - 1, Wd - 2, shade(toi, 1.1));
-      s.hline(x0, y0 + 1, L - cabW - 1, art.body);
-      s.hline(x0, y1 - 1, L - cabW - 1, art.body);
-      s.vline(x0, y0 + 1, Wd - 2, art.body);
+      // SÀN PHẲNG: thành thấp, hai kiện hàng buộc dây
+      for (let x = 0; x < L - cabW - 1; x += Q)
+        for (let y = y0 + 1; y <= y1 - 1; y += Q) s.dot(x0 + x, y, shade(toi, 1.15));
+      for (let x = 0; x < L - cabW - 1; x += Q) {
+        s.dot(x0 + x, y0 + 1, art.body);
+        s.dot(x0 + x, y1 - 1, art.body);
+      }
       const kien = "#c9a06a";
       const kienToi = "#8a6238";
-      s.rect(x0 + 2, y0 + 3, 5, Wd - 6, kien);
-      s.rect(x0 + 2, y0 + 3, 5, 1, lighten(kien));
-      s.rect(x0 + 2, y1 - 3, 5, 1, kienToi);
-      s.rect(x0 + 9, y0 + 3, 5, Wd - 6, kien);
-      s.rect(x0 + 9, y0 + 3, 5, 1, lighten(kien));
-      s.rect(x0 + 9, y1 - 3, 5, 1, kienToi);
+      for (const kx of [x0 + 1.5, x0 + 8]) {
+        for (let x = 0; x < 5.5; x += Q)
+          for (let y = y0 + 2.5; y <= y1 - 2.5; y += Q) s.dot(kx + x, y, kien);
+        for (let x = 0; x < 5.5; x += Q) {
+          s.dot(kx + x, y0 + 2.5, lighten(kien));
+          s.dot(kx + x, y1 - 2.5, kienToi);
+        }
+        // dây buộc vắt ngang kiện
+        for (let y = y0 + 2.5; y <= y1 - 2.5; y += Q) s.dot(kx + 2.5, y, "#6b5638");
+      }
     }
-    // ca-bin
-    s.rect(cx0, y0, cabW, Wd, art.body);
-    s.hline(cx0, y0, cabW, sang);
-    s.hline(cx0, y1, cabW, toi);
-    s.vline(cx0 + cabW - 1, y0, Wd, toi);
-    s.rect(cx0 + 3, y0 + 1, 3, Wd - 2, toi); // khung kính
-    s.rect(cx0 + 4, y0 + 2, 1, Wd - 4, art.glass);
-    // đèn pha
-    s.px(cx0 + cabW - 1, y0 + 1, art.accent);
-    s.px(cx0 + cabW - 1, y1 - 1, art.accent);
-    // đèn hậu
-    s.px(x0, y0 + 1, "#e05d5d");
-    s.px(x0, y1 - 1, "#e05d5d");
-    // BÁNH: bốn bánh nhô khỏi thân 1px, khung 1 dịch vân bánh 1px = đang lăn
-    const banh = "#1e1a18";
-    const van = frame === 0 ? "#3a3532" : "#57504b";
-    for (const bx of [x0 + 3, cx0 + 1]) {
-      s.rect(bx, y0 - 1, 4, 2, banh);
-      s.rect(bx, y1, 4, 2, banh);
-      s.px(bx + 1 + frame, y0 - 1, van);
-      s.px(bx + 1 + frame, y1 + 1, van);
+
+    // ---- CA-BIN
+    for (let x = 0; x < cabW; x += Q)
+      for (let y = y0; y <= y1; y += Q) s.dot(cx0 + x, y, art.body);
+    for (let x = 0; x < cabW; x += Q) {
+      s.dot(cx0 + x, y0, sang);
+      s.dot(cx0 + x, y1, toi);
     }
+    // KÍNH: khung tối, mặt kính, một vệt phản chiếu chéo
+    for (let x = 3; x < 5.5; x += Q)
+      for (let y = y0 + 1; y <= y1 - 1; y += Q) s.dot(cx0 + x, y, toi);
+    for (let y = y0 + 1.5; y <= y1 - 1.5; y += Q) s.dot(cx0 + 4, y, art.glass);
+    s.dot(cx0 + 4, y0 + 2, lighten(art.glass));
+    s.dot(cx0 + 4, y0 + 2.5, lighten(art.glass));
+    // GƯƠNG chiếu hậu hai bên
+    s.dot(cx0 + 3, y0 - 0.5, toi);
+    s.dot(cx0 + 3, y1 + 0.5, toi);
+    // LƯỚI TẢN NHIỆT và ĐÈN PHA ở mũi
+    for (let y = y0 + 2; y <= y1 - 2; y += Q) s.dot(cx0 + cabW - Q, y, rat);
+    for (let y = y0 + 2.5; y <= y1 - 2.5; y += 1) s.dot(cx0 + cabW - Q * 2, y, toi);
+    for (let d = 0; d < 1; d += Q) {
+      s.dot(cx0 + cabW - Q + d, y0 + 1, art.accent);
+      s.dot(cx0 + cabW - Q + d, y1 - 1, art.accent);
+    }
+    // ĐÈN HẬU và ỐNG XẢ
+    s.dot(x0, y0 + 1, "#e05d5d");
+    s.dot(x0, y1 - 1, "#e05d5d");
+    s.dot(x0 - 0.5, gy + 1.5, rat);
   }
 
-  const done = outline(s).c;
+  const done = outline(s, P.outline, 1).c;
   if (!doc && !flip) return done;
   // xoay/lật: right → left (lật ngang); right → down (xoay 90° thuận); right → up (xoay 90° ngược)
   if (!doc) return latNgang(done, S, S);
