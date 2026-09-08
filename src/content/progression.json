@@ -1,5 +1,5 @@
 {
-  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, cured, gathered, crafted, hired, built.<id>.\n\nKHÔNG CÒN MỞ KHOÁ. Cửa hàng bán mọi thứ ngay từ đầu — có tiền thì mua, hết. Nấc và mục tiêu để ĐÁNH DẤU tiến độ, nói một câu, và (từ core 1.34) PHÁT THƯỞNG: 'reward' { money?, items? [{id,n}] } — tiền cộng thẳng, vật phẩm vào balo, tràn thì vào kho. Nấc xếp theo ngưỡng tăng dần; không nấc nào trùng điều kiện với một mục tiêu để khỏi bắn hai toast một lúc. Toàn bộ xem lại được ở Nhật ký nông trại.",
+  "$comment": "LÀN NHANH — lộ trình người chơi. 'require' đọc từ bảng thống kê của state: money, day, harvested, tilled, planted, watered, sold, earned, cured, gathered, crafted, hired, built.<id>.\n\nKHÔNG CÒN MỞ KHOÁ. Cửa hàng bán mọi thứ ngay từ đầu — có tiền thì mua, hết. Nấc và mục tiêu để ĐÁNH DẤU tiến độ, nói một câu, và (từ core 1.34) PHÁT THƯỞNG: 'reward' { money?, items? [{id,n}] } — tiền cộng thẳng, vật phẩm vào balo, tràn thì vào kho. Nấc xếp theo ngưỡng tăng dần; không nấc nào trùng điều kiện với một mục tiêu để khỏi bắn hai toast một lúc. Nhật ký nông trại ĐÃ BỎ (Cường, Đợt 25): nấc và mục tiêu nay chỉ nói một câu toast và phát thưởng, không có bảng xem lại.",
   "stages": [
     {
       "id": "start",
@@ -118,7 +118,7 @@
       "require": {
         "day": 8
       },
-      "toast": "Sang ngày thứ tám. Nhìn Nhật ký xem còn nấc nào gần tới.",
+      "toast": "Sang ngày thứ tám. Nông trại bắt đầu vào nhịp.",
       "reward": {
         "money": 250
       }

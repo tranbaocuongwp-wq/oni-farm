@@ -32,7 +32,6 @@ import { penSummary } from "../game/animals.ts";
 import { diemThucAn } from "../game/pen.ts";
 import { khoaNgoai } from "./inert.ts";
 import { energyOf } from "../game/actions.ts";
-import { requirementProgress, statValue } from "../game/progression.ts";
 import { workerCard } from "../game/workers.ts";
 
 export interface MenuHandlers {
@@ -135,7 +134,6 @@ export interface Menus {
   /** Bảng nút tay cầm — mở tự động lần đầu nhận ra tay cầm. */
   openPadHelp(): void;
   /** NHẬT KÝ nông trại: các nấc đã đạt / đang tới, phần thưởng, và mục tiêu. */
-  openJournal(): void;
   /** vẽ lại modal đang mở sau khi state đổi (mua xong, bán xong) */
   refresh(): void;
   /** Màn đang mở có hàng tab không — thanh gợi ý tay cầm hỏi mỗi khung hình,
@@ -1625,7 +1623,6 @@ export function createMenus(
         openPause();
       }, h.autoWork() ? "primary" : ""),
       tileBtn("bag", "Balo", () => openBag()),
-      tileBtn("goal", "Nhật ký", () => openJournal()),
       tileBtn("gear", "Cài đặt", () => openSettings()),
       tileBtn("save", c.strings.ui["save"] ?? "Lưu game", () => h.save(), "primary"),
       tileBtn("load", c.strings.ui["load"] ?? "Tải game", () => h.load()),
@@ -1812,86 +1809,6 @@ export function createMenus(
   /* ------------------------------------------------------------ HƯỚNG DẪN */
   /* ------------------------------------------------------------- NHẬT KÝ */
 
-  /**
-   * NHẬT KÝ NÔNG TRẠI — nơi duy nhất người chơi XEM LẠI được mình đã đi tới
-   * đâu.
-   *
-   * Trước core 1.34, `stagesDone` không được một file UI nào đọc: hoàn thành
-   * một nấc là một dòng toast trôi qua trong hai giây, không phần thưởng,
-   * không danh sách. Mười bốn nấc được viết ra mà người chơi có thể đi hết
-   * ván không biết chúng tồn tại.
-   */
-  function openJournal() {
-    current = openJournal;
-    const s = getState();
-    const c = getContent();
-    const xong = s.stagesDone.length;
-    const { body, foot } = shell("Nhật ký nông trại", `${xong}/${c.stages.length} nấc · ${s.goalsDone.length}/${c.goals.length} mục tiêu`, "sheet");
-
-    const tenMon = (id: string) => itemLabel(id, c);
-    const thuong = (st: (typeof c.stages)[number]): string => {
-      const r = st.reward;
-      if (!r) return "";
-      const parts: string[] = [];
-      if (r.money) parts.push(`${money(r.money)}`);
-      for (const it of r.items ?? []) parts.push(`${tenMon(it.id)} ×${it.n}`);
-      return parts.join(" · ");
-    };
-    const dieuKien = (req: Record<string, number>): string => {
-      const TEN: Record<string, string> = {
-        money: "tiền", day: "ngày", tilled: "ô đã cày", planted: "lượt gieo", watered: "lượt tưới",
-        harvested: "lượt thu hoạch", sold: "món đã bán", earned: "đ kiếm được", cured: "cây đã chữa",
-        gathered: "sữa/trứng/lông đã thu", crafted: "lần chế tạo", hired: "người đã thuê",
-      };
-      return Object.entries(req)
-        .map(([k, v]) => {
-          const have = statValue(s, k) ?? 0;
-          const ten = k.startsWith("built.") ? `${c.buildings[k.slice(6)]?.name ?? k.slice(6)} đã xây` : (TEN[k] ?? k);
-          return `${Math.min(have, v).toLocaleString("vi-VN")}/${v.toLocaleString("vi-VN")} ${ten}`;
-        })
-        .join(" · ");
-    };
-
-    const h1 = document.createElement("div");
-    h1.className = "bag-head";
-    h1.textContent = "CÁC NẤC";
-    body.appendChild(h1);
-    for (const st of c.stages) {
-      const da = s.stagesDone.includes(st.id);
-      const p = da ? 1 : requirementProgress(s, st.require);
-      const row = document.createElement("div");
-      row.className = `jrow${da ? " done" : ""}`;
-      row.innerHTML =
-        `<div class="jhead"><b></b><span class="jmark"></span></div>` +
-        `<div class="jbar"><i></i></div>` +
-        `<div class="jsub"></div><div class="jgift"></div>`;
-      (row.querySelector("b") as HTMLElement).textContent = st.name;
-      (row.querySelector(".jmark") as HTMLElement).textContent = da ? "✓" : `${Math.round(p * 100)}%`;
-      (row.querySelector(".jbar i") as HTMLElement).style.width = `${Math.round(p * 100)}%`;
-      (row.querySelector(".jsub") as HTMLElement).textContent = da ? (st.toast ?? "") : dieuKien(st.require);
-      const g = thuong(st);
-      const eg = row.querySelector(".jgift") as HTMLElement;
-      if (g) eg.textContent = `${da ? "Đã nhận" : "Thưởng"}: ${g}`;
-      else eg.remove();
-      body.appendChild(row);
-    }
-
-    const h2 = document.createElement("div");
-    h2.className = "bag-head";
-    h2.textContent = "MỤC TIÊU";
-    body.appendChild(h2);
-    for (const g of c.goals) {
-      const da = s.goalsDone.includes(g.id);
-      const row = document.createElement("div");
-      row.className = `jrow goal${da ? " done" : ""}`;
-      row.innerHTML = `<div class="jhead"><b></b><span class="jmark"></span></div><div class="jsub"></div>`;
-      (row.querySelector("b") as HTMLElement).textContent = g.text;
-      (row.querySelector(".jmark") as HTMLElement).textContent = da ? "✓" : "";
-      (row.querySelector(".jsub") as HTMLElement).textContent = da ? "" : dieuKien(g.require);
-      body.appendChild(row);
-    }
-    foot.appendChild(mkBtn("Đóng", close, "primary wide"));
-  }
 
   function openHelp() {
     current = openHelp;
@@ -1960,7 +1877,6 @@ export function createMenus(
     openBag,
     openHelp,
     openPen,
-    openJournal,
     hasTabs: () => !!root.querySelector(".tabs button"),
     refresh: () => current?.(),
     confirm: (title, text, onYes) =>

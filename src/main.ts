@@ -314,9 +314,6 @@ async function boot() {
     cardAnimal = null;
   });
   hud.onAnimalCycle((d) => cycleAnimal(store.getState(), d));
-  hud.onGoalClick(() => {
-    if (!menus.isOpen()) menus.openJournal();
-  });
   /* MỔ THỊT — hỏi một câu vì không hoàn tác được, rồi dispatch cái action đã
      nằm sẵn trong reducer từ lâu mà chưa có nút nào gọi. */
   hud.onAnimalSlaughter(() => {

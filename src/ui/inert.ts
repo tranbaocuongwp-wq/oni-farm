@@ -3,7 +3,7 @@
 
    `shell()` của menu đặt `role="dialog" aria-modal="true"`, nhưng ARIA chỉ là
    lời HỨA với trình đọc màn hình — bàn phím thật thì không: bấm Tab từ trong
-   Cài đặt là tiêu điểm nhảy ra `#goal-box`, `#bag-btn`, cụm `#abtn` của HUD
+   Cài đặt là tiêu điểm nhảy ra `#bag-btn`, cụm `#abtn` của HUD
    đang sống phía sau. Hướng dẫn cũng vậy: nó chặn chuột (`pointer-events`
    trên `inset: 0`) mà không chặn Tab.
 

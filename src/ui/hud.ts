@@ -66,7 +66,6 @@ export interface Hud {
   /** Người chơi bấm MỔ THỊT trên bảng con vật — main biết con nào đang mở. */
   onAnimalSlaughter(fn: () => void): void;
   /** Người chơi bấm vào chip mục tiêu — mở Nhật ký. */
-  onGoalClick(fn: () => void): void;
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -148,9 +147,9 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
         <span class="stat weather" id="hud-wx-line" title="Thời tiết hôm nay · dự báo ngày mai"><i class="ic" id="hud-wx"></i><span id="hud-wx-name"></span><i class="ic next" id="hud-wx-next"></i></span>
       </div>
-      <button class="goal-chip" id="goal-box" type="button" aria-label="Mục tiêu hiện tại">
+      <div class="goal-chip" id="goal-box" aria-live="polite">
         <i class="ic" data-ic="goal"></i><span id="goal">—</span>
-      </button>
+      </div>
       <div class="goal-chip want" id="want-box" hidden aria-live="polite">
         <i class="ic" data-ic="bag"></i><span id="want">—</span>
       </div>
@@ -258,12 +257,11 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     }, 1600);
   };
 
-  /* ---- mục tiêu: chip bấm để MỞ NHẬT KÝ ----
-     Trước đây bấm là thu gọn — nhưng trạng thái thu gọn bị ép mở lại mỗi lần
-     đổi mục tiêu, nên nó chưa bao giờ thật sự là một lựa chọn. Mở Nhật ký thì
-     cái chip thành cửa vào của toàn bộ tiến trình. */
-  let onGoal: () => void = () => {};
-  elGoalBox.addEventListener("click", () => onGoal());
+  /* ---- mục tiêu: chỉ HIỂN THỊ, không bấm được ----
+     Cường bỏ Nhật ký nông trại, mà Nhật ký là thứ duy nhất cái chip này mở ra.
+     Một cái nút bấm vào không xảy ra gì là thứ tệ hơn cả không có nút, nên nó
+     thôi làm nút: đổi hẳn sang thẻ hiển thị, và bỏ luôn khỏi vòng tiêu điểm bàn
+     phím để người dùng Tab không dừng lại ở một chỗ không làm gì. */
 
   /* ---- hotbar: chạm chọn, nhấn giữ xem mô tả ---- */
   let holdTimer = 0;
@@ -398,9 +396,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     },
     onAnimalSlaughter(fn) {
       onSlaughter = fn;
-    },
-    onGoalClick(fn) {
-      onGoal = fn;
     },
     onAnimalCycle(fn) {
       onCycle = fn;
