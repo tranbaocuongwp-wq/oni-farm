@@ -1823,10 +1823,11 @@ export function createMenus(
     const keys = touch
       ? `
       <div class="help-grid">
-        <span class="k">Chạm 1 lần</span><span>Nhân vật <b>đi tới</b> ô đó và ngắm sẵn ô đó</span>
-        <span class="k">Chạm 2 lần</span><span><b>Làm ngay</b> tại ô đó: cày, gieo, tưới, thu…</span>
+        <span class="k">Chạm màn hình</span><span>Nhân vật <b>đi tới</b> ô đó. Chạm chỉ để <b>ĐI</b> — không bao giờ làm gì cả</span>
+        <span class="k">Mũi tên <b>đỏ</b></span><span>Chỉ vào thứ nút lớn <b>sẽ tác động</b> — nhìn nó là biết bấm sẽ động vào đâu</span>
+        <span class="k">Nút MỤC TIÊU</span><span>Chuyển mũi tên đỏ sang thứ khác <b>trong tầm với</b>, đi vòng quanh mình</span>
         <span class="k">Nút lớn</span><span>Làm việc ghi trên nút, theo món đang cầm. Bấm <b>một lần</b> là làm <b>hết việc của món đó</b>, khu nào gọn khu đó — cuốc thì cày hết lô, cám thì đổ hết máng; hết việc / hết món / hết sức thì tự dừng. Đang làm thì nút ghi DỪNG. Cũng mở cửa hàng, lên giường, múc nước</span>
-        <span class="k">Nút XEM</span><span>Tra cứu thứ gần mình: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
+        <span class="k">Nút XEM</span><span>Tra cứu thứ mũi tên đang chỉ: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
         <span class="k">Nhấn giữ ô hotbar</span><span>Xem vật phẩm đó dùng để làm gì</span>
         <span class="k">Bản đồ nhỏ</span><span>Bấm vào để đi xa; ô vàng = cây chín</span>
       </div>`
@@ -1835,19 +1836,20 @@ export function createMenus(
         <span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Di chuyển (hoặc mũi tên) · giữ <kbd>Shift</kbd> để chạy</span>
         <span class="k"><kbd>Space</kbd> / <kbd>Enter</kbd></span><span>Nút chính: làm theo món đang cầm. Bấm <b>một lần</b> là làm <b>hết việc của món đó</b>, khu nào gọn khu đó; hết việc / hết món / hết sức thì tự dừng, bấm lại cũng dừng. Không bao giờ tự đổi món. Cũng mở cửa hàng, lên giường, múc nước</span>
         <span class="k"><kbd>E</kbd></span><span>Nút tra cứu: bảng con vật, bảng khu, thẻ ô</span>
+        <span class="k"><kbd>Q</kbd></span><span>Chuyển <b>mục tiêu</b> — mũi tên đỏ nhảy sang thứ khác trong tầm với (<kbd>Shift</kbd>+<kbd>Q</kbd> đi ngược)</span>
         <span class="k"><kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd></span><span>Chọn ô hotbar (hoặc lăn chuột / <kbd>Tab</kbd>)</span>
         <span class="k"><kbd>I</kbd> <kbd>F</kbd></span><span>Balo · bật/tắt tự động làm</span>
         <span class="k"><kbd>B</kbd> <kbd>M</kbd></span><span>Cửa hàng nhanh · bật/tắt bản đồ nhỏ</span>
         <span class="k"><kbd>Esc</kbd></span><span>Quay lại một lớp (đóng bảng, thoát chế độ xây); không có gì mở thì Tạm dừng</span>
-        <span class="k">Bấm 1 / 2 lần</span><span>Đi tới ô đó / làm ngay tại ô đó</span>
+        <span class="k">Bấm chuột</span><span>Đi tới ô đó. Bấm chỉ để <b>ĐI</b> — rê chuột thì mũi tên đỏ bám theo</span>
       </div>`;
     body.innerHTML = `${keys}
       <div class="help-text">
         <p><b>Vòng lặp:</b> cầm cuốc <b>CÀY</b> ô cỏ → chọn hạt <b>GIEO</b> → cầm bình <b>TƯỚI</b>
         → về nhà lên giường <b>NGỦ</b>. Cây chỉ lớn ở ô <b>đã tưới</b> (đất sẫm màu). Chín thì
         <b>THU</b>, mang ra quầy <b>BÁN</b>.</p>
-        <p><b>Ngắm một lần, làm ba việc:</b> ô đã ngắm được giữ lại chừng nào bạn còn đứng gần.
-        Cày xong đổi sang hạt rồi bấm nút, đổi sang bình rồi bấm nút — không cần chạm lại.</p>
+        <p><b>Ngắm một lần, làm ba việc:</b> mục tiêu được giữ lại chừng nào bạn còn <b>với tới</b> nó.
+        Cày xong đổi sang hạt rồi bấm nút, đổi sang bình rồi bấm nút — không cần ngắm lại.</p>
         <p><b>Làm từng việc một:</b> mỗi thao tác mất một nhịp ngắn. Bấm loạn không nhanh hơn.</p>
         <p><b>Khai thác:</b> chế <b>rìu</b> để chặt cây lấy gỗ, <b>cuốc chim</b> để đập đá.
         Bụi cỏ dại tay không phát được, ra sợi. Vạch vàng trên đầu vật thể = số nhát còn lại.</p>

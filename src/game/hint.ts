@@ -18,7 +18,7 @@ import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
-import { TILE, inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
+import { TILE, REACH_TILES, inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
 import { runFor, type Run } from "./run.ts";
 import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
@@ -231,8 +231,8 @@ export type Press =
   | { t: "gather"; id: number; x: number; y: number }
   /** tương tác với vật thể ở (x,y): cửa hàng, quầy, giường, giếng, kho, cửa nhà */
   | { t: "interact"; kind: InteractKind; x: number; y: number }
-  /** mở sạp thuyền buôn đang cập bến */
-  | { t: "boat"; id: number }
+  /** mở sạp thuyền buôn đang cập bến; `x,y` = ô con thuyền, để mũi tên chỉ vào nó */
+  | { t: "boat"; id: number; x: number; y: number }
   /** đi tới (x,y) rồi làm `then` ở đó; `kind` để in nhãn; `dist` = số ô (Chebyshev) */
   | { t: "go"; x: number; y: number; then: "use" | "gather" | "interact" | "boat"; kind: Exclude<HintKind, null>; dist: number }
   /** bắt đầu CHUYẾN của món đang cầm (`runFor`); `why` = câu giải thích cho ô ngắm */
@@ -341,7 +341,7 @@ export function pressPlan(
   const fromCtx = (ca: CtxAction): Press | null => {
     if (ca.kind === "boat") {
       const th = boatAt(state, Math.floor(state.player.x / TILE), Math.floor(state.player.y / TILE));
-      return th ? { t: "boat", id: th.id } : null;
+      return th ? { t: "boat", id: th.id, x: Math.floor(th.x / TILE), y: Math.floor(th.y / TILE) } : null;
     }
     if (ca.kind === "gather") {
       if (ca.id !== undefined && inReach(state, ca.at.x, ca.at.y))
@@ -391,7 +391,7 @@ export function pressPlan(
      nước "MÚC được" — không xét thuyền trước thì đứng sát sạp mà nút ghi MÚC. */
   if (opts.context) {
     const th = boatAt(state, Math.floor(state.player.x / TILE), Math.floor(state.player.y / TILE));
-    if (th) return cho({ t: "boat", id: th.id });
+    if (th) return cho({ t: "boat", id: th.id, x: Math.floor(th.x / TILE), y: Math.floor(th.y / TILE) });
   }
 
   /* 5. vật thể ngay ô ngắm — trừ khi ô ngắm là ô DƯỚI CHÂN: đứng trên cầu tàu
@@ -445,7 +445,9 @@ export function hintOf(p: Press): Hint {
     case "interact":
       return { kind: INTERACT_KIND[p.kind], label: LABEL[INTERACT_KIND[p.kind]], ready: true, why: null, at: { x: p.x, y: p.y } };
     case "boat":
-      return { kind: "boat", label: LABEL.boat, ready: true, why: null };
+      /* Có `at` để MŨI TÊN ĐỎ chỉ được vào con thuyền. Không có nó thì mũi tên
+         biến mất đúng lúc nút ghi THUYỀN BUÔN — trông y như hỏng. */
+      return { kind: "boat", label: LABEL.boat, ready: true, why: null, at: { x: p.x, y: p.y } };
     case "go":
       return {
         kind: p.kind,
@@ -1208,4 +1210,121 @@ export function autoJob(
     if (best) return best;
   }
   return null;
+}
+
+/* ============================================================================
+   MỤC TIÊU — cái mà nút CHÍNH sẽ tác động vào.
+
+   Cường, Đợt 27: "bây giờ trên màn hình chỉ còn con trỏ chuyển động thôi, con
+   trỏ này chỉ mục đích định hướng di chuyển… nút chuyển mục tiêu tương tác
+   (mặc định sẽ có 1 cái mũi tên màu đỏ chỉ vô cái đối tượng mà hành động chính
+   sắp nhắm tới hoặc đang nhắm tới)".
+
+   Trước đợt này MỘT con trỏ gánh HAI nghĩa: vừa là "nơi tôi sẽ đi", vừa là
+   "nơi nút DÙNG sẽ tác động". Chính vì gộp mà phải có chạm-hai-lần để phân
+   biệt, và người chơi không có cách nào nhìn màn hình mà biết cái nút to kia
+   đang nhắm vào đâu. Tách ra rồi thì chạm-kép thành thừa, và mục tiêu cần một
+   cách chọn riêng — đó là ba hàm dưới đây.
+============================================================================ */
+
+/** Một mục tiêu chọn được: ô NGẮM, và ô mà cú bấm thật sự tác động vào. */
+export interface AimTarget {
+  /** ô đưa cho `pressPlan` làm con trỏ */
+  x: number;
+  y: number;
+  /** ô cú bấm tác động vào — có thể khác `x,y` (ngắm bụi cỏ, tác động vào máng) */
+  at: { x: number; y: number };
+}
+
+/**
+ * Mọi mục tiêu chọn được TRONG TẦM VỚI, sắp xếp tất định.
+ *
+ * KHÔNG dựng bộ luật thứ hai. Nó hỏi thẳng `pressPlan` — đúng cái hàm quyết
+ * định cú bấm thật — nên mũi tên đỏ không bao giờ chỉ khác chỗ với thứ nút sẽ
+ * làm. Đây là bài học của Đợt 21: mỗi lần có hai bộ luật cho cùng một câu hỏi,
+ * chúng trôi khỏi nhau và nhãn nút nói dối.
+ *
+ * `canGo: false` cắt mọi nhánh "đi tới rồi làm": danh sách này chỉ gồm thứ
+ * đứng tại chỗ là với tới được, theo đúng chốt của Cường.
+ *
+ * CHỈ GỌI KHI BẤM, không bao giờ mỗi khung hình: 25 ô × `pressPlan`, mà
+ * `pressPlan` với `context: true` còn quét `contextAction` bán kính 6 — cỡ
+ * bốn nghìn ô cho một cú bấm. Rẻ khi bấm, sập khung hình nếu HUD gọi để đếm.
+ */
+export function reachTargets(state: GameState, content: Content, opts: PressOptions): AimTarget[] {
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+  const R = Math.ceil(REACH_TILES); // 2 → hộp 5×5, `inReach` cắt phần thừa
+
+  const ra: AimTarget[] = [];
+  const daCo = new Set<string>();
+  for (let dy = -R; dy <= R; dy++) {
+    for (let dx = -R; dx <= R; dx++) {
+      const x = px + dx;
+      const y = py + dy;
+      if (x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
+      if (!inReach(state, x, y)) continue;
+      const h = hintOf(pressPlan(state, content, { x, y }, { context: opts.context, canGo: false }));
+      if (!h.at) continue;
+      /* KHỬ TRÙNG theo ô TÁC ĐỘNG: con vật trong bán kính 1,4 ô làm bốn năm ô
+         ngắm cùng trả về một con, và `contextAction` gộp nhiều ô trống về cùng
+         một cái máng. Không khử thì bấm năm lần vẫn đứng yên một chỗ. */
+      const khoa = `${h.at.x},${h.at.y}`;
+      if (daCo.has(khoa)) continue;
+      daCo.add(khoa);
+      ra.push({ x, y, at: { x: h.at.x, y: h.at.y } });
+    }
+  }
+
+  /* THỨ TỰ: theo GÓC quanh nhân vật, tính từ hướng LÊN và quay theo chiều kim
+     đồng hồ — bấm nhiều lần thì mũi tên quay vòng quanh mình, một chuyển động
+     đoán được, chứ không nhảy loạn theo thứ tự duyệt mảng.
+     Ba khoá sau là để hai ô cùng góc không bao giờ hoán vị nhau: cùng góc thì
+     gần hơn trước, rồi y, rồi x. Tất định là điều kiện để kịch bản sim khoá
+     được thứ tự này. */
+  const goc = (t: AimTarget) => {
+    const a = Math.atan2(t.x - px, -(t.y - py));
+    return a < 0 ? a + Math.PI * 2 : a;
+  };
+  const xa = (t: AimTarget) => Math.hypot(t.x - px, t.y - py);
+  ra.sort(
+    (a, b) => goc(a) - goc(b) || xa(a) - xa(b) || a.y - b.y || a.x - b.x,
+  );
+  return ra;
+}
+
+/**
+ * Mục tiêu kế tiếp trong danh sách. `dir = 1` xuôi chiều kim đồng hồ, `-1` ngược.
+ *
+ * Chưa chọn gì, hoặc mục tiêu cũ đã rơi khỏi danh sách (đi chỗ khác, cây vừa
+ * bị thu) → về phần tử ĐẦU. Tất định, không phụ thuộc lịch sử: cùng một chỗ
+ * đứng thì lần nào bấm phát đầu cũng ra cùng một mục tiêu.
+ */
+export function nextTarget(
+  list: readonly AimTarget[],
+  cur: { x: number; y: number } | null,
+  dir: 1 | -1,
+): AimTarget | null {
+  if (!list.length) return null;
+  if (!cur) return list[0]!;
+  let i = list.findIndex((t) => t.x === cur.x && t.y === cur.y);
+  if (i < 0) i = list.findIndex((t) => t.at.x === cur.x && t.at.y === cur.y);
+  if (i < 0) return list[0]!;
+  return list[(i + dir + list.length) % list.length]!;
+}
+
+/**
+ * Mục tiêu đã chọn còn dùng được không.
+ *
+ * MỘT hàm cho cả vòng lặp game lẫn kịch bản sim, vì luật này là thứ dễ trôi
+ * nhất: trước Đợt 27 nó chỉ tồn tại NGẦM ở chỗ đọc (`targetTile` trong
+ * main.ts) chứ không phải một phép dọn dẹp thật, nên không quan sát được và
+ * không kiểm được.
+ *
+ * Luật: giữ chừng nào còn TRONG TẦM VỚI. Cố ý không xoá khi người chơi bước —
+ * mục tiêu vừa chọn mà biến mất ngay bước chân đầu tiên thì nút chuyển mục
+ * tiêu vô dụng.
+ */
+export function aimStillValid(state: GameState, aim: { x: number; y: number } | null): boolean {
+  return aim !== null && inReach(state, aim.x, aim.y);
 }

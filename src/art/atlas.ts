@@ -4746,6 +4746,46 @@ function makeNavMark(frame: number): HTMLCanvasElement {
   return outline(s, "rgba(0,0,0,0.5)").c;
 }
 
+/**
+ * MŨI TÊN ĐỎ chỉ vào mục tiêu của nút chính — 3 khung nhún, 16×12.
+ *
+ * Cường, Đợt 27: "mặc định sẽ có 1 cái mũi tên màu đỏ chỉ vô cái đối tượng mà
+ * hành động chính sắp nhắm tới hoặc đang nhắm tới". Trước đợt này ô ấy được
+ * đánh dấu bằng CHÍNH hình con trỏ, chỉ mờ đi — hai câu khác hẳn nhau ("tôi sẽ
+ * đi đây" và "nút sẽ làm ở đây") mà dùng chung một hình thì không ai đọc ra.
+ *
+ * Độ nhún vẽ SẴN vào từng khung chứ không dịch lúc vẽ: chỗ gọi `put()` nhờ vậy
+ * luôn cùng một `dy`, và không ai lỡ nhân thêm `ART` vào một con số đã là đơn
+ * vị thế giới — đúng cái lỗi đã lọt bốn lần trong Đợt 24.
+ *
+ * Vẽ bằng `dot()` (một pixel HD thật) chứ không phải `px()`: mũi tên nhỏ, cạnh
+ * xiên vẽ bằng khối 2×2 thì thành bậc thang thô.
+ */
+function makeAimArrow(frame: number): HTMLCanvasElement {
+  const s = surface(TILE, 12);
+  const dy = frame; // 0 · 1 · 2 đơn vị thế giới — nhún xuống rồi lên
+  const than = "#e23b2f";
+  const sang = "#ff8a7a";
+  const cx = 8;
+  /* `dot` nhận toạ độ theo ĐƠN VỊ THẾ GIỚI (nó tự nhân `ART`), bước `Q` là một
+     pixel HD. Đây là chỗ dễ nhầm nhất của cả hệ HD: truyền chỉ số pixel HD vào
+     đây là hình phóng gấp đôi rồi tràn ra ngoài khung — lỗi ấy vừa xảy ra
+     trong chính đợt này và chỉ nhìn mới thấy. */
+  const day = 9; // đáy tam giác
+  const cao = 6; // chiều cao tam giác
+  const y0 = 4 + dy;
+  for (let r = 0; r < cao; r += Q) {
+    const w = Math.max(Q, day * (1 - r / cao));
+    const x0 = cx - w / 2;
+    for (let i = 0; i < w; i += Q) s.dot(x0 + i, y0 + r, i < Q || r < Q ? sang : than);
+  }
+  /* Cái cán ngắn phía trên cho mũi tên có hướng rõ, chứ một tam giác trơ trọi
+     dễ đọc nhầm thành cái nêm trang trí. */
+  for (let r = 0; r < 3; r += Q)
+    for (let i = -1; i < 1; i += Q) s.dot(cx + i, y0 - 3 + r, r < Q ? sang : than);
+  return outline(s, "rgba(0,0,0,0.6)", 1).c;
+}
+
 /** Ngôi sao lấp lánh trên cây chín — 3 khung, 7×7. */
 function makeSparkle(frame: number): HTMLCanvasElement {
   const s = surface(7, 7);
@@ -5178,6 +5218,8 @@ export interface Atlas {
   cursorNo: HTMLCanvasElement;
   /** dấu đích đang đi tới, 3 khung */
   navMark: HTMLCanvasElement[];
+  /** mũi tên đỏ chỉ vào mục tiêu của nút chính, 3 khung nhún */
+  aimArrow: HTMLCanvasElement[];
   /** lấp lánh trên cây chín, 3 khung 7×7 */
   sparkle: HTMLCanvasElement[];
   drop: HTMLCanvasElement;
@@ -7262,6 +7304,7 @@ export function buildAtlas(content: Content): Atlas {
     cursorOk: makeCursor(true),
     cursorNo: makeCursor(false),
     navMark: [0, 1, 2].map(makeNavMark),
+    aimArrow: [0, 1, 2].map(makeAimArrow),
     sparkle: [0, 1, 2].map(makeSparkle),
     drop: makeDrop(),
     trough: (feedId, muc) => {

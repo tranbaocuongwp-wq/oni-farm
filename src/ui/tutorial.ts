@@ -28,13 +28,18 @@ export interface Tutorial {
 export const TOUCH_STEPS: TutorialStep[] = [
   {
     title: "Chạm để đi",
-    text: "Chạm vào ô nào, nhân vật tự đi tới ô đó. Chạm HAI lần để làm việc ngay tại ô đó.",
+    text: "Chạm vào ô nào, nhân vật tự đi tới ô đó. Chạm chỉ để ĐI — mọi việc làm đều qua các nút bên dưới.",
     target: null,
   },
   {
     title: "Nút hành động",
-    text: "Nút to bên dưới cho biết bấm sẽ làm gì: CÀY, GIEO, TƯỚI, THU, MUA… Nó đổi theo ô bạn đang ngắm và thứ bạn đang cầm.",
+    text: "Nút to bên dưới cho biết bấm sẽ làm gì: CÀY, GIEO, TƯỚI, THU, MUA… Nó đổi theo thứ bạn đang cầm và thứ mũi tên ĐỎ đang chỉ vào.",
     target: "#abtn .a",
+  },
+  {
+    title: "Mũi tên đỏ",
+    text: "Mũi tên đỏ chỉ vào thứ nút DÙNG sẽ tác động. Bấm MỤC TIÊU để chuyển nó sang thứ khác quanh mình.",
+    target: "#abtn .t",
   },
   {
     title: "Hotbar",
@@ -50,13 +55,18 @@ export const TOUCH_STEPS: TutorialStep[] = [
 
 export const DESKTOP_STEPS: TutorialStep[] = [
   {
-    title: "Bấm để đi, bấm đôi để làm",
-    text: "Bấm chuột vào ô: nhân vật tự đi tới. Bấm đôi để làm việc. Hoặc WASD + Space như game cổ điển.",
+    title: "Bấm để đi, Space để làm",
+    text: "Bấm chuột vào ô: nhân vật tự đi tới đó. Space (hoặc nút DÙNG) làm việc ở chỗ mũi tên ĐỎ đang chỉ. Hoặc WASD như game cổ điển.",
     target: null,
   },
   {
+    title: "Mũi tên đỏ",
+    text: "Mũi tên đỏ chỉ vào thứ nút DÙNG sẽ tác động — rê chuột để ngắm, hoặc bấm Q để chuyển sang thứ khác quanh mình.",
+    target: "#abtn .t",
+  },
+  {
     title: "Hotbar",
-    text: "Phím 1–9 hoặc lăn chuột để chọn vật phẩm. Ô đang ngắm được giữ lại, nên cày → gieo → tưới không cần ngắm lại.",
+    text: "Phím 1–9 hoặc lăn chuột để chọn vật phẩm. Mục tiêu được giữ lại chừng nào còn với tới, nên cày → gieo → tưới không cần ngắm lại.",
     target: "#hotbar",
   },
   {
@@ -71,7 +81,7 @@ export const DESKTOP_STEPS: TutorialStep[] = [
 export const PAD_STEPS: TutorialStep[] = [
   {
     title: "Cần trái để đi",
-    text: "Đẩy cần trái để đi, đẩy hết cỡ là chạy. Ô đang ngắm nằm ngay trước mặt nhân vật.",
+    text: "Đẩy cần trái để đi, đẩy hết cỡ là chạy. Cần phải rê mũi tên ĐỎ — đó là thứ nút A sẽ tác động.",
     target: null,
   },
   {

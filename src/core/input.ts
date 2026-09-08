@@ -92,6 +92,10 @@ export const PAD_MAP: readonly PadBind[] = [
      nhổ cỏ lượm đá" trong khi người chơi đang đứng cạnh chuồng gà. */
   { nut: PAD.A, viec: "use", mo: "Làm — theo món đang cầm và những gì quanh mình. Ngoài tầm thì tự đi tới làm rồi dừng." },
   { nut: PAD.B, viec: "interact", mo: "Tra cứu — bảng con vật, bảng khu, thẻ ô gần mình. Không đổi gì cả." },
+  /* KHÔNG có nút "chuyển mục tiêu" cho tay cầm, dù cảm ứng có (Đợt 27).
+     Cần PHẢI đã rê thẳng mũi tên đỏ tới ô muốn nhắm — liên tục, chọn đúng chỗ,
+     không phải bấm năm lần để đi vòng. Thêm một nút nữa cho cùng việc ấy là
+     phá đúng hợp đồng "một nút một việc, một việc một nút" mà bảng này giữ. */
   /* X = QUAY LẠI. Cố ý KHÔNG rào sau `canStd`: từ khi B mang việc tra cứu thì
      đây là nút thoát duy nhất ngoài START, và cắm một tay cầm mà trình duyệt
      không nhận ra sơ đồ chuẩn thì mất hẳn đường lùi. Đoán sai thì cái giá chỉ
@@ -145,12 +149,15 @@ export type Intent =
   /** TẮT popup đang nổi (bảng con vật, con trỏ bản đồ nhỏ, chế độ xây). */
   /** Đổi mức phóng khung nhìn: gần → vừa → xa → gần. */
   | { t: "zoom" }
-  /** Bấm/chạm vào thế giới — toạ độ WORLD px.
-   *  `double` = cú chạm thứ hai của một lần chạm kép. Luật điều khiển:
-   *  chạm MỘT lần là ĐI tới đó, chạm HAI lần mới THỰC THI (cày, gieo, dùng
-   *  công cụ). Tách hai ý định ra như vậy thì trên màn nhỏ không còn chuyện
-   *  định đi mà lại lỡ tay cày mất một ô. */
-  | { t: "pointer"; wx: number; wy: number; double: boolean }
+  /** Bấm/chạm vào thế giới — toạ độ WORLD px. CHỈ CÓ MỘT nghĩa: ĐI tới đó.
+   *
+   *  Từ Đợt 27 không còn chạm-kép-để-làm. Cường: "con trỏ này chỉ mục đích
+   *  định hướng di chuyển". Chạm kép sinh ra vì một con trỏ phải gánh hai
+   *  nghĩa — vừa "nơi tôi sẽ đi" vừa "nơi nút DÙNG sẽ tác động"; tách hai
+   *  nghĩa ra rồi thì nó thành thừa, và mọi HÀNH ĐỘNG đi qua nút chính. */
+  | { t: "pointer"; wx: number; wy: number }
+  /** Chuyển sang MỤC TIÊU kế tiếp trong tầm với. `d = -1` là lùi. */
+  | { t: "aimNext"; d: 1 | -1 }
   /* ---- KÉO một tuyến (hàng rào, đường nhựa) ----------------------------
      Chỉ phát khi `setDrag(true)`. Cố ý phải bật thủ công chứ không phát mọi
      lúc: đường bấm-để-đi đã được chỉnh rất kỹ để không giật (xem `pointer`),
@@ -266,17 +273,6 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
   const queue: Intent[] = [];
   let ptr: { x: number; y: number } | null = null;
   let ptrAt = 0;
-  /** Lần chạm gần nhất, để nhận ra chạm kép. `tile` là ô THẾ GIỚI đã chạm. */
-  let lastTap = { t: 0, x: -1e9, y: -1e9, tx: -1e9, ty: -1e9 };
-  /** Hai cú chạm cách nhau dưới ngần này ms thì tính là chạm kép.
-   *
-   *  450 chứ không phải 350: chạm kép hai lần trúng một mục tiêu nhỏ trên điện
-   *  thoại chậm hơn hẳn chạm kép trên chuột, và cửa sổ hẹp làm cú thứ hai rơi
-   *  ra ngoài — người chơi thấy "bấm mãi không ăn" nên bấm dồn, mà mỗi cú bấm
-   *  lại huỷ chuyến đi đang chạy. Safari cũng lấy ~500ms cho chạm kép. */
-  const DOUBLE_MS = 450;
-  /** …và phải trong khoảng này (CSS px) — ngón tay rung vài pixel là bình thường. */
-  const DOUBLE_DIST = 44;
   /** Sau ngần này ms không cử động, con trỏ coi như "bỏ đó", nhường cho bàn phím. */
   const POINTER_STALE_MS = 1500;
 
@@ -322,6 +318,13 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         break;
       case "KeyE":
         push({ t: "interact" });
+        break;
+      /* Q đổi MỤC TIÊU, đối xứng với Tab đổi ô hotbar: giữ Shift là đi ngược.
+         Không dùng Tab vì Tab đã là ô hotbar, và một phím hai việc là đúng cái
+         luật mà `PAD_MAP` sinh ra để chặn. */
+      case "KeyQ":
+        push({ t: "aimNext", d: e.shiftKey ? -1 : 1 });
+        e.preventDefault();
         break;
       case "KeyB":
         push({ t: "shop" });
@@ -392,22 +395,6 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
       ptr = p;
       ptrAt = now;
     }
-    // Hai phép đo, chấp nhận cú nào đúng cũng được:
-    //   · CÙNG MỘT Ô  — phép đo đúng nghĩa, và không phụ thuộc mức phóng. Ở
-    //     scale 5 một ô rộng 80 CSS px, nên hai cú chạm vào hai góc của CÙNG ô
-    //     cách nhau 113 px và ngưỡng 44 px sẽ trượt — chạm kép hỏng dù người
-    //     chơi làm đúng.
-    //   · KHOẢNG CÁCH — cứu trường hợp ngược lại: trên điện thoại ô chỉ rộng 32
-    //     px nên ngón tay lệch một chút là rơi sang ô bên cạnh.
-    const tx = Math.floor(p.x / 16);
-    const ty = Math.floor(p.y / 16);
-    const isDouble =
-      now - lastTap.t < DOUBLE_MS &&
-      ((tx === lastTap.tx && ty === lastTap.ty) ||
-        Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < DOUBLE_DIST);
-    // Sau một cú chạm kép thì đặt lại mốc, nếu không chạm lần thứ ba sẽ lại
-    // được tính là kép và thao tác chạy hai lần liền.
-    lastTap = { t: isDouble ? 0 : now, x: e.clientX, y: e.clientY, tx, ty };
     if (dragOn && dragId === null) {
       dragId = e.pointerId;
       /* GIỮ CON TRỎ trong lúc kéo tuyến. Không giữ thì ngón tay rê ra khỏi
@@ -421,7 +408,7 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
         /* vài trình duyệt từ chối khi con trỏ đã bị bắt ở chỗ khác — không sao */
       }
     }
-    push({ t: "pointer", wx: p.x, wy: p.y, double: isDouble });
+    push({ t: "pointer", wx: p.x, wy: p.y });
   };
 
   const onLeave = () => {

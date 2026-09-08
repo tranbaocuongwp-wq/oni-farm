@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 165 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 169 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -100,18 +100,19 @@ Chi tiết và cách xử lý sự cố: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 | Cử chỉ | Việc |
 |---|---|
-| Chạm 1 lần vào ô | Nhân vật tự **đi tới** (tìm đường, tự chạy khi xa), ngắm sẵn ô đó |
-| Chạm 2 lần | **Làm ngay** tại ô đó |
+| Chạm vào ô | Nhân vật tự **đi tới** (tìm đường, tự chạy khi xa). Chạm chỉ để **ĐI** — không bao giờ làm gì cả |
+| **Mũi tên đỏ** trên bản đồ | Chỉ vào thứ nút lớn **sẽ tác động**. Nhìn nó là biết bấm sẽ động vào đâu; mờ đi khi chưa làm được |
+| Nút MỤC TIÊU | Chuyển mũi tên đỏ sang thứ khác **trong tầm với**, đi vòng quanh nhân vật |
 | Nút lớn góc dưới | Ghi đúng việc sẽ làm: **CÀY · GIEO · TƯỚI · THU · CHẶT · ĐẬP · ĐẶT · MUA · BÁN · CHẾ · NGỦ · VÀO · MÚC**. Ô xa thì bấm là tự đi tới rồi làm. Không làm được thì nói vì sao |
 | **Giữ** nút lớn (hoặc bấm liên tục) | Xong nhát này tự sang **ô kế tiếp trong tầm công cụ**, cùng loại việc — cày cả luống mà không phải ngắm từng ô. Hết ô quanh chân thì dừng |
 | Nút 🎒 cạnh hotbar | Mở **balo**: hotbar cố định 10 ô, phần túi còn lại (14 ô) nằm trong balo; chạm-chọn hoặc kéo thả để đổi chỗ |
-| Nút E | Tương tác thứ trước mặt |
+| Nút XEM | Tra cứu thứ mũi tên đang chỉ: bảng con vật, bảng khu, thẻ ô. Không đổi gì cả |
 | Nhấn giữ ô hotbar | Xem vật phẩm dùng làm gì |
 | Chạm bản đồ nhỏ | Đi xa |
 | ☰ | Tạm dừng: lưu, tải, **Cài đặt**, hướng dẫn, cài về màn hình chính |
 
 Mặc định không có joystick; bật được trong Cài đặt cùng tay thuận, cỡ giao diện,
-khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hướng dẫn 4 bước khoanh
+khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hướng dẫn khoanh
 đúng vào nút.
 
 **Máy tính**
@@ -120,13 +121,14 @@ khung nhìn gần/xa, rung, giảm chuyển động. Lần đầu chơi có hư�
 |---|---|
 | `W A S D` / mũi tên | Di chuyển · giữ `Shift` để chạy |
 | `Space` | Dùng vật phẩm đang cầm lên ô đang ngắm |
-| `E` | Tương tác — cửa, giường, máy bán hạt, quầy, giếng |
+| `E` | Tra cứu thứ mũi tên đỏ đang chỉ — bảng con vật, bảng khu, thẻ ô |
+| `Q` / `Shift`+`Q` | Chuyển **mục tiêu**: mũi tên đỏ nhảy sang thứ khác trong tầm với |
 | `1`–`9`, `0` / lăn chuột / `Tab` | Chọn ô hotbar (10 ô) |
 | `I` | Mở balo |
 | Giữ `Space` | Tự sang ô kế tiếp trong tầm, cùng loại việc |
 | `B` · `M` | Mở cửa hàng · bật/tắt bản đồ nhỏ |
 | `Esc` | Tạm dừng: lưu, tải, cài đặt, xuất/nhập file save |
-| Bấm chuột 1 / 2 lần | Đi tới ô đó / làm ngay tại ô đó |
+| Bấm chuột | Đi tới ô đó. Bấm chỉ để **ĐI**; rê chuột thì mũi tên đỏ bám theo |
 
 **Luật quan trọng nhất:** cây chỉ lớn nếu ô **được tưới trong đêm đó**. Nhìn màu
 đất là biết — đất sẫm nghĩa là đêm nay cây sẽ lớn.
@@ -873,18 +875,29 @@ Lớp địa hình được cache và chỉ vẽ lại khi mảng ô thật sự
 chỉ cần so **tham chiếu mảng**, không phải quét 1200 ô mỗi khung hình để phát hiện không có
 gì đổi. Ô vàng = cây đã chín, khung trắng = khung nhìn hiện tại, chấm trắng = nhân vật.
 
-### Bấm-để-đi
+### Bấm-để-đi, và mũi tên đỏ
 
-**Chạm MỘT lần là ĐI, chạm HAI lần mới THỰC THI.** Hai ý định này rất dễ lẫn trên màn nhỏ:
-đang muốn đi ngang qua ruộng mà lỡ tay cày mất một ô là chuyện bực nhất, nên tách hẳn ra.
+**Chạm CHỈ có nghĩa là ĐI.** Từ Đợt 27 không còn chạm-hai-lần-để-làm — và cái phải bỏ không
+phải là một thao tác, mà là một chỗ gộp: **một con trỏ đang gánh hai câu**, "nơi tôi sẽ đi"
+và "nơi nút DÙNG sẽ tác động". Chính vì gộp mà phải có cú chạm thứ hai để phân biệt, và
+người chơi nhìn màn hình thì không cách nào biết cái nút to kia đang nhắm vào đâu.
 
-- **1 lần** → đi tới ô đó, và ngắm sẵn ô đó (không làm gì cả).
-- **2 lần** (dưới 350ms, trong vòng 44px) → thực thi: cày, gieo, tưới, dùng công cụ. Còn ở xa
-  thì đi tới rồi mới làm.
-- Tới nơi thì ô đó **vẫn đang được ngắm**, nên `Space`/nút DÙNG làm việc ngay — khỏi chạm lại.
+Tách ra thành ba dấu, mỗi dấu đúng một câu:
 
-Sau một cặp chạm kép thì mốc thời gian được đặt lại, nếu không cú chạm thứ ba lại ghép với cú
-thứ hai và thao tác chạy hai lần liền.
+| Dấu | Câu nó nói |
+|---|---|
+| khung trắng | "tôi sẽ **ĐI** đây" — chỉ hiện khi đang đi, hoặc khi có con trỏ chuột |
+| vòng vàng | "đang trên đường tới đây" |
+| **mũi tên đỏ** | "nút chính **sẽ tác động** vào đây" |
+
+- Chạm một ô → đi tới đó, không làm gì cả. Chạm lại đúng ô đang đi tới là **xác nhận**, không
+  phải lệnh mới (bấm dồn thì nhân vật không dừng-chạy-dừng-chạy nữa).
+- Mũi tên đỏ **mờ đi chứ không tắt** khi chưa làm được: mất nó đúng lúc ấy là bỏ người chơi
+  lại giữa câu hỏi "tôi đang chỉ vào cái gì mà bấm không ăn".
+- Nút **MỤC TIÊU** (phím `Q`) đi vòng quanh nhân vật theo GÓC tính từ hướng lên — một chuyển
+  động đoán trước được, không nhảy loạn theo thứ tự duyệt mảng. Chỉ quét **trong tầm với**.
+- Mục tiêu **giữ chừng nào còn với tới**, cố ý không mất khi bước đi — nếu không thì cày →
+  gieo → tưới lại phải ngắm lại sau mỗi bước chân.
 
 `src/core/navigate.ts` là một **cách nhập liệu**, không phải luật chơi: nó chỉ sinh vector
 di chuyển từng khung hình y như bàn phím hay joystick, còn mọi thay đổi state vẫn đi qua

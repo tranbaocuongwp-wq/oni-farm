@@ -70,7 +70,7 @@ trong `src/ui/`, `src/art/`, `src/render/`, `src/style.css`.
 │                        NHÂN VẬT Ở TÂM                           │
 │                                                                 │
 │ [bản đồ nhỏ]                              (lý do)               │  .hud-mid · #abtn .why
-│                                        [E]  [ CÀY ]             │  #abtn
+│                       [MỤC TIÊU] [XEM]  [ CÀY ]                  │  #abtn
 └──────────────── [hotbar 9 ô] ───────────────────────────────────┘  .hud-bottom
 ```
 
@@ -96,8 +96,8 @@ bảng màu để trang tĩnh và game là một sản phẩm.
 
 | Cử chỉ | Kết quả | Ở đâu |
 |---|---|---|
-| Chạm 1 lần | đi tới ô (A*), ngắm sẵn ô đó, vòng vàng đánh dấu đích | `main.ts` case "pointer", `core/navigate.ts` |
-| Chạm 2 lần (< 350ms, < 44px) | làm ngay tại ô; xa thì đi tới rồi làm | như trên |
+| Chạm 1 lần | **đi tới ô đó, và CHỈ thế** (A*), vòng vàng đánh dấu đích | `main.ts` case "pointer", `core/navigate.ts` |
+| Nút MỤC TIÊU / phím `Q` | chuyển mũi tên đỏ sang mục tiêu kế tiếp **trong tầm với**, đi vòng theo góc quanh nhân vật; `Shift`+`Q` đi ngược | `game/hint.ts › reachTargets`/`nextTarget`, `main.ts` case "aimNext" |
 | Nút hành động | làm việc ghi trên nút với ô đang ngắm; ô xa thì tự đi tới rồi làm | `main.ts` case "use" |
 | **Giữ** nút hành động (> 0,2s) hoặc bấm liên tục | xong nhát này tự sang ô kế tiếp **trong tầm**, cùng loại việc; hết ô thì dừng, không tự đi xa | `game/hint.ts › nearestTarget`, `main.ts › continueWork` |
 | Nút 🎒 / phím `I` | mở balo: hotbar cố định 10 ô + 14 ô balo; chạm-chọn-chạm hoặc kéo thả để đổi chỗ (action `SWAP`) | `ui/menus.ts › openBag` |
@@ -107,10 +107,32 @@ bảng màu để trang tĩnh và game là một sản phẩm.
 | Kéo một tuyến | `setPointerCapture` NGAY lúc chạm xuống — không giữ thì ngón rê ra khỏi canvas là `dragEnd` không bao giờ tới và phiên kéo kẹt vĩnh viễn | `core/input.ts › onDown` |
 | Chạm chip mục tiêu | thu gọn/mở | `ui/hud.ts` |
 
-Nắn cú chạm (`snapTap`): xét 9 ô quanh điểm chạm, ưu tiên ô làm được việc, bán kính
-tính bằng pixel màn hình rồi đổi ra world px — màn càng nhỏ nắn càng rộng.
+**Ba dấu, ba câu khác nhau** (Đợt 27 — trước đó một con trỏ gánh hai nghĩa, và
+chính vì gộp mà phải có chạm-hai-lần để phân biệt):
 
-Ô ngắm dính (`aimed`): giữ chừng nào còn trong tầm với; bỏ khi tự đi/đổi bản đồ.
+| Dấu | Câu nó nói | Nguồn |
+|---|---|---|
+| con trỏ ô (khung trắng) | "tôi sẽ **ĐI** đây" | chỉ hiện khi có đích `nav` hoặc có chuột trên máy tính |
+| vòng vàng (`navMark`) | "đang trên đường tới đây" | `nav.target()` |
+| **mũi tên đỏ** (`aimArrow`) | "nút chính **sẽ tác động** vào đây" | `hint.at`, rơi về ô ngắm và **mờ đi** khi chưa làm được |
+
+Mũi tên vẽ **TRÊN** lớp vật thể (con trỏ vẽ dưới): nó chỉ VÀO một vật, mà nằm
+dưới thì đúng những mục tiêu đáng chỉ nhất — cây cao, mái nhà, con bò — lại che
+mất nó. Lệch `-6` đơn vị thế giới chứ không phải cả chiều cao mũi tên: treo hẳn
+lên trên mép ô thì nó rơi vào ô kề, mà ô kề rất hay là chỗ nhân vật đang đứng.
+
+Nắn cú chạm (`snapTap`): **chỉ còn dùng trong chế độ XÂY**. Với nghĩa mới của cú
+chạm ("đi tới đây") thì hút cú chạm về "ô có nghĩa gần nhất" là sai hẳn — chạm
+vào khoảnh cỏ trống cạnh gốc cây thì nhân vật lại đi sang ô gốc cây.
+
+MỤC TIÊU (`aimed`): đặt bởi nút MỤC TIÊU, cần phải tay cầm, chuột, hoặc lúc tới
+đích một chuyến. Giữ chừng nào còn **trong tầm với** — luật ấy là một phép dọn
+dẹp THẬT ở đầu vòng khung hình (`aimStillValid`), không phải một điều kiện ngầm
+ở chỗ đọc. Cố ý KHÔNG bỏ khi người chơi bước đi: mục tiêu vừa chọn mà biến mất
+ngay bước chân đầu tiên thì nút MỤC TIÊU vô dụng.
+
+Tay cầm **không** có nút MỤC TIÊU: cần phải đã rê thẳng mũi tên tới ô muốn nhắm,
+tức một cách ngắm tốt hơn vòng lặp. Thêm nút nữa là hai đường cho một việc.
 
 **Phản hồi khi thao tác thành công** (suy từ diff thống kê trong `main.ts`, không
 cần action riêng): âm thanh 8-bit + hạt tại ô (`renderer.burst`) + rung
@@ -207,7 +229,7 @@ Dùng `askConfirm()` trong `menus.ts`.
 về đúng một `Press`:
 
 ```
-deny{why}  build  use{kind,x,y,run}  gather{id}  interact{kind,x,y}  boat{id}
+deny{why}  build  use{kind,x,y,run}  gather{id,x,y}  interact{kind,x,y}  boat{id,x,y}
 go{x,y,then,kind,dist}  run{run}
 ```
 
@@ -231,8 +253,10 @@ Thứ tự trong `pressPlan` (xem chú thích ở hàm):
 
 Ba thứ **chỉ có một**: ô ngắm (`pressCursor` — cùng ô cho HUD và cú bấm), tầm với
 (`inReach` / `inInteractRange` của reducer; MÚC theo `inReach`), bán kính con vật
-(1,4 ô). Khi `hint.at` khác ô ngắm, renderer vẽ dấu mờ ở ô đó (`DrawOptions.target`)
-và `why` ghi "Cách N ô — bấm để đi tới".
+(1,4 ô). `hint.at` là chỗ **mũi tên đỏ** cắm xuống (`DrawOptions.aimArrow`), kể cả
+khi nó trùng ô ngắm; `why` ghi "Cách N ô — bấm để đi tới". Mọi nhánh `Press` mang
+toạ độ đều **bắt buộc** khai `at` — kịch bản 169 khoá điều đó, vì thiếu `at` ở một
+nhánh nghĩa là mũi tên tắt ngóm đúng lúc nút vẫn sáng.
 
 Nút PHỤ: `infoHint(state, content, cursor)` — người làm quanh ô ngắm/chân → thẻ
 người làm; rồi `interactHint` quanh chân, rồi ô ngắm. Cũng một hàm cho HUD và cú bấm.
@@ -308,7 +332,7 @@ tất định theo chỉ số hạt, trần 240 hạt, tự tắt khi `reduceMot
 ## 8. Tutorial (`src/ui/tutorial.ts`)
 
 Chỉ chạy khi `tutorialSeen = false` **và** ván mới (save cũ = đã biết chơi). Mỗi bước
-một thẻ + vòng khoanh phần tử thật (`#abtn .a`, `#hotbar`, `#minimap`). Thẻ tự đặt ở
+một thẻ + vòng khoanh phần tử thật (`#abtn .a`, `#abtn .t`, `#hotbar`, `#minimap`). Thẻ tự đặt ở
 nửa màn hình đối diện phần tử. Esc/Bỏ qua thoát; Enter/Space tiếp. Xem lại trong
 Cài đặt.
 
@@ -317,7 +341,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 165 kịch bản sim (159 dây bẫy cache nền · 160 cây theo mùa · 148 một thang việc · 151 việc vặt …) + OTA
+npm run test:all       # typecheck + 169 kịch bản sim (159 dây bẫy cache nền · 160 cây theo mùa · 148 một thang việc · 151 việc vặt …) + OTA
 npm run build
 ```
 

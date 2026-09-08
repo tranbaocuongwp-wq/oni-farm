@@ -120,7 +120,7 @@ Bản đồ không đổi gì trong đêm thì **giữ nguyên tham chiếu cũ*
 ## 5. Tất định — xương sống của cả dự án
 
 Bất biến: **cùng seed + cùng chuỗi action = state y hệt.** Save, replay, và toàn
-bộ 165 kịch bản sim đều dựa vào nó.
+bộ 169 kịch bản sim đều dựa vào nó.
 
 Hai luật giữ nó:
 
@@ -225,7 +225,7 @@ Chi tiết đồ hoạ và UX chạm: [`MOBILE-UX.md`](MOBILE-UX.md).
 
 | Lệnh | Việc |
 |---|---|
-| `npm run test:sim` | **165 kịch bản** mô phỏng, Node thuần, ~30 giây |
+| `npm run test:sim` | **169 kịch bản** mô phỏng, Node thuần, ~30 giây |
 | `npm run test:ota` | cổng tương thích + schema content pack |
 | `npm run test:all` | typecheck + cả hai |
 | `npm run bench` | bảng chi phí phần mô phỏng trên cảnh nặng cố định |

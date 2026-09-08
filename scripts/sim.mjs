@@ -22,7 +22,7 @@ import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { CROP_ORDER, jobRank } from "../src/game/joborder.ts";
-import { donDuoc, propsMocDuoc } from "../src/game/world.ts";
+import { donDuoc, propsMocDuoc, REACH_TILES, inReach } from "../src/game/world.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
 import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE } from "../src/game/entities.ts";
@@ -34,7 +34,7 @@ import { animalMood } from "../src/game/animals.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src/game/items.ts";
 import { sellSlots, countItem} from "../src/game/inventory.ts";
-import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt} from "../src/game/hint.ts";
+import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt, reachTargets, nextTarget, aimStillValid} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import { validateCrops } from "../src/core/content/schema.ts";
 import * as seasonApi from "../src/game/season.ts";
@@ -11761,6 +11761,341 @@ test("165. Con vật rảnh phải ĐỔI VIỆC, và cái đói thắng mọi v
     if (animalMood(store.getState(), content, conBo()).pose !== "eat") doiRaViecVat++;
   }
   eq(doiRaViecVat, 0, "con vật ĐÓI phải ra dáng ĂN ở mọi lúc, không được rẽ sang việc vặt");
+});
+
+/* ---------------------------------------------------------------------------
+   Đợt 27 — MỤC TIÊU tách khỏi CON TRỎ.
+
+   Cường: "bỏ tính năng chạm hai lần để hành động… con trỏ này chỉ mục đích
+   định hướng di chuyển… nút chuyển mục tiêu tương tác (mặc định sẽ có 1 cái
+   mũi tên màu đỏ chỉ vô cái đối tượng mà hành động chính sắp nhắm tới)".
+
+   Ba kịch bản dưới giữ ba thứ, và cả ba đều hỏng ÂM THẦM: danh sách mục tiêu
+   im lặng đổi thứ tự, mục tiêu im lặng biến mất, mũi tên im lặng chỉ sai chỗ.
+--------------------------------------------------------------------------- */
+
+/** Chỗ đứng sạch: dọn hết vật thể và cây quanh (x,y) trong bán kính r. */
+function donQuanh(s, x, y, r = 3) {
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++) {
+      const tx = x + dx;
+      const ty = y + dy;
+      if (tx < 0 || ty < 0 || tx >= s.w || ty >= s.h) continue;
+      setTile(s, tx, ty, { prop: null, hp: 0, crop: null, tilled: false, wet: false, b: null });
+    }
+}
+
+test("166. Danh sách CHUYỂN MỤC TIÊU: chỉ trong tầm với, không trùng, và TẤT ĐỊNH", () => {
+  /* Nút chuyển mục tiêu chỉ có nghĩa nếu bấm nhiều lần thì mũi tên đi một vòng
+     đoán trước được. Thứ tự "theo thứ tự duyệt mảng" trông cũng chạy, nhưng nó
+     nhảy loạn quanh nhân vật và người chơi không học được gì. */
+  const store = mkStore(31337);
+  const zones = content.tiles.zones ?? [];
+  const ruong = zones.find((z) => z.kind === "farm");
+  ok(!!ruong, "bản đồ có lô ruộng");
+  const px = ruong.x + 2;
+  const py = ruong.y + 2;
+
+  setState(store, (s) => {
+    donQuanh(s, px, py, 4);
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+    s.player.dir = "down";
+  });
+  selectItem(store, "tool:hoe");
+
+  const opts = { context: true, canGo: false };
+  const a = reachTargets(store.getState(), content, opts);
+  const b = reachTargets(store.getState(), content, opts);
+  const c = reachTargets(store.getState(), content, opts);
+  deepEq(a, b, "gọi hai lần trên cùng một state phải ra y hệt");
+  deepEq(b, c, "và lần thứ ba cũng thế — không có gì phụ thuộc lịch sử");
+
+  ok(a.length > 0, "đứng giữa lô ruộng cầm cuốc thì phải có ô cày được");
+
+  for (const t of a)
+    ok(inReach(store.getState(), t.x, t.y), `mục tiêu (${t.x},${t.y}) phải nằm trong tầm với`);
+
+  const khoa = new Set(a.map((t) => `${t.at.x},${t.at.y}`));
+  eq(khoa.size, a.length, "không hai mục tiêu nào cùng trỏ vào MỘT ô tác động");
+
+  /* THỨ TỰ: góc tính từ hướng LÊN, quay theo chiều kim đồng hồ. Viết tay ra
+     đây thì đổi khoá sắp xếp là kịch bản đỏ ngay — đó là cả mục đích. */
+  const gocCua = (t) => {
+    const g = Math.atan2(t.x - px, -(t.y - py));
+    return g < 0 ? g + Math.PI * 2 : g;
+  };
+  for (let i = 1; i < a.length; i++) {
+    const g0 = gocCua(a[i - 1]);
+    const g1 = gocCua(a[i]);
+    ok(g0 <= g1 + 1e-9, `mục tiêu ${i} phải có góc >= mục tiêu ${i - 1} (${g0.toFixed(3)} → ${g1.toFixed(3)})`);
+  }
+  /* Ô ngay TRÊN đầu là góc 0 — phần tử đầu tiên phải là nó (hoặc một ô cùng
+     góc 0 nhưng gần hơn, mà gần hơn thì không có vì đó đã là ô kề). */
+  eq(a[0].x, px, "mục tiêu đầu tiên nằm thẳng phía trên");
+  ok(a[0].y < py, "…và ở phía trên thật, không phải phía dưới");
+
+  /* ĐỨNG NGOÀI LÔ, cạnh mép ruộng: nhiều ô ngắm cùng dẫn về MỘT ô cày được
+     (nấc "quanh chân" của `pressPlan`). Không khử trùng thì danh sách có bốn
+     mục trỏ vào cùng một chỗ, và bấm bốn lần mũi tên đứng im — trông y như nút
+     hỏng. Đây là ca duy nhất bắt được lỗi ấy, nên nó phải nằm trong kịch bản. */
+  const ox = ruong.x - 1;
+  const oy = ruong.y - 1;
+  setState(store, (s) => {
+    donQuanh(s, ox, oy, 4);
+    s.player.x = (ox + 0.5) * TILE;
+    s.player.y = (oy + 0.5) * TILE;
+  });
+  selectItem(store, "tool:hoe");
+  const ngoai = reachTargets(store.getState(), content, opts);
+  ok(ngoai.length > 0, "đứng cạnh mép ruộng vẫn phải nhắm được vào ô cày được bên trong");
+  eq(
+    new Set(ngoai.map((t) => `${t.at.x},${t.at.y}`)).size,
+    ngoai.length,
+    "nhiều ô ngắm cùng dẫn về một ô tác động thì danh sách chỉ được giữ MỘT",
+  );
+  ok(
+    ngoai.some((t) => t.at.x !== t.x || t.at.y !== t.y),
+    "phải có mục tiêu mà ô tác động KHÁC ô ngắm — nếu không, ca này không kiểm gì cả",
+  );
+
+  /* TAY KHÔNG trên đất trống: danh sách phải NGẮN HẲN lại. Nếu không thì
+     "mục tiêu" chẳng liên quan gì tới món đang cầm, và mũi tên sẽ chỉ vào chỗ
+     mà bấm nút cũng không làm được gì. */
+  setState(store, (s) => {
+    donQuanh(s, px, py, 4);
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+    const trong = s.inv.findIndex((v, i) => i >= 2 && i < BAL.hotbarSlots && !v);
+    ok(trong >= 0, "cần một ô hotbar trống để thử tay không");
+    s.sel = trong;
+  });
+  const tayKhong = reachTargets(store.getState(), content, opts);
+  ok(
+    tayKhong.length < a.length,
+    `tay không phải ít mục tiêu hơn cầm cuốc (${tayKhong.length} vs ${a.length})`,
+  );
+});
+
+test("167. Bấm N lần thì mũi tên đi TRỌN một vòng rồi về đúng chỗ cũ", () => {
+  const store = mkStore(31337);
+  const ruong = (content.tiles.zones ?? []).find((z) => z.kind === "farm");
+  const px = ruong.x + 2;
+  const py = ruong.y + 2;
+  setState(store, (s) => {
+    donQuanh(s, px, py, 4);
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+  });
+  selectItem(store, "tool:hoe");
+
+  const list = reachTargets(store.getState(), content, { context: true, canGo: false });
+  ok(list.length >= 3, `cần ít nhất ba mục tiêu để kiểm vòng lặp, đang có ${list.length}`);
+
+  // Chưa chọn gì → phần tử đầu, tất định.
+  deepEq(nextTarget(list, null, 1), list[0], "chưa chọn gì thì về mục tiêu đầu");
+  // Mục tiêu không còn trong danh sách (đi chỗ khác) → cũng về đầu.
+  deepEq(nextTarget(list, { x: -99, y: -99 }, 1), list[0], "mục tiêu đã rơi khỏi danh sách → về đầu");
+
+  let cur = list[0];
+  const daGhe = new Set([`${cur.x},${cur.y}`]);
+  for (let i = 1; i < list.length; i++) {
+    cur = nextTarget(list, cur, 1);
+    daGhe.add(`${cur.x},${cur.y}`);
+  }
+  eq(daGhe.size, list.length, "đi N-1 bước phải ghé đủ N mục tiêu, không bỏ sót không lặp");
+  deepEq(nextTarget(list, cur, 1), list[0], "bước thứ N quay về đúng mục tiêu đầu");
+
+  // Chiều ngược lại phải đi đúng ngược.
+  deepEq(nextTarget(list, list[0], -1), list[list.length - 1], "lùi từ đầu thì vòng về cuối");
+  deepEq(nextTarget(list, list[2], -1), list[1], "lùi một bước là lùi đúng một bước");
+  deepEq(nextTarget([], null, 1), null, "danh sách rỗng thì không có mục tiêu nào");
+});
+
+test("168. Mục tiêu TỰ RƠI khi ra khỏi tầm — và KHÔNG rơi chỉ vì bước một bước", () => {
+  /* Đây là luật dễ trôi nhất của đợt này. Trước Đợt 27 `main.ts` XOÁ ô ngắm mỗi
+     khi người chơi tự đi — hợp lý hồi ô ngắm là "ô vừa chạm", nhưng với nghĩa
+     mới thì mục tiêu vừa chọn biến mất ngay bước chân đầu tiên và cái nút mới
+     thành vô dụng. `aimStillValid` là MỘT hàm cho cả vòng lặp game lẫn chỗ này,
+     nên hai bên không thể nói khác nhau. */
+  const store = mkStore(4242);
+  const ruong = (content.tiles.zones ?? []).find((z) => z.kind === "farm");
+  const px = ruong.x + 3;
+  const py = ruong.y + 3;
+  setState(store, (s) => {
+    donQuanh(s, px, py, 5);
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+  });
+
+  const aim = { x: px, y: py - 1 };
+  ok(aimStillValid(store.getState(), aim), "ô kề ngay trên đầu thì đang trong tầm");
+  eq(aimStillValid(store.getState(), null), false, "chưa chọn gì thì không có gì để giữ");
+
+  // Bước MỘT bước sang ngang: vẫn trong 1,6 ô → mục tiêu phải còn.
+  setState(store, (s) => {
+    s.player.x = (px + 1.5) * TILE;
+  });
+  ok(
+    aimStillValid(store.getState(), aim),
+    "bước một bước ngang thì mục tiêu vẫn còn — nếu không, nút chuyển mục tiêu vô dụng",
+  );
+
+  // Đi hẳn ba ô: ra khỏi tầm → phải rơi.
+  setState(store, (s) => {
+    s.player.x = (px + 3.5) * TILE;
+  });
+  eq(aimStillValid(store.getState(), aim), false, "đi xa hẳn thì mục tiêu tự rơi");
+
+  /* Và luật ấy đúng là `inReach`, không phải một bán kính thứ ba tự chế: bán
+     kính thứ ba là đúng cái lỗi Đợt 21 đã dọn ("NGỦ" sáng ở hai ô mà bấm thì
+     giường im lặng). */
+  for (const d of [1, 2, 3, 4]) {
+    setState(store, (s) => {
+      s.player.x = (px + 0.5 + d) * TILE;
+    });
+    eq(
+      aimStillValid(store.getState(), aim),
+      inReach(store.getState(), aim.x, aim.y),
+      `cách ${d} ô: luật giữ mục tiêu phải trùng khít với inReach`,
+    );
+  }
+});
+
+
+test("169. MŨI TÊN ĐỎ luôn chỉ đúng ô mà nút chính sẽ tác động", () => {
+  /* Cường: "mặc định sẽ có 1 cái mũi tên màu đỏ chỉ vô cái đối tượng mà hành
+     động chính sắp nhắm tới hoặc đang nhắm tới". Một mũi tên chỉ SAI chỗ còn
+     tệ hơn không có mũi tên: nó dạy người chơi một luật không đúng, và họ chỉ
+     phát hiện ra khi bấm nhầm.
+
+     Hai vế. LUẬT: mỗi cú bấm có toạ độ đều phải khai `at`, và `at` phải bằng
+     đúng toạ độ ấy. CÁCH VIẾT: `main.ts` phải lấy `hint.at` làm nguồn của mũi
+     tên (không lọc theo "khác ô con trỏ" nữa), và `draw.ts` phải thôi mang
+     `opts.target` — hai thứ ấy sim không chạy được, nên quét nguồn, cùng lối
+     với kịch bản 164. */
+
+  // ---- vế LUẬT ---------------------------------------------------------
+  const store = mkStore(909);
+  const ruong = (content.tiles.zones ?? []).find((z) => z.kind === "farm");
+  const px = ruong.x + 2;
+  const py = ruong.y + 2;
+  setState(store, (s) => {
+    donQuanh(s, px, py, 4);
+    s.player.x = (px + 0.5) * TILE;
+    s.player.y = (py + 0.5) * TILE;
+  });
+  selectItem(store, "tool:hoe");
+
+  const opts = { context: true, canGo: true };
+  for (const t of reachTargets(store.getState(), content, { context: true, canGo: false })) {
+    const p = pressPlan(store.getState(), content, { x: t.x, y: t.y }, opts);
+    const h = hintOf(p);
+    ok(h.at, `mục tiêu (${t.x},${t.y}) phải có ô tác động để mũi tên cắm xuống`);
+    deepEq(
+      { x: h.at.x, y: h.at.y },
+      { x: t.at.x, y: t.at.y },
+      `mũi tên và danh sách mục tiêu phải nói CÙNG một ô cho (${t.x},${t.y})`,
+    );
+  }
+
+  /* Mọi cú bấm mang toạ độ đều phải khai `at` — kể cả những nhánh ít gặp.
+     Quét đủ mọi ô trong tầm, ở vài hoàn cảnh khác nhau, rồi đối chiếu `at` với
+     chính toạ độ của `Press`. Thiếu `at` ở một nhánh nghĩa là mũi tên biến mất
+     đúng lúc nút vẫn sáng — trông y như hỏng. */
+  const soatQuanh = (ghiChu) => {
+    const st = store.getState();
+    for (let dy = -2; dy <= 2; dy++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const x = Math.floor(st.player.x / TILE) + dx;
+        const y = Math.floor(st.player.y / TILE) + dy;
+        if (x < 0 || y < 0 || x >= st.w || y >= st.h) continue;
+        const p = pressPlan(st, content, { x, y }, opts);
+        if (p.x === undefined || p.y === undefined) continue; // deny/build/run: không nhắm vào ô nào
+        const h = hintOf(p);
+        ok(h.at, `${ghiChu}: cú bấm '${p.t}' ở (${x},${y}) có toạ độ mà không khai at`);
+        deepEq(
+          { x: h.at.x, y: h.at.y },
+          { x: p.x, y: p.y },
+          `${ghiChu}: at của '${p.t}' phải trùng toạ độ của chính cú bấm`,
+        );
+      }
+  };
+  soatQuanh("cầm cuốc giữa lô");
+
+  selectItem(store, "tool:can");
+  soatQuanh("cầm bình tưới");
+
+  /* CON VẬT TỚI LỨA kề bên: nhánh `gather` là nhánh duy nhất mà ô tác động
+     KHÔNG phải ô ngắm mà là ô con vật đang đứng — nếu nó quên khai `at` thì
+     mũi tên tắt ngóm đúng lúc nút ghi THU, tức đúng lúc người chơi cần nó
+     nhất. Không dựng cảnh này thì kịch bản không bao giờ đi qua nhánh ấy. */
+  setState(store, (s) => {
+    const n = ++s.entSeq;
+    s.entities.push({
+      id: n, kind: "animal", def: "cow", map: "farm",
+      x: (px + 1) * TILE + 8, y: py * TILE + 8,
+      dir: "down", anim: 0, seed: 77 + n,
+      ai: { phase: "idle", until: 0, tx: -1, ty: -1, path: [], planAt: -999 },
+      animal: { age: 9, fed: 400, hungryDays: 0, prod: [99999] },
+    });
+  });
+  {
+    const p = pressPlan(store.getState(), content, { x: px + 1, y: py }, opts);
+    eq(p.t, "gather", "con bò tới lứa kề bên: cú bấm phải là THU");
+    const h = hintOf(p);
+    ok(h.at, "nhánh THU phải khai ô tác động — nếu không, mũi tên tắt đúng lúc nút ghi THU");
+    deepEq({ x: h.at.x, y: h.at.y }, { x: p.x, y: p.y }, "và nó chỉ vào đúng ô con bò");
+  }
+  soatQuanh("có bò tới lứa kề bên");
+
+  /* ---- vế LUẬT, phần TOÀN DIỆN --------------------------------------
+     `hintOf` là hàm thuần của một `Press`, nên không cần dựng cảnh: dựng
+     thẳng từng dạng `Press` CÓ TOẠ ĐỘ rồi soát. Dựng cảnh chỉ chứng minh
+     `pressPlan` sinh ra đúng dạng ấy; còn phép này bao được cả nhánh hiếm mà
+     không cảnh nào trong bộ sim đi qua — như con THUYỀN BUÔN, thứ chỉ cập bến
+     ba ngày một lần. Thiếu `at` ở đó nghĩa là mũi tên tắt ngóm đúng lúc nút
+     ghi THUYỀN BUÔN, và không ai phát hiện ra cho tới khi chơi thật. */
+  const mau = [
+    ["use", { t: "use", kind: "till", x: 7, y: 9 }],
+    ["gather", { t: "gather", id: 3, x: 7, y: 9 }],
+    ["interact", { t: "interact", kind: "SHOP", x: 7, y: 9 }],
+    ["boat", { t: "boat", id: 4, x: 7, y: 9 }],
+    ["go", { t: "go", x: 7, y: 9, then: "use", kind: "till", dist: 3 }],
+  ];
+  for (const [ten, p] of mau) {
+    const h = hintOf(p);
+    ok(h.at, `dạng '${ten}' mang toạ độ thì BẮT BUỘC phải khai at cho mũi tên`);
+    deepEq({ x: h.at.x, y: h.at.y }, { x: p.x, y: p.y }, `at của '${ten}' phải trùng toạ độ của nó`);
+  }
+
+  // ---- vế CÁCH VIẾT ----------------------------------------------------
+  const boChuThich = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const mainSrc = boChuThich(readFileSync(new URL("../src/main.ts", import.meta.url), "utf8"));
+  const drawSrc = boChuThich(readFileSync(new URL("../src/render/draw.ts", import.meta.url), "utf8"));
+
+  ok(
+    /aimArrow\s*=\s*hint\?\.at\s*\?\?\s*oNham/.test(mainSrc),
+    "main.ts phải lấy THẲNG hint.at làm nguồn mũi tên (rơi về ô ngắm khi chưa làm được), không lọc theo ô con trỏ",
+  );
+  ok(
+    /aimArrowOk:\s*!!hint\?\.at/.test(mainSrc),
+    "mũi tên phải MỜ ĐI khi nút chưa làm được gì, chứ không biến mất",
+  );
+  ok(!/opts\.target/.test(drawSrc), "draw.ts không được còn opts.target — mũi tên đỏ đã thay nó");
+  ok(/opts\.aimArrow/.test(drawSrc), "draw.ts phải vẽ opts.aimArrow");
+
+  /* Mũi tên vẽ TRÊN lớp vật thể: nếu không, đúng những mục tiêu đáng chỉ nhất
+     (cây cao, mái nhà, con bò) lại che mất nó. Mốc là vòng vẽ `items`. */
+  const iItems = drawSrc.indexOf("for (const it of items) it.run();");
+  const iArrow = drawSrc.indexOf("opts.aimArrow");
+  ok(iItems > 0 && iArrow > iItems, "mũi tên phải vẽ SAU vòng vẽ vật thể, không phải trước");
+
+  // Và chạm-kép phải biến mất hẳn khỏi lớp nhập liệu.
+  const inputSrc = boChuThich(readFileSync(new URL("../src/core/input.ts", import.meta.url), "utf8"));
+  ok(!/DOUBLE_MS|DOUBLE_DIST|isDouble|lastTap/.test(inputSrc), "input.ts không được còn dấu vết chạm kép");
+  ok(!/it\.double/.test(mainSrc), "main.ts không được còn nhánh chạm kép");
+  ok(/case "aimNext"/.test(mainSrc), "main.ts phải xử lý nút chuyển mục tiêu");
 });
 
 await Promise.all(choDoi);

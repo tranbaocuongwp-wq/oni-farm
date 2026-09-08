@@ -20,7 +20,7 @@ import "./style.css";
 import { buildAtlas } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
-import { alignedTo, createNavigator } from "./core/navigate.ts";
+import { createNavigator } from "./core/navigate.ts";
 import { applySettings, loadSettings, saveSettings, type Settings } from "./core/settings.ts";
 import { buzz, setHaptics, setPadRumble } from "./core/haptics.ts";
 import { MAX_CONSECUTIVE_ERRORS, createLoop } from "./core/loop.ts";
@@ -57,7 +57,7 @@ import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tuto
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, autoStopReason, facingTile, hintOf, infoHint, pressPlan, tileInfo, type Hint, type Press } from "./game/hint.ts";
+import { autoJob, autoStopReason, aimStillValid, facingTile, hintOf, infoHint, nextTarget, pressPlan, reachTargets, tileInfo, type Hint, type Press } from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { seasonIndex, currentSeason } from "./game/season.ts";
@@ -100,7 +100,11 @@ window.addEventListener("beforeinstallprompt", (e) => {
    `touch-action: manipulation` (CSS) cho chạm kép, còn véo hai ngón thì phải
    chặn bằng JS. Ba lớp bảo hiểm: gesturestart (Safari), touchmove nhiều ngón
    (Chrome/Android), và chạm kép trên phần tử KHÔNG phải nút/ô — nút thì để
-   nguyên, nếu không bấm nhanh hai lần vào +/− sẽ mất một lần. */
+   nguyên, nếu không bấm nhanh hai lần vào +/− sẽ mất một lần.
+
+   Đợt 27 gỡ chạm-kép-để-làm của GAME, nhưng khối này KHÔNG đụng tới: nó chặn
+   zoom của TRÌNH DUYỆT, một chuyện khác hẳn. Gỡ nó đi thì chạm nhanh hai lần
+   trên canvas sẽ phóng to cả trang trên iOS. */
 function preventBrowserZoom() {
   const opts = { passive: false } as AddEventListenerOptions;
   document.addEventListener("gesturestart", (e) => e.preventDefault(), opts);
@@ -621,6 +625,7 @@ async function boot() {
   for (const [sel, code] of [
     ["#abtn .a", "Space"],
     ["#abtn .b", "KeyE"],
+    ["#abtn .t", "KeyQ"],
     ["#abtn .y", "KeyI"],
     ["#sysbtn .menu", "Escape"],
   ] as [string, string][]) {
@@ -760,7 +765,12 @@ async function boot() {
 
   /* ---- 8. ô đang nhắm ---- */
   function targetTile(s: GameState, forceFacing = false): Cursor | null {
-    const p = forceFacing || input.stickActive() ? null : input.pointer();
+    let p = forceFacing || input.stickActive() ? null : input.pointer();
+    /* Chuột chưa nhúc nhích kể từ lúc bấm nút MỤC TIÊU thì coi như không có
+       chuột: mục tiêu vừa chọn phải sống được ít nhất tới khi người chơi thật
+       sự rê tay. */
+    if (p && chuotLucChon && p.x === chuotLucChon.x && p.y === chuotLucChon.y) p = null;
+    else if (p) chuotLucChon = null;
 
     if (!p && !forceFacing && aimed && inReachOf(s, aimed.x, aimed.y))
       return { x: aimed.x, y: aimed.y, ok: tileActionable(s, aimed.x, aimed.y) };
@@ -803,7 +813,30 @@ async function boot() {
     lastPos = { x: st.player.x, y: st.player.y };
   });
 
+  /**
+   * MỤC TIÊU — ô mà nút CHÍNH sẽ tác động vào.
+   *
+   * Từ Đợt 27 đây KHÔNG còn là "ô vừa chạm". Chạm màn hình giờ chỉ có nghĩa
+   * ĐI, nên mục tiêu phải được chọn riêng: nút MỤC TIÊU (phím Q), cần phải tay
+   * cầm, hoặc rê chuột trên máy tính. Hệ thống chỉ đặt nó ở đúng một chỗ — lúc
+   * tới đích một chuyến (`nav.takeArrival`) — để chuỗi cày → gieo → tưới trên
+   * cùng một ô không phải chọn lại sau mỗi lần đi.
+   *
+   * Nó tự rơi khi ra khỏi TẦM VỚI, và chỉ khi ấy: xem `aimStillValid`, luật
+   * dùng chung với kịch bản sim 168.
+   */
   let aimed: { x: number; y: number } | null = null;
+
+  /**
+   * Vị trí chuột lúc người chơi chọn mục tiêu bằng NÚT/PHÍM.
+   *
+   * Vì sao cần: `targetTile` cho chuột thắng `aimed` (Cường chốt "rê chuột thì
+   * ngắm luôn"), mà con trỏ chuột thì luôn nằm đâu đó trên màn hình. Không có
+   * mốc này thì bấm Q xong nhích chuột một pixel là mục tiêu vừa chọn biến
+   * mất — người chơi thấy cái nút mới chớp tắt vô nghĩa. Bỏ qua chuột cho tới
+   * khi nó THẬT SỰ rời khỏi chỗ cũ.
+   */
+  let chuotLucChon: { x: number; y: number } | null = null;
 
   /**
    * Con vật đang MỞ bảng thống kê, theo id. `null` = không mở bảng nào.
@@ -815,6 +848,16 @@ async function boot() {
    */
   let cardAnimal: number | null = null;
 
+  /**
+   * Hút cú chạm về ô CÓ NGHĨA gần nhất — **chỉ dùng trong chế độ XÂY**.
+   *
+   * Từ Đợt 27 nhánh đi bộ dùng ô THÔ. Phép hút này sinh ra hồi cú chạm còn
+   * phải chọn ô để LÀM VIỆC, và khi ấy nó đúng: ngón tay to hơn một ô 32px.
+   * Với nghĩa mới ("chạm là ĐI") nó thành sai hẳn — chạm vào khoảnh cỏ trống
+   * cạnh gốc cây thì nhân vật lại đi sang ô gốc cây, tức là đi chỗ khác chỗ
+   * người chơi vừa chỉ. Trong chế độ xây thì người chơi đang chỉ vào một Ô để
+   * đặt công trình, nên ở đó nó vẫn đúng như cũ.
+   */
   function snapTap(s: GameState, wx: number, wy: number): { x: number; y: number } {
     const raw = {
       x: Math.max(0, Math.min(s.w - 1, Math.floor(wx / TILE))),
@@ -1727,6 +1770,20 @@ async function boot() {
        nhân vật trôi liên tục còn con trỏ nhảy theo nhịp lặp — hai tốc độ khác
        nhau dưới cùng một ngón cái, và không cách nào ngắm cho đứng. */
     const reOChuot = padOn && (building || !!minimap.cursor());
+
+    /* MỤC TIÊU tự rơi khi ra khỏi TẦM VỚI — luật duy nhất quyết định nó sống
+       hay chết, và nó nằm ở ĐÂY chứ không ở chỗ đọc. Trước Đợt 27 luật này chỉ
+       tồn tại ngầm trong `targetTile`, nên trạng thái thật không bao giờ quan
+       sát được và không kịch bản nào kiểm được nó.
+
+       Cố ý KHÔNG xoá khi người chơi bước đi (bản cũ làm thế, hồi `aimed` còn
+       nghĩa là "ô vừa chạm"): mục tiêu vừa chọn mà biến mất ngay bước chân đầu
+       tiên thì nút MỤC TIÊU vô dụng. */
+    if (!aimStillValid(store.getState(), aimed)) {
+      aimed = null;
+      chuotLucChon = null;
+    }
+
     if (!modal) {
       const ax = reOChuot ? { x: 0, y: 0 } : input.axis();
       if (ax.x !== 0 || ax.y !== 0) {
@@ -1736,7 +1793,6 @@ async function boot() {
         if (run) stopRun();
         nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
-        aimed = null;
       } else {
         const step = nav.update(store.getState(), content, dt);
         if (step) store.dispatch({ t: "MOVE", dx: step.dx, dy: step.dy, dt, run: step.run });
@@ -1976,19 +2032,29 @@ async function boot() {
           execute(s, pressPlan(s, content, pressCursor(s), pressOpts()));
           break;
         }
+        /* CHẠM = ĐI. Không còn nghĩa nào khác.
+           Cường, Đợt 27: "con trỏ này chỉ mục đích định hướng di chuyển".
+           Mọi HÀNH ĐỘNG đi qua nút chính, và ô nó tác động vào thì mũi tên đỏ
+           chỉ ra — nên không còn gì để chạm-hai-lần phân biệt. */
         case "pointer": {
           if (building) {
+            /* Trong chế độ XÂY thì cú chạm là đặt điểm đầu của tuyến, và ở đó
+               `snapTap` vẫn đúng: người chơi đang chỉ vào một Ô cụ thể để xây,
+               không phải chỉ một chỗ để đi tới. `lineFrom/lineTo` là biến
+               riêng — cố ý KHÔNG dùng chung `aimed`, vì `aimed` giờ mang nghĩa
+               mục tiêu của nút chính và sẽ làm mũi tên đỏ hiện giữa lúc xây. */
             const q = snapTap(s, it.wx, it.wy);
             lineFrom = { x: q.x, y: q.y };
             lineTo = { x: q.x, y: q.y };
-            aimed = { x: q.x, y: q.y };
             break;
           }
           if (modal) break;
-          const snapped = snapTap(s, it.wx, it.wy);
-          const tx = snapped.x;
-          const ty = snapped.y;
-          aimed = { x: tx, y: ty };
+          /* Ô THÔ, không `snapTap`. Phép hút cú chạm về "ô có nghĩa gần nhất"
+             sinh ra hồi cú chạm còn phải chọn ô để LÀM VIỆC; với nghĩa mới nó
+             thành sai hẳn — chạm vào khoảnh cỏ trống cạnh gốc cây thì nhân vật
+             lại đi sang ô gốc cây, tức là đi chỗ khác chỗ người chơi chỉ. */
+          const tx = Math.max(0, Math.min(s.w - 1, Math.floor(it.wx / TILE)));
+          const ty = Math.max(0, Math.min(s.h - 1, Math.floor(it.wy / TILE)));
           // Người chơi tự chạm thì đây KHÔNG còn là chuyến đi làm việc nữa —
           // tới nơi được phép mở cửa hàng/giường như bình thường. Chuyến đang
           // chạy cũng dừng: nhập tay luôn thắng thứ đang chạy tự động.
@@ -2000,31 +2066,40 @@ async function boot() {
              vật lại. Mở bảng giờ là việc của nút XEM và nút vai — có chủ ý. */
           cardAnimal = null;
 
+          // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
+          // Trước đây mọi cú chạm đều huỷ rồi tìm đường lại, nên người chơi
+          // sốt ruột bấm dồn là nhân vật dừng-chạy-dừng-chạy — đúng cảm giác
+          // "giật giật". Bấm lại chỗ cũ là XÁC NHẬN, không phải lệnh mới.
+          const cur = nav.target();
+          if (cur && cur.tx === tx && cur.ty === ty) break;
+          nav.cancel();
+          if (!inReachOf(s, tx, ty))
+            nav.goTo(s, content, tx, ty, {
+              act: false,
+              avoidStandingOn: holdingSolidBuilding(s),
+            });
+          break;
+        }
 
-          if (!it.double) {
-            // Chạm lại đúng ô ĐANG đi tới thì để yên cho nhân vật đi tiếp.
-            // Trước đây mọi cú chạm đều huỷ rồi tìm đường lại, nên người chơi
-            // sốt ruột bấm dồn là nhân vật dừng-chạy-dừng-chạy — đúng cảm giác
-            // "giật giật". Bấm lại chỗ cũ là XÁC NHẬN, không phải lệnh mới.
-            const cur = nav.target();
-            if (cur && cur.tx === tx && cur.ty === ty) break;
-            nav.cancel();
-            if (!inReachOf(s, tx, ty))
-              nav.goTo(s, content, tx, ty, {
-                act: false,
-                avoidStandingOn: holdingSolidBuilding(s),
-              });
+        /* NÚT MỤC TIÊU — thứ thay thế cho chạm-hai-lần.
+           Danh sách và phép đi vòng nằm trong `src/game/hint.ts`, hỏi thẳng
+           `pressPlan` nên mũi tên đỏ không bao giờ chỉ khác chỗ với thứ nút
+           chính sẽ làm. Ở đây chỉ còn việc ghi nhớ và báo khi không có gì. */
+        case "aimNext": {
+          if (modal || building) break;
+          const ds = reachTargets(s, content, pressOpts());
+          const t = nextTarget(ds, aimed, it.d);
+          if (!t) {
+            aimed = null;
+            deny();
+            toasts.say("Không có gì trong tầm với", "info");
             break;
           }
-
-          nav.cancel();
-          if (tryInteract(s, tx, ty)) break;
-          if (alignedTo(s, tx, ty) && tryUse(s, tx, ty)) break;
-          if (
-            !tileActionable(s, tx, ty) ||
-            !nav.goTo(s, content, tx, ty, { avoidStandingOn: holdingSolidBuilding(s) })
-          )
-            deny();
+          aimed = { x: t.x, y: t.y };
+          /* Ghim mốc chuột: xem `chuotLucChon`. Không ghim thì trên máy tính
+             mục tiêu vừa chọn chết ngay ở khung hình sau. */
+          chuotLucChon = input.pointer();
+          buzz("tap");
           break;
         }
         /* Rê ngón/chuột khi đang vẽ tuyến: chỉ cập nhật ô CUỐI. Không dispatch
@@ -2034,7 +2109,6 @@ async function boot() {
           if ((modal && !building) || !lineFrom) break;
           const q = snapTap(s, it.wx, it.wy);
           lineTo = { x: q.x, y: q.y };
-          aimed = { x: q.x, y: q.y };
           break;
         }
 
@@ -2097,7 +2171,6 @@ async function boot() {
               x: Math.max(0, Math.min(s.w - 1, p0.x + it.dx)),
               y: Math.max(0, Math.min(s.h - 1, p0.y + it.dy)),
             };
-            aimed = { ...padCursor };
             // Đang vẽ dở thì đầu kia của đoạn bám theo con trỏ.
             if (lineFrom) lineTo = { ...padCursor };
             break;
@@ -2113,7 +2186,10 @@ async function boot() {
             const a0 = aimed ?? facingTile(s, TILE);
             const nx = Math.max(0, Math.min(s.w - 1, a0.x + it.dx));
             const ny = Math.max(0, Math.min(s.h - 1, a0.y + it.dy));
-            if (inReachOf(s, nx, ny)) aimed = { x: nx, y: ny };
+            if (inReachOf(s, nx, ny)) {
+              aimed = { x: nx, y: ny };
+              chuotLucChon = input.pointer();
+            }
           }
           break;
         }
@@ -2197,11 +2273,25 @@ async function boot() {
        — đó cũng là cách người chơi đang mong. */
     camera.follow(s.player.x, s.player.y, dt);
     const navT = nav.target();
+    /* CON TRỎ Ô nói ĐÚNG MỘT câu: "tôi sẽ ĐI đâu".
+       Đợt 27 tách nó khỏi câu thứ hai ("nút sẽ làm ở đâu") — câu ấy giờ là của
+       mũi tên đỏ. Nên nó chỉ hiện khi có một đích DI CHUYỂN thật: chuyến đang
+       đi, hoặc ô dưới con trỏ chuột trên máy tính (bấm là đi tới đó).
+       Trên cảm ứng lúc đứng yên thì KHÔNG có con trỏ nào cả — trước khi tách,
+       nó bám theo ô ngắm nên vẽ đúp với mũi tên, và hai dấu chồng lên nhau ở
+       cùng một ô thì cả hai cùng hết nghĩa. */
+    const chuotO = modal || input.stickActive() ? null : input.pointer();
     const cursor: Cursor | null = modal
       ? null
       : navT
         ? { x: navT.tx, y: navT.ty, ok: true }
-        : targetTile(s);
+        : chuotO
+          ? {
+              x: Math.max(0, Math.min(s.w - 1, Math.floor(chuotO.x / TILE))),
+              y: Math.max(0, Math.min(s.h - 1, Math.floor(chuotO.y / TILE))),
+              ok: true,
+            }
+          : null;
 
     // Chuyển ngày: giữ đen 0,35s rồi mở sáng trong 0,9s.
     let fade = 0;
@@ -2230,19 +2320,27 @@ async function boot() {
 
     /* Nhãn hai nút là HÌNH CHIẾU của đúng cú bấm sẽ xảy ra — cùng `pressPlan`
        / `infoHint`, cùng ô ngắm (`pressCursor`), cùng tuỳ chọn (`pressOpts`).
-       Tính TRƯỚC khi vẽ, vì ô nút sẽ tác động (`hint.at`) được vẽ dấu lên bản
-       đồ khi nó không phải ô đang ngắm — người chơi thấy nút sẽ dắt mình tới đâu. */
-    const hint: Hint | null = modal ? null : hintOf(pressPlan(s, content, pressCursor(s), pressOpts()));
-    const iHint = modal ? null : infoHint(s, content, pressCursor(s));
-    const hintAt = hint?.at ?? null;
-    const target = hintAt && (!cursor || hintAt.x !== cursor.x || hintAt.y !== cursor.y) ? hintAt : null;
+       Tính TRƯỚC khi vẽ, vì ô nút sẽ tác động (`hint.at`) chính là chỗ MŨI TÊN
+       ĐỎ cắm xuống — người chơi nhìn màn hình là biết nút to kia nhắm vào đâu. */
+    const oNham = modal ? null : pressCursor(s);
+    const hint: Hint | null = modal ? null : hintOf(pressPlan(s, content, oNham, pressOpts()));
+    const iHint = modal ? null : infoHint(s, content, oNham);
+    /* KHÔNG lọc theo "khác ô con trỏ" nữa: con trỏ nói "tôi sẽ đi đây", mũi tên
+       nói "nút sẽ nhắm vào đây" — hai câu khác nhau, trùng ô vẫn phải hiện cả hai.
+
+       Và khi nút KHÔNG làm được gì thì mũi tên vẫn ở đó, chỉ mờ đi: Cường nói
+       nó chỉ vào thứ "sắp nhắm tới HOẶC ĐANG NHẮM TỚI". Tắt nó đúng lúc việc
+       chưa làm được là bỏ người chơi lại giữa câu hỏi "tôi đang chỉ vào cái
+       gì mà bấm không ăn" — mà đó chính là lúc họ cần câu trả lời nhất. */
+    const aimArrow = hint?.at ?? oNham;
 
     const wxDef = weatherDef(s, content);
     const fogUntil = wxDef.fogUntil ?? 0;
     renderer.draw(s, content, cursor, elapsed, {
       lineCells,
       navTarget: navT ? { x: navT.tx, y: navT.ty } : null,
-      target,
+      aimArrow,
+      aimArrowOk: !!hint?.at,
       fade,
       reduceMotion: document.body.dataset["motion"] === "reduce",
       weather: {

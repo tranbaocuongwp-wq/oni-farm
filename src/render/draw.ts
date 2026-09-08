@@ -112,8 +112,24 @@ export interface WeatherFx {
 export interface DrawOptions {
   /** Ô ĐÍCH đang đi tới (bấm-để-đi) — vẽ dấu vòng vàng. */
   navTarget: { x: number; y: number } | null;
-  /** Ô mà NÚT CHÍNH sẽ tác động khi nó KHÁC ô đang ngắm (con vật kề, máng của khu…). */
-  target: { x: number; y: number } | null;
+  /**
+   * MỤC TIÊU của nút chính — ô mà cú bấm sẽ tác động vào. Vẽ mũi tên đỏ.
+   *
+   * Từ Đợt 27 nó KHÔNG còn điều kiện "khác ô đang ngắm": con trỏ và mũi tên
+   * nói hai câu khác nhau ("tôi sẽ đi đây" / "nút sẽ làm ở đây"), nên trùng ô
+   * vẫn phải hiện cả hai. Trước đó cả hai dùng chung hình con trỏ và phân biệt
+   * bằng độ mờ, tức là bắt người chơi đọc alpha để hiểu luật chơi.
+   */
+  aimArrow: { x: number; y: number } | null;
+  /**
+   * Nút chính có LÀM ĐƯỢC gì ở ô ấy không.
+   *
+   * `false` = đang nhắm vào đó nhưng chưa làm được (chưa cày, hết nước, sai
+   * công cụ) → mũi tên mờ đi. Cường nói mũi tên chỉ vào thứ "sắp nhắm tới HOẶC
+   * ĐANG NHẮM TỚI", nên nó không được biến mất chỉ vì việc chưa làm được: mất
+   * mũi tên đúng lúc ấy là mất luôn câu trả lời cho "vì sao bấm không ăn".
+   */
+  aimArrowOk: boolean;
   /** 0..1: độ mờ đen khi chuyển ngày (main điều khiển), 0 = không phủ. */
   fade: number;
   /** Tắt nhấp nháy/lấp lánh/hạt cho ai say chuyển động. */
@@ -2131,15 +2147,6 @@ export function createRenderer(
       );
       g.globalAlpha = 1;
     }
-    /* Ô nút chính SẼ TÁC ĐỘNG khi nó không phải ô đang ngắm: cùng hình con
-       trỏ nhưng mờ hơn và không nhấp nháy — "nút nói về ô này", chưa phải
-       "đang chỉ vào ô này". Không có nó thì nhãn "ĐỔ MÁNG" hiện lên mà người
-       chơi không biết cái máng ở đâu. */
-    if (opts.target) {
-      g.globalAlpha = 0.55;
-      put(atlas.cursorOk, opts.target.x * TILE - camera.rx, opts.target.y * TILE - camera.ry);
-      g.globalAlpha = 1;
-    }
     // Dấu đích đang đi tới: vòng vàng co lại. Khác con trỏ để người chơi phân
     // biệt "sẽ tới đó" và "sẽ làm ở đó".
     if (opts.navTarget) {
@@ -2176,6 +2183,26 @@ export function createRenderer(
     dem.items = items.length;
     items.sort((a, b) => a.base - b.base);
     for (const it of items) it.run();
+
+    /* ---- MŨI TÊN ĐỎ: mục tiêu của nút chính -------------------------------
+       Vẽ TRÊN lớp vật thể, khác hẳn con trỏ (vẽ dưới). Con trỏ là một ô sáng
+       nên nằm dưới cây là đúng; mũi tên thì CHỈ VÀO một vật, mà nằm dưới thì
+       đúng những mục tiêu đáng chỉ nhất — cây cao, mái nhà, con bò — lại che
+       mất nó. Vẫn nằm trong `g.save()` của lớp thế giới nên toạ độ không đổi. */
+    if (opts.aimArrow) {
+      const f = opts.reduceMotion ? 0 : Math.floor(timeSec * 5) % 3;
+      if (!opts.aimArrowOk) g.globalAlpha = 0.55;
+      put(
+        atlas.aimArrow[f]!,
+        opts.aimArrow.x * TILE - camera.rx,
+        /* -6 chứ không phải -11 (cả chiều cao mũi tên): mũi tên phải nằm TRÊN
+           chính ô mục tiêu, mũi chạm khoảng giữa ô. Treo hẳn nó lên phía trên
+           mép ô thì nó rơi vào ô KỀ — mà ô kề rất hay là chỗ nhân vật đang
+           đứng, nên trông như mũi tên cắm vào đầu người chơi. */
+        opts.aimArrow.y * TILE - camera.ry - 6,
+      );
+      g.globalAlpha = 1;
+    }
 
     /* ---- CÔN TRÙNG: bướm ban ngày, đom đóm ban đêm --------------------
        Sinh vật trang trí thuần: KHÔNG có thực thể nào trong save, không một

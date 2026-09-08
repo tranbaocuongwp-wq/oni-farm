@@ -1659,12 +1659,24 @@ body[data-hand="left"] #abtn {
 #abtn .btns .b {
   margin-bottom: calc(var(--btn-a) * 0.34);
 }
+/* Nút MỤC TIÊU là nút thứ BA của cụm, và nó nằm xa nhất trên cung — nên nó
+   thấp lại: cung ngón cái đi lên ở giữa rồi xuống lại ở đầu kia, chứ không
+   dốc mãi. Ba nút thẳng hàng ngang thì nút thứ ba đòi ngón cái duỗi hẳn ra. */
+#abtn .btns .t {
+  margin-bottom: calc(var(--btn-a) * 0.12);
+}
 body[data-hand="left"] #abtn .btns {
   flex-direction: row-reverse;
 }
 /* Nút BALO tròn CHỈ có ở chế độ tay cầm: cảm ứng đã có nút balo ngay cạnh
    hotbar rồi, thêm một cái nữa là hai nút cùng việc chen nhau chỗ. */
 #abtn .btns .y {
+  display: none;
+}
+/* …và ngược lại, nút MỤC TIÊU KHÔNG có ở chế độ tay cầm: cần phải đã rê ô ngắm
+   liên tục và chọn thẳng, tức là một cách ngắm TỐT HƠN cái vòng lặp. Thêm nút
+   nữa là hai đường cho một việc — đúng cái luật `PAD_MAP` sinh ra để chặn. */
+body[data-input^="pad"] #abtn .btns .t {
   display: none;
 }
 
@@ -1768,6 +1780,18 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
   height: var(--btn-b);
   min-height: var(--btn-b);
   font-size: 1.05em;
+}
+/* Nút MỤC TIÊU: cùng cỡ nút phụ, viền đỏ đúng màu mũi tên nó điều khiển —
+   người chơi nối được cái nút với cái mũi tên trên bản đồ mà không cần ai chỉ. */
+#abtn .t {
+  width: var(--btn-b);
+  height: var(--btn-b);
+  min-height: var(--btn-b);
+  font-size: 0.56em;
+  letter-spacing: 0;
+  line-height: 1.05;
+  border-color: #e2573f;
+  color: #ffd8cf;
 }
 /* Nút BALO ở đỉnh hình thoi — cùng cỡ với hai nút cạnh cho cụm cân. */
 #abtn .y {
