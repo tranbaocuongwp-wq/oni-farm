@@ -556,6 +556,19 @@ export interface PropDef {
   /** Đêm bão có `chance` bị quật thành `to` (cây con → khúc gỗ). */
   stormFell?: { to: string; chance: number };
   art?: { body: string; dark: string; accent: string };
+  /**
+   * SỐ KIỂU HÌNH của vật thể — cửa đóng, cửa hé, cửa mở hẳn…
+   *
+   * Cường: "toà nhà thì cũng phải có hiệu ứng sprite: đóng cửa mở cửa, mỗi toà
+   * nhà cũng phải có 10-12 kiểu, để diễn hoạt động tương tác". Thiếu trường này
+   * = một kiểu duy nhất, đúng như mọi vật thể trước giờ.
+   *
+   * Kiểu 0 luôn là trạng thái NGHỈ (cửa đóng). Kiểu cuối là trạng thái mở hẳn.
+   * Lớp vẽ nội suy giữa hai đầu, nên số kiểu càng lớn thì cánh cửa mở càng mượt.
+   */
+  frames?: number;
+  /** Kiểu hình đổi theo cái gì: `door` = có người tới gần thì mở. */
+  anim?: "door";
 }
 
 export interface Balance {

@@ -968,6 +968,44 @@ export function createRenderer(
     }
   }
 
+  /* ------------------------------------------------------------- CỬA MỞ RA
+
+     Cường: "toà nhà thì cũng phải có hiệu ứng sprite: đóng cửa mở cửa… để diễn
+     hoạt động tương tác".
+
+     Độ mở của mỗi cánh cửa là trạng thái của LỚP VẼ, không phải của luật chơi:
+     nó không đổi kết quả một cú bấm nào, không ai cần nó trong bản lưu, và nó
+     phải mượt theo thời gian thực chứ không theo nhịp phút game. Giữ nó ở đây
+     là giữ đúng chỗ — cùng lẽ với `phaLam` (pha vung của người làm).
+
+     Khoá là chỉ số ô. Bảng tự dọn: ô nào đã đóng hẳn thì xoá khỏi bảng, nên nó
+     không lớn quá số cửa đang mở. */
+  const cuaMo = new Map<number, number>();
+  /** Người tới gần hơn ngần này ô thì cửa mở. */
+  const CUA_GAN = 1.6;
+  let dtVe = 0;
+
+  /** Độ mở hiện tại của cửa ở ô `i`, đã nới theo thời gian. 0 đóng, 1 mở hẳn. */
+  function doMoCua(s: GameState, i: number, wcx: number, wcy: number): number {
+    let gan = Math.hypot(s.player.x - wcx, s.player.y - wcy) <= CUA_GAN * TILE;
+    if (!gan)
+      for (const e of s.entities) {
+        if (e.map !== s.mapId || (!e.worker && e.kind !== "vehicle")) continue;
+        if (Math.hypot(e.x - wcx, e.y - wcy) <= CUA_GAN * TILE) {
+          gan = true;
+          break;
+        }
+      }
+    const dich = gan ? 1 : 0;
+    const cu = cuaMo.get(i) ?? 0;
+    // 0,22 giây cho một lần mở hẳn — nhanh hơn thì giật, chậm hơn thì lề mề
+    const buoc = Math.min(1, dtVe / 0.22);
+    const moi = cu + (dich - cu) * (buoc > 0 ? buoc : 1);
+    if (moi <= 0.002 && dich === 0) cuaMo.delete(i);
+    else cuaMo.set(i, moi);
+    return moi;
+  }
+
   /** Bộ đệm bốn cạnh dùng lại cho mọi ô nước — không cấp phát mỗi ô mỗi khung. */
   const SIDES_TMP: [Side, Tile | undefined][] = [
     ["n", undefined],
@@ -1052,7 +1090,7 @@ export function createRenderer(
              cam mùa thu, bạc đi mùa đông. Khác lớp phủ màu mùa toàn màn ở chỗ
              nó là trạng thái của TỪNG VẬT — cái cây đổi lá, mặt đường thì không. */
           const theoMua = def?.seasonal ? atlas.propMua(t.prop, wx.season) : null;
-          const img = theoMua
+          let img = theoMua
             ? theoMua
             : khoi
             ? khoi.get(
@@ -1073,6 +1111,12 @@ export function createRenderer(
           if (lanCan?.down) {
             const over = atlas.propOver[t.prop];
             if (over) items.push({ base: y * TILE + TILE + 5, run: () => put(over, px, py) });
+          }
+          if (img && def && (def.frames ?? 0) >= 2 && def.anim === "door") {
+            // cửa cuốn kho, cửa ra bản đồ trong nhà: thay hẳn hình theo độ mở
+            const u = doMoCua(s, y * s.w + x, wcx, wcy);
+            const k = Math.round(u * ((def.frames ?? 1) - 1));
+            img = atlas.propKieu(t.prop, k) ?? img;
           }
           if (img) {
             const oy = def?.tall ? py - TILE : py;
@@ -1169,6 +1213,21 @@ export function createRenderer(
             );
             const img = atlas.house.get(key);
             if (img) items.push({ base, run: () => put(img, px, py) });
+            if (t.prop === "door") {
+              /* CÁNH CỬA là một LỚP PHỦ vẽ đè lên ô nhà, không phải một bộ ô
+                 nhà thứ hai: ô nhà đã có 32 biến thể tự nối, nhân thêm mười
+                 kiểu mở là 320 hình dựng lúc mở game cho một thứ chỉ hiện ra
+                 khi người chơi đứng sát cửa. Ở độ mở 0 lớp phủ rỗng, nên cửa
+                 đóng không thêm một lệnh vẽ nào. */
+              const dnum = content.props["door"]?.frames ?? 0;
+              if (dnum >= 2) {
+                const u = doMoCua(s, y * s.w + x, wcx, wcy);
+                if (u > 0.02) {
+                  const ov = atlas.propKieu("door", Math.round(u * (dnum - 1)));
+                  if (ov) items.push({ base: base + 0.25, run: () => put(ov, px, py) });
+                }
+              }
+            }
             /* KHÓI ống khói: chỉ ở NÓC (ô trên không phải nhà) và chỉ khi trong
                nhà có người — tức lúc trời đã tối hoặc trời lạnh. Một cái nhà im
                lìm suốt ngày đọc ra là nhà bỏ hoang; một sợi khói là thứ rẻ nhất
@@ -1923,6 +1982,7 @@ export function createRenderer(
     if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
 
     const dt = lastTime > 0 ? Math.min(0.1, Math.max(0, timeSec - lastTime)) : 0;
+    dtVe = dt;
     lastTime = timeSec;
     lastTimeSec = timeSec;
     if (opts.reduceMotion) particles.length = 0;

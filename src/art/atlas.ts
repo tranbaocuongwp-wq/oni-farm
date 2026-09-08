@@ -1210,6 +1210,98 @@ function makeGrassProp(art: PropArt, tall: boolean): HTMLCanvasElement {
   return s.c;
 }
 
+/* ---------------------------------------------------------------------------
+   BA LOẠI ĐÁ NỮA — Cường: "thêm nhiều loại đá".
+
+   Một nông trại chỉ có đúng một hòn đá xám thì mọi chỗ có đá đều trông giống
+   nhau, và mắt thôi để ý tới địa hình. Ba loại dưới đây khác nhau ở việc CHÚNG
+   LÀM GÌ chứ không chỉ ở hình: đá quặng đập lâu mà cho nhiều đá, đống sỏi nhặt
+   được ngay, phiến đá thì đi qua được — nó là mặt sàn, không phải chướng ngại.
+--------------------------------------------------------------------------- */
+
+/** ĐÁ QUẶNG — khối đá sẫm có vỉa khoáng vàng lấp lánh, đập sáu nhát. */
+function makeRockOre(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x6d31);
+  s.shadow(8, 14, 5.5, 1.8);
+  /* Khối đá GÃY GÓC: sáu mặt phẳng, mỗi mặt một tông. Đá tròn trơn đọc ra là
+     quả trứng; đá quặng thì phải trông như vừa bị tách ra khỏi vách núi. */
+  const mat: [number, number, number, number, string][] = [
+    [2.5, 9, 6, 5, art.dark],
+    [4, 6, 6, 5, art.body],
+    [8, 7.5, 5.5, 6, shade(art.body, 0.86)],
+    [5.5, 4, 4.5, 4, lighten(art.body)],
+  ];
+  for (const [x0, y0, w, h, mau] of mat)
+    for (let y = 0; y < h; y += Q)
+      for (let x = 0; x < w; x += Q) {
+        // vát bốn góc để mặt đá thành hình đa giác chứ không phải ô vuông
+        const u = x / w;
+        const v = y / h;
+        if (u + v < 0.16 || u + v > 1.84 || u - v > 0.86 || v - u > 0.86) continue;
+        s.dot(x0 + x, y0 + y, mau);
+      }
+  // cạnh gãy: nét sáng ở mép trên mỗi mặt
+  for (const [x0, y0, w, , ] of mat) for (let x = 0.5; x < w - 0.5; x += Q) s.dot(x0 + x, y0 + 0.5, lighten(art.body));
+  /* VỈA QUẶNG: ba mạch vàng chạy theo cạnh gãy, mỗi mạch có một chấm sáng
+     hơn. Rải hạt vàng đều khắp thì nó thành ra đá bị đổ sơn. */
+  for (let i = 0; i < 3; i++) {
+    const x0 = 4 + rnd() * 6;
+    const y0 = 6 + rnd() * 5;
+    const goc = rnd() * Math.PI;
+    for (let d = 0; d < 2.5 + rnd() * 1.5; d += Q) {
+      const x = x0 + Math.cos(goc) * d;
+      const y = y0 + Math.sin(goc) * d * 0.6;
+      s.dot(x, y, art.accent);
+      if (d < Q * 2) s.dot(x, y - Q, lighten(art.accent));
+    }
+  }
+  return outline(s, shade(art.dark, 0.55), 1).c;
+}
+
+/** ĐỐNG SỎI — năm hòn nhỏ chồng nhau, nhặt được ngay. */
+function makeRockPile(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  s.shadow(8, 14, 5, 1.6);
+  const hon: [number, number, number][] = [
+    [4.5, 12, 2.4],
+    [11, 12.5, 2],
+    [8, 11.5, 2.6],
+    [6, 9.5, 1.9],
+    [10, 9, 1.6],
+  ];
+  for (const [cx, cy, r] of hon) {
+    s.ell(cx, cy, r, r * 0.78, art.dark);
+    s.ell(cx, cy - Q, r - Q, r * 0.78 - Q, art.body);
+    s.ell(cx - r * 0.3, cy - r * 0.38, r * 0.36, r * 0.24, art.accent);
+  }
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** PHIẾN ĐÁ — tấm đá phẳng nằm sát đất, ĐI QUA ĐƯỢC. Nó là mặt sàn, không phải
+ *  chướng ngại: vẽ nó THẤP và không có bóng dựng, để mắt đọc ra ngay là "chỗ
+ *  giẫm lên được" chứ không phải "chỗ phải đi vòng". */
+function makeRockFlat(art: PropArt): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const rnd = mulberry32(0x1f7c);
+  for (let y = 4; y < 14; y += Q) {
+    const u = (y - 4) / 10;
+    const w = 6.4 * Math.sin(Math.PI * (0.18 + 0.72 * u));
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, art.body);
+    s.dot(8 - w, y, art.dark);
+    s.dot(8 + w, y, art.dark);
+    if (u < 0.4) s.dot(8 - w + Q, y, art.accent);
+  }
+  // vết nứt và vài đốm địa y
+  for (let d = 0; d < 6; d += Q) s.dot(6 + d * 0.7, 6.5 + d * 0.5, art.dark);
+  for (let i = 0; i < 7; i++) {
+    const x = 4 + rnd() * 8;
+    const y = 5 + rnd() * 8;
+    s.dot(x, y, rnd() > 0.5 ? "#7f9e5a" : shade(art.dark, 1.2));
+  }
+  return outline(s, shade(art.dark, 0.62), 1).c;
+}
+
 /**
  * ĐÁ RÊU — tảng đá lớn ven suối, mặt trên phủ rêu.
  *
@@ -1568,7 +1660,49 @@ function makeWall(art: PropArt): HTMLCanvasElement {
 }
 
 /** Cửa ra vào nhìn từ trong phòng. */
-function makeDoorIn(art: PropArt): HTMLCanvasElement {
+/* ---------------------------------------------------------------------------
+   CỬA MỞ RA ĐƯỢC — Cường: "toà nhà thì cũng phải có hiệu ứng sprite: đóng cửa
+   mở cửa… để diễn hoạt động tương tác".
+
+   Cách làm rẻ nhất mà vẫn đúng: cánh cửa là một LỚP PHỦ vẽ đè lên ô nhà, chứ
+   không phải một bộ ô nhà thứ hai. Ô nhà có 16 biến thể tự nối × 2 (có cửa /
+   không); nhân thêm mười kiểu mở là 320 hình phải dựng lúc mở game, cho một thứ
+   chỉ hiện ra khi người chơi đứng sát cửa. Lớp phủ thì mười hình, dựng LƯỜI, và
+   ở kiểu 0 nó rỗng — tức là cửa đóng thì không tốn một lệnh vẽ nào.
+--------------------------------------------------------------------------- */
+function makeDoor(art: PropArt, kieu: number): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  if (kieu <= 0) return s.c; // đóng: lớp phủ rỗng, ô nhà tự lo
+  const u = Math.min(1, kieu / 9); // 0 khép, 1 mở hẳn
+  const trong = "#241d18";
+  // KHUNG CỬA và lòng nhà tối
+  for (let y = 2.5; y < TILE - 1; y += Q) for (let x = 3.5; x < 12.5; x += Q) s.dot(x, y, trong);
+  /* ÁNH ĐÈN hắt ra: một hình thang sáng loe dần xuống thềm. Đây là thứ làm cái
+     cửa đọc ra là ĐANG MỞ chứ không phải một lỗ đen trên tường. */
+  for (let y = 3; y < TILE - 1; y += Q) {
+    const v = (y - 3) / (TILE - 4);
+    const w = (1.5 + v * 2.5) * u;
+    for (let x = -w; x <= w; x += Q) s.dot(8 + x, y, v < 0.5 ? "#f7e6b8" : "#e8cf94");
+  }
+  /* CÁNH CỬA xoay: nhìn từ trên xuống thì nó THU HẸP dần khi mở ra — bề ngang
+     cánh bằng cos của góc mở. Cánh trượt sang ngang là cửa lùa, không phải cửa
+     bản lề. */
+  const rong = Math.max(Q, 4.3 * Math.cos((u * Math.PI) / 2.1));
+  for (let y = 2.5; y < TILE - 1; y += Q) {
+    for (let x = 0; x < rong; x += Q) s.dot(3.5 + x, y, art.body);
+    s.dot(3.5, y, art.accent);
+    s.dot(3.5 + rong - Q, y, art.dark);
+  }
+  if (rong > 1.5) {
+    for (let y = 4; y < 9; y += Q) for (let x = 0.5; x < rong - 0.5; x += Q) s.dot(3.5 + x, y, P.glass);
+    s.dot(4, 4.5, P.glassLight);
+  }
+  if (rong > 1) s.dot(3.5 + rong - 0.5, 9.5, P.gold);
+  return outline(s, shade(art.dark, 0.6), 1).c;
+}
+
+/** Cửa RA của bản đồ trong nhà — cùng cách mở, thêm mũi tên chỉ lối ra. */
+function makeDoorIn(art: PropArt, kieu = 0): HTMLCanvasElement {
   const s = surface(TILE, TILE);
   s.rect(0, 0, TILE, TILE, P.roofDark);
   s.rect(2, 2, 12, 14, art.body);
@@ -1580,6 +1714,19 @@ function makeDoorIn(art: PropArt): HTMLCanvasElement {
   s.px(8, 13, P.gold);
   s.px(7, 12, P.gold);
   s.px(9, 12, P.gold);
+  if (kieu > 0) {
+    /* MỞ: cánh thu hẹp về mép trái, lộ ra khoảng sáng ngoài trời. */
+    const u = Math.min(1, kieu / 9);
+    for (let y = 2; y < TILE - 1; y += Q) for (let x = 2; x < 14; x += Q) s.dot(x, y, "#cfe3f2");
+    for (let y = 3; y < TILE - 2; y += Q) for (let x = 3; x < 13; x += Q) s.dot(x, y, "#eaf4ff");
+    const rong = Math.max(Q, 11 * Math.cos((u * Math.PI) / 2.1));
+    for (let y = 2; y < TILE - 1; y += Q) {
+      for (let x = 0; x < rong; x += Q) s.dot(2 + x, y, art.body);
+      s.dot(2 + rong - Q, y, art.dark);
+    }
+    if (rong > 3) for (let y = 3; y < 9; y += Q) for (let x = 1; x < rong - 1; x += Q) s.dot(2 + x, y, art.accent);
+    if (rong > 1) s.dot(2 + rong - 0.5, 11, P.gold);
+  }
   return s.c;
 }
 
@@ -1748,8 +1895,9 @@ function makeWarehouse(art: PropArt): HTMLCanvasElement {
 }
 
 /** Cửa kho — cửa cuốn kim loại, có nan ngang, ray hai bên và tay nắm đồng. */
-function makeStoreDoor(art: PropArt): HTMLCanvasElement {
+function makeStoreDoor(art: PropArt, kieu = 0): HTMLCanvasElement {
   const s = makeWarehouseSurface(art);
+  const u = Math.min(1, Math.max(0, kieu / 9)); // 0 kín, 1 cuốn hết lên
   // hốc cửa
   for (let y = 3.5; y < TILE; y += Q)
     for (let x = 2.5; x < 13.5; x += Q) s.dot(x, y, shade(art.dark, 0.6));
@@ -1758,19 +1906,28 @@ function makeStoreDoor(art: PropArt): HTMLCanvasElement {
     s.dot(2.5, y, art.dark);
     s.dot(13, y, art.dark);
   }
-  // nan cuốn: mỗi nan một mặt sáng một mặt tối
-  for (let y = 4.5; y < TILE - 0.5; y += 1.5) {
+  /* CỬA CUỐN KÉO LÊN: mép dưới của rèm nan trượt lên theo `kieu`, phần đã cuốn
+     lộ ra lòng kho tối. Cửa cuốn mà "mở" bằng cách mờ đi thì nó không phải cửa
+     cuốn — cái nan phải thật sự đi lên. */
+  const day = 3.5 + u * 11;
+  for (let y = 3.5; y < day; y += Q) for (let x = 3; x < 13; x += Q) s.dot(x, y, "#241d18");
+  if (u > 0.15) for (let x = 3; x < 13; x += Q) s.dot(x, day - Q, shade(art.dark, 0.5));
+  for (let y = day; y < TILE - 0.5; y += 1.5) {
     for (let x = 3; x < 13; x += Q) {
       s.dot(x, y, lighten(art.body));
       s.dot(x, y + 0.5, art.body);
       s.dot(x, y + 1, shade(art.dark, 0.8));
     }
   }
-  // tay nắm
-  for (let x = 7; x < 9.5; x += Q) {
-    s.dot(x, 10.5, art.accent);
-    s.dot(x, 11, shade(art.accent, 0.7));
-  }
+  // hộp cuốn ở đỉnh: nan cuốn phải đi đâu đó
+  for (let y = 3.5; y < 5; y += Q) for (let x = 3; x < 13; x += Q) s.dot(x, y, art.dark);
+  for (let x = 3; x < 13; x += 1.5) for (let y = 3.5; y < 5; y += Q) s.dot(x, y, shade(art.body, 0.8));
+  // tay nắm bám theo mép dưới rèm
+  if (day < TILE - 3)
+    for (let x = 7; x < 9.5; x += Q) {
+      s.dot(x, day + 1.5, art.accent);
+      s.dot(x, day + 2, shade(art.accent, 0.7));
+    }
   return outline(s, shade(art.dark, 0.55), 1).c;
 }
 
@@ -1935,11 +2092,13 @@ function makeWell(art: PropArt): HTMLCanvasElement {
   return outline(s, P.outline, 1).c;
 }
 
-function makeProp(id: string, art: PropArt): HTMLCanvasElement {
+function makeProp(id: string, art: PropArt, kieu = 0): HTMLCanvasElement {
   switch (id) {
+    case "door": return makeDoor(art, kieu);
+    case "door_in": return makeDoorIn(art, kieu);
+    case "store_door": return makeStoreDoor(art, kieu);
     case "warehouse": return makeWarehouse(art);
     case "kennel": return makeKennel(art);
-    case "store_door": return makeStoreDoor(art);
     case "tree": return makeTree(art);
     case "sapling": return makeSapling(art);
     case "stump": return makeStump(art);
@@ -1954,7 +2113,6 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "pier": return makePier(art);
     case "roadbridge": return makeRoadBridge(art);
     case "wall": return makeWall(art);
-    case "door_in": return makeDoorIn(art);
     case "shop": return makeShop();
     case "counter": return makeCounter();
     case "log": return makeLog(art);
@@ -1964,6 +2122,9 @@ function makeProp(id: string, art: PropArt): HTMLCanvasElement {
     case "bush_big": return makeBushBig(art);
     case "waterfall": return makeWaterfall(art);
     case "boulder": return makeBoulder(art);
+    case "rock_ore": return makeRockOre(art);
+    case "rock_pile": return makeRockPile(art);
+    case "rock_flat": return makeRockFlat(art);
     case "pine": return makePine(art);
     case "birch": return makeBirch(art);
     case "palm": return makePalm(art);
@@ -4105,6 +4266,12 @@ export interface Atlas {
    * Trả `null` nếu vật này không đổi màu — nơi gọi dùng `atlas.props[id]`.
    */
   propMua(id: string, mua: number): HTMLCanvasElement | null;
+  /**
+   * KIỂU HÌNH của một vật thể (cửa đóng → cửa mở). Dựng LƯỜI: kiểu nào không
+   * bao giờ xảy ra thì không tốn một pixel nào, và cửa đóng (kiểu 0) trả về
+   * hình gốc nên không thêm một lệnh vẽ nào cho cả nông trại.
+   */
+  propKieu(id: string, kieu: number): HTMLCanvasElement | null;
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật thể NHIỀU Ô tự nối (`prop.block`): id → (khoá trái-phải → sprite) */
@@ -6035,6 +6202,19 @@ export function buildAtlas(content: Content): Atlas {
     return c;
   };
 
+  const kieuCache = new Map<string, HTMLCanvasElement | null>();
+  const propKieuOf = (id: string, kieu: number): HTMLCanvasElement | null => {
+    const def = content.props[id];
+    const n = def?.frames ?? 0;
+    if (!def || n < 2) return null;
+    const k = Math.max(0, Math.min(n - 1, Math.round(kieu)));
+    const key = `${id}|${k}`;
+    if (kieuCache.has(key)) return kieuCache.get(key) ?? null;
+    const c = makeProp(id, def.art ?? FALLBACK_ART, k);
+    kieuCache.set(key, c);
+    return c;
+  };
+
   const workerCache = new Map<string, HTMLCanvasElement>();
   const workerOf = (skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement => {
     const skins = content.workers.skins;
@@ -6185,6 +6365,7 @@ export function buildAtlas(content: Content): Atlas {
     propMask,
     propOver,
     propMua: propMuaOf,
+    propKieu: propKieuOf,
     blocks,
     animal: animalOf,
     emote: emoteOf,

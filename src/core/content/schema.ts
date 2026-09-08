@@ -334,6 +334,15 @@ export function validateProps(raw: unknown): string[] {
     if (item["tall"] !== undefined && typeof item["tall"] !== "boolean")
       k.fail("tall", "phải là boolean");
     if (item["sway"] !== undefined) k.num(item, "sway", 0, 2);
+    /* KIỂU HÌNH (Đợt 25): cửa đóng → cửa mở. Phải là số nguyên >= 2 mới có
+       nghĩa, và `anim` phải là tên bộ vẽ biết — sai tên thì cánh cửa đứng im
+       trong khi build vẫn xanh, đúng kiểu hỏng khó tìm nhất. */
+    if (item["frames"] !== undefined) {
+      const n = item["frames"];
+      if (!isNum(n) || !Number.isInteger(n) || (n as number) < 2)
+        k.fail("frames", "phải là số nguyên >= 2");
+    }
+    if (item["anim"] !== undefined) k.enumStr(item, "anim", ["door"]);
     if (item["seasonal"] !== undefined && typeof item["seasonal"] !== "boolean")
       k.fail("seasonal", "phải là boolean");
     if (item["place"] !== undefined && item["place"] !== "tile" && item["place"] !== "edge")

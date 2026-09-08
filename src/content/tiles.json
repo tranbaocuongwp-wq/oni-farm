@@ -178,6 +178,18 @@
     "A": {
       "ground": "grass",
       "prop": "deadtree"
+    },
+    "O": {
+      "ground": "grass",
+      "prop": "rock_ore"
+    },
+    "e": {
+      "ground": "grass",
+      "prop": "rock_pile"
+    },
+    "f": {
+      "ground": "grass",
+      "prop": "rock_flat"
     }
   },
   "spawn": {
