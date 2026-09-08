@@ -35,6 +35,7 @@ import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src
 import { sellSlots, countItem} from "../src/game/inventory.ts";
 import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
+import { validateCrops } from "../src/core/content/schema.ts";
 import * as seasonApi from "../src/game/season.ts";
 import { cropInSeason } from "../src/game/season.ts";
 import * as actionsApi from "../src/game/actions.ts";
@@ -11530,6 +11531,95 @@ test("162. HỆ SỐ PHÓNG luôn chia hết cho ART — pixel không được m
     const dai = Math.max(vp.viewW, vp.viewH) / TILE;
     ok(dai <= MAX_TILES_LONG + 0.001, `${w}×${h}: trục dài ${dai.toFixed(1)} ô vượt trần ${MAX_TILES_LONG}`);
   }
+});
+
+test("163. KHÔNG cây trồng nào trông giống hệt cây khác", () => {
+  /* Đợt 24 sinh ra từ đúng một câu của Cường: "tính ra là toàn mấy cây giống
+     nhau… toàn màu tự tựa giống nhau khó phân biệt". Câu ấy đúng, và nó đúng vì
+     một lý do có thể đo được: 61 cây chia vào 11 DÁNG, còn bên trong một dáng
+     thì mọi cây vẽ y hệt nhau và chỉ khác bảng màu. Mười loại củ ra mười túm lá
+     giống hệt; năm loại ngũ cốc ra năm cái quạt giống hệt.
+
+     Kịch bản này biến câu than ấy thành một LUẬT. Hai cây được phép trùng
+     "chữ ký hình" (dáng cây · dáng quả · hoa văn · dáng lá) chỉ khi bảng màu
+     của chúng đủ xa nhau. Trùng cả hình lẫn màu là thứ không được phép tồn tại,
+     vì đó chính là hai cây mà người chơi không phân biệt nổi.
+
+     Nó cũng là dây bẫy cho một cách hỏng rất dễ xảy ra: thêm cây mới bằng cách
+     chép object của cây cũ rồi đổi tên và giá — build vẫn xanh, schema vẫn
+     xanh, và nông trại lặng lẽ có thêm một cây trùng hình. */
+  const NGUONG = 150; // tổng khoảng cách Manhattan RGB của MÀU LÁ + MÀU QUẢ
+
+  const rgb = (h) => {
+    const v = h.replace("#", "");
+    return [
+      parseInt(v.slice(0, 2), 16),
+      parseInt(v.slice(2, 4), 16),
+      parseInt(v.slice(4, 6), 16),
+    ];
+  };
+  const xa = (p, q) => {
+    const a = rgb(p);
+    const b = rgb(q);
+    return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  };
+  const chuKy = (a) =>
+    [a.form ?? "leafy", a.fruitShape ?? "-", a.pattern ?? "plain", a.leafShape ?? "drop"].join("·");
+
+  const cay = Object.values(content.crops);
+  eq(cay.length, 61, "content phải có đủ 61 cây");
+
+  const nhom = new Map();
+  for (const c of cay) {
+    const k = chuKy(c.art);
+    if (!nhom.has(k)) nhom.set(k, []);
+    nhom.get(k).push(c);
+  }
+
+  let gan = Infinity;
+  let ganAi = "";
+  for (const [k, ds] of nhom) {
+    for (let i = 0; i < ds.length; i++)
+      for (let j = i + 1; j < ds.length; j++) {
+        const A = ds[i];
+        const B = ds[j];
+        const d = xa(A.art.leaf, B.art.leaf) + xa(A.art.fruit, B.art.fruit);
+        if (d < gan) {
+          gan = d;
+          ganAi = `${A.id} vs ${B.id} (chữ ký ${k})`;
+        }
+      }
+  }
+  ok(
+    gan >= NGUONG,
+    `hai cây cùng chữ ký hình mà màu quá giống nhau: ${ganAi} — khoảng cách ${gan} < ${NGUONG}`,
+  );
+
+  /* Và mỗi DÁNG CÂY phải thật sự dùng tới các tham số hình: nếu cả mười cây họ
+     củ đều bỏ trống `fruitShape` thì luật trên vẫn xanh (chúng cùng chữ ký, chỉ
+     cần khác màu) trong khi ngoài ruộng chúng lại giống hệt nhau. */
+  const theoDang = new Map();
+  for (const c of cay) {
+    const f = c.art.form ?? "leafy";
+    if (!theoDang.has(f)) theoDang.set(f, new Set());
+    theoDang.get(f).add(chuKy(c.art));
+  }
+  for (const [dang, ds] of theoDang) {
+    const soCay = cay.filter((c) => (c.art.form ?? "leafy") === dang).length;
+    if (soCay < 3) continue;
+    ok(
+      ds.size >= 2,
+      `dáng "${dang}" có ${soCay} cây mà chỉ một chữ ký hình — chúng sẽ vẽ ra y hệt nhau`,
+    );
+  }
+
+  // schema phải CHẶN tên dáng sai, không lặng lẽ rơi về mặc định
+  const xau = JSON.parse(JSON.stringify(rawPack().crops));
+  xau.crops[0].art.fruitShape = "khong-co-that";
+  ok(
+    validateCrops(xau).length > 0,
+    "schema phải từ chối `fruitShape` lạ — rơi lặng lẽ về mặc định thì một lỗi gõ biến quả dưa sọc thành quả bóng trơn mà build vẫn xanh",
+  );
 });
 
 await Promise.all(choDoi);

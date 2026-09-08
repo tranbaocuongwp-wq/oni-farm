@@ -49,9 +49,75 @@ export type CropForm =
   /** một bông to trên đỉnh thân (hướng dương, cúc) */
   | "flower";
 
+/**
+ * BÓNG DÁNG CỦA QUẢ — thứ phân biệt cây này với cây kia MẠNH hơn màu.
+ *
+ * Đợt 24 thêm trường này vì một lý do đo được: 61 cây chia vào 11 dáng, nhưng
+ * bên trong một dáng thì mọi cây vẽ y hệt nhau và chỉ khác bảng màu. Mười loại
+ * củ ra mười túm lá giống hệt; năm loại ngũ cốc ra năm cái quạt giống hệt; năm
+ * quả họ dưa thì KHÔNG hiện quả nào cả. Ở cỡ 16 pixel, hai cây khác màu mà cùng
+ * bóng dáng vẫn đọc ra "cùng một cây", nhất là khi cả hai đều xanh lá.
+ *
+ * Mỗi DÁNG CÂY tự hiểu tên dáng quả theo cách của mình — "ear" ở `stalk` là bắp
+ * ngô, ở `grain` là bông lúa mì. Đó là chủ ý: một bảng tên chung cho mọi dáng
+ * cây thì hoặc phải dài lê thê, hoặc phải đặt tên chung chung tới mức vô nghĩa.
+ * Thiếu trường = dáng mặc định của dáng cây ấy, nên pack cũ không đổi hình.
+ */
+export type FruitShape =
+  /** khối tròn (cà chua, dâu, củ cải) */
+  | "round"
+  /** thon dài (dưa leo, cà tím, khoai lang) */
+  | "long"
+  /** thon nhọn một đầu (ớt, cà rốt) */
+  | "cone"
+  /** nhiều múi phồng (ớt chuông) */
+  | "lobed"
+  /** bắp có hàng hạt (ngô, lúa mì) */
+  | "ear"
+  /** trái dẹt dài có ngấn hạt (đậu que, đậu nành) */
+  | "pod"
+  /** chùm quả nhỏ (việt quất, cà phê, khoai tây) */
+  | "cluster"
+  /** bông trĩu cong xuống (lúa) */
+  | "droop"
+  /** bông dựng có râu dài (lúa mạch) */
+  | "awn"
+  /** chuỗi hoa nhỏ dọc ngọn (oải hương) */
+  | "spike"
+  /** cánh cuộn vòng (hoa hồng) */
+  | "rosette"
+  /** đĩa lớn viền cánh (hướng dương) */
+  | "disc"
+  /** cầu cánh dày (cúc vạn thọ) */
+  | "pompom"
+  /** nhiều cánh mảnh toả (hoa cúc) */
+  | "ray";
+
+/** MẶT NGOÀI của quả — sọc dưa hấu, múi bí đỏ, vân lưới, đốm. */
+export type FruitPattern = "plain" | "stripe" | "ridge" | "net" | "speckle";
+
+/** BÓNG DÁNG CỦA LÁ — thứ phân biệt chín loại rau thơm với nhau. */
+export type LeafShape =
+  /** lá giọt nước (mặc định) */
+  | "drop"
+  /** lá dài bản hẹp, cong rủ (sả, lúa) */
+  | "blade"
+  /** lá tròn mọc đối (húng quế, bạc hà, tía tô) */
+  | "round"
+  /** lá xẻ thuỳ (ngò rí, cần tây, cải xoăn) */
+  | "lobed"
+  /** lá ống rỗng (hành lá, hẹ) */
+  | "tube";
+
 export interface CropArt {
   /** Dáng cây; thiếu thì coi như "leafy". */
   form?: CropForm;
+  /** Dáng quả; thiếu thì mỗi dáng cây dùng dáng quả mặc định của nó. */
+  fruitShape?: FruitShape;
+  /** Mặt ngoài quả; thiếu thì trơn. */
+  pattern?: FruitPattern;
+  /** Dáng lá; thiếu thì "drop". */
+  leafShape?: LeafShape;
   stem: string;
   leaf: string;
   leafDark: string;

@@ -108,6 +108,30 @@ const CROP_FORMS = [
   "flower",
 ] as const;
 
+/** Phải khớp với kiểu FruitShape trong src/game/types.ts. */
+const FRUIT_SHAPES = [
+  "round",
+  "long",
+  "cone",
+  "lobed",
+  "ear",
+  "pod",
+  "cluster",
+  "droop",
+  "awn",
+  "spike",
+  "rosette",
+  "disc",
+  "pompom",
+  "ray",
+] as const;
+
+/** Phải khớp với kiểu FruitPattern trong src/game/types.ts. */
+const FRUIT_PATTERNS = ["plain", "stripe", "ridge", "net", "speckle"] as const;
+
+/** Phải khớp với kiểu LeafShape trong src/game/types.ts. */
+const LEAF_SHAPES = ["drop", "blade", "round", "lobed", "tube"] as const;
+
 function colors(c: Check, src: Any, keys: string[], where: string) {
   for (const k of keys) {
     const v = src[k];
@@ -174,6 +198,12 @@ export function validateCrops(raw: unknown): string[] {
       // vì như thế một lỗi chính tả sẽ biến cả ruộng dưa thành cây lá.
       if (art["form"] !== undefined)
         k.enumStr(art, "form", CROP_FORMS);
+      /* Ba trường dáng của Đợt 24 cũng TUỲ CHỌN và cũng chặn tên sai vì đúng
+         một lý do như `form`: rơi lặng lẽ về mặc định thì một lỗi gõ biến quả
+         dưa hấu sọc thành một quả bóng trơn, mà build vẫn xanh. */
+      if (art["fruitShape"] !== undefined) k.enumStr(art, "fruitShape", FRUIT_SHAPES);
+      if (art["pattern"] !== undefined) k.enumStr(art, "pattern", FRUIT_PATTERNS);
+      if (art["leafShape"] !== undefined) k.enumStr(art, "leafShape", LEAF_SHAPES);
       colors(k, art, ["stem", "leaf", "leafDark", "fruit", "fruitDark"], "art");
       for (const n of ["height", "leaves", "spread", "fruitCount", "fruitSize"])
         if (!isNum(art[n]) || (art[n] as number) < 0) k.fail(`art.${n}`, "phải là số >= 0");

@@ -120,7 +120,7 @@ Bản đồ không đổi gì trong đêm thì **giữ nguyên tham chiếu cũ*
 ## 5. Tất định — xương sống của cả dự án
 
 Bất biến: **cùng seed + cùng chuỗi action = state y hệt.** Save, replay, và toàn
-bộ 160 kịch bản sim đều dựa vào nó.
+bộ 163 kịch bản sim đều dựa vào nó.
 
 Hai luật giữ nó:
 
@@ -225,7 +225,7 @@ Chi tiết đồ hoạ và UX chạm: [`MOBILE-UX.md`](MOBILE-UX.md).
 
 | Lệnh | Việc |
 |---|---|
-| `npm run test:sim` | **160 kịch bản** mô phỏng, Node thuần, ~30 giây |
+| `npm run test:sim` | **163 kịch bản** mô phỏng, Node thuần, ~30 giây |
 | `npm run test:ota` | cổng tương thích + schema content pack |
 | `npm run test:all` | typecheck + cả hai |
 | `npm run bench` | bảng chi phí phần mô phỏng trên cảnh nặng cố định |
@@ -255,6 +255,13 @@ Lớp vẽ **không** đo được trong Node (canvas ở Node chỉ đo phần 
 một con số trông chính xác mà không đúng với cái gì cả). Đo nó trong trình duyệt
 qua `window.__PF.step()` ở bản dev, hoặc **đếm lệnh vẽ** — thước đo không phụ
 thuộc lịch trình của trình duyệt.
+
+Từ Đợt 24 bộ đếm ấy có thật, không còn là mong muốn: `renderer.stats()` trả
+`{ drawImage, fillRect, items, culled }` của khung vừa vẽ (chỉ bản DEV — nó bọc
+`g.drawImage`/`g.fillRect` nên không được phép tồn tại trong bản phát hành). Đo
+một khung: `__PF.step(0.016, 3)` rồi `__PF.renderer.stats()`. Cùng đợt, thời gian
+**dựng atlas** lúc mở game cũng in ra console ở bản dev — số pixel của atlas tăng
+bốn lần nên nó thành một con số phải theo dõi được, không phải đoán.
 
 ---
 

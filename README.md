@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 160 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 163 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -1006,6 +1006,69 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 24: HD pixel art, và sáu mươi mốt cây thôi giống nhau (core 1.51 · content 1.51)
+
+Cường: *"tái cấu trúc hàng loạt — nâng cấp đồ hoạ lên HD pixel art"*, rồi giữa đợt: *"tính ra là
+toàn mấy cây giống nhau… toàn màu tự tựa giống nhau khó phân biệt."*
+
+#### Một hệ số nghệ thuật, không phải một cuộc vẽ lại từ số không
+
+`TILE` mang hai vai từ ngày đầu: một ô ăn **16 đơn vị thế giới** (toạ độ nằm trong bản lưu, hộp va
+chạm, A*) và một sprite rộng **16 pixel**. `ART = 2` tách chúng: một ô vẫn 16 đơn vị thế giới,
+sprite của nó rộng 32 pixel. Trên màn hình kích thước **không đổi một pixel**; mật độ chi tiết gấp
+bốn. `SAVE_VERSION` giữ nguyên 10 — bản lưu cũ nạp ra đúng từng toạ độ.
+
+Đo trước khi làm, và con số đổi hẳn hình dạng của đợt:
+
+| Đo được | Con số |
+|---|---|
+| Hệ số phóng ở 1000×700 | 4× — mỗi pixel bị thổi thành ô vuông 4×4, đó chính là chỗ trông thô |
+| Atlas trong bộ nhớ | 0,59 MB → **2,35 MB** |
+| Thời gian dựng atlas lúc mở game | **≈ 148 ms** |
+| `drawImage` một khung, ruộng lúa kín | **536** — HD không thêm một lệnh nào |
+
+**HD gần như miễn phí lúc chạy**: sprite 32px vẽ ở hệ số 2 tô đúng ngần ấy pixel đích như sprite
+16px vẽ ở hệ số 4. Giá phải trả là bộ nhớ và công vẽ lại.
+
+Đổi lại phải trả một ràng buộc: **hệ số phóng chia hết cho `ART`**. Sprite 32px vẽ ở hệ số 1,5 thì
+mỗi pixel nguồn trải ra 1,5 pixel đích — pixel art hỏng, và HD trông *xấu hơn* bản cũ.
+
+#### Ba bản sao của `TILE`, và một lỗi lệch nửa ô
+
+Có **ba** hằng `TILE` bằng 16, không cái nào import cái nào, không kịch bản nào kiểm chúng khớp
+nhau: cỡ ảnh (atlas), đơn vị thế giới (world), và `DEFAULT_CAMERA_CONFIG.tile` gõ tay. Tệ hơn:
+`main.ts` và `draw.ts` lấy `TILE` từ **atlas** rồi dùng nó làm đơn vị thế giới. Ngày cỡ ảnh đổi mà
+thế giới không đổi — tức đúng đợt này — hai vai ấy phải tách.
+
+Nó đã lệch thật một lần: `drawActors` neo hình bằng `img.width / 2`, mà từ khi có ART một con vật
+16 đơn vị thế giới có canvas rộng 32 pixel. Mọi con vật, mọi người làm, mọi chiếc xe đứng lệch
+**nửa ô** so với chỗ luật chơi nói họ đang đứng. Bắt được vì đọc lại từng dòng dùng `.width`, không
+phải vì test — sim không có canvas nên không gọi được lớp vẽ.
+
+#### Vì sao 61 cây từng trông giống nhau
+
+61 cây chia vào 11 dáng, nhưng **bên trong một dáng thì mọi cây vẽ y hệt nhau, chỉ khác bảng màu**.
+Mười loại củ ra mười túm lá giống hệt. Năm loại ngũ cốc ra năm cái quạt giống hệt. Năm quả họ dưa
+thì không hiện quả nào cả — quả chỉ to bằng hai ba pixel, nên quả dưa hấu **không thấy được**. Và
+hơn bốn mươi cây mang cùng một sắc xanh lá, mà ở cỡ mười sáu pixel thì màu là thứ đọc được sau
+cùng.
+
+Ba tham số content mới, đều tuỳ chọn nên pack cũ không đổi hình:
+
+* **`fruitShape`** — dáng quả: ớt thon nhọn, bắp ngô có hàng hạt, trái đậu dẹt có ngấn, việt quất
+  thành chùm, bông lúa trĩu cong, chuỗi hoa oải hương, cánh cuộn hoa hồng.
+* **`pattern`** — mặt ngoài: sọc dưa hấu, múi bí đỏ, vân lưới dưa lưới, đốm khoai mì.
+* **`leafShape`** — dáng lá: lá ống của hành, lá tròn mọc đối của húng quế, lá xẻ của ngò, lá bản
+  dài của sả. Chín loại rau thơm thôi là chín cái quạt giống nhau.
+
+Biểu tượng trong túi đồ cũng đi theo: trước đợt này cả 61 cây dùng **đúng một hình** — hai đĩa tròn
+lệch nhau, khác mỗi màu. Nay quả trong túi là quả ngoài ruộng, còn cây ăn lá thì là một bó rau bó
+theo đúng kiểu lá của nó.
+
+Kịch bản 163 biến chuyện này thành một luật đo được: hai cây trùng "chữ ký hình" chỉ được phép khi
+bảng màu của chúng cách nhau tối thiểu 150. Nó bắt cả cách hỏng dễ xảy ra nhất — thêm cây mới bằng
+cách chép object của cây cũ rồi đổi tên và giá.
 
 ### Đợt 23: lớp vẽ nhanh gấp ba, rồi tiêu chỗ trống ấy vào đồ hoạ (core 1.50 · content 1.50)
 

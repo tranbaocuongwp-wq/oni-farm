@@ -318,6 +318,96 @@ mượt thật. Bão dùng hai lớp lệch pha — vẫn chỉ hai lệnh.
 
 ---
 
+## 10b. Hệ số nghệ thuật — HD mà không đụng một dòng luật chơi
+
+`TILE` mang HAI vai từ ngày đầu: một ô ăn **16 đơn vị thế giới** (toạ độ nằm
+trong bản lưu, hộp va chạm, A*) và một sprite rộng **16 pixel**. Hai vai trùng
+giá trị nên chưa ai phải tách — cho tới lúc muốn nét đẹp hơn.
+
+Đo trước khi làm, và bốn con số quyết định cả hình dạng của Đợt 24:
+
+| Đo được | Con số | Nghĩa |
+|---|---|---|
+| Hệ số phóng ở 1000×700 | **4×** | mỗi pixel sprite bị thổi thành ô vuông 4×4 — đó chính là chỗ trông thô |
+| Atlas trong bộ nhớ | 484 canvas · **0,59 MB** | ở 2× là **2,35 MB**, không đáng kể |
+| Thời gian dựng atlas | **≈ 148 ms** | gấp bốn số pixel mà vẫn dưới ngưỡng thấy được |
+| `drawImage` một khung, ruộng lúa kín | **536** (399 vật thể) | HD không thêm một lệnh nào |
+
+**Kết luận quan trọng nhất: HD gần như MIỄN PHÍ lúc chạy.** Sprite 32px vẽ ở hệ
+số 2 và sprite 16px vẽ ở hệ số 4 tô **đúng ngần ấy pixel đích**. Chi phí thật là
+bộ nhớ (không đáng kể) và công vẽ lại.
+
+`ART = 2` tách hai vai: `world.ts` giữ đơn vị thế giới, `atlas.ts` giữ cỡ ảnh, và
+camera nhận `tile` từ `world.ts` thay vì gõ tay. Trước đợt này `main.ts` và
+`draw.ts` import `TILE` từ **atlas** rồi dùng nó làm đơn vị thế giới — ba hằng
+bằng nhau, không cái nào import cái nào, không kịch bản nào kiểm. Ngày cỡ ảnh đổi
+mà thế giới không đổi, hai vai ấy phải tách, nếu không mọi toạ độ lệch nửa ô và
+nó im lặng cho tới khi ai đó đi xuyên tường. (Nó đã lệch thật một lần trong đợt:
+`drawActors` còn dùng `img.width` làm đơn vị thế giới.)
+
+Hai ràng buộc giữ cho HD không phản tác dụng:
+
+1. **Hệ số phóng phải chia hết cho `ART`.** Sprite 32px vẽ ở hệ số 1,5 thì mỗi
+   pixel nguồn trải ra 1,5 pixel đích: ô pixel to nhỏ không đều, và HD trông *xấu
+   hơn* bản 16px cũ. `pickScale` kẹp về bội của ART — làm tròn **trần xuống** và
+   **sàn lên**, vì làm tròn cả hai xuống thì màn siêu rộng vỡ trần số ô trục dài.
+   Kịch bản 162 quét 16 khổ máy.
+2. **Hai cây bút, một hệ toạ độ.** `px` vẫn tô khối `ART × ART` — đó là thứ giữ
+   cho art chưa vẽ lại trông y như trước. Art đã vẽ lại dùng `dot` (đúng một
+   pixel HD) với bước lưới `Q = 1/ART`, và `outline(…, 1)` cho viền mảnh. Chỗ nào
+   còn `px` là chỗ chưa vẽ lại, và điều đó **đọc ra được ngay khi nhìn code**.
+
+Lớp vẽ giữ **toạ độ thế giới** và truyền cỡ đích tường minh qua `put()`. Cách này
+tránh phải sửa ~150 biểu thức toạ độ trong `draw.ts` — nhóm rủi ro lớn nhất của
+kế hoạch biến mất hẳn. Bốn chỗ cắt lát ảnh dùng source-rect theo **pixel ảnh** và
+đích theo **đơn vị thế giới**; hai hệ khác nhau nên chúng phải viết rõ cả hai.
+
+---
+
+## 10c. Sáu mươi mốt cây, và vì sao chúng từng trông giống nhau
+
+Cường nói đúng một câu: *"tính ra là toàn mấy cây giống nhau… toàn màu tự tựa
+giống nhau khó phân biệt"*. Câu ấy đúng, và nó đúng vì một lý do đo được.
+
+61 cây chia vào **11 dáng**, nhưng bên trong một dáng thì mọi cây vẽ y hệt nhau
+và chỉ khác bảng màu. Mười loại củ ra mười túm lá giống hệt. Năm loại ngũ cốc ra
+năm cái quạt giống hệt. Năm quả họ dưa thì **không hiện quả nào cả** — quả chỉ to
+bằng `fruitSize * 0.5`, tức hai ba pixel. Và hơn bốn mươi cây mang cùng một sắc
+xanh lá, mà ở cỡ mười sáu pixel thì **màu là thứ đọc được sau cùng**.
+
+Chữa bằng ba tham số content mới, đều **tuỳ chọn** nên pack cũ không đổi hình:
+
+| Tham số | Nói điều gì | Ví dụ |
+|---|---|---|
+| `fruitShape` | bóng dáng của quả | ớt thon nhọn · bắp ngô có hàng hạt · trái đậu dẹt có ngấn · việt quất thành chùm · bông lúa trĩu cong |
+| `pattern` | mặt ngoài của quả | sọc dưa hấu · múi bí đỏ · vân lưới dưa lưới · đốm khoai mì |
+| `leafShape` | bóng dáng của lá | lá ống của hành · lá tròn mọc đối của húng quế · lá xẻ của ngò · lá bản dài của sả |
+
+Mỗi **dáng cây** tự hiểu tên dáng quả theo cách của mình — `"ear"` ở `stalk` là
+bắp ngô, ở `grain` là bông lúa mì. Đó là chủ ý: một bảng tên chung cho mọi dáng
+cây thì hoặc dài lê thê, hoặc chung chung tới mức vô nghĩa.
+
+Ba lỗi vẽ tìm ra trong lúc làm, cả ba đều là *"đúng kỹ thuật mà sai hẳn hình"*:
+
+- **Quả mảnh tối đen.** `Math.abs(x) >= w - Q` làm mép tối; với quả mảnh (`w` chỉ
+  hơn `Q` một chút) thì **mọi** pixel rơi vào mép. Trái đậu que ra một ngón tay
+  đen. Tách thành `veLat()`: mép tối dày đúng một pixel HD, không hơn.
+- **Bông lúa bị chính bụi lá nuốt.** Vẽ cọng rồi bông trong **một** lượt thì cọng
+  thứ i+1 đè lên bông thứ i — mà bông lúa rủ xuống ngay giữa bụi. Nay hai lượt:
+  xong cọng rồi mới tới bông.
+- **Bốn cái bông thành hai đôi cánh.** Bông cong ngược *vào giữa* bụi và hạt chìa
+  đều hai bên, nên bốn bông chụm lại thành hình con chim. Nay bông vươn *ra
+  ngoài* rồi rủ, hạt chỉ bám mặt ngoài của cung.
+
+Kịch bản 163 biến câu than ấy thành một **luật**: hai cây được phép trùng "chữ ký
+hình" (dáng cây · dáng quả · hoa văn · dáng lá) chỉ khi bảng màu của chúng cách
+nhau tối thiểu 150 (Manhattan RGB của màu lá + màu quả). Cặp sát nhất hiện nay là
+158. Nó cũng là dây bẫy cho một cách hỏng rất dễ xảy ra: **thêm cây mới bằng cách
+chép object của cây cũ** rồi đổi tên và giá — build vẫn xanh, schema vẫn xanh, và
+nông trại lặng lẽ có thêm một cây trùng hình.
+
+---
+
 ## 11. Bản đồ nhỏ — vẽ lại đúng ô đổi màu
 
 Đây là chỗ tốn nhất của lớp vẽ, và nó ẩn suốt mười bốn đợt.

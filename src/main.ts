@@ -238,7 +238,13 @@ async function boot() {
   setMuted(!settings.sound);
 
   /* ---- 2. mỹ thuật ---- */
+  /* Đợt 24 nhân số pixel của atlas lên bốn lần, nên thời gian dựng nó thành
+     một con số phải THEO DÕI ĐƯỢC chứ không phải đoán: nếu nó kéo dài màn hình
+     chờ thấy được thì phải chuyển sang dựng lười theo lô. Chỉ đo ở bản DEV. */
+  const atlasT0 = import.meta.env?.DEV ? performance.now() : 0;
   const atlas = buildAtlas(content);
+  if (import.meta.env?.DEV)
+    console.info(`[atlas] dựng xong trong ${(performance.now() - atlasT0).toFixed(1)} ms`);
 
   /* ---- 3. state: tiếp tục save cũ hoặc bắt đầu mới ----
 
