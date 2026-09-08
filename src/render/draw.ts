@@ -89,6 +89,8 @@ export interface WeatherFx {
   hot: boolean;
   /** 0..1 độ dày sương (main tính theo giờ) */
   fog: number;
+  /** chỉ số MÙA (0..3 theo thứ tự content) — cây cỏ đổi màu tán theo nó */
+  season: number;
   /** bản đồ đang chơi ở ngoài trời không — trong nhà không vẽ mưa/sương */
   outdoor: boolean;
   /** lớp màu của MÙA, phủ cả trong nhà (mùa thì ở đâu cũng là mùa đó) */
@@ -417,40 +419,88 @@ export function createRenderer(
     }
   }
 
-  function drawGround(
+  /* ---------------------------------------------------- LỚP NỀN ĐƯỢC CACHE
+
+     Nền là phần TỐN NHẤT của một khung hình: mỗi ô nhìn thấy tốn ít nhất một
+     `drawImage`, và ô đất cày thì tốn tới sáu (nền · viền bốn cạnh · lớp đất).
+     Đo trên cảnh đêm-bão 285 ô: 581 lệnh `drawImage` mỗi khung, quá nửa là nền.
+
+     Nhưng nền gần như KHÔNG ĐỔI giữa các khung: nó chỉ đổi khi một ô đổi, khi
+     camera trôi sang ô mới, hoặc khi trời bắt đầu/tạnh mưa. Nên vẽ nó một lần
+     vào canvas phụ rồi dán lại mỗi khung.
+
+     Khoá vô hiệu hoá RẺ và CHÍNH XÁC: `s.tiles` là mảng copy-on-write, nên chỉ
+     cần so THAM CHIẾU — một ô đổi là cả mảng đổi. Không phải nghĩ ra một bộ
+     đếm phiên bản nào, và không có cách nào nó bỏ sót một thay đổi.
+
+     Hai thứ KHÔNG vào cache vì chúng động mỗi khung: mặt nước và bọt sóng. Danh
+     sách ô nước được ghi lại lúc dựng cache nên khung sau không phải quét lại
+     cả vùng để tìm chúng. */
+  const nen = document.createElement("canvas");
+  const ng2 = nen.getContext("2d")!;
+  let nenTiles: Tile[] | null = null;
+  let nenX0 = 0;
+  let nenY0 = 0;
+  let nenCols = 0;
+  let nenRows = 0;
+  let nenMua = false;
+  /** Chỉ số ô NƯỚC trong vùng đã cache — vẽ trực tiếp mỗi khung. */
+  let nenNuoc: number[] = [];
+  /** Chừa mấy ô quanh khung nhìn để camera trôi một quãng mà chưa phải dựng lại. */
+  const NEN_LE = 3;
+
+  function veNen(
     s: GameState,
     content: Content,
     x0: number,
     y0: number,
     x1: number,
     y1: number,
-    waterFrame: number,
     mua: boolean,
   ) {
-    const { rx, ry } = camera;
-    const shoreFrame = Math.floor(waterFrame / 2) % 2;
+    nenX0 = Math.max(0, x0 - NEN_LE);
+    nenY0 = Math.max(0, y0 - NEN_LE);
+    const x1b = Math.min(s.w - 1, x1 + NEN_LE);
+    const y1b = Math.min(s.h - 1, y1 + NEN_LE);
+    nenCols = x1b - nenX0 + 1;
+    nenRows = y1b - nenY0 + 1;
+    nenTiles = s.tiles;
+    nenMua = mua;
+    nenNuoc = [];
+    const w = nenCols * TILE;
+    const h = nenRows * TILE;
+    if (nen.width !== w || nen.height !== h) {
+      nen.width = w;
+      nen.height = h;
+      ng2.imageSmoothingEnabled = false;
+    } else ng2.clearRect(0, 0, w, h);
+    veNenVao(ng2, s, content, nenX0, nenY0, x1b, y1b, nenX0 * TILE, nenY0 * TILE, mua, nenNuoc);
+  }
+
+  /** Phần TĨNH của nền, vẽ vào một ngữ cảnh bất kỳ với gốc toạ độ cho trước. */
+  function veNenVao(
+    gg: CanvasRenderingContext2D,
+    s: GameState,
+    content: Content,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    ox: number,
+    oy: number,
+    mua: boolean,
+    nuoc: number[] | null,
+  ) {
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
         if (!t) continue;
-        const px = x * TILE - rx;
-        const py = y * TILE - ry;
+        const px = x * TILE - ox;
+        const py = y * TILE - oy;
 
+        // Mặt nước ĐỘNG mỗi khung — ghi lại chỗ rồi vẽ sau, ngoài cache.
         if (t.g === "water") {
-          g.drawImage(atlas.water[waterFrame % atlas.water.length]!, px, py);
-          // bọt ở cạnh giáp đất — ao đọc ra là ao
-          // Bốn cạnh đọc thẳng, không dựng mảng bộ đôi cho MỖI ô nước MỖI khung.
-          SIDES_TMP[0]![1] = at(s, x, y - 1);
-          SIDES_TMP[1]![1] = at(s, x, y + 1);
-          SIDES_TMP[2]![1] = at(s, x - 1, y);
-          SIDES_TMP[3]![1] = at(s, x + 1, y);
-          const sides = SIDES_TMP;
-          // BÓNG bờ trước, BỌT sau: bọt nằm ngay mép nước nên phải ở trên cùng,
-          // còn cái bóng thì chìm xuống dưới nó.
-          for (const [sd, nb] of sides)
-            if (nb && nb.g !== "water") g.drawImage(atlas.bank[sd], px, py);
-          for (const [sd, nb] of sides)
-            if (nb && nb.g !== "water") g.drawImage(atlas.shore[sd][shoreFrame]!, px, py);
+          if (nuoc) nuoc.push(y * s.w + x);
           continue;
         }
         const base =
@@ -463,44 +513,88 @@ export function createRenderer(
                 : t.g === "concrete"
                   ? atlas.concrete
                   : atlas.grass;
-        g.drawImage(base[variantFor(x, y, base.length)]!, px, py);
+        gg.drawImage(base[variantFor(x, y, base.length)]!, px, py);
         /* VŨNG NƯỚC trên lối đi khi trời mưa: một phần năm số ô, chọn theo băm
            toạ độ nên vũng nào ở đâu là ở đó suốt cơn mưa — không nhảy múa. */
         if (mua && t.g === "path" && hash2(x, y, 7) % 5 === 0)
-          g.drawImage(atlas.puddle[hash2(x, y, 9) % 2]!, px, py);
+          gg.drawImage(atlas.puddle[hash2(x, y, 9) % 2]!, px, py);
 
-        /* GỜ ĐẤT ở mép giáp nước. Vẽ ngay sau nền và TRƯỚC mọi thứ đặt lên ô,
-           để luống cày / sàn nhà kính vẫn đè lên được như thường. Bốn phép tra
-           mảng cho mỗi ô đất nhìn thấy — rẻ hơn hẳn một lần `blockedAt`, và
-           đây là thứ duy nhất làm cái hồ đọc ra là TRŨNG chứ không phải một
-           vũng màu dán lên đồng cỏ. */
+        /* GỜ ĐẤT ở mép giáp nước. */
         if (t.g !== "wood" && t.g !== "asphalt" && t.g !== "concrete") {
-          if (at(s, x, y - 1)?.g === "water") g.drawImage(atlas.bankRim.n, px, py);
-          if (at(s, x, y + 1)?.g === "water") g.drawImage(atlas.bankRim.s, px, py);
-          if (at(s, x - 1, y)?.g === "water") g.drawImage(atlas.bankRim.w, px, py);
-          if (at(s, x + 1, y)?.g === "water") g.drawImage(atlas.bankRim.e, px, py);
+          if (at(s, x, y - 1)?.g === "water") gg.drawImage(atlas.bankRim.n, px, py);
+          if (at(s, x, y + 1)?.g === "water") gg.drawImage(atlas.bankRim.s, px, py);
+          if (at(s, x - 1, y)?.g === "water") gg.drawImage(atlas.bankRim.w, px, py);
+          if (at(s, x + 1, y)?.g === "water") gg.drawImage(atlas.bankRim.e, px, py);
         }
 
         if (t.b) {
           const def = content.buildings[t.b];
           if (def?.kind === "floor") {
             const img = atlas.buildings[t.b];
-            if (img) g.drawImage(img, px, py);
+            if (img) gg.drawImage(img, px, py);
           }
         }
 
         if (t.tilled) {
           const set = t.wet ? atlas.soilWet : atlas.soil;
-          g.drawImage(set[variantFor(x, y, set.length)]!, px, py);
+          gg.drawImage(set[variantFor(x, y, set.length)]!, px, py);
           // viền lô đất ở cạnh giáp ô CHƯA cày
-          if (!at(s, x, y - 1)?.tilled) g.drawImage(atlas.soilEdge.n, px, py);
-          if (!at(s, x, y + 1)?.tilled) g.drawImage(atlas.soilEdge.s, px, py);
-          if (!at(s, x - 1, y)?.tilled) g.drawImage(atlas.soilEdge.w, px, py);
-          if (!at(s, x + 1, y)?.tilled) g.drawImage(atlas.soilEdge.e, px, py);
+          if (!at(s, x, y - 1)?.tilled) gg.drawImage(atlas.soilEdge.n, px, py);
+          if (!at(s, x, y + 1)?.tilled) gg.drawImage(atlas.soilEdge.s, px, py);
+          if (!at(s, x - 1, y)?.tilled) gg.drawImage(atlas.soilEdge.w, px, py);
+          if (!at(s, x + 1, y)?.tilled) gg.drawImage(atlas.soilEdge.e, px, py);
         }
 
-        if (t.decor === "tuft") g.drawImage(atlas.tuft, px, py);
+        if (t.decor === "tuft") gg.drawImage(atlas.tuft, px, py);
       }
+    }
+  }
+
+  function drawGround(
+    s: GameState,
+    content: Content,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    waterFrame: number,
+    mua: boolean,
+  ) {
+    const { rx, ry } = camera;
+    const shoreFrame = Math.floor(waterFrame / 2) % 2;
+
+    // Cache còn dùng được không: cùng lưới ô, cùng trời, và phủ hết khung nhìn.
+    const hopLe =
+      nenTiles === s.tiles &&
+      nenMua === mua &&
+      x0 >= nenX0 &&
+      y0 >= nenY0 &&
+      x1 <= nenX0 + nenCols - 1 &&
+      y1 <= nenY0 + nenRows - 1;
+    if (!hopLe) veNen(s, content, x0, y0, x1, y1, mua);
+    g.drawImage(nen, nenX0 * TILE - rx, nenY0 * TILE - ry);
+
+    // MẶT NƯỚC và BỌT SÓNG: động mỗi khung nên nằm ngoài cache.
+    const anhNuoc = atlas.water[waterFrame % atlas.water.length]!;
+    for (const i of nenNuoc) {
+      const x = i % s.w;
+      const y = (i - x) / s.w;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const px = x * TILE - rx;
+      const py = y * TILE - ry;
+      g.drawImage(anhNuoc, px, py);
+      // Bốn cạnh đọc thẳng, không dựng mảng bộ đôi cho MỖI ô nước MỖI khung.
+      SIDES_TMP[0]![1] = at(s, x, y - 1);
+      SIDES_TMP[1]![1] = at(s, x, y + 1);
+      SIDES_TMP[2]![1] = at(s, x - 1, y);
+      SIDES_TMP[3]![1] = at(s, x + 1, y);
+      const sides = SIDES_TMP;
+      // BÓNG bờ trước, BỌT sau: bọt nằm ngay mép nước nên phải ở trên cùng,
+      // còn cái bóng thì chìm xuống dưới nó.
+      for (const [sd, nb] of sides)
+        if (nb && nb.g !== "water") g.drawImage(atlas.bank[sd], px, py);
+      for (const [sd, nb] of sides)
+        if (nb && nb.g !== "water") g.drawImage(atlas.shore[sd][shoreFrame]!, px, py);
     }
   }
 
@@ -546,6 +640,9 @@ export function createRenderer(
   ) {
     const { rx, ry } = camera;
     const sparkFrame = Math.floor(timeSec * 6) % 3;
+    /* Trời đã tối chưa — dùng chung một mốc với lớp phủ đêm (`nightTint`), nên
+       khói bếp và đom đóm hiện đúng lúc màn hình bắt đầu sẫm lại. */
+    const dem = nightTint(s.minutes)[1] > 0.12;
     // Gió: ngọn cây lệch theo sin, mỗi ô lệch pha theo toạ độ nên cả ruộng
     // gợn sóng thay vì lắc đồng loạt. Tắt khi reduceMotion.
     const wind = reduceMotion ? 0 : wx.wind;
@@ -581,7 +678,13 @@ export function createRenderer(
              "cùng prop": đầu cầu tiếp đất phải MỞ, nếu không người đi xuyên
              qua lan can khi lên cầu. */
           const lanCan = def?.bridge ? bridgeRail(s, x, y, t.prop) : null;
-          const img = khoi
+          /* CÂY CỎ ĐỔI MÀU THEO MÙA (`prop.seasonal`): xanh non mùa xuân, vàng
+             cam mùa thu, bạc đi mùa đông. Khác lớp phủ màu mùa toàn màn ở chỗ
+             nó là trạng thái của TỪNG VẬT — cái cây đổi lá, mặt đường thì không. */
+          const theoMua = def?.seasonal ? atlas.propMua(t.prop, wx.season) : null;
+          const img = theoMua
+            ? theoMua
+            : khoi
             ? khoi.get(
                 blockVariantKey(
                   s.tiles[y * s.w + x - 1]?.prop === t.prop && x > 0,
@@ -662,6 +765,40 @@ export function createRenderer(
             );
             const img = atlas.house.get(key);
             if (img) items.push({ base, run: () => g.drawImage(img, px, py) });
+            /* KHÓI ống khói: chỉ ở NÓC (ô trên không phải nhà) và chỉ khi trong
+               nhà có người — tức lúc trời đã tối hoặc trời lạnh. Một cái nhà im
+               lìm suốt ngày đọc ra là nhà bỏ hoang; một sợi khói là thứ rẻ nhất
+               nói "có người sống ở đây". Trang trí thuần: vị trí suy từ đồng hồ
+               vẽ và toạ độ ô, không có một byte nào vào save. */
+            const ongKhoi =
+              t.prop === "house" &&
+              // hàng NÓC: ô trên không phải nhà
+              !isHouse(s.tiles[(y - 1) * s.w + x]) &&
+              // và là ô ĐẦU của dãy mái — MỘT nhà một ống khói, không phải tám
+              !(x > 0 && isHouse(s.tiles[y * s.w + x - 1]));
+            if (ongKhoi && !reduceMotion && (dem || wx.season === 3)) {
+              const gio = wx.wind;
+              /* Cột khói CỐ Ý THẤP (14px): ngôi nhà nằm sát mép trên bản đồ, mà
+                 camera không trôi lên quá mép được — khói bốc cao hơn thế là bốc
+                 thẳng ra sau thanh HUD, tức là vẽ cho không ai xem. */
+              for (let k = 0; k < 5; k++) {
+                const pha = (timeSec * 0.5 + k * 0.2) % 1;
+                const cao = pha * 14;
+                const anh = atlas.smoke[Math.min(3, Math.floor(pha * 4))]!;
+                // lệch sang phải một ô rưỡi: ống khói nằm trên mái, không ở mép
+                const sx = px + 18 + Math.round(Math.sin(pha * 4 + x) * 2 + cao * gio * 0.4);
+                const sy = py - 2 - Math.round(cao);
+                const mo = (1 - pha) * 1.6;
+                items.push({
+                  base: base + 2,
+                  run: () => {
+                    g.globalAlpha = Math.min(1, mo);
+                    g.drawImage(anh, sx, sy);
+                    g.globalAlpha = 1;
+                  },
+                });
+              }
+            }
             if (t.prop === "door") lights.push({ wx: wcx, wy: wcy + 8, r: 40, strength: 0.9 });
             else if (isHouse(s.tiles[(y - 1) * s.w + x]))
               lights.push({ wx: wcx, wy: wcy + 7, r: 22, strength: 0.5 });
@@ -1006,23 +1143,54 @@ export function createRenderer(
    * từng vệt hash theo (chỉ số, nhịp) — không state, không Math.random, và cùng
    * khung hình thì cùng hình.
    */
-  function drawRain(timeSec: number, storm: boolean, wind: number) {
-    const vp = camera.viewport;
-    const n = storm ? 110 : 60;
-    const beat = Math.floor(timeSec * 10);
-    const w = vp.viewW;
-    const h = vp.viewH;
-    for (let i = 0; i < n; i++) {
-      const hx = ((i * 73856093) ^ (beat * 19349663)) >>> 0;
-      const hy = ((i * 83492791) ^ (beat * 2654435761)) >>> 0;
-      /* Mưa NGHIÊNG theo gió: hạt rơi 16px thì trôi ngang `wind × 6`px —
-         bão thổi gần 45°, mưa thường hơi xiên, không gió thì rơi thẳng. */
-      const roi = (timeSec * 140) % 16;
-      const x = (hx % (w + 16)) - 8 + Math.round(roi * wind * 0.4);
-      const y = ((hy % (h + 16)) - 8 + roi) % (h + 16);
-      const f = (i + beat) % 3;
-      g.drawImage(atlas.rainDrop[f]!, Math.round(x), Math.round(y));
+  /* ---------------------------------------------------------------- MƯA
+
+     Trước Đợt 23 mỗi hạt mưa là một lệnh vẽ: 110 lệnh mỗi khung khi bão, tức
+     hơn một phần ba tổng số lệnh của cả khung hình — cho một thứ trang trí.
+     Và vì vị trí hạt băm lại theo từng "nhịp" 1/10 giây, cả màn mưa NHẢY CÓC
+     mười lần mỗi giây thay vì rơi liền mạch.
+
+     Giờ mưa là một MẢNG LẶP: một ô 64×64 có sẵn mấy hạt, dựng một lần, rồi tô
+     kín màn bằng ĐÚNG MỘT lệnh `fillRect` với gốc mảng trôi theo thời gian.
+     Rẻ hơn hai bậc, và rơi mượt thật vì gốc trôi liên tục. */
+  const MUA_O = 64;
+  let mangMua: CanvasPattern | null = null;
+  function tamMua(): CanvasPattern | null {
+    if (mangMua) return mangMua;
+    const c = document.createElement("canvas");
+    c.width = MUA_O;
+    c.height = MUA_O;
+    const cg = c.getContext("2d");
+    if (!cg) return null;
+    cg.imageSmoothingEnabled = false;
+    /* Rải hạt bằng hàm băm thuần của chỉ số — cùng một tấm ở mọi máy, mọi lần
+       chạy. Thưa vừa đủ: mật độ thật do việc lặp tấm quyết định. */
+    for (let i = 0; i < 9; i++) {
+      const x = hash2(i, 3, 11) % MUA_O;
+      const y = hash2(i, 7, 29) % MUA_O;
+      cg.drawImage(atlas.rainDrop[i % 3]!, x, y);
     }
+    mangMua = g.createPattern(c, "repeat");
+    return mangMua;
+  }
+
+  function drawRain(timeSec: number, storm: boolean, wind: number) {
+    const p = tamMua();
+    if (!p) return;
+    const vp = camera.viewport;
+    /* Hai lớp cho BÃO: cùng một tấm, lệch pha và lệch tốc, nên nhìn ra mưa dày
+       mà vẫn chỉ tốn hai lệnh vẽ. */
+    const lop = storm ? 2 : 1;
+    for (let k = 0; k < lop; k++) {
+      const toc = 140 + k * 90;
+      const dy = (timeSec * toc) % MUA_O;
+      const dx = (-timeSec * toc * wind * 0.4 + k * 23) % MUA_O;
+      p.setTransform(new DOMMatrix().translateSelf(dx, dy));
+      g.globalAlpha = k === 0 ? 1 : 0.7;
+      g.fillStyle = p;
+      g.fillRect(0, 0, vp.viewW, vp.viewH);
+    }
+    g.globalAlpha = 1;
   }
 
   /** Lớp phủ toàn màn: sương, tint âm u, tối bão + chớp. Sau lớp đêm. */
@@ -1475,6 +1643,43 @@ export function createRenderer(
 
     items.sort((a, b) => a.base - b.base);
     for (const it of items) it.run();
+
+    /* ---- CÔN TRÙNG: bướm ban ngày, đom đóm ban đêm --------------------
+       Sinh vật trang trí thuần: KHÔNG có thực thể nào trong save, không một
+       lần tìm đường nào. Vị trí là hàm thuần của (chỉ số con, đồng hồ vẽ), nên
+       chúng bay giống nhau ở mọi máy và biến mất sạch khi tắt chuyển động.
+
+       Vì sao đáng làm: nông trại ban ngày im phăng phắc trừ lúc có con vật đi
+       ngang, còn ban đêm thì tối om và trống. Mấy chấm sáng bay lượn là thứ rẻ
+       nhất biến một bức tranh tĩnh thành một nơi ĐANG SỐNG. */
+    if (!opts.reduceMotion && opts.weather.outdoor && !opts.weather.rain) {
+      const banDem = nightTint(s.minutes)[1] > 0.12;
+      const n = banDem ? 14 : 10;
+      const vw = camera.viewport.viewW;
+      const vh = camera.viewport.viewH;
+      for (let i = 0; i < n; i++) {
+        /* Neo vào TOẠ ĐỘ THẾ GIỚI chứ không vào màn hình: con bướm đậu ở một
+           góc ruộng thì đi xa rồi quay lại nó vẫn ở đó, chứ không dán cứng vào
+           khung nhìn mà trôi theo camera. */
+        const ox = (hash2(i, 11, 3) % 4096) - 2048;
+        const oy = (hash2(i, 23, 7) % 4096) - 2048;
+        const toc = 0.35 + (hash2(i, 31, 5) % 100) / 260;
+        const wx0 = ox + Math.sin(timeSec * toc + i) * 34;
+        const wy0 = oy + Math.cos(timeSec * toc * 0.8 + i * 2) * 26;
+        // gói về quanh camera để chúng luôn có mặt đâu đó trong khung
+        const px2 = Math.round(((wx0 - camera.rx) % (vw + 64) + vw + 64) % (vw + 64)) - 32;
+        const py2 = Math.round(((wy0 - camera.ry) % (vh + 64) + vh + 64) % (vh + 64)) - 32;
+        if (banDem) {
+          const nhay = Math.floor(timeSec * 3 + i * 1.7) % 4;
+          if (nhay === 3) continue; // tắt một nhịp — đom đóm chớp chứ không sáng đều
+          g.drawImage(atlas.firefly[nhay]!, px2, py2);
+        } else {
+          const mau = i % atlas.buom.length;
+          const f = Math.floor(timeSec * 9 + i) % 2;
+          g.drawImage(atlas.buom[mau]![f]!, px2, py2);
+        }
+      }
+    }
 
     drawParticles();
     if (opts.weather.outdoor && opts.weather.rain && !opts.reduceMotion) drawRain(timeSec, opts.weather.storm, gio);

@@ -304,6 +304,8 @@ export function validateProps(raw: unknown): string[] {
     if (item["tall"] !== undefined && typeof item["tall"] !== "boolean")
       k.fail("tall", "phải là boolean");
     if (item["sway"] !== undefined) k.num(item, "sway", 0, 2);
+    if (item["seasonal"] !== undefined && typeof item["seasonal"] !== "boolean")
+      k.fail("seasonal", "phải là boolean");
     if (item["place"] !== undefined && item["place"] !== "tile" && item["place"] !== "edge")
       k.fail("place", 'phải là "tile" (chiếm trọn ô) hoặc "edge" (đứng ở mép ô)');
     if (item["place"] === "edge" && item["solid"] === true)

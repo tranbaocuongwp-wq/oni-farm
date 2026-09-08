@@ -274,6 +274,11 @@ một nhánh `Press`, một dòng `LABEL`, một nhánh `execute`, kèm test.
 | Người làm | Dùng **nguyên** bảy khung của nhân vật chính, kể cả khung 5 (chạm) và 6 (giơ) — hai khung ấy đã được cache sẵn cho mọi bộ đồ từ lâu nhưng tới Đợt 22 lớp vẽ mới gọi tới. Pha vung suy từ `ai.until / WORK_MINUTES` (`workFrame`, hàm thuần có test): đúng **ba nấc**, bậc thang chứ không mượt như người chơi — làm mượt đòi thêm một đồng hồ số thực vào save cho một việc trang trí. Công cụ suy từ VIỆC (`heldForJob`), không từ hotbar: họ không có hotbar. Đồ đang đeo vẽ **trên đầu** bằng `atlas.icon` — "bưng bê" và "vác về kho" phục vụ bằng đúng một cơ chế; lúc ấy bong bóng đẩy lên một nấc. Hạt bắn khi khung đổi sang CHẠM, do renderer tự bắt bằng một `Map` theo `e.id` (không vào save, dọn theo danh sách thực thể mỗi khung). **Không có tiếng** — xem `docs/TIEN-DO.md`. |
 | Xe | 32×32 (`VEHICLE_SIZE`), thân 24×13 — một rưỡi ô, to hơn hẳn người; hộp va chạm vẫn 13×11 (content) nên đường 1 ô vẫn đi được. Hai khung bánh theo `e.anim`. Ba dáng suy từ content: `sea` → thuyền (buồm, nhấp nhô ±1px theo `timeSec`), có `buyBonus` → sàn phẳng chở kiện, còn lại thùng kín. Vẽ một hình hướng phải rồi xoay/lật. Neo: `px = e.x − w/2`, `py = e.y − h/2 − 5`. |
 | Cầu (`prop.bridge`) | `atlas.propMask[id]` 16 biến thể theo cạnh có LAN CAN (`bridgeRail` trong draw.ts: ô kề là nước và không cùng cầu; đầu cầu tiếp đất thì mở). Lan can cạnh DƯỚI là `atlas.propOver[id]`, đẩy vào `items` với `base = y·16 + 16 + 5` để vẽ **đè lên** người/xe đứng trên ô — lần đầu `items` có một lớp phủ sau actor. |
+| Cây cỏ theo MÙA | Prop khai `seasonal: true` trong content được dựng thêm bốn bảng màu: xuân lá non, hạ nguyên bản (**mùa gốc** — con số trong `props.json` phải đúng nghĩa ở ít nhất một mùa), thu vàng cam, đông bạc đi. Dựng LƯỜI theo `id|mùa`. Khác lớp phủ màu mùa toàn màn (`seasons[].tint`) ở chỗ nó là trạng thái của TỪNG VẬT: cái cây đổi lá, mặt đường thì không. |
+| Khói bếp | Một nhà MỘT ống khói (ô đầu của dãy mái), chỉ bốc khi trời tối hoặc mùa đông. Cột khói cố ý thấp (14px) vì nhà nằm sát mép trên bản đồ — cao hơn là bốc thẳng ra sau thanh HUD. |
+| Bướm · đom đóm | Sinh vật trang trí thuần: KHÔNG thực thể nào trong save, không một lần tìm đường nào. Vị trí là hàm thuần của (chỉ số con, đồng hồ vẽ), neo vào toạ độ THẾ GIỚI rồi gói quanh camera. Bướm ban ngày, đom đóm chớp ban đêm; tắt sạch khi mưa hoặc khi `reduceMotion`. |
+| Nền | **Cache vào canvas phụ** (rộng hơn khung nhìn ba ô mỗi bên), dán lại mỗi khung. Vô hiệu hoá bằng phép so tham chiếu `s.tiles`. Mặt nước và bọt sóng nằm NGOÀI cache vì chúng động. Xem `docs/GIAI-THUAT.md` mục 10. |
+| Mưa | Một **mảng lặp** 64×64 tô kín màn bằng một `fillRect`, gốc trôi theo thời gian; bão dùng hai lớp lệch pha. Trước Đợt 23 là 110 lệnh vẽ mỗi khung và nhảy cóc mười lần mỗi giây. |
 | Gió (`weather.wind`, chỉ lớp vẽ) | prop có `sway` (cây 1, bụi 0,7, cỏ 0,4–0,8) lắc theo sin lệch pha theo ô; mưa nghiêng `roi × wind × 0,4`; lá bay (`burst "blow"` từ một tán cây mỗi 0,6s khi wind ≥ 0,5, hạt chịu lực ngang `windX`); mặt nước gợn nhanh hơn; vũng nước trên lối đi (`atlas.puddle`, băm toạ độ); giọt bắn dưới chân người đi trong mưa. Tất cả tắt với `reduceMotion`, không vào state. |
 
 Bảng màu `P` là chỗ duy nhất đổi tông. Màu của vật thể/cây/công trình vẫn lấy từ
@@ -312,7 +317,7 @@ Cài đặt.
 ## 9. Chốt kiểm tra trước khi merge
 
 ```bash
-npm run test:all       # typecheck + 158 kịch bản sim (148 một thang việc · 151 việc vặt · 154 đòi vật tư · 157 động tác người làm …) + OTA
+npm run test:all       # typecheck + 160 kịch bản sim (159 dây bẫy cache nền · 160 cây theo mùa · 148 một thang việc · 151 việc vặt …) + OTA
 npm run build
 ```
 

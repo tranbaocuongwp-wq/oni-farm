@@ -277,7 +277,48 @@ gian vẽ; chi phí nằm ở chính các lệnh `drawImage`. Đã gỡ bỏ.
 
 ---
 
-## 10. Bản đồ nhỏ — vẽ lại đúng ô đổi màu
+## 10. Lớp NỀN được cache, và mưa thành một mảng lặp
+
+Đợt 15 đã tìm ra chỗ tốn nhất *của HUD*. Đợt 23 hỏi tiếp câu ấy cho **thế giới**,
+và đo trước khi sửa: phần mô phỏng tốn **0,2%** ngân sách một khung hình, tức
+không còn gì để lấy ở đó. Chỗ tiền nằm ở lớp vẽ.
+
+Cảnh đo: 285 ô nhìn thấy · đêm · bão · 28 thực thể.
+
+| | Trước | Sau |
+|---|---|---|
+| `drawImage` mỗi khung | **600** | **149** |
+| thời gian vẽ mỗi khung | **0,90 ms** | **0,30 ms** (−67%) |
+
+Hai chỗ, và cả hai đều là *"thứ này có cần vẽ lại mỗi khung không?"*:
+
+**Nền.** Mỗi ô nhìn thấy tốn ít nhất một `drawImage`, ô đất cày tốn tới sáu (nền ·
+lớp đất · viền bốn cạnh) — quá nửa số lệnh của cả khung. Nhưng nền chỉ đổi khi
+một ô đổi, khi camera trôi sang ô mới, hoặc khi trời bắt đầu mưa. Nên nó được vẽ
+một lần vào canvas phụ (rộng hơn khung nhìn ba ô mỗi bên) rồi dán lại.
+
+Khoá vô hiệu hoá là phép so **THAM CHIẾU** `s.tiles`: mảng ô là copy-on-write nên
+một ô đổi là cả mảng đổi. Rẻ nhất có thể, và không có cách nào nó bỏ sót — miễn
+là mọi đường sửa ô đều đi qua `dTile`. Kịch bản 159 là dây bẫy cho đúng điều kiện
+ấy: sửa một ô tại chỗ thì nó đỏ, vì lỗi đó sẽ làm cache đứng hình mà không ai
+thấy ngoài người chơi.
+
+Mặt nước và bọt sóng **không** vào cache (chúng động mỗi khung); danh sách ô nước
+được ghi lại lúc dựng cache nên khung sau không phải quét lại cả vùng để tìm.
+
+**Mưa.** 110 lệnh vẽ mỗi khung khi bão — hơn một phần ba tổng số — cho một thứ
+trang trí. Và vì vị trí hạt băm lại theo từng nhịp 1/10 giây, cả màn mưa *nhảy
+cóc* mười lần mỗi giây. Nay mưa là một **mảng lặp** 64×64 tô kín màn bằng đúng
+một `fillRect`, gốc mảng trôi liên tục theo thời gian: rẻ hơn hai bậc **và** rơi
+mượt thật. Bão dùng hai lớp lệch pha — vẫn chỉ hai lệnh.
+
+> Chỗ trống ấy tiêu vào đâu: bốn hệ đồ hoạ mới của cùng đợt (cây theo mùa, khói
+> bếp, bướm, đom đóm). Đo lại với **51** thực thể — gần gấp đôi cảnh gốc — vẫn là
+> 252 lệnh và 0,51 ms, tức vẫn rẻ hơn hẳn mốc 600 lệnh / 0,90 ms ban đầu.
+
+---
+
+## 11. Bản đồ nhỏ — vẽ lại đúng ô đổi màu
 
 Đây là chỗ tốn nhất của lớp vẽ, và nó ẩn suốt mười bốn đợt.
 
@@ -320,7 +361,7 @@ khớp **từng ô**. *Một cache vẽ ít mà trôi dần thì tệ hơn hẳn
 
 ---
 
-## 11. Lớp bão hoà mùa — bài học cũ còn nguyên giá trị
+## 12. Lớp bão hoà mùa — bài học cũ còn nguyên giá trị
 
 Mùa thu/đông từng vẽ một `fillRect` với `globalCompositeOperation = "saturation"`
 phủ **toàn canvas ở độ phân giải thiết bị, mỗi khung**. Blend không tách kênh là

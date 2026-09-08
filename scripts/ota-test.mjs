@@ -131,6 +131,9 @@ reject("props: grow.to trỏ vào vật thể không có", (p) => {
 reject("props: spread.into trỏ vào vật thể không có", (p) => {
   p.props.props.find((x) => x.id === "grass_short").spread = { chance: 0.1, into: "khongCo" };
 });
+reject("props: seasonal không phải boolean", (p) => {
+  p.props.props.find((x) => x.id === "tree").seasonal = "co";
+});
 reject("props: stormFell.chance > 1", (p) => {
   p.props.props.find((x) => x.id === "sapling").stormFell = { to: "log", chance: 7 };
 });

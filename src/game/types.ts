@@ -382,6 +382,15 @@ export interface PropDef {
   /** Lay theo gió (chỉ lớp vẽ): 0..2, nhân với `weather.wind`. Không khai = đứng yên. */
   sway?: number;
   /**
+   * ĐỔI MÀU THEO MÙA (chỉ lớp vẽ): cây và cỏ xanh non mùa xuân, vàng cam mùa
+   * thu, bạc đi mùa đông.
+   *
+   * Khác lớp phủ màu mùa toàn màn (`seasons[].tint`) ở chỗ nó là trạng thái
+   * của TỪNG VẬT: cái cây đổi lá còn mặt đường thì không, đúng như ngoài đời.
+   * Lớp phủ kia rút bão hoà cả khung hình; cái này nói "cây này đang mùa nào".
+   */
+  seasonal?: boolean;
+  /**
    * CÔNG TRÌNH NHIỀU Ô tự nối: mỗi ô nhìn hai ô kề TRÁI–PHẢI cùng id để chọn
    * hình (đầu trái · thân · đầu phải · đứng một mình).
    *

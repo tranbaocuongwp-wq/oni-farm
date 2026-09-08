@@ -53,7 +53,7 @@ npm run dev        # http://localhost:1420  → trang chủ, game ở /farm/
 | `npm run build` | Build content + xuất static site vào `dist/` |
 | `npm run preview` | Xem thử bản build tĩnh ở cổng 1421 |
 | `npm run content:build` | Biên dịch + kiểm content, xuất pack OTA |
-| `npm run test:sim` | 158 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
+| `npm run test:sim` | 160 kịch bản mô phỏng game (luật chơi, nút ngữ cảnh, vật nuôi, người làm, save/migrate, tay cầm), Node thuần, ~25 giây |
 | `npm run test:ota` | Kiểm cổng tương thích + schema của content pack |
 | `npm run test:all` | typecheck + cả hai bộ test |
 | `npm run bench` | Đo chi phí phần mô phỏng trên một nông trại nặng (xem Đợt 15) |
@@ -1006,6 +1006,47 @@ của phần còn lại:
 * Menu và hướng dẫn `inert` phần còn lại của trang: Tab không nhảy ra HUD phía sau.
 * Công tắc âm thanh đi qua settings nên sống sót qua tải lại.
 * Sửa sáu chỗ chữ vẫn nói về nút XÂY / nút E đã bỏ từ Đợt 5.
+
+### Đợt 23: lớp vẽ nhanh gấp ba, rồi tiêu chỗ trống ấy vào đồ hoạ (core 1.50 · content 1.50)
+
+Cường: *"tối ưu tiếp tốc độ đi, trạng thái đồ hoạ nhiều vô, tăng thêm sprite nhiều vô."* Hai vế ấy
+đi cùng nhau: thêm đồ hoạ mà không dọn chỗ trước là thêm vào một cái ngân sách đã chật.
+
+#### Đo trước, và con số nói ngay chỗ nào KHÔNG đáng sửa
+
+`npm run bench` cho biết cả phần mô phỏng — TICK, A\*, cây lớn, AI — tốn **0,2%** ngân sách một
+khung hình. Không còn gì để lấy ở đó. Tiền nằm ở **lớp vẽ**, và nó chưa từng được đo: Đợt 15 mới chỉ
+đo HUD. Cảnh đo mới (285 ô, đêm, bão, 28 thực thể): **600 lệnh `drawImage`, 0,90 ms mỗi khung**.
+
+#### Hai câu hỏi, cùng một dạng: "thứ này có cần vẽ lại mỗi khung không?"
+
+**Nền** chiếm quá nửa số lệnh — mỗi ô ít nhất một, ô đất cày tới sáu. Nhưng nó chỉ đổi khi một ô đổi,
+khi camera trôi sang ô mới, hoặc khi trời bắt đầu mưa. Nay nó được vẽ một lần vào canvas phụ rồi dán
+lại. Khoá vô hiệu hoá là phép so **tham chiếu** `s.tiles`: mảng ô là copy-on-write nên một ô đổi là
+cả mảng đổi — rẻ nhất có thể, và không thể bỏ sót. Kịch bản 159 là dây bẫy cho đúng điều kiện ấy:
+ngày nào có ai sửa một ô tại chỗ, cache sẽ đứng hình và lỗi đó im lặng, chỉ người chơi thấy.
+
+**Mưa** tốn 110 lệnh mỗi khung khi bão cho một thứ trang trí — và vì vị trí hạt băm lại theo từng
+nhịp 1/10 giây, cả màn mưa *nhảy cóc* mười lần mỗi giây. Nay là một mảng lặp 64×64 tô kín màn bằng
+đúng một `fillRect`, gốc trôi liên tục: rẻ hơn hai bậc **và** rơi mượt thật.
+
+Kết quả: **600 → 149 lệnh vẽ, 0,90 → 0,30 ms** (−67%).
+
+#### Rồi tiêu chỗ trống ấy
+
+- **Cây cỏ đổi màu theo mùa.** Lớp phủ màu mùa toàn màn đã có từ lâu, nhưng nó nói "đang mùa nào" với
+  mọi thứ như nhau, kể cả mặt đường. Cái thiếu là trạng thái của TỪNG VẬT. Vật nào đổi là do content
+  quyết (`prop.seasonal`), không phải một bảng id gõ cứng trong mã vẽ. **Hạ là mùa gốc** — giữ nguyên
+  bảng màu trong `props.json`, vì con số trong content phải đúng nghĩa ở ít nhất một mùa.
+- **Khói bếp**, một nhà một ống khói, chỉ bốc khi trời tối hoặc mùa đông. Cột khói cố ý thấp: ngôi nhà
+  nằm sát mép trên bản đồ, mà camera không trôi lên quá mép được — khói cao hơn là bốc thẳng ra sau
+  thanh HUD, tức vẽ cho không ai xem.
+- **Bướm ban ngày, đom đóm ban đêm.** Trang trí thuần: không một thực thể nào vào save, không một lần
+  tìm đường nào; vị trí là hàm thuần của (chỉ số con, đồng hồ vẽ). Nông trại ban ngày vốn im phăng
+  phắc trừ lúc có con vật đi ngang, còn ban đêm thì tối và trống.
+
+Đo lại với **51** thực thể — gần gấp đôi cảnh gốc — vẫn là 252 lệnh và 0,51 ms, tức vẫn rẻ hơn hẳn
+mốc 600 lệnh / 0,90 ms ban đầu. Đó là điều kiện để lần sau còn thêm được nữa.
 
 ### Đợt 22: một bộ não cho cả người làm lẫn nút TỰ ĐỘNG (core 1.49 · content 1.49)
 

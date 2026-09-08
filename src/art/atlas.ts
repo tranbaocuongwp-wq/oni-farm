@@ -1972,6 +1972,46 @@ function shade(hex: string, k: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 const darken = (hex: string) => shade(hex, 0.68);
+
+/* ------------------------------------------------------------- MÀU THEO MÙA
+
+   Lớp phủ màu mùa toàn màn (`seasons[].tint`) rút bão hoà CẢ khung hình — nó
+   nói "đang mùa nào" nhưng nói với mọi thứ như nhau, kể cả mặt đường. Cái
+   thiếu là trạng thái của TỪNG VẬT: cái cây đổi lá, còn con đường thì không.
+
+   Hàm dưới đây kéo một mã màu về phía màu của mùa, giữ nguyên độ sáng tương
+   đối để khối vẫn đọc ra. Vật thể nào đổi màu là do content quyết
+   (`prop.seasonal`), không phải bảng id gõ cứng trong mã.
+--------------------------------------------------------------------------- */
+
+/** Kéo `hex` về phía `dich` với tỉ lệ `k` (0..1). */
+function pha(hex: string, dich: string, k: number): string {
+  const a = parseInt(hex.slice(1), 16);
+  const b = parseInt(dich.slice(1), 16);
+  const m = (sh: number) => {
+    const va = (a >> sh) & 255;
+    const vb = (b >> sh) & 255;
+    return Math.max(0, Math.min(255, Math.round(va + (vb - va) * k)));
+  };
+  return `#${((m(16) << 16) | (m(8) << 8) | m(0)).toString(16).padStart(6, "0")}`;
+}
+
+/** Bốn mùa, theo THỨ TỰ trong content: xuân · hạ · thu · đông. */
+const MUA_LA: { dich: string; k: number; sang: number }[] = [
+  { dich: "#b6f06a", k: 0.34, sang: 1.06 }, // xuân: lá non, xanh ngả vàng
+  { dich: "#000000", k: 0, sang: 1 }, // hạ: nguyên bản, đây là màu gốc của content
+  { dich: "#e8a33c", k: 0.52, sang: 1.0 }, // thu: vàng cam
+  { dich: "#9fb3bd", k: 0.46, sang: 0.94 }, // đông: bạc đi, xám lạnh
+];
+
+/** Bảng màu của một vật thể ở mùa thứ `mua`. Mùa lạ → trả nguyên bản. */
+export function artTheoMua(art: PropArt, mua: number): PropArt {
+  const m = MUA_LA[mua];
+  if (!m || m.k <= 0) return art;
+  const doi = (hex: string) => shade(pha(hex, m.dich, m.k), m.sang);
+  return { body: doi(art.body), dark: doi(art.dark), accent: doi(art.accent) };
+}
+
 const lighten = (hex: string) => shade(hex, 1.28);
 
 /** Bảng màu mặc định = ĐÚNG các hằng của nhân vật chính, nên khi không truyền
@@ -2465,6 +2505,56 @@ function makePuddle(k: number): HTMLCanvasElement {
   return s.c;
 }
 
+/**
+ * Cụm KHÓI từ ống khói. Bốn cỡ: mới thoát ra thì nhỏ và đặc, lên cao thì to và
+ * loãng — đó là toàn bộ thứ mắt cần để đọc ra "khói đang bay lên".
+ */
+function makeSmoke(i: number): HTMLCanvasElement {
+  const s = surface(10, 10);
+  const r = 1.8 + i * 1.0;
+  const a = 0.85 - i * 0.17;
+  s.g.globalAlpha = Math.max(0.14, a);
+  s.ell(5, 5, r, r * 0.86, "#cfcac2");
+  s.g.globalAlpha = Math.max(0.1, a * 0.85);
+  s.ell(5 - r * 0.28, 5 - r * 0.3, r * 0.6, r * 0.52, "#f4f1ea");
+  s.g.globalAlpha = 1;
+  return s.c;
+}
+
+/** BƯỚM 5×5: hai khung vỗ cánh, ba màu. Bay lượn ngoài đồng lúc trời sáng. */
+function makeButterfly(mau: number, frame: number): HTMLCanvasElement {
+  const s = surface(5, 5);
+  const than = ["#f2c14e", "#e88fb0", "#8fd3f4"][mau] ?? "#f2c14e";
+  const toi = shade(than, 0.7);
+  const mo = frame === 0; // cánh mở
+  s.px(2, 2, "#3a2f28");
+  s.px(2, 3, "#3a2f28");
+  if (mo) {
+    s.rect(0, 1, 2, 2, than);
+    s.rect(3, 1, 2, 2, than);
+    s.px(0, 3, toi);
+    s.px(4, 3, toi);
+  } else {
+    s.px(1, 1, than);
+    s.px(3, 1, than);
+    s.px(1, 2, toi);
+    s.px(3, 2, toi);
+  }
+  return s.c;
+}
+
+/** ĐOM ĐÓM 3×3: một chấm sáng có quầng. Ba mức để nó nhấp nháy. */
+function makeFirefly(i: number): HTMLCanvasElement {
+  const s = surface(3, 3);
+  const a = [0.35, 0.7, 1][i] ?? 1;
+  s.g.globalAlpha = a * 0.5;
+  s.ell(1.5, 1.5, 1.5, 1.5, "#d8ff8a");
+  s.g.globalAlpha = a;
+  s.px(1, 1, "#f6ffd0");
+  s.g.globalAlpha = 1;
+  return s.c;
+}
+
 /** Icon 12×12 cho HUD theo id thời tiết. Id lạ (content mới) → mặt trời. */
 function makeWeatherIcon(id: string): HTMLCanvasElement {
   const s = surface(12, 12);
@@ -2540,6 +2630,13 @@ export interface Atlas {
   propMask: Record<string, Map<string, HTMLCanvasElement>>;
   /** Lan can cạnh DƯỚI của cầu — vẽ SAU người/xe đứng trên ô, nên là hình riêng. */
   propOver: Record<string, HTMLCanvasElement>;
+  /**
+   * Vật thể ĐỔI MÀU THEO MÙA (`prop.seasonal`) — cây và cỏ xanh non mùa xuân,
+   * vàng cam mùa thu, bạc đi mùa đông. Dựng LƯỜI: một ván chỉ đi qua bốn mùa,
+   * mà dựng sẵn cả bốn cho mọi loại cây là trả tiền cho ba mùa chưa tới.
+   * Trả `null` nếu vật này không đổi màu — nơi gọi dùng `atlas.props[id]`.
+   */
+  propMua(id: string, mua: number): HTMLCanvasElement | null;
   /** công trình tự nối: id → (khoá bitmask → sprite) */
   autotiles: Record<string, Map<string, HTMLCanvasElement>>;
   /** vật thể NHIỀU Ô tự nối (`prop.block`): id → (khoá trái-phải → sprite) */
@@ -2587,6 +2684,12 @@ export interface Atlas {
   rainDrop: HTMLCanvasElement[];
   /** Vũng nước trên lối đi khi trời mưa — hai hình, chọn theo băm toạ độ ô. */
   puddle: HTMLCanvasElement[];
+  /** Cụm khói bốc lên từ ống khói — bốn cỡ, càng lên cao càng to và càng nhạt. */
+  smoke: HTMLCanvasElement[];
+  /** Bướm bay ban ngày — hai khung vỗ cánh × ba màu. */
+  buom: HTMLCanvasElement[][];
+  /** Đom đóm ban đêm — ba mức sáng. */
+  firefly: HTMLCanvasElement[];
   /** icon 12×12 theo id thời tiết (id lạ → mặt trời) */
   weatherIcon(id: string): HTMLCanvasElement;
 }
@@ -3881,6 +3984,20 @@ export function buildAtlas(content: Content): Atlas {
     return c;
   };
 
+  /* Vật thể theo MÙA: dựng lười, khoá `id|mùa`. Một ván đi qua bốn mùa nên
+     dựng sẵn cả bốn cho mọi loại cây là trả tiền cho ba mùa chưa tới. */
+  const muaCache = new Map<string, HTMLCanvasElement | null>();
+  const propMuaOf = (id: string, mua: number): HTMLCanvasElement | null => {
+    const def = content.props[id];
+    if (!def?.seasonal) return null;
+    const key = `${id}|${mua}`;
+    if (muaCache.has(key)) return muaCache.get(key) ?? null;
+    const art = def.art;
+    const c = art ? makeProp(id, artTheoMua(art, mua)) : null;
+    muaCache.set(key, c);
+    return c;
+  };
+
   const workerCache = new Map<string, HTMLCanvasElement>();
   const workerOf = (skin: number, dir: PlayerDir, frame: number): HTMLCanvasElement => {
     const skins = content.workers.skins;
@@ -4030,6 +4147,7 @@ export function buildAtlas(content: Content): Atlas {
     autotiles,
     propMask,
     propOver,
+    propMua: propMuaOf,
     blocks,
     animal: animalOf,
     emote: emoteOf,
@@ -4078,6 +4196,9 @@ export function buildAtlas(content: Content): Atlas {
     wiltOverlay: makeWiltOverlay(),
     rainDrop: [0, 1, 2].map(makeRainDrop),
     puddle: [0, 1].map(makePuddle),
+    smoke: [0, 1, 2, 3].map(makeSmoke),
+    buom: [0, 1, 2].map((m) => [0, 1].map((f) => makeButterfly(m, f))),
+    firefly: [0, 1, 2].map(makeFirefly),
     weatherIcon,
   };
 }

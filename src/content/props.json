@@ -21,7 +21,8 @@
         "dark": "#245227",
         "accent": "#5a3d24"
       },
-      "sway": 1
+      "sway": 1,
+      "seasonal": true
     },
     {
       "id": "sapling",
@@ -49,7 +50,8 @@
         "to": "log",
         "chance": 0.25
       },
-      "sway": 0.6
+      "sway": 0.6,
+      "seasonal": true
     },
     {
       "id": "stump",
@@ -112,7 +114,8 @@
         "dark": "#2e5c2b",
         "accent": "#4f9647"
       },
-      "sway": 0.7
+      "sway": 0.7,
+      "seasonal": true
     },
     {
       "id": "well",
@@ -270,7 +273,8 @@
         "dark": "#4d9a3f",
         "accent": "#a6e07a"
       },
-      "sway": 0.4
+      "sway": 0.4,
+      "seasonal": true
     },
     {
       "id": "grass_tall",
@@ -298,7 +302,8 @@
         "dark": "#3d7a33",
         "accent": "#8fd06a"
       },
-      "sway": 0.8
+      "sway": 0.8,
+      "seasonal": true
     },
     {
       "id": "bush_small",
@@ -324,7 +329,8 @@
         "body": "#4a8a3c",
         "dark": "#31612a",
         "accent": "#6fb35a"
-      }
+      },
+      "seasonal": true
     },
     {
       "id": "bush_big",
@@ -351,7 +357,8 @@
         "body": "#3f7a34",
         "dark": "#284f22",
         "accent": "#5fa04a"
-      }
+      },
+      "seasonal": true
     },
     {
       "id": "warehouse",

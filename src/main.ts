@@ -60,7 +60,7 @@ import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/act
 import { autoJob, autoStopReason, facingTile, hintOf, infoHint, pressPlan, tileInfo, type Hint, type Press } from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
-import { currentSeason } from "./game/season.ts";
+import { seasonIndex, currentSeason } from "./game/season.ts";
 import { animalStats } from "./game/animals.ts";
 import { itemName } from "./game/items.ts";
 import { workerCard } from "./game/workers.ts";
@@ -2244,6 +2244,7 @@ async function boot() {
         // sương tan dần trong 60 phút cuối trước mốc fogUntil
         fog: fogUntil > 0 && s.minutes < fogUntil ? Math.min(1, (fogUntil - s.minutes) / 60) : 0,
         outdoor: isOutdoor(content, s.mapId),
+        season: seasonIndex(s.day, content),
         seasonTint: currentSeason(s, content)?.tint ?? null,
       },
     });

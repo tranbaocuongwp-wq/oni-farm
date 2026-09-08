@@ -53,6 +53,7 @@ import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
 import { workFrame, heldForJob } from "../src/render/draw.ts";
+import { artTheoMua } from "../src/art/atlas.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
 
 /* ----------------------------------------------------------- khung chạy test */
@@ -11379,6 +11380,82 @@ test("158. TRỜI MƯA thì thôi đi tưới — để việc khác lên trư�
   const mua = dung("rain");
   ok(mua && mua.kind !== "water", `trời mưa: KHÔNG đi tưới, làm việc khác (đang là ${mua?.kind})`);
   eq(mua.kind, "till", "…và việc khác ấy là mở thêm đất");
+});
+
+
+test("159. MỌI thay đổi một ô đều đổi THAM CHIẾU mảng tiles", () => {
+  /* Đây là dây bẫy cho LỚP NỀN ĐƯỢC CACHE (Đợt 23).
+
+     Nền chiếm quá nửa số lệnh vẽ mỗi khung mà gần như không đổi, nên nó được vẽ
+     một lần vào canvas phụ rồi dán lại. Khoá vô hiệu hoá là phép so THAM CHIẾU
+     `s.tiles !== tilesĐãCache` — rẻ nhất có thể, và đúng **chừng nào** mọi
+     đường sửa ô đều đi qua `dTile`/`dTiles` (copy-on-write).
+
+     Ngày nào có ai sửa một ô TẠI CHỖ, cache sẽ đứng lại ở hình cũ và người chơi
+     thấy một luống cày không hiện ra. Lỗi ấy im lặng, chỉ ở lớp vẽ, và không
+     kịch bản nào khác bắt được. Kịch bản này bắt. */
+  const store = mkStore(2301);
+  walkTo(store, HOME.x, HOME.y);
+  const plot = PLOTS[0];
+
+  const thu = (ten, lam) => {
+    const truoc = store.getState().tiles;
+    lam();
+    ok(
+      store.getState().tiles !== truoc,
+      `${ten}: đổi một ô thì mảng tiles phải là mảng MỚI (lớp nền cache dựa vào đúng chỗ này)`,
+    );
+  };
+
+  selectItem(store, "tool:hoe");
+  thu("cày", () => use(store, plot.x, plot.y));
+  selectItem(store, "seed:lettuce");
+  thu("gieo", () => use(store, plot.x, plot.y));
+  selectItem(store, "tool:can");
+  topUpWater(store);
+  thu("tưới", () => use(store, plot.x, plot.y));
+  thu("đặt vật thể", () => setState(store, (s) => putProp(s, plot.x + 2, plot.y, "rock")));
+  thu("sang ngày (cỏ mọc, đất khô)", () => sleep(store));
+
+  /* Và chiều ngược lại: KHÔNG đổi ô nào thì mảng phải GIỮ NGUYÊN tham chiếu —
+     nếu không thì cache dựng lại mỗi khung và cả phần tối ưu thành vô nghĩa. */
+  const yen = store.getState().tiles;
+  for (let i = 0; i < 30; i++) store.dispatch({ t: "MOVE", dx: 1, dy: 0, dt: 1 / 60 });
+  eq(store.getState().tiles, yen, "đi bộ không đụng ô nào thì mảng tiles phải y nguyên");
+});
+
+test("160. CÂY CỎ ĐỔI MÀU THEO MÙA — và chỉ cây cỏ", () => {
+  /* Lớp phủ màu mùa toàn màn nói "đang mùa nào" với mọi thứ như nhau, kể cả
+     mặt đường. Cái thiếu là trạng thái của TỪNG VẬT: cái cây đổi lá, con đường
+     thì không. Vật nào đổi là do CONTENT quyết (`prop.seasonal`), không phải
+     một bảng id gõ cứng trong mã vẽ. */
+  const xanh = ["tree", "sapling", "bush", "bush_small", "bush_big", "grass_short", "grass_tall"];
+  for (const id of xanh)
+    eq(content.props[id]?.seasonal, true, `'${id}' là cây cỏ — phải đổi màu theo mùa`);
+  for (const id of ["rock", "log", "well", "house", "roadbridge", "pier", "trough"])
+    ok(!content.props[id]?.seasonal, `'${id}' KHÔNG phải cây cỏ — không được đổi màu theo mùa`);
+
+  const art = content.props.tree.art;
+  ok(!!art, "cây phải khai bảng màu trong content");
+  const mua = [0, 1, 2, 3].map((i) => artTheoMua(art, i));
+
+  /* HẠ là mùa GỐC: con số trong content phải đúng nghĩa ở ít nhất một mùa, nếu
+     không thì "màu của cái cây" không còn là thứ đọc được từ props.json. */
+  deepEq(mua[1], { body: art.body, dark: art.dark, accent: art.accent }, "mùa Hạ giữ nguyên bảng màu gốc");
+
+  const ten = ["Xuân", "Hạ", "Thu", "Đông"];
+  for (const i of [0, 2, 3])
+    ok(mua[i].body !== art.body, `mùa ${ten[i]} phải cho tán một màu khác mùa gốc`);
+  const rieng = new Set(mua.map((m) => m.body));
+  eq(rieng.size, 4, `bốn mùa phải ra bốn màu khác nhau (đang có ${rieng.size})`);
+
+  // và nó phải là màu HỢP LỆ, không phải chuỗi rác
+  for (const m of mua)
+    for (const v of [m.body, m.dark, m.accent])
+      ok(/^#[0-9a-f]{6}$/i.test(v), `màu '${v}' phải là mã hex sáu chữ số`);
+
+  // mùa lạ (content thêm mùa thứ năm) thì trả nguyên bản, không nổ
+  deepEq(artTheoMua(art, 9), art, "mùa ngoài bảng thì giữ nguyên, không ném lỗi");
 });
 
 await Promise.all(choDoi);
