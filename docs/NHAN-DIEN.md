@@ -131,9 +131,34 @@ Bảng khoá → trang:
 | `animal:<id>` | `/vat-nuoi/<id>/` |
 | `item:<id>` | `/vat-pham/vp-<id>/` |
 | `tool:<id>` | `/vat-pham/vp-tool-<id>/` |
+| `build:<id>` | `/cong-trinh/<id>/` |
+| `prop:<id>` | `/dia-hinh/<id>/` |
 
 Thứ chưa có trang riêng thì **vẫn có hình**: thiếu trang là lý do để không liên
 kết, không phải lý do để bỏ luôn hình minh hoạ.
+
+**Không trang nào được để trống hình.** Trang chủ từng có mười thẻ mà chỉ hai
+thẻ có hình — trong tám thẻ trống có cả Công trình, tức đúng chỗ người ta vào
+tìm cái nhà. Lối chơi và Tác giả thì không có lấy một hình nào. Nay mỗi thẻ mang
+hình của **chính thứ nó dẫn tới**, và mỗi mục lớn của Lối chơi mở đầu bằng một
+dải `.wgal`.
+
+**Khoá nhân vật** nhận cả hướng và khung, nên trang Nhân vật bày ra được từng tư
+thế thay vì nói suông:
+
+| Khoá | Nghĩa |
+|---|---|
+| `player` · `player:<hướng>` · `player:<hướng>:<khung>` | nhân vật chính |
+| `worker:<đồ>` · `worker:<đồ>:<hướng>:<khung>` | người làm, `<đồ>` là chỉ số bộ màu |
+| `ui:<tên>` · `weather:<id>` | biểu tượng HUD · biểu tượng trời |
+
+Hướng phải là `down`/`up`/`left`/`right` và khung phải nằm trong
+`0..PLAYER_FRAMES-1`, `kiemKhoaSprite` soát cả hai — gõ sai thì build đỏ chứ
+không lặng lẽ vẽ khung 0 ở mọi ô.
+
+Danh sách **18 tư thế** trên trang Nhân vật không gõ tay: builder đọc chú thích
+`/** ... */` phía trên từng hằng `PF_` trong `src/art/atlas.ts`. Thêm khung thứ
+19 mà quên chú thích thì build đỏ ngay, chứ trang không âm thầm bỏ sót nó.
 
 ---
 
@@ -154,6 +179,31 @@ cũ hay chưa — và một con số cũ không có nhãn còn tệ hơn không 
 | Cây trồng · Vật nuôi · Vật phẩm · Công trình · Địa hình · Thời tiết | content pack (`contentVersion`) |
 | Hành động · Biểu tượng | mã game (`CORE_VERSION`) |
 | Lối chơi | cả hai — luật ở content, cách bấm ở mã |
+
+---
+
+## 3d. Bảng phải cuộn trong khung của nó
+
+Một `<table>` rộng hơn màn 320px mà không nằm trong `<div class="table-wrap">`
+sẽ đẩy lệch **cả trang**: người đọc phải vuốt ngang cả bài để xem nốt một cột,
+và tiêu đề trôi mất khỏi mép trái. Trang Vật phẩm đã mắc đúng lỗi này và build
+vẫn xanh, vì không có gì soát.
+
+Nay `write()` trong `scripts/build-site.mjs` soát mọi trang trước khi ghi: thấy
+một `<table>` không có `class="table-wrap"` ngay trước nó là **ném lỗi**. Phép
+soát ấy tìm ra hai chỗ ngay lần chạy đầu.
+
+Kèm hai luật CSS đi cùng:
+
+- `thead th { white-space: nowrap }` — để "Chế tạo từ" đừng vỡ thành ba dòng và
+  hàng tiêu đề cao gấp ba phần thân bảng. Thà để bảng rộng ra rồi cuộn: cuộn thì
+  **thấy được**, còn chữ vỡ vụn thì chỉ khó đọc.
+- `.gia { white-space: nowrap }` — số và đồng xu là **một** đơn vị đọc; không có
+  nó thì trên màn 320px hình xu rơi xuống dòng dưới, tách khỏi con số của nó.
+
+`.table-wrap` còn có bóng mờ hai mép (bốn lớp `background`, hai lớp `local` bám
+theo nội dung và hai lớp `scroll` là bóng) để người đọc **biết** là còn cột bên
+phải — không cần một dòng JS nào.
 
 ---
 
@@ -263,6 +313,10 @@ TRONG game cho người đang chơi.
 | `/cay-trong/<id>/` — một trang cho MỖI cây (61) | **sinh từ content** |
 | `/vat-nuoi/<id>/` — một trang cho MỖI loài (10) | **sinh từ content** |
 | `/vat-pham/` + một trang cho MỖI món (37) | **sinh từ content** |
+| `/cong-trinh/` + một trang cho MỖI công trình | **sinh từ content** — kể cả nhà cửa dựng sẵn |
+| `/dia-hinh/` + một trang cho MỖI vật thể (70) | **sinh từ content** |
+| `/thoi-tiet/` · `/bieu-tuong/` | **sinh từ content** và từ mã |
+| `/nhan-vat/` | **sinh từ atlas.ts** — 18 tư thế × 4 hướng, người làm |
 | `/tac-gia/` | `tacGiaPage()` — Trần Cường, story |
 | `/privacy/` | `noi-dung/privacy.html` |
 | `/farm/` | chính game — không dùng vỏ này |

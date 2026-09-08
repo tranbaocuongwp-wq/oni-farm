@@ -35,6 +35,7 @@
           <a href="/cong-trinh/">Công trình</a>
           <a href="/dia-hinh/">Địa hình</a>
           <a href="/thoi-tiet/">Thời tiết</a>
+          <a href="/nhan-vat/">Nhân vật</a>
           <a href="/hanh-dong/">Hành động</a>
           <a href="/bieu-tuong/">Biểu tượng</a></div>
         <div class="wgrp"><b>Về dự án</b>
@@ -49,8 +50,15 @@
     <section>
       <div class="wrap">
         <h2>Một ngày</h2>
+        <div class="wgal">
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="ui:sun" data-size="64" role="img" aria-label="Ban ngày"></canvas></span><figcaption>Ban ngày</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="ui:moon" data-size="64" role="img" aria-label="Ban đêm"></canvas></span><figcaption>Ban đêm</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="ui:energy" data-size="64" role="img" aria-label="Năng lượng"></canvas></span><figcaption>Năng lượng</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="ui:water" data-size="64" role="img" aria-label="Nước trong bình"></canvas></span><figcaption>Nước</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:bed" data-size="64" role="img" aria-label="Giường"></canvas></span><figcaption>Giường</figcaption></figure>
+        </div>
         <p class="lead">Đồng hồ chạy liên tục theo thời gian thật. Một ngày trong game dài khoảng <b>10 phút</b> ngoài đời.</p>
-        <div class="table-wrap"><table class="luat"><tbody><tr><th scope="row">Thức dậy</th><td>6:00</td></tr><tr><th scope="row">Trời tối</th><td>19:00 — sau giờ này cây ngừng lớn</td></tr><tr><th scope="row">Gục tại chỗ</th><td>2:00 — chưa lên giường thì ngất, mất một phần năng lượng</td></tr><tr><th scope="row">Nhịp đồng hồ</th><td>5 giây thật = 10 phút trong game</td></tr><tr><th scope="row">Năng lượng</th><td>tối đa 150; ngủ hồi lại đầy, ngủ muộn thì hồi ít hơn</td></tr><tr><th scope="row">Túi đồ</th><td>28 ô, trong đó 10 ô ngoài thanh nhanh</td></tr><tr><th scope="row">Tiền khởi đầu</th><td><b class="tien">150</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></td></tr></tbody></table></div>
+        <div class="table-wrap"><table class="luat"><tbody><tr><th scope="row">Thức dậy</th><td>6:00</td></tr><tr><th scope="row">Trời tối</th><td>19:00 — sau giờ này cây ngừng lớn</td></tr><tr><th scope="row">Gục tại chỗ</th><td>2:00 — chưa lên giường thì ngất, mất một phần năng lượng</td></tr><tr><th scope="row">Nhịp đồng hồ</th><td>5 giây thật = 10 phút trong game</td></tr><tr><th scope="row">Năng lượng</th><td>tối đa 150; ngủ hồi lại đầy, ngủ muộn thì hồi ít hơn</td></tr><tr><th scope="row">Túi đồ</th><td>28 ô, trong đó 10 ô ngoài thanh nhanh</td></tr><tr><th scope="row">Tiền khởi đầu</th><td><span class="gia"><b class="tien">150</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></span></td></tr></tbody></table></div>
         <p class="note">Ngủ <b>trên giường</b> mới sang ngày — cửa nhà chỉ để đi vào. Ngủ trong nhà thì ngoài ruộng vẫn lớn, vẫn khô, vẫn mọc cỏ.</p>
       </div>
     </section>
@@ -59,6 +67,14 @@
       <div class="wrap">
         <h2>Vòng lõi</h2>
         <p class="lead">CÀY → GIEO → TƯỚI → chờ cây lớn → THU → BÁN.</p>
+        <div class="wgal">
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="tool:hoe" data-size="64" role="img" aria-label="Cuốc"></canvas></span><figcaption>Cày — cuốc</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="seed:tomato" data-size="64" role="img" aria-label="Hạt giống"></canvas></span><figcaption>Gieo — hạt</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="tool:can" data-size="64" role="img" aria-label="Bình tưới"></canvas></span><figcaption>Tưới — bình</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="crop:tomato:1" data-size="64" role="img" aria-label="Cây non"></canvas></span><figcaption>Cây lớn dần</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="crop:tomato" data-size="64" role="img" aria-label="Cây chín"></canvas></span><figcaption>Thu</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:counter" data-size="64" role="img" aria-label="Quầy thu mua"></canvas></span><figcaption>Bán</figcaption></figure>
+        </div>
         <div class="grid">
           <div class="card"><h3>Cây lớn theo thời gian</h3>
             <p>Ô còn <b>ẩm</b> và trời còn sáng thì cây lớn dần trông thấy trong ngày, không nhảy cóc lúc ngủ. Đi ngủ sớm vẫn được cộng nốt phần ban ngày còn lại — không bị phạt.</p></div>
@@ -75,6 +91,14 @@
     <section>
       <div class="wrap">
         <h2>Bốn mùa</h2>
+        <div class="wgal">
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:sunny" data-size="64" role="img" aria-label="Nắng"></canvas></span><figcaption>Nắng</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:hot" data-size="64" role="img" aria-label="Nắng gắt"></canvas></span><figcaption>Nắng gắt</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:overcast" data-size="64" role="img" aria-label="Âm u"></canvas></span><figcaption>Âm u</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:rain" data-size="64" role="img" aria-label="Mưa"></canvas></span><figcaption>Mưa</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:storm" data-size="64" role="img" aria-label="Bão"></canvas></span><figcaption>Bão</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="weather:fog" data-size="64" role="img" aria-label="Sương sớm"></canvas></span><figcaption>Sương sớm</figcaption></figure>
+        </div>
         <p class="lead">Mỗi mùa <b>12 ngày</b>: Xuân → Hạ → Thu → Đông → rồi quay lại. Thời tiết rút mỗi ngày một kiểu trong 6: Nắng, Nắng gắt, Âm u, Mưa, Bão, Sương sớm.</p>
         <div class="table-wrap"><table class="luat"><tbody><tr><th scope="row">Trái mùa</th><td>gieo không được</td></tr><tr><th scope="row">Sang mùa</th><td>cây <b>chưa chín</b> mà trái mùa thì héo</td></tr><tr><th scope="row">Cây đã chín</th><td>không bao giờ mất — vụ đang chờ gặt luôn an toàn</td></tr><tr><th scope="row">Nhà kính</th><td>sàn nhà kính miễn nhiễm mùa, trồng gì cũng được quanh năm</td></tr></tbody></table></div>
       </div>
@@ -83,6 +107,16 @@
     <section class="alt">
       <div class="wrap">
         <h2>Chăn nuôi</h2>
+        <div class="wgal">
+          <figure class="wgal-o"><a href="/vat-nuoi/cow/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:cow" data-size="64" role="img" aria-label="Bò"></canvas></span><figcaption>Bò</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/goat/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:goat" data-size="64" role="img" aria-label="Dê"></canvas></span><figcaption>Dê</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/pig/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:pig" data-size="64" role="img" aria-label="Heo"></canvas></span><figcaption>Heo</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/sheep/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:sheep" data-size="64" role="img" aria-label="Cừu"></canvas></span><figcaption>Cừu</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/chicken/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:chicken" data-size="64" role="img" aria-label="Gà"></canvas></span><figcaption>Gà</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/duck/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:duck" data-size="64" role="img" aria-label="Vịt"></canvas></span><figcaption>Vịt</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/vat-nuoi/fish/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="animal:fish" data-size="64" role="img" aria-label="Cá"></canvas></span><figcaption>Cá</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/dia-hinh/trough/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:trough" data-size="64" role="img" aria-label="Máng thức ăn"></canvas></span><figcaption>Máng</figcaption></a></figure>
+        </div>
         <p class="lead">8 loài, mỗi loài có khu riêng dựng sẵn — không phải tự đóng rào.</p>
         <div class="grid">
           <div class="card"><h3>Máng là cửa duy nhất</h3>
@@ -101,13 +135,26 @@
     <section>
       <div class="wrap">
         <h2>Người làm thuê</h2>
-        <div class="table-wrap"><table class="luat"><tbody><tr><th scope="row">Thuê</th><td><b class="tien">900</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> một người</td></tr><tr><th scope="row">Lương</th><td><b class="tien">220</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg> mỗi 3 ngày</td></tr><tr><th scope="row">Giao việc</th><td>chăm cây <i>hoặc</i> chăn nuôi — trong phạm vi đó họ tự chọn việc</td></tr><tr><th scope="row">Thứ tự ưu tiên</th><td>cố định, không ngẫu nhiên — nên đoán được họ sẽ làm gì</td></tr><tr><th scope="row">Rảnh việc</th><td>đi kiếm gỗ đá trong rừng, không đụng cây cảnh bạn trồng</td></tr><tr><th scope="row">Đầy tay</th><td>mang về kho (24 món)</td></tr></tbody></table></div>
+        <div class="wgal">
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="worker:0:down:0" data-size="64" role="img" aria-label="Người làm"></canvas></span><figcaption>Đứng chờ</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="worker:1:right:6" data-size="64" role="img" aria-label="Cày"></canvas></span><figcaption>Cày</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="worker:2:down:13" data-size="64" role="img" aria-label="Tưới"></canvas></span><figcaption>Tưới</figcaption></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="worker:3:down:7" data-size="64" role="img" aria-label="Bê hàng"></canvas></span><figcaption>Bê hàng</figcaption></figure>
+        </div>
+        <p class="note"><a href="/nhan-vat/">Xem đủ 18 tư thế ở trang Nhân vật →</a></p>
+        <div class="table-wrap"><table class="luat"><tbody><tr><th scope="row">Thuê</th><td><span class="gia"><b class="tien">900</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></span> một người</td></tr><tr><th scope="row">Lương</th><td><span class="gia"><b class="tien">220</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></span> mỗi 3 ngày</td></tr><tr><th scope="row">Giao việc</th><td>chăm cây <i>hoặc</i> chăn nuôi — trong phạm vi đó họ tự chọn việc</td></tr><tr><th scope="row">Thứ tự ưu tiên</th><td>cố định, không ngẫu nhiên — nên đoán được họ sẽ làm gì</td></tr><tr><th scope="row">Rảnh việc</th><td>đi kiếm gỗ đá trong rừng, không đụng cây cảnh bạn trồng</td></tr><tr><th scope="row">Đầy tay</th><td>mang về kho (24 món)</td></tr></tbody></table></div>
       </div>
     </section>
 
     <section class="alt">
       <div class="wrap">
         <h2>Mua bán</h2>
+        <div class="wgal">
+          <figure class="wgal-o"><a href="/dia-hinh/shop/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:shop" data-size="64" role="img" aria-label="Chợ hạt giống"></canvas></span><figcaption>Chợ</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/dia-hinh/counter/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:counter" data-size="64" role="img" aria-label="Quầy thu mua"></canvas></span><figcaption>Quầy</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/dia-hinh/warehouse/"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="prop:warehouse" data-size="64" role="img" aria-label="Nhà kho"></canvas></span><figcaption>Kho</figcaption></a></figure>
+          <figure class="wgal-o"><span class="ic" style="--s:64px"><canvas class="sp" data-sprite="ui:coin" data-size="64" role="img" aria-label="Tiền"></canvas></span><figcaption>Tiền</figcaption></figure>
+        </div>
         <div class="grid">
           <div class="card"><h3>Chợ và Quầy đứng hai đầu</h3>
             <p>Chợ để mua, Quầy thu mua để bán. Không ô nào bấm trúng cả hai.</p></div>

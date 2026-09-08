@@ -44,6 +44,46 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = resolve(ROOT, "src");
 const content = loadContent();
 
+/* ------------------------------------------------------- KHUNG HÌNH NHÂN VẬT
+
+   Cường: "thiếu trang nhân vật". Trang ấy chỉ có nghĩa nếu nó BÀY RA từng tư
+   thế, và danh sách tư thế phải đọc từ `atlas.ts` chứ không gõ tay — nếu không,
+   đợt sau thêm khung thứ 19 thì trang này im lặng bỏ sót nó.
+--------------------------------------------------------------------------- */
+
+const ATLAS_SRC = readFileSync(resolve(SRC, "art/atlas.ts"), "utf8");
+
+const SO_KHUNG_NGUOI = Number(/export const PLAYER_FRAMES = (\d+)/.exec(ATLAS_SRC)?.[1] ?? 0);
+if (!SO_KHUNG_NGUOI) throw new Error("không đọc được PLAYER_FRAMES từ src/art/atlas.ts");
+
+/* Khung 0..6 không có hằng PF_ riêng (chúng có từ trước khi bảng này ra đời),
+   nên tả ở đây; từ 7 trở đi lấy thẳng chú thích trên đầu mỗi hằng PF_. */
+const KHUNG_NGUOI = (() => {
+  const ra = [
+    ["Đứng yên", "Tư thế nghỉ, không làm gì."],
+    ["Bước 1", "Khung đi thứ nhất."],
+    ["Bước 2", "Khung đi thứ hai — chân kia."],
+    ["Bước 3", "Khung đi thứ ba."],
+    ["Bước 4", "Khung đi thứ tư, khép lại một nhịp chân."],
+    ["Ra tay", "Khung lúc công cụ chạm đất: cày, tưới, chặt, đập."],
+    ["Giơ lên", "Vung công cụ lên trước khi bổ xuống."],
+  ].map(([ten, mo], i) => ({ i, ten, mo }));
+  for (const m of ATLAS_SRC.matchAll(/\/\*\* ([^*]+?) \*\/\s*export const PF_(\w+) = (\d+);/g)) {
+    const cut = m[1].indexOf(":");
+    const ten = (cut < 0 ? m[1] : m[1].slice(0, cut)).trim().replace(/\.$/, "");
+    const mo = cut < 0 ? "" : m[1].slice(cut + 1).trim();
+    ra.push({ i: Number(m[3]), ten: ten.charAt(0) + ten.slice(1).toLowerCase(), mo });
+  }
+  ra.sort((a, b) => a.i - b.i);
+  if (ra.length !== SO_KHUNG_NGUOI || ra.some((k, i) => k.i !== i)) {
+    throw new Error(
+      `atlas.ts có ${SO_KHUNG_NGUOI} khung người nhưng trang Nhân vật tả được ${ra.length} ` +
+        "(chỉ số: " + ra.map((k) => k.i).join(",") + ") — thêm chú thích /** ... */ cho hằng PF_ mới",
+    );
+  }
+  return ra;
+})();
+
 /* ------------------------------------------------------------------ tiện ích */
 
 const esc = (s) =>
@@ -106,9 +146,26 @@ const XU_SYMBOL = `<svg class="xu-def" aria-hidden="true"><symbol id="xu" viewBo
   `<path d="M4.6 5.2a4.8 4.8 0 0 1 3-2" stroke="#fff3bf" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
   `</symbol></svg>`;
 
-/** `1.234` + đồng xu. Số in ĐẬM vì đó là thứ người ta tới đây để đọc. */
+/** `1.234` + đồng xu. Số in ĐẬM vì đó là thứ người ta tới đây để đọc.
+
+   Bọc trong một `<span class="gia">` vì nếu không, trên màn 320px đồng xu rơi
+   xuống dòng dưới tách khỏi con số của nó — "42" một dòng, hình xu một dòng —
+   và bảng giá đọc thành hai cột lệch nhau. */
 function xu(n) {
-  return `<b class="tien">${tien(n)}</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg>`;
+  return `<span class="gia"><b class="tien">${tien(n)}</b><svg class="xu" aria-label="đồng" role="img"><use href="#xu"/></svg></span>`;
+}
+
+const HUONG_NV = ["down", "up", "left", "right"];
+
+/** Soát phần đuôi "right:5" của khoá nhân vật. Khớp `docTuThe` trong sprites.ts. */
+function kiemTuThe(duoi, hong) {
+  const phan = duoi.split(":").filter(Boolean);
+  if (!phan.length) return;
+  if (!HUONG_NV.includes(phan[0])) return hong(`hướng "${phan[0]}" không có — chỉ ${HUONG_NV.join(" · ")}`);
+  if (phan.length === 1) return;
+  const f = Number(phan[1]);
+  if (!Number.isInteger(f) || f < 0 || f >= SO_KHUNG_NGUOI)
+    return hong(`khung ${phan[1]} nằm ngoài 0..${SO_KHUNG_NGUOI - 1}`);
 }
 
 /** Ném lỗi nếu `key` không trỏ tới thứ có thật. Luật khớp `spriteFor`. */
@@ -116,8 +173,16 @@ function kiemKhoaSprite(key) {
   const hong = (vi) => {
     throw new Error(`data-sprite="${key}" không vẽ được: ${vi}`);
   };
-  if (key === "player") return;
-  if (key.startsWith("ui:") || key.startsWith("worker:")) return; // do atlas tự lo
+  /* "player" · "player:right" · "player:right:5" — hướng phải có thật và khung
+     phải nằm trong 0..PLAYER_FRAMES-1, nếu không trang Nhân vật sẽ lặng lẽ vẽ
+     khung 0 ở mọi ô và không ai nhận ra. */
+  if (key === "player" || key.startsWith("player:")) return kiemTuThe(key.slice(7), hong);
+  if (key.startsWith("worker:")) {
+    const phan = key.slice(7).split(":");
+    if (!/^\d+$/.test(phan[0] ?? "")) return hong("bộ đồ người làm phải là một số");
+    return kiemTuThe(phan.slice(1).join(":"), hong);
+  }
+  if (key.startsWith("ui:")) return; // do atlas tự lo
   if (key.startsWith("weather:"))
     return content.weathers[key.slice(8)] ? undefined : hong("không có kiểu thời tiết này");
   const sau = (n) => key.slice(n);
@@ -366,6 +431,7 @@ const NAV_NHOM = [
     ["/cong-trinh/", "Công trình"],
     ["/dia-hinh/", "Địa hình"],
     ["/thoi-tiet/", "Thời tiết"],
+    ["/nhan-vat/", "Nhân vật"],
     ["/hanh-dong/", "Hành động"],
     ["/bieu-tuong/", "Biểu tượng"],
   ]],
@@ -460,10 +526,28 @@ ${hop}${dan}${mucLuc}${body}
 }
 
 function write(rel, html) {
+  kiemBangCuonDuoc(rel, html);
   const out = resolve(SRC, rel, "index.html");
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, html);
   return out;
+}
+
+/* Bảng rộng hơn màn 320px mà KHÔNG nằm trong `.table-wrap` thì nó đẩy lệch cả
+   trang: người đọc trên điện thoại phải vuốt ngang cả bài để xem nốt một cột,
+   và tiêu đề trôi mất khỏi mép trái. Trang Vật phẩm đã mắc đúng lỗi này và
+   build vẫn xanh, vì không có gì soát — nên soát ở đây, một lần cho mọi trang,
+   thay vì trông vào việc nhớ gõ `<div class="table-wrap">` mỗi lần thêm bảng. */
+function kiemBangCuonDuoc(rel, html) {
+  for (const m of html.matchAll(/<table\b/g)) {
+    const truoc = html.slice(Math.max(0, m.index - 60), m.index);
+    if (!truoc.includes('class="table-wrap"')) {
+      throw new Error(
+        `trang /${rel}/ có <table> không nằm trong <div class="table-wrap"> — ` +
+          "bảng rộng sẽ đẩy lệch cả trang trên màn hình nhỏ",
+      );
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -1135,8 +1219,21 @@ function trangChinhPage() {
   const nVat = content.animalOrder.filter((id) => content.animals[id]?.job !== "pest").length;
   const nMon = content.materialOrder.length;
   const nCong = content.toolOrder.length;
-  const mauCay = content.cropOrder.slice(0, 10).map((id) => cx(`crop:${id}`, 40, ""));
-  const mauVat = content.animalOrder.slice(0, 6).map((id) => cx(`animal:${id}`, 40, ""));
+  /* Mỗi thẻ trong danh mục phải có hình của CHÍNH thứ nó dẫn tới. Trước đó chỉ
+     Cây trồng và Vật nuôi có hình, tám thẻ còn lại là một khung trống — mà tám
+     thẻ ấy gồm cả Công trình, tức đúng chỗ người ta vào tìm cái nhà. */
+  const mau = (ks, co = 40) => ks.map((k) => cx(k, co, "")).join("");
+  const mauCay = mau(content.cropOrder.slice(0, 10).map((id) => `crop:${id}`));
+  const mauVat = mau(content.animalOrder.slice(0, 6).map((id) => `animal:${id}`));
+  const mauLuat = mau(["player:down:0", "ui:energy", "ui:water", "weather:rain", "ui:day"]);
+  const mauDo = mau(["item:wood", "item:stone", "item:milk", "item:egg", "tool:hoe", "tool:axe"]);
+  const mauNha = mau(["prop:house", "prop:warehouse", "prop:shop", "prop:counter", "prop:well", "build:sprinkler"]);
+  const mauDat = mau(["prop:tree", "prop:rock", "prop:log", "prop:bush", "prop:pine", "prop:boulder"]);
+  const mauTroi = mau(Object.keys(content.weathers ?? {}).map((id) => `weather:${id}`));
+  const mauViec = mau(["tool:hoe", "tool:can", "tool:axe", "tool:pickaxe"]);
+  const mauIcon = mau(["ui:coin", "ui:bag", "ui:build", "ui:power", "ui:gear", "ui:goal"]);
+  const mauNguoi = mau(["player:down:0", "worker:1:down:13", "worker:2:down:7", "worker:3:down:10"]);
+  const mauTacGia = mau(["player:down:15", "prop:house", "animal:cow"]);
 
   const the = (href, ten, dem, mo, anh) => `          <a class="wcard" href="${href}">
             <div class="wcard-art">${anh}</div>
@@ -1158,16 +1255,17 @@ function trangChinhPage() {
   const body = `
     <h2 id="danh-muc">Danh mục</h2>
     <div class="wcards">
-${the("/loi-choi/", "Lối chơi", "luật", "Một ngày dài bao lâu, năng lượng tiêu thế nào, mùa và thời tiết đổi ra sao.", "")}
-${the("/cay-trong/", "Cây trồng", `${nCay} loại`, "Mỗi cây: gieo mùa nào, mấy ngày chín, giá hạt, giá bán, lãi mỗi ngày.", mauCay.join(""))}
-${the("/vat-nuoi/", "Vật nuôi", `${nVat} loài`, "Ăn gì, mấy ngày một lứa, cho sữa/trứng/lông hay lấy thịt.", mauVat.join(""))}
-${the("/vat-pham/", "Vật phẩm", `${nMon + nCong} món`, "Nguyên liệu, món chế biến và công cụ — mỗi món một trang chi tiết.", "")}
-${the("/cong-trinh/", "Công trình", `${content.buildingOrder.length} thứ`, "Vòi tưới, sàn nhà kính, hàng rào — giá bao nhiêu và làm được gì.", "")}
-${the("/dia-hinh/", "Địa hình", `${content.propOrder.length} vật thể`, "Nền đất, cây cối, đá, gỗ chết, cỏ bụi và đồ trong nhà.", "")}
-${the("/thoi-tiet/", "Thời tiết", `${Object.keys(content.weathers ?? {}).length} kiểu trời`, "Trời đổi luật chơi của một ngày thế nào.", "")}
-${the("/hanh-dong/", "Hành động", "mọi nút", "Từng việc nhân vật làm được trên một ô đất, cần cầm gì và tốn bao nhiêu sức.", "")}
-${the("/bieu-tuong/", "Biểu tượng", "HUD · menu", "Mỗi biểu tượng trên thanh trạng thái và trong menu nói gì.", "")}
-${the("/tac-gia/", "Tác giả", "story", "Ai làm ra nông trại này, và nó bắt đầu từ đâu.", "")}
+${the("/loi-choi/", "Lối chơi", "luật", "Một ngày dài bao lâu, năng lượng tiêu thế nào, mùa và thời tiết đổi ra sao.", mauLuat)}
+${the("/cay-trong/", "Cây trồng", `${nCay} loại`, "Mỗi cây: gieo mùa nào, mấy ngày chín, giá hạt, giá bán, lãi mỗi ngày.", mauCay)}
+${the("/vat-nuoi/", "Vật nuôi", `${nVat} loài`, "Ăn gì, mấy ngày một lứa, cho sữa/trứng/lông hay lấy thịt.", mauVat)}
+${the("/vat-pham/", "Vật phẩm", `${nMon + nCong} món`, "Nguyên liệu, món chế biến và công cụ — mỗi món một trang chi tiết.", mauDo)}
+${the("/cong-trinh/", "Công trình", `${content.buildingOrder.length} thứ`, "Nhà, kho, chợ, quầy, giếng — và vòi tưới, sàn nhà kính, hàng rào tự xây.", mauNha)}
+${the("/dia-hinh/", "Địa hình", `${content.propOrder.length} vật thể`, "Nền đất, cây cối, đá, gỗ chết, cỏ bụi và đồ trong nhà.", mauDat)}
+${the("/thoi-tiet/", "Thời tiết", `${Object.keys(content.weathers ?? {}).length} kiểu trời`, "Trời đổi luật chơi của một ngày thế nào.", mauTroi)}
+${the("/nhan-vat/", "Nhân vật", `${SO_KHUNG_NGUOI} tư thế`, "Nhân vật và người làm: từng tư thế, khi nào hiện khung nào, tiền thuê và lương.", mauNguoi)}
+${the("/hanh-dong/", "Hành động", "mọi nút", "Từng việc nhân vật làm được trên một ô đất, cần cầm gì và tốn bao nhiêu sức.", mauViec)}
+${the("/bieu-tuong/", "Biểu tượng", "HUD · menu", "Mỗi biểu tượng trên thanh trạng thái và trong menu nói gì.", mauIcon)}
+${the("/tac-gia/", "Tác giả", "story", "Ai làm ra nông trại này, và nó bắt đầu từ đâu.", mauTacGia)}
     </div>
 
     <h2 id="bat-dau">Bắt đầu từ đâu</h2>
@@ -1243,8 +1341,8 @@ function vatPhamPage() {
     ["Công cụ", ds.filter((v) => v.loai === "Công cụ")],
   ];
 
-  const bang = (list) => `        <table class="wtab">
-          <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th><th></th></tr></thead>
+  const bang = (list) => `        <div class="table-wrap"><table class="wtab">
+          <thead><tr><th>Món</th><th>Bán</th><th>Mua</th><th>Chế tạo từ</th></tr></thead>
           <tbody>
 ${list
   .map(
@@ -1257,7 +1355,7 @@ ${list
   )
   .join("\n")}
           </tbody>
-        </table>`;
+        </table></div>`;
 
   const body = nhom
     .map(
@@ -1325,7 +1423,7 @@ function vatPhamChiTiet(v) {
 
   return page({
     title: `${v.ten} — OniFarm Wiki`,
-    desc: `${v.ten} trong OniFarm: ${v.loai.toLowerCase()}${v.ban ? `, bán ${v.ban}đ` : ""}${v.congThuc ? ", chế tạo được" : ""}.`,
+    desc: `${v.ten} trong OniFarm: ${v.loai.toLowerCase()}${v.ban ? `, bán ${v.ban} xu` : ""}${v.congThuc ? ", chế tạo được" : ""}.`,
     url: "/vat-pham/",
     h1: esc(v.ten),
     tag: v.loai.toLowerCase(),
@@ -1346,7 +1444,31 @@ function tacGiaPage() {
     </section>
 `;
 
+  /* Một dải hình ngay đầu bài: trang này nói VỀ nông trại, mà trước đó nó là
+     trang duy nhất trong wiki không có lấy một hình của chính nông trại ấy. */
+  const hop = `        <aside class="winfo">
+          <div class="winfo-art">${cx("player:down:15", 112, "Nhân vật giơ tay mừng")}</div>
+          <p class="winfo-ten">OniFarm</p>
+          <dl>
+            <dt>Tác giả · story</dt><dd><b>TRẦN CƯỜNG</b></dd>
+            <dt>Bản lõi</dt><dd>${esc(PHIEN_BAN.core)}</dd>
+            <dt>Bản nội dung</dt><dd>${esc(PHIEN_BAN.content)}</dd>
+            <dt>Cây trồng</dt><dd>${SO_LIEU.soCay} loại</dd>
+            <dt>Vật nuôi</dt><dd>${SO_LIEU.soLoai} loài</dd>
+            <dt>Kịch bản kiểm thử</dt><dd>${SO_LIEU.soKichBan}</dd>
+          </dl>
+        </aside>`;
+
   const body = `
+    <div class="wgal">
+      <figure class="wgal-o">${cx("prop:house", 72, "Nhà")}<figcaption>Nhà</figcaption></figure>
+      <figure class="wgal-o">${cx("animal:cow", 72, "Bò")}<figcaption>Bò</figcaption></figure>
+      <figure class="wgal-o">${cx("crop:tomato", 72, "Cà chua")}<figcaption>Cà chua</figcaption></figure>
+      <figure class="wgal-o">${cx("prop:tree", 72, "Cây")}<figcaption>Cây</figcaption></figure>
+      <figure class="wgal-o">${cx("weather:rain", 72, "Mưa")}<figcaption>Mưa</figcaption></figure>
+      <figure class="wgal-o">${cx("player:down:0", 72, "Nhân vật")}<figcaption>Nhân vật</figcaption></figure>
+    </div>
+
     <h2 id="story">Story</h2>
     <p>
       Bắt đầu từ một câu hỏi giản dị: <i>một cái nông trại chạy được, mở bằng trình duyệt, không cần cài,
@@ -1381,6 +1503,7 @@ function tacGiaPage() {
     h1: "Tác giả",
     tag: "Trần Cường",
     muc: [["story", "Story"], ["nguyen-tac", "Ba nguyên tắc"], ["lien-he", "Chơi thử"]],
+    hop,
     dan,
     body,
   });
@@ -1432,6 +1555,7 @@ function cropDetailPage(c) {
     </p>
 
     <h2 id="tien">Tiền nong</h2>
+    <div class="table-wrap">
     <table>
       <tbody>
         <tr><th scope="row">Hạt giống</th><td>${xu(c.seedPrice)} một gói</td></tr>
@@ -1440,6 +1564,7 @@ function cropDetailPage(c) {
         <tr><th scope="row">Lãi mỗi ngày</th><td class="${laiMoiNgay(c) >= 0 ? "up" : "down"}">${xu(Math.round(laiMoiNgay(c)))}</td></tr>
       </tbody>
     </table>
+    </div>
     <p class="note">Lãi tính theo mức thu <b>thấp nhất</b> — con số bạn chắc chắn nhận được, không phải mức trung bình.</p>
 
     <h2 id="dung">Dùng làm gì</h2>
@@ -1455,7 +1580,7 @@ function cropDetailPage(c) {
 
   return page({
     title: `${c.name} — OniFarm Wiki`,
-    desc: `${c.name} trong OniFarm: gieo mùa ${mua}, chín sau ${tongNgay(c)} ngày, hạt ${c.seedPrice}đ, bán ${c.sellPrice}đ.`,
+    desc: `${c.name} trong OniFarm: gieo mùa ${mua}, chín sau ${tongNgay(c)} ngày, hạt ${c.seedPrice} xu, bán ${c.sellPrice} xu.`,
     url: "/cay-trong/",
     h1: esc(c.name),
     tag: "cây trồng",
@@ -1520,7 +1645,7 @@ function animalDetailPage(a) {
 
   return page({
     title: `${a.name} — OniFarm Wiki`,
-    desc: `${a.name} trong OniFarm: mua ${a.price ?? 0}đ, lớn sau ${a.matureDays ?? 0} ngày, ăn gì và cho sản phẩm gì.`,
+    desc: `${a.name} trong OniFarm: mua ${a.price ?? 0} xu, lớn sau ${a.matureDays ?? 0} ngày, ăn gì và cho sản phẩm gì.`,
     url: "/vat-nuoi/",
     h1: esc(a.name),
     tag: a.job === "pest" ? "loài phá hoại" : "vật nuôi",
@@ -1542,14 +1667,57 @@ function animalDetailPage(a) {
 
 const KIEU_XAY = { object: "Vật đặt trên ô", floor: "Sàn lát" };
 
+/* NHÀ CỬA — Cường: "các loại công trình toà nhà đâu, sao không thấy render".
+
+   Vì trong dữ liệu, nhà · kho · chợ · quầy KHÔNG nằm ở `buildings` mà ở `props`:
+   `buildings` chỉ chứa ba thứ NGƯỜI CHƠI TỰ XÂY (vòi tưới, sàn nhà kính, rào),
+   còn nhà cửa thì đã dựng sẵn trên bản đồ. Đúng về mặt luật chơi, nhưng người
+   tra cứu không nghĩ như thế: họ tìm "Nhà" ở trang Công trình. Nên trang này
+   kể cả hai, và mỗi thứ trỏ về trang chi tiết thật của nó.
+
+   Danh sách gõ tay vì "cái nào là toà nhà" là một phán đoán biên tập, không có
+   trong dữ liệu — nhưng `cx()` soát từng khoá, nên gõ sai một id là build đỏ. */
+const NHA_CUA = [
+  ["house", "Chỗ ở của bạn. Ngủ trong này để sang ngày mới."],
+  ["door", "Cửa nhà — bước vào là đổi sang bản đồ trong nhà."],
+  ["warehouse", "Nhà kho: nông sản dỡ vào đây, xe tới chở đi từ đây."],
+  ["store_door", "Cửa kho — mở ra bảng kho hàng."],
+  ["shop", "Chợ hạt giống: mua hạt, mua con giống, thuê người làm."],
+  ["counter", "Quầy thu mua: bán mọi thứ đang cầm."],
+  ["well", "Giếng nước: múc đầy bình tưới."],
+  ["kennel", "Nhà chó — chỗ con chó về nghỉ."],
+  ["trough", "Máng thức ăn: đổ vào đây thì cả chuồng tự tới ăn."],
+  ["bench", "Bàn chế tạo, đặt trong nhà."],
+  ["bed", "Giường — ngủ một đêm, cây lớn thêm một giai đoạn."],
+  ["pier", "Cầu gỗ bắc qua nước, đi bộ được."],
+  ["roadbridge", "Cầu đường: xe qua được, không chỉ người."],
+];
+
 function congTrinhPage() {
   const ds = content.buildingOrder.map((id) => content.buildings[id]).filter(Boolean);
   const the = (b) => `        <a class="chip" href="/cong-trinh/${b.id}/">
           ${cx(`build:${b.id}`, 40, b.name)}<span>${esc(b.name)}</span>
         </a>`;
 
+  const theNha = ([id, mo]) => `        <article class="ent" id="nc-${esc(id)}">
+          <div class="ent-art">${cx(`prop:${id}`, 88, content.props[id]?.name ?? id)}</div>
+          <div class="ent-main">
+            <h3><a href="/dia-hinh/${esc(id)}/">${esc(content.props[id]?.name ?? id)}</a></h3>
+            <p>${esc(mo)}</p>
+          </div>
+        </article>`;
+
   const body = `
+    <h2 id="nha">Nhà cửa dựng sẵn</h2>
+    <p>Những thứ này <b>đã có sẵn trên bản đồ</b> — không mua, không xây, nhưng đây là chỗ mọi việc
+       diễn ra: mua bán, cất hàng, ngủ, múc nước. Cửa nhà và cửa kho có hình <b>đóng và mở</b>,
+       nên đứng gần là thấy nó hé ra.</p>
+    <div class="ents">
+${NHA_CUA.map(theNha).join("\n")}
+    </div>
+
     <h2 id="ds">Xây được những gì</h2>
+    <p>Ba thứ dưới đây thì ngược lại: <b>bạn tự mua và tự đặt</b>, ở đâu tuỳ ý.</p>
     <div class="chips">
 ${ds.map(the).join("\n")}
     </div>
@@ -1582,11 +1750,16 @@ ${ds
 `;
   return page({
     title: "Công trình — OniFarm Wiki",
-    desc: `Toàn bộ ${ds.length} công trình xây được trong OniFarm: giá, kiểu, đi qua được hay không.`,
+    desc: `Nhà · kho · chợ · quầy · giếng và ${ds.length} công trình xây được trong OniFarm: mỗi thứ làm gì, giá bao nhiêu.`,
     url: "/cong-trinh/",
     h1: "Công trình",
-    tag: `${ds.length} thứ xây được`,
-    muc: [["ds", "Xây được những gì"], ["bang", "Bảng so sánh"], ["xay", "Xây thế nào"]],
+    tag: `${NHA_CUA.length} nhà cửa · ${ds.length} thứ xây được`,
+    muc: [
+      ["nha", "Nhà cửa dựng sẵn"],
+      ["ds", "Xây được những gì"],
+      ["bang", "Bảng so sánh"],
+      ["xay", "Xây thế nào"],
+    ],
     body,
   });
 }
@@ -1612,11 +1785,11 @@ function congTrinhChiTiet(b) {
     <h2 id="lam">Nó làm gì</h2>
     <p>${esc(b.desc ?? "")}</p>
     ${hd.length
-      ? `<table>
+      ? `<div class="table-wrap"><table>
       <tbody>
 ${hd.map(([k, v]) => `        <tr><th scope="row">${esc(TEN_HD[k] ?? k)}</th><td>${typeof v === "boolean" ? (v ? "có" : "không") : esc(String(v))}</td></tr>`).join("\n")}
       </tbody>
-    </table>`
+    </table></div>`
       : ""}
 
     <h2 id="xay">Xây thế nào</h2>
@@ -1917,6 +2090,173 @@ ${BIEU_TUONG.map(
   });
 }
 
+/* ------------------------------------------------------------- NHÂN VẬT
+
+   Cường: "thiếu trang nhân vật". Wiki này tra được cây, con, đồ, nhà, đất,
+   trời — mà bỏ trống đúng cái thứ người chơi điều khiển suốt buổi. Và vì mỗi
+   khung hình đã có tên và lý do tồn tại trong `atlas.ts`, trang này chỉ việc
+   bày chúng ra: không có con số nào gõ tay.
+--------------------------------------------------------------------------- */
+
+/** Khi nào người làm hiện khung nào — chép luật từ `khungNguoiLam` trong draw.ts. */
+const KHI_NAO_KHUNG = [
+  ["Đang tưới hoặc đổ máng", "Nghiêng bình tưới"],
+  ["Đang gieo hạt", "Ngồi xổm rồi nghiêng người"],
+  ["Đang cày · chặt · đập đá", "Giơ lên rồi ra tay"],
+  ["Hết sức, đang đi tìm chỗ nghỉ", "Mệt"],
+  ["Đang ngồi nghỉ lại sức", "Ngồi nghỉ"],
+  ["Trời mưa bão, về đứng trước kho", "Quệt mồ hôi"],
+  ["Đang nói chuyện với người khác", "Nói chuyện"],
+  ["Đang vuốt ve con vật", "Ngồi xổm"],
+  ["Trên tay còn hàng, hoặc đang dỡ vào kho", "Bê đồ"],
+  ["Đang đi", "Bốn khung bước chân"],
+  ["Đứng chờ việc", "Thỉnh thoảng vẫy tay, chỉ tay hoặc quệt mồ hôi"],
+];
+
+function nhanVatPage() {
+  const skins = content.workers?.skins ?? [];
+  const ten = content.workers?.names ?? [];
+  const w = content.workers ?? {};
+
+  const huong = [["down", "quay xuống"], ["up", "quay lên"], ["left", "quay trái"], ["right", "quay phải"]];
+
+  const theKhung = (k) => `        <article class="ent" id="k${k.i}">
+          <div class="ent-art">${cx(`player:down:${k.i}`, 88, k.ten)}</div>
+          <div class="ent-main">
+            <h3>${esc(k.ten)}</h3>
+            <p class="ent-sub">khung <b>${k.i}</b></p>
+${k.mo ? `            <p>${esc(k.mo.charAt(0).toUpperCase() + k.mo.slice(1))}</p>` : ""}
+          </div>
+        </article>`;
+
+  const hop = `        <aside class="winfo">
+          <div class="winfo-art">${cx("player:down:0", 112, "Nhân vật chính")}</div>
+          <p class="winfo-ten">Nhân vật</p>
+          <dl>
+            <dt>Tư thế</dt><dd><b>${SO_KHUNG_NGUOI}</b> khung mỗi hướng</dd>
+            <dt>Hướng</dt><dd>4 — ${huong.map(([, t]) => t.replace("quay ", "")).join(" · ")}</dd>
+            <dt>Tổng hình</dt><dd>${SO_KHUNG_NGUOI * 4} khung nhân vật</dd>
+            <dt>Bộ đồ người làm</dt><dd>${skins.length}</dd>
+            <dt>Thuê một người</dt><dd>${xu(w.hireFee ?? 0)}</dd>
+            <dt>Lương</dt><dd>${xu(w.wage ?? 0)} mỗi ${w.wageEveryDays ?? 0} ngày</dd>
+          </dl>
+        </aside>`;
+
+  const body = `
+    <h2 id="ban">Bạn</h2>
+    <p>Nhân vật bạn điều khiển có <b>${SO_KHUNG_NGUOI} tư thế</b> vẽ riêng cho <b>mỗi hướng</b> —
+       tổng cộng ${SO_KHUNG_NGUOI * 4} khung hình. Game chọn khung theo <b>việc đang làm</b>,
+       không phải theo nút bạn bấm: nhìn từ xa là đoán được người kia đang cày hay đang tưới.</p>
+
+    <div class="wgal">
+${huong
+  .map(
+    ([d, t]) => `      <figure class="wgal-o">${cx(`player:${d}:0`, 72, `Đứng ${t}`)}<figcaption>Đứng, ${esc(t)}</figcaption></figure>`,
+  )
+  .join("\n")}
+    </div>
+
+    <h3 id="di">Một nhịp bước chân</h3>
+    <p>Bốn khung nối vòng, đổi khung theo quãng đường đã đi chứ không theo đồng hồ — nên đi chậm thì bước chậm.</p>
+    <div class="wgal">
+${[1, 2, 3, 4]
+  .map((f) => `      <figure class="wgal-o">${cx(`player:right:${f}`, 72, `Bước ${f}`)}<figcaption>Bước ${f}</figcaption></figure>`)
+  .join("\n")}
+    </div>
+
+    <h2 id="tu-the">${SO_KHUNG_NGUOI} tư thế</h2>
+    <div class="ents">
+${KHUNG_NGUOI.map(theKhung).join("\n")}
+    </div>
+
+    <h2 id="nguoi-lam">Người làm</h2>
+    <p>Thuê ở <b>Chợ</b> ${xu(w.hireFee ?? 0)} một người, rồi trả lương ${xu(w.wage ?? 0)}
+       mỗi <b>${w.wageEveryDays ?? 0} ngày</b>. Họ dùng <b>đúng bộ hình của nhân vật chính</b>,
+       chỉ khác bảng màu áo · quần · nón · tóc — nên mọi tư thế ở trên, họ cũng làm được.</p>
+
+    <div class="wgal">
+${skins
+  .map(
+    (sk, i) =>
+      `      <figure class="wgal-o">${cx(`worker:${i}:down:0`, 72, `Bộ đồ ${i + 1}`)}<figcaption>Bộ đồ ${i + 1}</figcaption></figure>`,
+  )
+  .join("\n")}
+    </div>
+
+    <h3 id="viec">Họ đang làm gì</h3>
+    <div class="wgal">
+${[
+  [1, "worker:1:right:13", "Tưới"],
+  [2, "worker:2:down:12", "Gieo"],
+  [3, "worker:3:right:6", "Cày"],
+  [0, "worker:0:down:7", "Bê hàng"],
+  [1, "worker:1:down:8", "Hết sức"],
+  [2, "worker:2:down:9", "Ngồi nghỉ"],
+  [3, "worker:3:down:11", "Tán chuyện"],
+  [0, "worker:0:down:10", "Vẫy tay"],
+]
+  .map(([, k, t]) => `      <figure class="wgal-o">${cx(k, 72, t)}<figcaption>${esc(t)}</figcaption></figure>`)
+  .join("\n")}
+    </div>
+
+    <h3 id="khi-nao">Khi nào hiện khung nào</h3>
+    <p>Xét theo thứ tự này, gặp dòng nào đúng trước thì dừng ở dòng đó:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Lúc ấy họ đang</th><th>Thì bạn thấy</th></tr></thead>
+        <tbody>
+${KHI_NAO_KHUNG.map(([a, b]) => `          <tr><td>${esc(a)}</td><td><b>${esc(b)}</b></td></tr>`).join("\n")}
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Người đứng chờ bốc cử chỉ theo <b>số hiệu của chính họ</b> và nhịp bốn giây, nên ba người
+       đứng cạnh nhau không bao giờ cùng vẫy tay một lúc — mà ván chơi lại vẫn ra đúng chuỗi ấy.</p>
+
+    <h3 id="ten">Họ tên gì</h3>
+    <p>Tên bốc từ danh sách ${ten.length} cái: ${ten.map((t) => `<b>${esc(t)}</b>`).join(" · ")}.</p>
+
+    <h3 id="suc">Sức và sức chở</h3>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+          <tr><th scope="row">Năng lượng đầy</th><td>${w.energyMax ?? 0}</td></tr>
+          <tr><th scope="row">Mỗi việc tốn</th><td>${w.energyPerTask ?? 0}</td></tr>
+          <tr><th scope="row">Dưới mức này thì đi nghỉ</th><td>${w.restBelow ?? 0}</td></tr>
+          <tr><th scope="row">Nghỉ bao lâu</th><td>${w.restMinutes ?? 0} phút trong game</td></tr>
+          <tr><th scope="row">Ôm được</th><td>${w.carryMax ?? 0} món</td></tr>
+          <tr><th scope="row">Tốc độ</th><td>${w.speed ?? 0}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="cam">Cầm gì trên tay</h2>
+    <p>Công cụ đang cầm hiện ngay trong tay nhân vật, và nó quyết định
+       <a href="/hanh-dong/">nút hành động</a> nào sáng lên trên ô đất trước mặt.</p>
+    <div class="chips">
+${content.toolOrder
+  .filter((id) => content.tools[id])
+  .map((id) => `      ${nhan(`tool:${id}`, 40)}`)
+  .join("\n")}
+    </div>
+`;
+
+  return page({
+    title: "Nhân vật — OniFarm Wiki",
+    desc: `Nhân vật và người làm trong OniFarm: ${SO_KHUNG_NGUOI} tư thế mỗi hướng, khi nào hiện khung nào, tiền thuê và lương người làm.`,
+    url: "/nhan-vat/",
+    h1: "Nhân vật",
+    tag: `${SO_KHUNG_NGUOI} tư thế · 4 hướng`,
+    muc: [
+      ["ban", "Bạn"],
+      ["tu-the", `${SO_KHUNG_NGUOI} tư thế`],
+      ["nguoi-lam", "Người làm"],
+      ["cam", "Cầm gì trên tay"],
+    ],
+    hop,
+    body,
+  });
+}
+
 function luatChoiPage() {
   const b = content.balance;
   const nl = b.energyCost ?? {};
@@ -1931,6 +2271,13 @@ function luatChoiPage() {
     <section>
       <div class="wrap">
         <h2>Một ngày</h2>
+        <div class="wgal">
+          <figure class="wgal-o">${cx("ui:sun", 64, "Ban ngày")}<figcaption>Ban ngày</figcaption></figure>
+          <figure class="wgal-o">${cx("ui:moon", 64, "Ban đêm")}<figcaption>Ban đêm</figcaption></figure>
+          <figure class="wgal-o">${cx("ui:energy", 64, "Năng lượng")}<figcaption>Năng lượng</figcaption></figure>
+          <figure class="wgal-o">${cx("ui:water", 64, "Nước trong bình")}<figcaption>Nước</figcaption></figure>
+          <figure class="wgal-o">${cx("prop:bed", 64, "Giường")}<figcaption>Giường</figcaption></figure>
+        </div>
         <p class="lead">Đồng hồ chạy liên tục theo thời gian thật. Một ngày trong game dài khoảng <b>${SO_LIEU.phutMoiNgayThat} phút</b> ngoài đời.</p>
         ${bangLuat([
           ["Thức dậy", `${SO_LIEU.gioDay}`],
@@ -1949,6 +2296,14 @@ function luatChoiPage() {
       <div class="wrap">
         <h2>Vòng lõi</h2>
         <p class="lead">CÀY → GIEO → TƯỚI → chờ cây lớn → THU → BÁN.</p>
+        <div class="wgal">
+          <figure class="wgal-o">${cx("tool:hoe", 64, "Cuốc")}<figcaption>Cày — cuốc</figcaption></figure>
+          <figure class="wgal-o">${cx("seed:tomato", 64, "Hạt giống")}<figcaption>Gieo — hạt</figcaption></figure>
+          <figure class="wgal-o">${cx("tool:can", 64, "Bình tưới")}<figcaption>Tưới — bình</figcaption></figure>
+          <figure class="wgal-o">${cx("crop:tomato:1", 64, "Cây non")}<figcaption>Cây lớn dần</figcaption></figure>
+          <figure class="wgal-o">${cx("crop:tomato", 64, "Cây chín")}<figcaption>Thu</figcaption></figure>
+          <figure class="wgal-o">${cx("prop:counter", 64, "Quầy thu mua")}<figcaption>Bán</figcaption></figure>
+        </div>
         <div class="grid">
           <div class="card"><h3>Cây lớn theo thời gian</h3>
             <p>Ô còn <b>ẩm</b> và trời còn sáng thì cây lớn dần trông thấy trong ngày, không nhảy cóc lúc ngủ. Đi ngủ sớm vẫn được cộng nốt phần ban ngày còn lại — không bị phạt.</p></div>
@@ -1965,6 +2320,11 @@ function luatChoiPage() {
     <section>
       <div class="wrap">
         <h2>Bốn mùa</h2>
+        <div class="wgal">
+${Object.values(content.weathers ?? {})
+  .map((w) => `          <figure class="wgal-o">${cx(`weather:${w.id}`, 64, w.name)}<figcaption>${esc(w.name)}</figcaption></figure>`)
+  .join("\n")}
+        </div>
         <p class="lead">Mỗi mùa <b>${SO_LIEU.ngayMoiMua} ngày</b>: ${mua.join(" → ")} → rồi quay lại. ${thoiTiet.length ? `Thời tiết rút mỗi ngày một kiểu trong ${thoiTiet.length}: ${thoiTiet.join(", ")}.` : ""}</p>
         ${bangLuat([
           ["Trái mùa", "gieo không được"],
@@ -1978,6 +2338,17 @@ function luatChoiPage() {
     <section class="alt">
       <div class="wrap">
         <h2>Chăn nuôi</h2>
+        <div class="wgal">
+${content.animalOrder
+  .filter((id) => content.animals[id] && content.animals[id].job !== "pest")
+  .slice(0, 7)
+  .map(
+    (id) =>
+      `          <figure class="wgal-o"><a href="/vat-nuoi/${esc(id)}/">${cx(`animal:${id}`, 64, content.animals[id].name)}<figcaption>${esc(content.animals[id].name)}</figcaption></a></figure>`,
+  )
+  .join("\n")}
+          <figure class="wgal-o"><a href="/dia-hinh/trough/">${cx("prop:trough", 64, "Máng thức ăn")}<figcaption>Máng</figcaption></a></figure>
+        </div>
         <p class="lead">${SO_LIEU.soLoai} loài, mỗi loài có khu riêng dựng sẵn — không phải tự đóng rào.</p>
         <div class="grid">
           <div class="card"><h3>Máng là cửa duy nhất</h3>
@@ -1996,6 +2367,13 @@ function luatChoiPage() {
     <section>
       <div class="wrap">
         <h2>Người làm thuê</h2>
+        <div class="wgal">
+          <figure class="wgal-o">${cx("worker:0:down:0", 64, "Người làm")}<figcaption>Đứng chờ</figcaption></figure>
+          <figure class="wgal-o">${cx("worker:1:right:6", 64, "Cày")}<figcaption>Cày</figcaption></figure>
+          <figure class="wgal-o">${cx("worker:2:down:13", 64, "Tưới")}<figcaption>Tưới</figcaption></figure>
+          <figure class="wgal-o">${cx("worker:3:down:7", 64, "Bê hàng")}<figcaption>Bê hàng</figcaption></figure>
+        </div>
+        <p class="note"><a href="/nhan-vat/">Xem đủ ${SO_KHUNG_NGUOI} tư thế ở trang Nhân vật →</a></p>
         ${bangLuat([
           ["Thuê", `${xu(content.workers?.hireFee ?? 0)} một người`],
           ["Lương", `${xu(content.workers?.wage ?? 0)} mỗi ${SO_LIEU.ngayTraLuong} ngày`],
@@ -2010,6 +2388,12 @@ function luatChoiPage() {
     <section class="alt">
       <div class="wrap">
         <h2>Mua bán</h2>
+        <div class="wgal">
+          <figure class="wgal-o"><a href="/dia-hinh/shop/">${cx("prop:shop", 64, "Chợ hạt giống")}<figcaption>Chợ</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/dia-hinh/counter/">${cx("prop:counter", 64, "Quầy thu mua")}<figcaption>Quầy</figcaption></a></figure>
+          <figure class="wgal-o"><a href="/dia-hinh/warehouse/">${cx("prop:warehouse", 64, "Nhà kho")}<figcaption>Kho</figcaption></a></figure>
+          <figure class="wgal-o">${cx("ui:coin", 64, "Tiền")}<figcaption>Tiền</figcaption></figure>
+        </div>
         <div class="grid">
           <div class="card"><h3>Chợ và Quầy đứng hai đầu</h3>
             <p>Chợ để mua, Quầy thu mua để bán. Không ô nào bấm trúng cả hai.</p></div>
@@ -2078,6 +2462,7 @@ const outs = [
   write("cong-trinh", congTrinhPage()),
   write("dia-hinh", diaHinhPage()),
   write("thoi-tiet", thoiTietPage()),
+  write("nhan-vat", nhanVatPage()),
   write("hanh-dong", actionsPage()),
   write("bieu-tuong", bieuTuongPage()),
   write("tac-gia", tacGiaPage()),

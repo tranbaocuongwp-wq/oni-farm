@@ -89,6 +89,8 @@ canvas.sp {
   margin-left: 2px;
 }
 .tien { font-variant-numeric: tabular-nums; }
+/* Số và đồng xu là MỘT đơn vị đọc — không cho xuống dòng giữa chúng. */
+.gia { white-space: nowrap; }
 
 /* ---------------------------------------------------------------- thanh trên */
 
@@ -217,6 +219,11 @@ th, td {
 thead th, table th[scope="col"] {
   background: var(--nen-3);
   font-weight: 700;
+  /* Tiêu đề cột KHÔNG xuống dòng: trên màn 320px "Chế tạo từ" vỡ thành ba
+     dòng và hàng tiêu đề cao gấp ba phần thân bảng. Thà để bảng rộng ra rồi
+     cuộn ngang TRONG `.table-wrap` — cuộn thì thấy được, còn chữ vỡ vụn thì
+     chỉ khó đọc. */
+  white-space: nowrap;
 }
 tbody th { background: var(--nen-2); font-weight: 600; }
 td.num, .num { text-align: right; white-space: nowrap; }
@@ -224,7 +231,45 @@ td.num, .num { text-align: right; white-space: nowrap; }
 .down { color: var(--do); }
 
 /* Bảng rộng hơn màn thì cuộn TRONG khung của nó, không đẩy cả trang lệch. */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Bóng mờ ở mép để người đọc BIẾT là còn cột bên phải. Bốn lớp nền: hai lớp
+     `local` bám theo nội dung (che bóng khi đã cuộn hết), hai lớp `scroll` là
+     bóng. Không cần một dòng JS nào. */
+  background:
+    linear-gradient(to right, var(--nen) 30%, transparent) left / 24px 100% no-repeat local,
+    linear-gradient(to left, var(--nen) 30%, transparent) right / 24px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.16), transparent) left / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.16), transparent) right / 12px 100% no-repeat scroll;
+}
+
+/* ------------------------------------------------------------ dải hình mẫu
+
+   Một hàng hình có chú thích dưới — dùng cho bộ tư thế nhân vật, bộ đồ người
+   làm, dải công trình. Cùng luật ô vuông đều như `.ic`: mọi hình chiếm đúng
+   một ô bằng nhau, dù con vật cao hay cái xẻng nằm ngang. */
+.wgal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(96px, 100%), 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.wgal-o {
+  margin: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--vien);
+  background: var(--nen-2);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.wgal-o figcaption {
+  font-size: 13px;
+  color: var(--chu-nhat);
+  text-align: center;
+  line-height: 1.3;
+}
 
 /* ------------------------------------------------- thẻ, chip, danh sách con */
 

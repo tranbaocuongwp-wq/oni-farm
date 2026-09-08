@@ -25,13 +25,36 @@ import { bundledContent } from "../core/content/bundled.ts";
 const content = bundledContent();
 const atlas = buildAtlas(content);
 
+const HUONG = ["down", "up", "left", "right"] as const;
+type Huong = (typeof HUONG)[number];
+
+/** "right:5" → ["right", 5]; "" → ["down", 0]. Sai thì lùi về mặc định. */
+function docTuThe(duoi: string): [Huong, number] {
+  const phan = duoi.split(":").filter(Boolean);
+  const dir = (HUONG as readonly string[]).includes(phan[0] ?? "") ? (phan[0] as Huong) : "down";
+  const f = Number(phan[phan.length - 1]);
+  return [dir, Number.isFinite(f) && phan.length > (dir === phan[0] ? 1 : 0) ? f : 0];
+}
+
 /** Sprite cho một khoá `data-sprite`, hoặc null nếu không có gì để vẽ. */
 function spriteFor(key: string): HTMLCanvasElement | null {
-  if (key === "player") return atlas.player.down[0] ?? null;
+  // "player" · "player:right" · "player:right:5" — hướng và KHUNG.
+  // Trang Nhân vật cần bày ra 18 tư thế; nếu ở đây chỉ trả về một khung đứng
+  // thì trang ấy chỉ có cách nói suông rằng nhân vật biết làm gì.
+  if (key === "player" || key.startsWith("player:")) {
+    const [dir, frame] = docTuThe(key.slice(7));
+    return atlas.player[dir]?.[frame] ?? null;
+  }
   // "ui:power" → icon 12×12 của HUD. Dùng chính bộ icon trong game thay cho
   // emoji: emoji là font của hệ điều hành nên mỗi máy ra một hình khác.
   if (key.startsWith("ui:")) return atlas.ui(key.slice(3) as Parameters<Atlas["ui"]>[0]);
-  if (key.startsWith("worker:")) return atlas.worker(Number(key.slice(7)) || 0, "down", 0);
+  // "worker:2" · "worker:2:up:13" — bộ đồ, hướng, khung.
+  if (key.startsWith("worker:")) {
+    const phan = key.slice(7).split(":");
+    const da = Number(phan[0]) || 0;
+    const [dir, frame] = docTuThe(phan.slice(1).join(":"));
+    return atlas.worker(da, dir, frame);
+  }
   // "weather:rain" → icon thời tiết trên HUD. Cùng bộ hình game dùng, nên trang
   // tài liệu không bao giờ vẽ một biểu tượng mà game không có.
   if (key.startsWith("weather:")) return atlas.weatherIcon(key.slice(8));
