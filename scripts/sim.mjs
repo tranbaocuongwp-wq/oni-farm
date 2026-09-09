@@ -54,7 +54,7 @@ import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
-import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT } from "../src/render/draw.ts";
+import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT, soLat } from "../src/render/draw.ts";
 import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
 import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
@@ -12340,6 +12340,72 @@ test("173. CẮT NGOÀI KHUNG NHÌN không cắt nhầm thứ còn thấy đư�
     "phép cắt nằm TRƯỚC khối `if (e.worker)` — người làm ngoài khung sẽ bắn cụm hạt ma khi đi vào",
   );
   ok(than.includes("ngoaiKhung("), "drawActors phải dùng chính `ngoaiKhung` mà kịch bản này kiểm");
+});
+
+
+test("174. CÂY LAY không bao giờ TẮT, và không bao giờ quá 4 lát", () => {
+  /* Số lát cắt để uốn một cây là một phép đánh đổi thẳng: mỗi lát là một lệnh
+     vẽ, và ~79 cây cao trong khung nhìn điện thoại nhân với bốn lát là 316
+     lệnh chỉ để lắc cây. Nhưng cắt ít quá thì cây đứng chết — mà Đợt 25 sinh
+     ra chính vì Cường bảo "mấy cây lớn nữa hành động với gió… lay".
+
+     Kịch bản này quét MỌI cặp (gió, sway) có thật trong content, ở mọi mức
+     phóng có thật, và ghim cả hai đầu. */
+  const gio = Object.values(content.weathers).map((w) => w.wind);
+  const sway = [...new Set(Object.values(content.props).map((p) => p.sway ?? 0))].filter((v) => v > 0);
+  const swayCao = [
+    ...new Set(Object.values(content.props).filter((p) => p.tall).map((p) => p.sway ?? 0)),
+  ].filter((v) => v > 0);
+  ok(gio.length >= 5, `phải quét đủ kiểu thời tiết, đang có ${gio.length}`);
+  ok(swayCao.length > 0, "phải có cây CAO biết lay để kiểm");
+
+  /* Mức phóng THẬT: `kDev` = số pixel thiết bị cho một đơn vị thế giới, tức
+     `scale × dpr`. Điện thoại hôm nay 2×2; máy tính 4×1; và 2×3 là chỗ Đợt 28
+     sắp đi tới khi nâng `maxDpr`. */
+  const mucPhong = [2 * 1, 2 * 2, 4 * 1, 2 * 3, 4 * 2];
+
+  // Vế một: trần 4 lát cho cây cao, 2 cho bụi — không mức phóng nào phá được.
+  for (const k of mucPhong)
+    for (const w of gio)
+      for (const sw of sway) {
+        const A = 2.6 * w * sw * k;
+        ok(soLat(true, A) <= 4, `cây cao: ${soLat(true, A)} lát ở gió ${w} sway ${sw} phóng ${k}`);
+        ok(soLat(false, A) <= 2, `bụi: ${soLat(false, A)} lát ở gió ${w} sway ${sw} phóng ${k}`);
+      }
+
+  /* Vế hai — KHÔNG BAO GIỜ TẮT. Ở BÃO (gió mạnh nhất) mọi cây biết lay đều
+     phải còn lay, ở mọi mức phóng. Đây là vế mà một ngưỡng đặt ẩu sẽ phá. */
+  const bao = Math.max(...gio);
+  for (const k of mucPhong)
+    for (const sw of swayCao) {
+      const n = soLat(true, 2.6 * bao * sw * k);
+      ok(n >= 2, `BÃO mà cây sway ${sw} ở mức phóng ${k} lại đứng yên (${n} lát)`);
+    }
+  // và ở bão thì cây lay mạnh nhất phải dùng trọn cả bốn lát.
+  eq(soLat(true, 2.6 * bao * Math.max(...swayCao) * 4), 4, "bão trên điện thoại phải cắt đủ 4 lát");
+
+  /* Vế ba — CÓ TIẾT KIỆM THẬT. Nếu mọi ca đều trả 4 thì hàm này chỉ là hằng số
+     cũ mặc áo mới, và cả commit vô nghĩa. Ngày nắng — kiểu thời tiết thường
+     gặp nhất — phải rẻ hơn bão. */
+  const nang = content.weathers["sunny"]?.wind ?? Math.min(...gio);
+  const swayMax = Math.max(...swayCao);
+  ok(
+    soLat(true, 2.6 * nang * swayMax * 4) < soLat(true, 2.6 * bao * swayMax * 4),
+    "ngày nắng phải cắt ít lát hơn ngày bão — nếu không thì đếm theo pixel chẳng để làm gì",
+  );
+
+  /* Vế bốn — chỉ TẮT khi thật sự không nhúc nhích nổi một pixel thiết bị.
+     Ngưỡng phải nằm dưới một pixel, không phải dưới một đơn vị thế giới. */
+  eq(soLat(true, 0.3), 0, "biên độ 0,3 px thiết bị thì cắt lát cũng vô ích");
+  ok(soLat(true, 2.0) >= 2, "biên độ 2 px thiết bị là thấy được — không được tắt");
+
+  /* Vế năm — càng lay mạnh càng nhiều lát, không bao giờ đi lùi. */
+  let truoc = 0;
+  for (let A = 0; A <= 40; A += 0.25) {
+    const n = soLat(true, A);
+    ok(n >= truoc, `số lát đi lùi ở biên độ ${A}: ${truoc} → ${n}`);
+    truoc = n;
+  }
 });
 
 await Promise.all(choDoi);

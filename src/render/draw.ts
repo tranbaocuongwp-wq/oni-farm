@@ -378,6 +378,54 @@ export function ngoaiKhung(
   return x < rx - LE_CAT || y < ry - LE_CAT || x > rx + viewW + LE_CAT || y > ry + viewH + LE_CAT;
 }
 
+/* ------------------------------------------------ SỐ LÁT CẮT ĐỂ UỐN MỘT CÂY
+
+   Cây và bụi lay theo gió bằng cách cắt sprite thành nhiều lát ngang rồi dịch
+   mỗi lát theo BÌNH PHƯƠNG độ cao — gốc đứng yên, ngọn đi xa nhất, thân cong
+   thành một cung (Đợt 25). Càng nhiều lát thì cung càng mượt, và càng tốn
+   `drawImage`.
+
+   Trước đợt này số lát là một hằng số — 4 cho cây cao, 2 cho bụi — và cái ngưỡng
+   "coi như đứng yên" là `Math.abs(dich) < 0.05` ĐƠN VỊ THẾ GIỚI. Cả hai đều nói
+   một câu vô nghĩa, vì mắt người không nhìn bằng đơn vị thế giới: cùng con số
+   0,05 ấy là 0,2 pixel thiết bị ở mức phóng này và 3 pixel ở mức phóng kia.
+
+   Hậu quả đo được: không kiểu thời tiết nào có `wind = 0` (thấp nhất 0,1), nên
+   nhánh "đứng yên" gần như không bao giờ trúng và mọi cây cao đều cắt 4 lát —
+   ~79 cây trong khung nhìn điện thoại là 316 lệnh vẽ thay vì 79, để lắc cây
+   chưa nổi một pixel.
+
+   Nay đếm bằng PIXEL THIẾT BỊ, và đếm theo BIÊN ĐỘ ĐỈNH (`2.6 × wind × sway`,
+   một hằng số suốt cả ngày) chứ KHÔNG theo `dich` tức thời. Đếm theo `dich`
+   thì số lát nhảy 60 lần mỗi giây và đường viền cây rung lăn tăn — đổi một lỗi
+   lấy một lỗi khác. `dich` vẫn dùng nguyên để đặt vị trí từng lát. */
+
+/** Sai lệch tối đa cho phép giữa đường gấp khúc của các lát và cung thật, PX THIẾT BỊ. */
+const LAT_SAI_DEV = 3.5;
+/** Dưới ngần này thì cả cái cây không nhúc nhích nổi một pixel — vẽ liền một mảnh. */
+const LAT_IM_DEV = 1.0;
+
+/**
+ * Bao nhiêu lát cho một cây có biên độ đỉnh `bienDoDev` (PX THIẾT BỊ)?
+ * `0` nghĩa là không cắt và cũng không dịch — cây đứng yên.
+ *
+ * Lát `i` được vẽ ở độ cao giữa lát, tức hệ số `(1 − (i+0,5)/n)²`. Lát trên
+ * cùng do đó lệch khỏi ngọn thật một khoảng `1 − (1 − 0,5/n)²` lần biên độ —
+ * đó chính là sai lệch mà công thức dưới đây kẹp lại.
+ */
+export function soLat(tall: boolean, bienDoDev: number): number {
+  if (bienDoDev < LAT_IM_DEV) return 0;
+  const toiDa = tall ? 4 : 2;
+  /* Sàn là 2, không phải 1: một lát nghĩa là cả cây TRƯỢT ngang một khối, đúng
+     cái mà Đợt 25 vừa bỏ đi ("cây bị xô chứ không bị uốn"). Tiết kiệm một lệnh
+     vẽ không đáng để lấy lại cái nhìn ấy. */
+  for (let n = 2; n < toiDa; n++) {
+    const lech = 1 - (1 - 0.5 / n) ** 2;
+    if (bienDoDev * lech <= LAT_SAI_DEV) return n;
+  }
+  return toiDa;
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   atlas: Atlas,
@@ -1290,10 +1338,16 @@ export function createRenderer(
     const sparkFrame = Math.floor(timeSec * 6) % 3;
     /* Trời đã tối chưa — dùng chung một mốc với lớp phủ đêm (`nightTint`), nên
        khói bếp và đom đóm hiện đúng lúc màn hình bắt đầu sẫm lại. */
-    const dem = nightTint(s.minutes)[1] > 0.12;
+    /* Tên `troiToi`, không phải `dem`: `dem` ở phạm vi ngoài là BỘ ĐẾM thống
+       kê, và cái tên trùng ấy đã che nó đi trong suốt hàm này. */
+    const troiToi = nightTint(s.minutes)[1] > 0.12;
     // Gió: ngọn cây lệch theo sin, mỗi ô lệch pha theo toạ độ nên cả ruộng
     // gợn sóng thay vì lắc đồng loạt. Tắt khi reduceMotion.
     const wind = reduceMotion ? 0 : wx.wind;
+    /* Một ĐƠN VỊ THẾ GIỚI bằng bao nhiêu PIXEL THIẾT BỊ — cùng con số mà
+       `snapDev` dùng. Số lát cắt để uốn cây đếm bằng đơn vị này, vì mắt người
+       nhìn bằng pixel màn hình chứ không nhìn bằng đơn vị thế giới. */
+    const kDev = camera.viewport.scale * camera.viewport.dpr;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const t = s.tiles[y * s.w + x];
@@ -1380,7 +1434,13 @@ export function createRenderer(
                giữ nguyên cảm giác lội qua vạt cỏ cao. Vật ĐẶC không cần luật
                này: không ai đứng lên được nó. */
             const lopVat = def && def.solid === false ? y * TILE : base;
-            if (Math.abs(dich) < 0.05) items.push({ base: lopVat, run: () => put(img, px, oy) });
+            /* Biên độ ĐỈNH quy ra pixel thiết bị: `2.6 × wind × sway` là đơn vị
+               thế giới, mà một đơn vị thế giới bằng `scale × dpr` pixel thiết
+               bị (xem `snapDev`). Hằng số suốt cả ngày, nên số lát không nhảy
+               theo khung hình. */
+            const nLat = soLat(!!def?.tall, 2.6 * wind * lay * kDev);
+            if (nLat === 0 || Math.abs(dich) * kDev < LAT_IM_DEV)
+              items.push({ base: lopVat, run: () => put(img, px, oy) });
             else {
               /* CÂY UỐN, không phải cây TRƯỢT.
 
@@ -1401,10 +1461,10 @@ export function createRenderer(
               const hPx = img.height;
               const wW = wPx / ART;
               const hW = hPx / ART;
-              const nLat = def?.tall ? 4 : 2;
               items.push({
                 base: lopVat,
                 run: () => {
+                  dem.lat += nLat;
                   for (let i = 0; i < nLat; i++) {
                     // lát 0 là NGỌN (trên cùng), lát cuối là GỐC
                     const y0 = (i / nLat) * hW;
@@ -1479,7 +1539,7 @@ export function createRenderer(
               !isHouse(s.tiles[(y - 1) * s.w + x]) &&
               // và là ô ĐẦU của dãy mái — MỘT nhà một ống khói, không phải tám
               !(x > 0 && isHouse(s.tiles[y * s.w + x - 1]));
-            if (ongKhoi && !reduceMotion && (dem || wx.season === 3)) {
+            if (ongKhoi && !reduceMotion && (troiToi || wx.season === 3)) {
               const gio = wx.wind;
               /* Cột khói CỐ Ý THẤP (14px): ngôi nhà nằm sát mép trên bản đồ, mà
                  camera không trôi lên quá mép được — khói bốc cao hơn thế là bốc
