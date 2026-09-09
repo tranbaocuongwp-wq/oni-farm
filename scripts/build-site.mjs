@@ -1090,10 +1090,17 @@ const HANH_DONG = [
   },
   {
     nut: "NHẤC",
-    ten: "Nhấc một vật lên vác",
+    ten: "Nhấc một vật NHẸ lên vác",
     can: null,
-    y: "Tay không, đứng cạnh khúc gỗ hay hòn đá rồi bấm là vác lên. Đang vác thì nút đổi thành ĐẶT để hạ xuống một ô trống.",
-    meo: "Vác là cách dọn một vật ra khỏi chỗ nó đang chắn đường, mà không phải đập vỡ nó. Không đặt xuống được ô nào sẽ tự nhốt mình — game chặn trước, không cho đặt.",
+    y: "Tay không, đứng cạnh một vật NHẸ — cây con, hòn đá, cái ghế, chậu cây — rồi bấm là vác lên. Đang vác thì nút đổi thành ĐẶT để hạ xuống một ô trống.",
+    meo: "Vác là cách dọn một vật ra khỏi chỗ nó đang chắn đường mà không phải đập vỡ nó. Vác cây con chính là cách trồng lại cây ở chỗ mình muốn: tám ngày sau nó thành cây lớn. Không đặt xuống được ô nào sẽ tự nhốt mình — game chặn trước, không cho đặt.",
+  },
+  {
+    nut: "KÉO",
+    ten: "Kéo lê một vật NẶNG",
+    can: null,
+    y: "Thứ nặng quá sức bê — khúc gỗ, đống đá, cái bàn, cái tủ, cái bếp — thì không nhấc được, chỉ kéo lê. Cùng cách bấm với NHẤC, nhưng đang kéo thì đi chỉ còn hơn nửa tốc độ, và vật nằm dưới chân chứ không đội trên đầu.",
+    meo: "Ba bậc, và chúng theo VẬT LÝ chứ không theo mức nặng dần: nhẹ thì NÂNG, nặng thì KÉO, còn thứ BÁM RỄ (cây đang đứng, gốc cây), thứ XÂY CỐ ĐỊNH (nhà, kho, cầu, giếng) và thứ QUÁ NẶNG (tảng đá) thì chịu. Muốn dời một cái cây lớn thì phải ĐỐN nó trước — khúc gỗ đốn ra mới là thứ kéo đi được.",
   },
   {
     nut: "VÀO",
@@ -2514,7 +2521,7 @@ const VIEC_TREN_O = (() => {
 const NUT_CUA_VIEC = {
   till: "CÀY", plant: "GIEO", water: "TƯỚI", harvest: "THU", cure: "CHỮA",
   pull: "NHỔ", chop: "CHẶT", mine: "ĐẬP", build: "XÂY",
-  pour: "ĐỔ MÁNG", feedpond: "RẮC HỒ", lift: "NHẤC", putdown: "NHẤC",
+  pour: "ĐỔ MÁNG", feedpond: "RẮC HỒ", lift: "NHẤC", putdown: "NHẤC", drag: "KÉO",
   clear: "DỌN CỎ",
 };
 

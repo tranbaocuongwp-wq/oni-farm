@@ -73,6 +73,7 @@ export const LABEL: Record<Exclude<HintKind, null>, string> = {
   store: "KHO",
   gather: "THU",
   lift: "NHẤC",
+  drag: "KÉO",
   putdown: "ĐẶT XUỐNG",
   pour: "ĐỔ MÁNG",
   feedpond: "CHO CÁ ĂN",
@@ -865,7 +866,7 @@ export const PEN_INSIDE = 1;
  * Cường tả: "bấm vô cái nó chạy đi tùm lum nhổ cỏ lượm đá". Ba trong bốn cái
  * này còn không hoàn tác được.
  */
-const DON_DEP = new Set<Exclude<HintKind, null>>(["chop", "mine", "lift", "pull", "clear"]);
+const DON_DEP = new Set<Exclude<HintKind, null>>(["chop", "mine", "lift", "drag", "pull", "clear"]);
 
 export function nhoMonDangCam(kind: Exclude<HintKind, null>): boolean {
   switch (kind) {

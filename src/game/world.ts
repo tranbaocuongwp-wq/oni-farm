@@ -211,11 +211,25 @@ export function propsMocDuoc(content: Content): Set<string> {
  * Ba vế cộng lại là câu trả lời cho nỗi sợ đã ghi ở `workers.ts` ("đừng dọn thứ
  * người chơi cố ý chừa").
  */
+/**
+ * Vật thể này dời đi bằng tay không được không, và dời KIỂU nào?
+ *
+ * Một chỗ duy nhất trả lời câu ấy, vì nó được hỏi ở bốn nơi khác nhau (nhãn
+ * nút, cú bấm, trộn save, dọn lô) và bốn nơi ấy mà trả lời khác nhau thì nhãn
+ * nói một đằng bấm làm một nẻo.
+ */
+export function cachDoi(def: PropDef | null | undefined): "lift" | "drag" | null {
+  if (!def) return null;
+  if (def.move === "lift" || def.move === "drag") return def.move;
+  // Pack content đời trước chỉ có một cờ boolean — đọc như NÂNG.
+  return def.portable ? "lift" : null;
+}
+
 export function donDuoc(state: GameState, content: Content, x: number, y: number): boolean {
   const t = tileAt(state, x, y);
   if (!t?.prop) return false;
   const def = propDef(content, t.prop);
-  if (!def || !def.hits || def.tool || def.portable) return false;
+  if (!def || !def.hits || def.tool || cachDoi(def)) return false;
   if (!propsMocDuoc(content).has(t.prop)) return false;
   return inZone(state, content, "farm", x, y);
 }

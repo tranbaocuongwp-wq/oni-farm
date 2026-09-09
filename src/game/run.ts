@@ -30,7 +30,10 @@ import { readyProduct } from "./animals.ts";
 
 /** Việc một chuyến làm được. `gather` không phải `UseKind` — nó là thu sản
  *  phẩm con vật, `main.ts` gọi `tryAnimal` cho nó. */
-export type RunJob = Exclude<UseKind, null | "build" | "lift" | "putdown"> | "gather";
+/* `lift` và `drag` KHÔNG phải việc của nút TỰ ĐỘNG: dời đồ là ý muốn của người
+   chơi về chỗ để, không phải một việc nông trại cần làm. Để nó vào đây thì nút
+   tự động sẽ đi nhặt sạch đá và bàn ghế trong tầm rồi đứng đó ôm. */
+export type RunJob = Exclude<UseKind, null | "build" | "lift" | "drag" | "putdown"> | "gather";
 
 /** Một KHU: một lô ruộng, một khu chuồng/ao, hay cả khu rừng. */
 export interface RunArea {

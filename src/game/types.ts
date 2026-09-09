@@ -538,11 +538,31 @@ export interface PropDef {
   /** Cửa dịch chuyển: BẢN ĐỒ và toạ độ Ô người chơi sẽ hiện ra. */
   portal?: { map: string; x: number; y: number };
   /**
-   * VÁC ĐI ĐƯỢC bằng tay không: khúc gỗ, hòn đá nhỏ.
+   * DỜI ĐI ĐƯỢC BẰNG TAY KHÔNG, và dời theo KIỂU NÀO.
    *
-   * Là dữ liệu chứ không phải danh sách id trong code — thêm "chậu cây" hay
-   * "thùng gỗ" sau này chỉ là một dòng JSON. Vật thể `tall` (cây lớn) cố ý
-   * không nên bật cờ này: vác cả một cái cây đi thì vô lý.
+   *   · `"lift"` — NÂNG lên mang đi: nhẹ, một người bê được. Cây con, hòn đá,
+   *     cái ghế, chậu cây. Đi lại bình thường, vật nằm trên đầu.
+   *   · `"drag"` — KÉO LÊ: nặng, bê không nổi nhưng trượt trên đất được. Khúc
+   *     gỗ, đống đá, cái bàn, cái tủ, cái bếp. Đi CHẬM HẲN
+   *     (`balance.dragSpeedMul`), và vật nằm dưới chân chứ không trên đầu.
+   *   · vắng — KHÔNG dời được. Ba lý do vật lý, không phải ba mức "nặng dần":
+   *       – BÁM RỄ: cây đứng, gốc cây, rễ. Muốn dời thì phải ĐỐN trước, và
+   *         cái đốn xong (khúc gỗ) mới là thứ kéo được.
+   *       – XÂY CỐ ĐỊNH: nhà, kho, tường, cầu, giếng, quầy.
+   *       – QUÁ NẶNG: tảng đá, đá quặng.
+   *
+   * Đây là DỮ LIỆU chứ không phải danh sách id trong code — thêm một món đồ
+   * mới chỉ là một dòng JSON.
+   *
+   * ⚠️ Vật có `interact` TUYỆT ĐỐI không được khai trường này: `canUseAt` hỏi
+   * "dời được không" TRƯỚC khi hỏi tương tác, nên cái giường dời được là tay
+   * không sẽ NHẤC GIƯỜNG thay vì đi ngủ. Kịch bản 180 chặn.
+   */
+  move?: "lift" | "drag";
+  /**
+   * CŨ — content pack đời trước khai "vác được" bằng một cờ boolean, không
+   * phân biệt nâng với kéo. Đọc như `move: "lift"` để pack cũ vẫn chạy đúng
+   * y như trước. Content mới dùng `move`.
    */
   portable?: boolean;
   /**
@@ -614,6 +634,8 @@ export interface Balance {
   hotbarSlots: number;
 
   /** Tốc độ đi bộ, world px mỗi giây (1 ô = 16 px). */
+  /** KÉO một vật nặng thì đi còn bao nhiêu phần tốc độ. Nâng thì không chậm. */
+  dragSpeedMul?: number;
   moveSpeed: number;
   /** Tốc độ chạy — giữ Shift, hoặc đẩy joystick hết cỡ. */
   runSpeed: number;

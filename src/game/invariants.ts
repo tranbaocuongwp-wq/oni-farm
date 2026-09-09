@@ -27,6 +27,7 @@ import {
   spawnMapId,
   tileCenterX,
   tileCenterY,
+  cachDoi,
 } from "./world.ts";
 import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
 import { isKnownItem, parseItem } from "./items.ts";
@@ -398,7 +399,7 @@ function mergeGrid(
              cho 43 trong 70 vật thể vác được — trước đó chỉ có ba. Chừng nào
              còn ba thì `portable` là một proxy dùng được cho "người chơi tự
              đặt xuống", nên hỏi nó trước là hợp lý. Nay proxy ấy CHẾT: cái cây
-             của bản đồ và hòn đá người chơi vác ra đều `portable`, trong dữ
+             của bản đồ và hòn đá người chơi vác ra đều dời được, trong dữ
              liệu không còn gì phân biệt hai thứ.
 
              Nên phải chọn một phía, và chọn phía AN TOÀN HƠN: thà mất hòn đá
@@ -409,7 +410,7 @@ function mergeGrid(
           /* ĐỒ ĐẠC vác được mà KHÔNG chặt được (bàn, ghế, thảm, đèn…): không
              phải thiên nhiên nên không đòi phải đứng trên cỏ — sàn gỗ trong
              nhà cũng là chỗ của nó. Chỉ mặt nước là không. */
-          if (oldDef?.portable) return t.g === "water" ? null : oldProp;
+          if (cachDoi(oldDef) !== null) return t.g === "water" ? null : oldProp;
           // Vật thể cũ là ĐỒ ĐẠC của bản đồ đời trước → bỏ, theo bản đồ mới.
           return freshProp;
         })();

@@ -69,7 +69,7 @@ import type { Camera } from "./camera.ts";
 import type { EmoteKind, RoadMark } from "../art/atlas.ts";
 import { hash2 } from "../core/rng.ts";
 import { WORK_MINUTES } from "../game/workerai.ts";
-import { TILE } from "../game/world.ts";
+import { TILE, cachDoi, propDef } from "../game/world.ts";
 
 /** Màu viền letterbox — tối hơn nền thế giới để thấy rõ đó là ngoài khung. */
 const LETTERBOX = "#0b0907";
@@ -2002,6 +2002,11 @@ export function createRenderer(
        một trạng thái vô hình: người chơi bấm nút thấy ghi ĐẶT XUỐNG mà không
        hiểu mình đang cầm cái gì. Nhún nhẹ theo bước đi để nó trông có sức nặng. */
     const vac = s.carry ? (atlas.props[s.carry] ?? null) : null;
+    /* KÉO thì vật nằm DƯỚI CHÂN và hơi lùi về sau, không đội trên đầu. Đây là
+       nửa còn lại của chuyện phân biệt kéo với nâng — nửa kia là bước chân
+       chậm hẳn (`player.ts`). Nhìn một cái tủ lơ lửng trên đầu người chơi thì
+       mọi con số cân bằng có đúng tới đâu cũng vô nghĩa. */
+    const dangKeo = s.carry ? cachDoi(propDef(content, s.carry)) === "drag" : false;
     const nhun = vac && p.moving ? (Math.floor(p.anim * 8) % 2 === 0 ? 0 : 1) : 0;
     /* ĐANG NGỦ: vẽ nhân vật NẰM NGANG trên giường bằng cách xoay 90°. Không
        phải một bộ sprite nằm riêng, nhưng trong tranh nhìn từ trên xuống thì
@@ -2029,7 +2034,14 @@ export function createRenderer(
         if (toolRef && raising && dir !== "down") put(toolRef.img, toolRef.x, toolRef.y);
         put(img, px + lech, py);
         if (toolRef && !(raising && dir !== "down")) put(toolRef.img, toolRef.x, toolRef.y);
-        if (vac) put(vac, px + lech, py - 11 + nhun);
+        if (vac) {
+          if (dangKeo) {
+            // lùi về phía SAU lưng theo hướng đang đi, và nằm ngang tầm chân
+            const lui = dir === "up" ? -1 : dir === "down" ? 1 : 0;
+            const luiX = dir === "left" ? 5 : dir === "right" ? -5 : 0;
+            put(vac, px + lech + luiX, py + 5 - lui * 5);
+          } else put(vac, px + lech, py - 11 + nhun);
+        }
       },
     });
   }

@@ -12,7 +12,7 @@
 import type { Content, Dir } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dPlayer } from "./state.ts";
-import { PLAYER_SPEED, blockedAt, nudgeOutOfSolid, speedMulAt } from "./world.ts";
+import { PLAYER_SPEED, blockedAt, cachDoi, nudgeOutOfSolid, propDef, speedMulAt } from "./world.ts";
 import { weatherMood } from "./weather.ts";
 
 export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
@@ -62,7 +62,14 @@ export function movePlayer(
       ? (content.balance.runSpeed ?? PLAYER_SPEED)
       : (content.balance.moveSpeed ?? PLAYER_SPEED)) *
     speedMulAt(d.s, content, x, y) *
-    weatherMood(d.s, content).speedMul;
+    weatherMood(d.s, content).speedMul *
+    /* ĐANG KÉO thì đi chậm hẳn. Đây là cả chỗ phân biệt KÉO với NÂNG: nâng một
+       hòn đá thì bước chân không đổi, còn lê một khúc gỗ hay cái tủ thì có.
+       Không có vế này thì hai kiểu dời chỉ khác nhau ở chỗ vẽ, và người chơi
+       không có lý do nào để thấy cái tủ nặng hơn cái ghế. */
+    (cachDoi(propDef(content, d.s.carry ?? null)) === "drag"
+      ? (content.balance.dragSpeedMul ?? 0.55)
+      : 1);
   // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
   const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
   const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;

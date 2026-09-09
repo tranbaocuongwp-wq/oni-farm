@@ -39,5 +39,6 @@
   "noonDryMinutes": 780,
   "troughMax": 60,
   "forestRegrowChance": 0.06,
-  "sleepSeconds": 1.1
+  "sleepSeconds": 1.1,
+  "dragSpeedMul": 0.55
 }

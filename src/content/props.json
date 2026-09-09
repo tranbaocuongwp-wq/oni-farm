@@ -22,8 +22,7 @@
         "accent": "#5a3d24"
       },
       "sway": 1,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "sapling",
@@ -53,7 +52,7 @@
       },
       "sway": 0.6,
       "seasonal": true,
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "stump",
@@ -72,13 +71,11 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#8a6440"
-      },
-      "portable": true
+      }
     },
     {
       "id": "rock",
       "name": "Tảng đá",
-      "portable": true,
       "solid": true,
       "hits": 3,
       "tool": "MINE",
@@ -93,7 +90,8 @@
         "body": "#8a8f98",
         "dark": "#6b7078",
         "accent": "#a2a8b1"
-      }
+      },
+      "move": "lift"
     },
     {
       "id": "bush",
@@ -238,7 +236,6 @@
     {
       "id": "log",
       "name": "Khúc gỗ",
-      "portable": true,
       "solid": true,
       "hits": 2,
       "tool": "CHOP",
@@ -253,7 +250,8 @@
         "body": "#8a5c34",
         "dark": "#5a3b21",
         "accent": "#c9a06a"
-      }
+      },
+      "move": "drag"
     },
     {
       "id": "grass_short",
@@ -365,8 +363,7 @@
         "dark": "#284f22",
         "accent": "#5fa04a"
       },
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "warehouse",
@@ -497,8 +494,7 @@
         "accent": "#5a4028"
       },
       "sway": 0.35,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "birch",
@@ -521,8 +517,7 @@
         "accent": "#e8e4d8"
       },
       "sway": 1,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "palm",
@@ -545,8 +540,7 @@
         "accent": "#8a6a44"
       },
       "sway": 1,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "willow",
@@ -569,8 +563,7 @@
         "accent": "#6b5232"
       },
       "sway": 1.4,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "maple",
@@ -593,8 +586,7 @@
         "accent": "#7a4a28"
       },
       "sway": 1,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "bamboo",
@@ -617,8 +609,7 @@
         "accent": "#b8c46a"
       },
       "sway": 1.4,
-      "seasonal": true,
-      "portable": true
+      "seasonal": true
     },
     {
       "id": "deadtree",
@@ -640,8 +631,7 @@
         "dark": "#5c4f40",
         "accent": "#3f362c"
       },
-      "sway": 1,
-      "portable": true
+      "sway": 1
     },
     {
       "id": "rock_ore",
@@ -665,7 +655,6 @@
     {
       "id": "rock_pile",
       "name": "Đống sỏi",
-      "portable": true,
       "solid": true,
       "hits": 2,
       "tool": "MINE",
@@ -680,7 +669,8 @@
         "body": "#9aa0a8",
         "dark": "#70767e",
         "accent": "#b8bec6"
-      }
+      },
+      "move": "drag"
     },
     {
       "id": "rock_flat",
@@ -691,7 +681,7 @@
         "dark": "#666c74",
         "accent": "#a8aeb6"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "rock_tall",
@@ -730,7 +720,7 @@
         "dark": "#4f5b66",
         "accent": "#8fd8f0"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "rock_split",
@@ -750,7 +740,7 @@
         "dark": "#5f656b",
         "accent": "#b0b6bc"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "rock_sand",
@@ -770,7 +760,7 @@
         "dark": "#967c52",
         "accent": "#e0c79a"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "rock_dark",
@@ -809,7 +799,7 @@
         "dark": "#525b60",
         "accent": "#9ab86a"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "log_moss",
@@ -829,7 +819,7 @@
         "dark": "#5a3b21",
         "accent": "#5f9e4a"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "log_hollow",
@@ -849,7 +839,7 @@
         "dark": "#5a3b21",
         "accent": "#2a1d12"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "log_split",
@@ -869,7 +859,7 @@
         "dark": "#6b4a26",
         "accent": "#d8b276"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "branch",
@@ -908,7 +898,7 @@
         "dark": "#57402a",
         "accent": "#a88a5e"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "stump_moss",
@@ -927,8 +917,7 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#5f9e4a"
-      },
-      "portable": true
+      }
     },
     {
       "id": "stump_burnt",
@@ -947,8 +936,7 @@
         "body": "#4a423c",
         "dark": "#251f1b",
         "accent": "#8a8078"
-      },
-      "portable": true
+      }
     },
     {
       "id": "deadfall",
@@ -968,7 +956,7 @@
         "dark": "#5c4c38",
         "accent": "#a89a80"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "driftwood",
@@ -988,7 +976,7 @@
         "dark": "#8a7f6c",
         "accent": "#d8cfbc"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "roots",
@@ -1007,8 +995,7 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#8a6440"
-      },
-      "portable": true
+      }
     },
     {
       "id": "twigs",
@@ -1047,7 +1034,7 @@
         "dark": "#684a28",
         "accent": "#c9a06a"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "table",
@@ -1058,7 +1045,7 @@
         "dark": "#6b4a26",
         "accent": "#e8dcc0"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "chair",
@@ -1069,7 +1056,7 @@
         "dark": "#5a3b21",
         "accent": "#c9a06a"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "rug",
@@ -1080,7 +1067,7 @@
         "dark": "#6f2637",
         "accent": "#e8c05a"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "shelf",
@@ -1091,7 +1078,7 @@
         "dark": "#553a20",
         "accent": "#4a7fa6"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "cabinet",
@@ -1102,7 +1089,7 @@
         "dark": "#4a3020",
         "accent": "#e0b45a"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "stove",
@@ -1113,7 +1100,7 @@
         "dark": "#3f4349",
         "accent": "#e07a2a"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "sink",
@@ -1124,7 +1111,7 @@
         "dark": "#8a8f98",
         "accent": "#7fb6ec"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "lamp",
@@ -1135,7 +1122,7 @@
         "dark": "#332c26",
         "accent": "#ffe6a8"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "potplant",
@@ -1146,7 +1133,7 @@
         "dark": "#7d4224",
         "accent": "#4f9e3f"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "clock",
@@ -1157,7 +1144,7 @@
         "dark": "#4a3020",
         "accent": "#f2ede0"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "painting",
@@ -1168,7 +1155,7 @@
         "dark": "#5f4223",
         "accent": "#5e81ac"
       },
-      "portable": true
+      "move": "lift"
     },
     {
       "id": "sofa",
@@ -1179,7 +1166,7 @@
         "dark": "#2f4a56",
         "accent": "#7fa8b8"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "barrel",
@@ -1190,7 +1177,7 @@
         "dark": "#5f4526",
         "accent": "#8a8f98"
       },
-      "portable": true
+      "move": "drag"
     },
     {
       "id": "crate",
@@ -1201,7 +1188,7 @@
         "dark": "#8a6238",
         "accent": "#6b4a2c"
       },
-      "portable": true
+      "move": "lift"
     }
   ]
 }

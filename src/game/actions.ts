@@ -40,6 +40,7 @@ import {
   tileIndexAt,
   isSolid,
   donDuoc,
+  cachDoi,
 } from "./world.ts";
 
 /* ---------------------------------------------------- đặt xuống có nhốt ai */
@@ -472,6 +473,8 @@ export type UseKind =
   | "pull"
   /** TAY KHÔNG nhấc một vật thể vác được lên (khúc gỗ, hòn đá) */
   | "lift"
+  /** KÉO LÊ một vật nặng — cùng cơ chế với `lift`, khác ở chỗ đi chậm hẳn. */
+  | "drag"
   /** đổ thức ăn đang cầm vào MÁNG của khu chuồng */
   | "pour"
   /** rắc thức ăn xuống mặt hồ cho cá */
@@ -551,7 +554,8 @@ export function canUseAt(
        Xét ở đây chứ không xét sau: nhánh này `return` trước, nên đặt luật nhấc
        ở dưới thì nó không bao giờ chạy tới. Và chỉ khi tay TRỐNG: cầm cái rìu
        mà bấm vào khúc gỗ thì ý định rõ ràng là chặt nó ra gỗ. */
-    if (def.portable && selectedItemId(state.inv, sel) === null) return "lift";
+    if (cachDoi(def) !== null && selectedItemId(state.inv, sel) === null)
+      return cachDoi(def) === "drag" ? "drag" : "lift";
     const tool = heldTool(state, content, sel);
     if (!canBreakWith(def, tool)) return null;
     // Cỏ dại mọc lan vào lô ruộng: cùng thao tác, khác nghĩa — xem `UseKind.clear`.
@@ -643,14 +647,18 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
      bắt đúng chỗ này). */
   if (selectedItemId(d.s.inv, d.s.sel) === null && cur.prop !== null) {
     const pd = propDef(content, cur.prop);
-    if (pd?.portable) {
+    if (pd && cachDoi(pd) !== null) {
       // Chỉ vác được MỘT thứ: `carry` là một chuỗi, không phải một danh sách.
       const t = dTile(d, i);
       if (!t) return;
       t.prop = null;
       t.hp = 0;
       touch(d).carry = pd.id;
-      toastText(d, `Đang vác ${pd.name}.`, "info");
+      /* Nói ĐÚNG động từ. "Vác" một cái tủ hay một khúc gỗ là sai với chính
+         cái luật vừa dựng: thứ nặng thì KÉO, và người chơi phải đọc ra điều đó
+         ngay ở dòng thông báo, không phải suy ra từ việc mình đi chậm. */
+      const cach = cachDoi(pd);
+      toastText(d, `${cach === "drag" ? "Đang kéo" : "Đang vác"} ${pd.name}.`, "info");
       return;
     }
   }

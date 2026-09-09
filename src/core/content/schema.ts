@@ -356,6 +356,16 @@ export function validateProps(raw: unknown): string[] {
     if (item["interact"] !== undefined) k.enumStr(item, "interact", INTERACTS);
     if (item["portable"] !== undefined && typeof item["portable"] !== "boolean")
       k.fail("portable", "phải là boolean");
+    /* `move` là danh sách ĐÓNG. Khai sai một chữ thì `cachDoi` trả null và vật
+       ấy lặng lẽ thành không dời được — không ai báo, chỉ người chơi bấm hoài
+       không lên. */
+    if (item["move"] !== undefined && item["move"] !== "lift" && item["move"] !== "drag")
+      k.fail("move", 'phải là "lift" (nâng) hoặc "drag" (kéo)');
+    /* Ràng buộc CỨNG: vật có `interact` mà dời được thì tay không sẽ NHẤC nó
+       thay vì DÙNG nó — `canUseAt` hỏi "dời được không" trước. Cái giường dời
+       được là mất luôn cách đi ngủ. */
+    if (item["move"] !== undefined && isStr(item["interact"]))
+      k.fail("move", `vật có interact (${item["interact"]}) không được dời — sẽ nhấc thay vì dùng`);
 
     const drops = item["drops"];
     if (drops !== undefined) {

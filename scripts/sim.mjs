@@ -3992,7 +3992,7 @@ test("65. tay không: nhấc khúc gỗ / hòn đá, vác đi rồi đặt xuố
   const px = Math.floor(p.x / TILE);
   const py = Math.floor(p.y / TILE);
 
-  ok(content.props.log?.portable, "content khai khúc gỗ vác được");
+  ok(content.props.log?.move === "drag", "content khai khúc gỗ KÉO được (nặng, không nâng nổi)");
   ok(!content.props.bush?.portable, "…còn bụi cỏ thì không");
 
   setState(store, (s) => {
@@ -4011,7 +4011,10 @@ test("65. tay không: nhấc khúc gỗ / hòn đá, vác đi rồi đặt xuố
   const oPhai = () => store.getState().tiles[idx(store.getState().w, px + 1, py)];
   const oTrai = () => store.getState().tiles[idx(store.getState().w, px - 1, py)];
 
-  eq(canUseAt(store.getState(), content, px + 1, py), "lift", "tay không + khúc gỗ → NHẤC");
+  /* Từ Đợt 30 khúc gỗ là thứ KÉO, không phải thứ nâng — bê một khúc gỗ lên đội
+     trên đầu thì vô lý. Cơ chế thì y hệt `lift`, chỉ khác bước chân chậm hẳn và
+     chỗ vẽ; nên phần còn lại của kịch bản này không đổi một dòng nào. */
+  eq(canUseAt(store.getState(), content, px + 1, py), "drag", "tay không + khúc gỗ → KÉO");
   use(store, px + 1, py);
   eq(store.getState().carry, "log", "đang vác khúc gỗ");
   eq(oPhai().prop, null, "ô cũ trống ra");
@@ -4055,7 +4058,7 @@ test("66. đặt vật xuống KHÔNG được tự nhốt mình; save đang k�
   const py = HOME.y;
 
   ok(content.props.rock?.solid, "hòn đá phải là vật ĐẶC, nếu không kịch bản này không chứng minh gì");
-  ok(content.props.rock?.portable, "…và vác được");
+  ok(content.props.rock?.move === "lift", "…và NÂNG được (nhẹ, bê một tay)");
 
   const donSach = (s) => {
     for (let dy = -1; dy <= 1; dy++)
@@ -12925,101 +12928,143 @@ test("179. XE CHẠY TRÊN QUỐC LỘ là trang trí — không được cướ
 });
 
 
-test("180. VÁC ĐƯỢC gần như mọi thứ — trừ đúng hai nhóm, và cả hai đều có lý do cứng", () => {
-  /* Cường: *"tay không kéo nhấc… lôi được mọi thứ trừ vài cái to quá"*, và
-     *"đào lên bỏ ấy, kiểu mấy cây đã trồng rồi"*.
+test("180. NÂNG hay KÉO hay CHỊU — phải khớp với vật lý, không phải với sự tiện tay", () => {
+  /* Cường: *"coi chừng nhầm nha — bạn phải tư duy gắn với vật lý thực tế, cái
+     nào kéo được cái nào nâng được. Chứ không thể kéo một cái cây to được, như
+     vậy rất vô lý"*.
 
-     Đợt 29 cho 43 trên 70 vật thể vác được (trước đó đúng ba: đá · khúc gỗ ·
-     đống đá). Nhưng có hai nhóm KHÔNG được cho vác, và không phải vì thẩm mỹ —
-     cho vác là hỏng thật. */
+     Câu ấy chỉ đúng một lỗi tôi vừa gây ra. Bản đầu gộp tất cả vào MỘT cờ
+     `portable`, nên cái cây gỗ lớn nhấc lên đội trên đầu đi như hòn sỏi. Tệ
+     hơn: chú thích ở `types.ts` đã ghi sẵn *"vật thể tall cố ý không nên bật cờ
+     này: vác cả một cái cây đi thì vô lý"* — tôi đạp lên một quyết định thiết
+     kế có ghi rõ lý do.
+
+     Nay ba bậc, và mỗi bậc là một câu hỏi VẬT LÝ khác nhau:
+
+       nâng  — một người bê nổi không?
+       kéo   — bê không nổi, nhưng lê trên đất được không?
+       chịu  — bám rễ, xây cố định, hay quá nặng?
+
+     Và cây đứng thuộc bậc ba KHÔNG vì nó nặng, mà vì nó BÁM RỄ. Muốn dời thì
+     phải đốn; thứ đốn xong (khúc gỗ) mới là thứ kéo được. */
   const ds = Object.values(content.props);
-  const vac = ds.filter((p) => p.portable);
-  ok(vac.length > ds.length / 2, `phải vác được phần lớn vật thể, đang ${vac.length}/${ds.length}`);
+  const nang = ds.filter((p) => p.move === "lift");
+  const keo = ds.filter((p) => p.move === "drag");
+  ok(nang.length >= 8, `phải có nhiều thứ nâng được, đang ${nang.length}`);
+  ok(keo.length >= 8, `phải có nhiều thứ kéo được, đang ${keo.length}`);
 
-  /* --- (a) VẬT CÓ `interact` TUYỆT ĐỐI KHÔNG ĐƯỢC VÁC -------------------
+  /* --- (a) CÂY ĐỨNG: không nâng, không kéo. Bám rễ. --------------------- */
+  const cayDung = ds.filter((p) => p.tall && p.hits);
+  ok(cayDung.length >= 6, `phải có nhiều loại cây đứng, đang ${cayDung.length}`);
+  for (const p of cayDung)
+    eq(
+      p.move ?? null,
+      null,
+      `'${p.id}' là cây ĐỨNG — bám rễ thì không nâng cũng không kéo được, phải đốn đã`,
+    );
 
-     `useAt` hỏi "tay không + ô này có vật vác được không" TRƯỚC khi hỏi tới
-     tương tác. Nên cho cái giường `portable` là tay không sẽ NHẤC GIƯỜNG LÊN
-     thay vì đi ngủ — và mất luôn ngày mới. Cái bàn chế tạo, cái giếng, cửa
-     hàng, quầy bán, cửa nhà đều hỏng y như thế.
+  /* Gốc cây và rễ cũng bám đất y như thế. */
+  for (const id of ["stump", "stump_moss", "stump_burnt", "roots"])
+    eq(content.props[id]?.move ?? null, null, `'${id}' bám đất — không dời bằng tay không`);
 
-     Đây là ràng buộc CỨNG, không phải lựa chọn cân bằng. */
-  const hong = vac.filter((p) => p.interact).map((p) => `${p.id}(${p.interact})`);
-  deepEq(
-    hong,
-    [],
-    `vật có tương tác mà cho vác thì tay không sẽ NHẤC nó thay vì DÙNG nó: ${hong.join(" · ")}`,
-  );
+  /* --- (b) THỨ NẶNG chỉ được KÉO, không được NÂNG ------------------------
+     Khúc gỗ, đống đá, cái tủ, cái bếp: bê một mình thì không, lê thì được. */
+  for (const id of ["log", "logpile", "deadfall", "rock_pile", "table", "cabinet", "stove", "sofa"])
+    eq(content.props[id]?.move, "drag", `'${id}' nặng — kéo được nhưng KHÔNG nâng nổi`);
 
-  /* --- (b) THỨ NHỔ ĐƯỢC BẰNG MỘT NHÁT TAY KHÔNG phải giữ nguyên ---------
+  /* --- (c) THỨ NHẸ mới được NÂNG ---------------------------------------- */
+  for (const id of ["sapling", "rock", "chair", "potplant", "lamp"])
+    eq(content.props[id]?.move, "lift", `'${id}' nhẹ — một người bê được`);
 
-     Cỏ, bụi nhỏ, cành khô — tay không nhổ ra rơm, sợi, gỗ. Cho chúng vác được
-     thì "nhấc" thắng "nhổ", và người chơi phải cầm đồ nghề mới hái nổi một bụi
-     cỏ. Kịch bản 22 canh đúng chỗ ấy từ lâu; đây là vế nói RÕ vì sao ranh giới
-     nằm ở `hits <= 1`. */
-  const nhoTay = vac.filter((p) => (p.hits ?? 0) === 1).map((p) => p.id);
-  deepEq(
-    nhoTay,
-    [],
-    `thứ nhổ được bằng một nhát tay không thì phải nhổ được, không phải nhấc: ${nhoTay.join(" · ")}`,
-  );
+  /* --- (d) QUÁ NẶNG thì chịu, kể cả kéo --------------------------------- */
+  for (const id of ["boulder", "rock_tall", "rock_ore", "rock_dark"])
+    eq(content.props[id]?.move ?? null, null, `'${id}' quá nặng — kéo cũng không nổi`);
 
-  /* --- (c) CÂY thì PHẢI vác được — đó là cả yêu cầu ---------------------- */
-  for (const id of ["tree", "sapling", "pine", "birch", "maple", "willow", "palm", "deadtree"])
-    ok(content.props[id]?.portable, `'${id}' phải đào lên vác đi được`);
+  /* --- (e) Ràng buộc CỨNG: vật có `interact` không được dời -------------
+     `canUseAt` hỏi "dời được không" TRƯỚC khi hỏi tương tác. Cái giường dời
+     được là tay không sẽ NHẤC GIƯỜNG thay vì đi ngủ — mất luôn ngày mới. */
+  const hong = ds.filter((p) => p.move && p.interact).map((p) => `${p.id}(${p.interact})`);
+  deepEq(hong, [], `vật có tương tác mà dời được thì tay không NHẤC nó thay vì DÙNG nó: ${hong.join(" · ")}`);
 
-  /* --- (d) CẦU và BIỂN không được vác ------------------------------------
-     Vác cây cầu đi là thủng đường qua sông; biển cắm không chiếm ô nên vác nó
-     là vác một thứ không có ở đó. */
-  for (const p of vac) {
-    ok(!p.bridge, `'${p.id}' là cầu — vác đi là thủng lối qua sông`);
-    ok(p.place !== "edge", `'${p.id}' cắm ở mép ô, không chiếm ô — không vác được`);
+  /* --- (f) Thứ nhổ được bằng MỘT nhát tay không thì để yên cho nhổ ------ */
+  const nhoTay = ds.filter((p) => p.move && (p.hits ?? 0) === 1).map((p) => p.id);
+  deepEq(nhoTay, [], `nhổ một nhát là ra nguyên liệu thì phải nhổ, không phải nhấc: ${nhoTay.join(" · ")}`);
+
+  /* --- (g) Cầu và biển cắm ---------------------------------------------- */
+  for (const p of [...nang, ...keo]) {
+    ok(!p.bridge, `'${p.id}' là cầu — dời đi là thủng lối qua sông`);
+    ok(p.place !== "edge", `'${p.id}' cắm ở mép ô, không chiếm ô`);
   }
 
-  /* --- (e) CHẠY THẬT: nhấc một cái cây lên rồi đặt xuống chỗ khác -------- */
+  /* --- (h) KÉO PHẢI CHẬM HƠN NÂNG, nếu không hai bậc chỉ khác chỗ vẽ ---- */
+  const mul = content.balance.dragSpeedMul;
+  ok(
+    typeof mul === "number" && mul > 0 && mul < 1,
+    `dragSpeedMul phải nằm trong (0,1) — đang ${mul}`,
+  );
+
+  /* --- (i) CHẠY THẬT: nâng cây con được, cây lớn thì KHÔNG -------------- */
   const store = mkStore(1800);
   const s0 = store.getState();
-  let cay = null;
-  for (let i = 0; i < s0.tiles.length && !cay; i++) {
-    const t = s0.tiles[i];
-    if (t?.prop !== "tree") continue;
-    const x = i % s0.w;
-    const y = (i / s0.w) | 0;
-    /* Cần HAI ô trống liền nhau: một ô để ĐỨNG, một ô để ĐẶT. Đứng ngay ô
-       mình định đặt thì `putdownWouldTrap` chặn — và chặn đúng, vì đặt xong là
-       tự nhốt mình dưới gốc cây. */
-    const dung = s0.tiles[y * s0.w + (x - 1)];
-    const dat = s0.tiles[y * s0.w + (x - 2)];
-    const trong = (t) => t && !t.prop && !t.b && !t.crop && t.g === "grass";
-    if (trong(dung) && trong(dat)) cay = { x, y, dx: x - 1, dy: y, ax: x - 2, ay: y };
-  }
-  ok(!!cay, "bản đồ phải có một cái cây cạnh HAI ô cỏ trống liền nhau");
+  const trong = (t) => t && !t.prop && !t.b && !t.crop && t.g === "grass";
+  const tim = (id) => {
+    for (let i = 0; i < s0.tiles.length; i++) {
+      if (s0.tiles[i]?.prop !== id) continue;
+      const x = i % s0.w;
+      const y = (i / s0.w) | 0;
+      if (trong(s0.tiles[y * s0.w + (x - 1)]) && trong(s0.tiles[y * s0.w + (x - 2)]))
+        return { x, y, dx: x - 1, dy: y, ax: x - 2, ay: y };
+    }
+    return null;
+  };
 
+  const cayLon = tim("tree");
+  ok(!!cayLon, "bản đồ phải có cây lớn cạnh hai ô cỏ trống");
   setState(store, (s) => {
-    s.player.x = cay.dx * TILE + 8;
-    s.player.y = cay.dy * TILE + 8;
+    s.player.x = cayLon.dx * TILE + 8;
+    s.player.y = cayLon.dy * TILE + 8;
     s.sel = 9; // ô rỗng = TAY KHÔNG
   });
-  useRaw(store, cay.x, cay.y);
+  useRaw(store, cayLon.x, cayLon.y);
   clearBusy(store);
-  eq(store.getState().carry, "tree", "tay không bấm vào cây thì ĐÀO nó lên, không chặt");
-  eq(store.getState().tiles[cay.y * s0.w + cay.x].prop, null, "…và ô ấy trống ra");
-
-  /* Không đặt được xuống ngay ô mình đang đứng — luật đã có, ghim luôn ở đây. */
-  useRaw(store, cay.dx, cay.dy);
-  clearBusy(store);
-  eq(store.getState().carry, "tree", "đang đứng chắn chỗ thì KHÔNG đặt xuống được");
-
-  useRaw(store, cay.ax, cay.ay);
-  clearBusy(store);
-  const sau = store.getState();
-  eq(sau.carry, null, "đặt sang ô bên cạnh thì thôi vác");
-  eq(sau.tiles[cay.ay * s0.w + cay.ax].prop, "tree", "cây đứng ở chỗ mới");
+  eq(store.getState().carry ?? null, null, "TAY KHÔNG KHÔNG nhấc nổi một cái cây gỗ lớn — nó bám rễ");
   eq(
-    sau.tiles[cay.ay * s0.w + cay.ax].hp,
-    content.props.tree.hits,
-    "…và đủ máu, không phải cái cây sắp đổ",
+    store.getState().tiles[cayLon.y * s0.w + cayLon.x].prop,
+    "tree",
+    "…và cái cây vẫn đứng nguyên đó",
   );
+
+  /* Cây CON thì bứng được — đó là cách trồng lại cây mới. */
+  const con = tim("sapling");
+  if (con) {
+    const st2 = mkStore(1800);
+    setState(st2, (s) => {
+      s.player.x = con.dx * TILE + 8;
+      s.player.y = con.dy * TILE + 8;
+      s.sel = 9;
+    });
+    useRaw(st2, con.x, con.y);
+    clearBusy(st2);
+    eq(st2.getState().carry, "sapling", "cây CON thì bứng lên được");
+    useRaw(st2, con.ax, con.ay);
+    clearBusy(st2);
+    eq(st2.getState().tiles[con.ay * s0.w + con.ax].prop, "sapling", "…và trồng lại được chỗ khác");
+  }
+
+  /* --- (j) KÉO một khúc gỗ: dời được, và nhãn nút nói KÉO chứ không NHẤC - */
+  const go = tim("log");
+  if (go) {
+    const st3 = mkStore(1800);
+    setState(st3, (s) => {
+      s.player.x = go.dx * TILE + 8;
+      s.player.y = go.dy * TILE + 8;
+      s.sel = 9;
+    });
+    eq(canUseAt(st3.getState(), content, go.x, go.y, st3.getState().sel), "drag", "khúc gỗ → KÉO");
+    useRaw(st3, go.x, go.y);
+    clearBusy(st3);
+    eq(st3.getState().carry, "log", "kéo được khúc gỗ");
+  }
 });
 
 await Promise.all(choDoi);
