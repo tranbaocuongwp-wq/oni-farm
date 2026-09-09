@@ -12536,6 +12536,71 @@ test("171. Một PIXEL ẢNH phải là một số NGUYÊN pixel thiết bị �
   ok(daKiem > 100, `phải kiểm được nhiều khổ máy có scale đổi theo mức phóng, mới có ${daKiem}`);
 });
 
+
+test("176. CSS không được làm nhoè ảnh pixel", () => {
+  /* Hai luật, cả hai đều mechanical, và cả hai đều đã bị vi phạm suốt nhiều
+     đợt mà không ai thấy — vì "hơi nhoè" trên một cái icon 20px thì mắt đọc ra
+     là "đồ hoạ nó thế", chứ không đọc ra là "có lỗi". */
+  const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+
+  /* --- Luật một: THỨ TỰ của `image-rendering` ------------------------
+
+     `pixelated` và `crisp-edges` là hai giá trị khác nhau, không phải một cặp
+     tiền tố. `crisp-edges` KHÔNG bắt buộc nearest-neighbour — nó cho trình
+     duyệt tự chọn một thuật toán "giữ tương phản". Nên khai `pixelated` TRƯỚC
+     rồi `crisp-edges` SAU là tự tay vứt đi đúng cái mình muốn: ở trình duyệt
+     hiểu cả hai, cái sau thắng.
+
+     Đúng thứ tự là `crisp-edges` trước (dự phòng cho trình duyệt cũ),
+     `pixelated` sau (thứ ta thật sự muốn). */
+  const dong = css.split("\n");
+  const sai = [];
+  for (let i = 0; i < dong.length - 1; i++) {
+    const a = /image-rendering:\s*([a-z-]+)/.exec(dong[i]);
+    const b = /image-rendering:\s*([a-z-]+)/.exec(dong[i + 1]);
+    if (a && b && a[1] === "pixelated" && b[1] === "crisp-edges") sai.push(i + 1);
+  }
+  deepEq(
+    sai,
+    [],
+    `dòng ${sai.join(", ")}: khai \`pixelated\` trước \`crisp-edges\` thì crisp-edges thắng, mà nó không bắt buộc nearest-neighbour`,
+  );
+  // và luật này phải còn có việc để làm — nếu không còn khối nào thì nó vô nghĩa
+  const soKhoi = dong.filter((l) => /image-rendering:\s*crisp-edges/.test(l)).length;
+  ok(soKhoi >= 5, `phải còn nhiều khối khai cả hai giá trị để luật có nghĩa, đang có ${soKhoi}`);
+
+  /* --- Luật hai: ẢNH PIXEL đo bằng PX, không bằng `em` hay `%` --------
+
+     Một canvas pixel art rộng `1.4em` hay `74%` thì bề rộng cuối cùng phụ
+     thuộc cỡ chữ và bề ngang cửa sổ — không có cách nào nó rơi trúng một bội
+     NGUYÊN của cỡ ảnh nguồn. Đo trong trình duyệt trước khi sửa: `.ic canvas`
+     ra 20,45px cho ảnh nguồn 24px (tỉ lệ 1,70) và `.slot canvas` ra 21,61px
+     cho ảnh nguồn 32px (tỉ lệ 1,35). Mỗi pixel ảnh trải ra một pixel rưỡi —
+     ô pixel to nhỏ không đều, đúng chữ "mờ".
+
+     Cỡ ảnh nguồn là 24 và 32 (Đợt 24). Bề rộng CSS phải bằng ĐÚNG cỡ nguồn
+     thì tỉ lệ mới là `dpr` chẵn ở mọi dpr nguyên: nhỏ hơn nguồn thì dpr 2 còn
+     chẵn nhưng dpr 3 ra số lẻ ngay. */
+  const khoiPixel = [];
+  const re = /([^{}]+)\{([^{}]*image-rendering:\s*pixelated[^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(css))) khoiPixel.push({ sel: m[1].trim().split("\n").pop().trim(), than: m[2] });
+  ok(khoiPixel.length >= 10, `phải tìm được các khối ảnh pixel trong style.css, mới có ${khoiPixel.length}`);
+  const doSai = [];
+  for (const k of khoiPixel) {
+    const w = /(?:^|;|\n)\s*width:\s*([^;\n]+)/.exec(k.than);
+    if (!w) continue; // không khai bề rộng thì cỡ do ảnh quyết định — đúng rồi
+    const v = w[1].trim();
+    if (v === "100%" || v === "auto") continue; // co theo khung chứa, không phải phóng ảnh
+    if (!/^\d+px$/.test(v)) doSai.push(`${k.sel} → width: ${v}`);
+  }
+  deepEq(
+    doSai,
+    [],
+    `ảnh pixel phải khai bề rộng bằng px nguyên: ${doSai.join(" · ")}`,
+  );
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

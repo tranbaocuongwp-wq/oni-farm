@@ -170,8 +170,8 @@ canvas#game {
   inset: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
   background: #0b0907;
   touch-action: none;
 }
@@ -185,8 +185,8 @@ canvas#game {
   flex: none;
 }
 .ic canvas {
-  width: 1.4em;
-  height: 1.4em;
+  width: 24px;
+  height: 24px;
   image-rendering: pixelated;
 }
 
@@ -430,10 +430,10 @@ body[data-hand="left"] .mid-col {
 }
 .animal-card .pic canvas {
   display: block;
-  width: 18px;
+  width: 32px;
   height: auto;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
 }
 /* Một dòng = một ICON + một THANH, cao 14px. Ba con số người chơi cần đọc ở
    đây đều là "phần trăm của một quãng"; thanh nói điều đó trong một liếc mắt,
@@ -750,8 +750,8 @@ body[data-hand="left"] #devpanel {
   display: block;
   width: 100%;
   height: auto;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
   cursor: pointer;
 }
 body[data-hand="left"] .hud-mid {
@@ -866,9 +866,12 @@ body[data-hand="left"] .hotbar-wrap {
   transform: translateY(-3px);
 }
 .slot canvas {
-  image-rendering: pixelated;
-  width: 74%;
-  height: 74%;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  /* 32px CỐ ĐỊNH, đúng bằng cỡ ảnh nguồn. `74%` của một ô rộng theo `vw` cho
+     ra 21,6px, tức tỉ lệ 1,35 — mỗi pixel ảnh trải ra một pixel rưỡi. */
+  width: 32px;
+  height: 32px;
 }
 .slot .n {
   position: absolute;
@@ -1737,9 +1740,9 @@ body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
 }
 /* Hình 16px phóng lên 20px — vẫn ghim lưới pixel, không nhoè. */
 #abtn .a .it {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  width: 20px;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  width: 32px;
   height: auto;
   flex: none;
   /* Bóng đổ mỏng để hình tách khỏi nền nút, kể cả khi nút đổi màu theo việc. */
@@ -2299,7 +2302,7 @@ body[data-input^="pad"] .selname {
 }
 .bm-item .icon {
   image-rendering: pixelated;
-  width: 24px;
+  width: 32px;
   height: auto;
 }
 .bm-item .pr {
@@ -2317,10 +2320,10 @@ button.ico-btn {
   gap: 7px;
 }
 button.ico-btn .bi {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  width: 16px;
-  height: 16px;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  width: 24px;
+  height: 24px;
   flex: none;
 }
 
@@ -2450,10 +2453,10 @@ body.pointer-focus .animal-card button:focus:not(:focus-visible) {
   font-size: calc(var(--fs-sm) * 0.94);
 }
 .menu-tiles .tile .bi {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  width: 22px;
-  height: 22px;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  width: 24px;
+  height: 24px;
 }
 
 /* ==========================================================================
@@ -2592,9 +2595,9 @@ body[data-input^="pad"][data-padbar="1"] .padctx {
 /* Thứ đang cầm, ngay trước nhãn: cùng chữ "DÙNG" mà cầm cuốc là cày, cầm hạt
    là gieo — cái nhãn một mình không nói đủ. */
 .padctx .it {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  width: 18px;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  width: 32px;
   height: auto;
   flex: none;
 }
@@ -2624,10 +2627,10 @@ body[data-input^="pad"][data-padbar="1"] .padctx {
   place-items: center;
 }
 .animal-card .row .ri canvas {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  width: 14px;
-  height: auto;
+  image-rendering: crisp-edges; /* dự phòng cho trình duyệt cũ */
+  image-rendering: pixelated; /* thứ ta THẬT SỰ muốn — khai SAU để thắng */
+  width: 24px;
+  height: 24px;
 }
 
 /* ==========================================================================
