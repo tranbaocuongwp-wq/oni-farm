@@ -157,6 +157,19 @@ export interface DrawStats {
   items: number;
   /** số thực thể bị bỏ qua vì nằm ngoài khung nhìn */
   culled: number;
+  /**
+   * 1 nếu khung này phải DỰNG LẠI cache lớp nền, 0 nếu dùng lại được.
+   *
+   * Con số quan trọng nhất của Đợt 28. Cache nền là thứ đắt nhất trong cả lớp
+   * vẽ (~900-1.400 `drawImage` vào một canvas phụ), và trước đợt này nó dựng
+   * lại MỖI KHUNG trên nông trại đã gieo mà không ai biết — vì bộ đếm chỉ bọc
+   * canvas chính, nên đúng ngần ấy lệnh vẽ nằm ngoài mọi phép đo.
+   */
+  nenVe: number;
+  /** tổng số LÁT đã cắt để uốn cây theo gió — mỗi lát là một `drawImage`. */
+  lat: number;
+  /** thời gian `draw()` tính bằng ms, chỉ DEV. 0 ở bản chơi thật. */
+  ms: number;
 }
 
 export interface Renderer {
@@ -300,9 +313,41 @@ export function createRenderer(
   atlas: Atlas,
   camera: Camera,
 ): Renderer {
-  const g = canvas.getContext("2d", { alpha: false })!;
+  /* ---------------------------------------------------------- ĐẾM LỆNH VẼ
+
+     Bọc `drawImage`/`fillRect` để đếm. Chỉ ở bản DEV: bản chơi thật không trả
+     một xu nào cho phép đo.
+
+     Vì sao đếm chứ không bấm giờ: thời gian một khung phụ thuộc lịch trình của
+     trình duyệt, máy đang chạy gì, và cả nhiệt độ máy — hai lần đo cách nhau
+     một phút đã lệch. Số LỆNH VẼ thì không: nó là một tính chất của mã.
+
+     BỌC MỌI NGỮ CẢNH, không riêng canvas chính. Từ Đợt 24 tới Đợt 27 bộ đếm
+     chỉ bọc `g`, nên ba canvas phụ — cache nền, lớp đêm, mảng nước/mưa — hoàn
+     toàn vô hình. Mà cache nền chính là chỗ đắt nhất: nó báo 149 lệnh vẽ trong
+     khi thật ra là ~1.500. Một bộ đếm mù đúng chỗ tốn nhất còn tệ hơn không có
+     bộ đếm, vì nó làm người ta tin là đã đo rồi. */
+  const dem: DrawStats = {
+    drawImage: 0, fillRect: 0, items: 0, culled: 0, nenVe: 0, lat: 0, ms: 0,
+  };
+  const boc = <T extends CanvasRenderingContext2D>(c: T): T => {
+    if (!import.meta.env?.DEV) return c;
+    const oDraw = c.drawImage.bind(c);
+    const oFill = c.fillRect.bind(c);
+    (c as CanvasRenderingContext2D).drawImage = ((...a: unknown[]) => {
+      dem.drawImage++;
+      return (oDraw as (...x: unknown[]) => void)(...a);
+    }) as CanvasRenderingContext2D["drawImage"];
+    (c as CanvasRenderingContext2D).fillRect = ((...a: unknown[]) => {
+      dem.fillRect++;
+      return (oFill as (...x: unknown[]) => void)(...a);
+    }) as CanvasRenderingContext2D["fillRect"];
+    return c;
+  };
+
+  const g = boc(canvas.getContext("2d", { alpha: false })!);
   const night = document.createElement("canvas");
-  const ng = night.getContext("2d")!;
+  const ng = boc(night.getContext("2d")!);
 
   const particles: Particle[] = [];
   let lastTime = 0;
@@ -317,28 +362,6 @@ export function createRenderer(
      phép tính. Không vào save — nó là chuyện của lớp vẽ. Dọn theo danh sách
      thực thể mỗi khung nên không rò rỉ khi người làm nghỉ việc. */
   const phaLam = new Map<number, number>();
-
-  /* ---------------------------------------------------------- ĐẾM LỆNH VẼ
-
-     Bọc `drawImage`/`fillRect` của chính ngữ cảnh này để đếm. Chỉ ở bản DEV:
-     bản chơi thật không trả một xu nào cho phép đo.
-
-     Vì sao đếm chứ không bấm giờ: thời gian một khung phụ thuộc lịch trình của
-     trình duyệt, máy đang chạy gì, và cả nhiệt độ máy — hai lần đo cách nhau
-     một phút đã lệch. Số LỆNH VẼ thì không: nó là một tính chất của mã. */
-  const dem: DrawStats = { drawImage: 0, fillRect: 0, items: 0, culled: 0 };
-  if (import.meta.env?.DEV) {
-    const oDraw = g.drawImage.bind(g);
-    const oFill = g.fillRect.bind(g);
-    (g as CanvasRenderingContext2D).drawImage = ((...a: unknown[]) => {
-      dem.drawImage++;
-      return (oDraw as (...x: unknown[]) => void)(...a);
-    }) as CanvasRenderingContext2D["drawImage"];
-    (g as CanvasRenderingContext2D).fillRect = ((...a: unknown[]) => {
-      dem.fillRect++;
-      return (oFill as (...x: unknown[]) => void)(...a);
-    }) as CanvasRenderingContext2D["fillRect"];
-  }
 
   /** Ghim một toạ độ world về đúng lưới pixel THIẾT BỊ (mịn hơn world px đúng
    *  bằng scale×dpr lần). Dùng cho những thứ DI CHUYỂN mượt: nhân vật, hạt. */
@@ -536,7 +559,7 @@ export function createRenderer(
      sách ô nước được ghi lại lúc dựng cache nên khung sau không phải quét lại
      cả vùng để tìm chúng. */
   const nen = document.createElement("canvas");
-  const ng2 = nen.getContext("2d")!;
+  const ng2 = boc(nen.getContext("2d")!);
   let nenTiles: Tile[] | null = null;
   let nenX0 = 0;
   let nenY0 = 0;
@@ -916,7 +939,10 @@ export function createRenderer(
       y0 >= nenY0 &&
       x1 <= nenX0 + nenCols - 1 &&
       y1 <= nenY0 + nenRows - 1;
-    if (!hopLe) veNen(s, content, x0, y0, x1, y1, mua);
+    if (!hopLe) {
+      dem.nenVe = 1;
+      veNen(s, content, x0, y0, x1, y1, mua);
+    }
     put(nen, nenX0 * TILE - rx, nenY0 * TILE - ry);
 
     // MẶT NƯỚC và BỌT SÓNG: động mỗi khung nên nằm ngoài cache.
@@ -2044,6 +2070,11 @@ export function createRenderer(
     dem.fillRect = 0;
     dem.items = 0;
     dem.culled = 0;
+    dem.nenVe = 0;
+    dem.lat = 0;
+    /* Bấm giờ CHỈ ở bản DEV. `performance.now()` hai lần mỗi khung là rẻ, nhưng
+       nó vẫn là một phép đo mà bản chơi thật không cần trả tiền. */
+    const gio0 = import.meta.env?.DEV ? performance.now() : 0;
     const vp = camera.viewport;
     if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
 
@@ -2262,6 +2293,7 @@ export function createRenderer(
       g.fillStyle = `rgba(0,0,0,${Math.min(1, fade)})`;
       g.fillRect(0, 0, canvas.width, canvas.height);
     }
+    if (gio0) dem.ms = performance.now() - gio0;
   }
 
   applyViewport();

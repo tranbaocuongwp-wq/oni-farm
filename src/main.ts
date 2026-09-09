@@ -17,7 +17,7 @@
 
 import "./style.css";
 
-import { buildAtlas } from "./art/atlas.ts";
+import { ART, buildAtlas } from "./art/atlas.ts";
 import { createInput, bindTouchButton } from "./core/input.ts";
 import { observeScreen } from "./core/screen.ts";
 import { createNavigator } from "./core/navigate.ts";
@@ -2497,6 +2497,58 @@ async function boot() {
       tutorial,
       step: (dt = 1 / 60, times = 1) => {
         for (let i = 0; i < times; i++) loop.step(dt);
+      },
+      /**
+       * ĐO: chạy `n` khung rồi trả về thống kê.
+       *
+       * `scripts/bench.mjs` cố ý không đo lớp vẽ (canvas trong Node chỉ đo được
+       * phần CPU của mình, không đo được phần trình duyệt thật sự tốn), nên đây
+       * là chỗ DUY NHẤT trả lời được câu "một khung hình tốn bao nhiêu".
+       *
+       * `nenVe` là tổng số khung phải dựng lại cache lớp nền: trên nông trại đã
+       * gieo, trước Đợt 28 nó bằng đúng `n`.
+       */
+      do: (n = 300, dt = 1 / 60) => {
+        const t: number[] = [];
+        let ve = 0;
+        let veMs = 0;
+        let li = 0;
+        let hinh = 0;
+        let o = 0;
+        let cat = 0;
+        let mon = 0;
+        for (let i = 0; i < n; i++) {
+          const a0 = performance.now();
+          loop.step(dt);
+          t.push(performance.now() - a0);
+          const st = renderer.stats();
+          ve += st.nenVe;
+          veMs += st.ms;
+          li += st.lat;
+          hinh += st.drawImage;
+          o += st.fillRect;
+          cat += st.culled;
+          mon += st.items;
+        }
+        t.sort((a, b) => a - b);
+        const vp = camera.viewport;
+        const lam = (v: number) => Math.round(v * 100) / 100;
+        return {
+          khung: n,
+          nenVe: ve,
+          "khung p50": lam(t[n >> 1] ?? 0),
+          "khung p99": lam(t[Math.min(n - 1, Math.floor(n * 0.99))] ?? 0),
+          "draw ms tb": lam(veMs / n),
+          "drawImage tb": Math.round(hinh / n),
+          "fillRect tb": Math.round(o / n),
+          "items tb": Math.round(mon / n),
+          "culled tb": Math.round(cat / n),
+          "lat tb": Math.round(li / n),
+          scale: vp.scale,
+          dpr: vp.dpr,
+          "px thiết bị/pixel ảnh": (vp.scale * vp.dpr) / ART,
+          "backing Mpx": lam((vp.cssW * vp.dpr * (vp.cssH * vp.dpr)) / 1e6),
+        };
       },
     };
   }
