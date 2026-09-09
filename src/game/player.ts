@@ -56,8 +56,13 @@ export function movePlayer(
   const len = Math.sqrt(dx * dx + dy * dy);
   // Nền dưới chân quyết định tốc độ: đường nhựa đi nhanh hơn cỏ.
   // Và TRỜI: mưa bão làm chậm mọi thứ ngoài trời (content quyết định bao nhiêu).
+  /* ĐANG KÉO thì KHÔNG chạy được. Lê một cái tủ mà vẫn chạy nước rút thì đúng
+     cái vô lý mà cả mô hình ba bậc sinh ra để tránh — và nếu chỉ nhân thêm hệ
+     số chậm thì người chơi vẫn bấm chạy để bù, tức cái nặng chẳng còn nghĩa gì.
+     Nâng thì chạy thoải mái: một hòn đá không cản bước ai. */
+  const keo = cachDoi(propDef(content, d.s.carry ?? null)) === "drag";
   const base =
-    (run
+    (run && !keo
       ? (content.balance.runSpeed ?? PLAYER_SPEED)
       : (content.balance.moveSpeed ?? PLAYER_SPEED)) *
     speedMulAt(d.s, content, x, y) *
@@ -66,9 +71,7 @@ export function movePlayer(
        hòn đá thì bước chân không đổi, còn lê một khúc gỗ hay cái tủ thì có.
        Không có vế này thì hai kiểu dời chỉ khác nhau ở chỗ vẽ, và người chơi
        không có lý do nào để thấy cái tủ nặng hơn cái ghế. */
-    (cachDoi(propDef(content, d.s.carry ?? null)) === "drag"
-      ? (content.balance.dragSpeedMul ?? 0.55)
-      : 1);
+    (keo ? (content.balance.dragSpeedMul ?? 0.55) : 1);
   // Độ dài vector > 1 (đi chéo bằng bàn phím) không được cộng dồn thành nhanh hơn.
   const throttle = Math.min(1, Number.isFinite(len) ? len : 0);
   const step = Number.isFinite(dt) ? Math.max(0, dt) * base * throttle : 0;

@@ -296,6 +296,7 @@ export function vehicleStep(
      vào" thì nó sẽ đi tìm bãi đậu trước cửa kho và đứng đó — một chiếc xe buýt
      đỗ trong sân nông trại, và bãi thì hết chỗ cho xe giao hàng thật. */
   if (v.errand?.kind === "transit") {
+    const dich = { x: v.errand.tx, y: v.errand.ty };
     /* Đường đã dựng SẴN lúc sinh — một đường thẳng dọc làn — nên ở đây không
        gọi A* lấy một lần. Đó không phải chuyện tiết kiệm vặt: `takeBudget()` là
        NGÂN SÁCH A* DÙNG CHUNG của cả bản đồ, và xe chạy ngang mà tiêu vào đó
@@ -304,7 +305,27 @@ export function vehicleStep(
 
        Trang trí không bao giờ được tiêu ngân sách của luật chơi. */
     if (e.ai.path.length) return true;
-    removeEntity(d, e.id); // hết đường = đã ra tới mép, biến mất
+    /* Hết đường vì hai lý do khác hẳn nhau, và trước đây cả hai cùng bị dọn:
+
+       · RA TỚI MÉP — xong việc, biến mất. Đúng.
+       · BỊ CHẶN — `moveActors` XOÁ đường đi khi thực thể kẹt ("bỏ đường, bước
+         quyết định kế tiếp sẽ tính lại"). Với xe chạy ngang thì "bước quyết
+         định kế tiếp" chính là dòng dưới đây, nên dọn ngay là chiếc xe BỐC HƠI
+         GIỮA ĐƯỜNG trước mắt người chơi.
+
+       Nay phân biệt bằng VỊ TRÍ: còn cách mép xa thì dựng lại đúng đường thẳng
+       ấy và đi tiếp. Vật cản còn đó thì nó dừng lại chờ — một cái xe dừng sau
+       chướng ngại vật là thứ đọc được, một cái xe tan biến thì không. Dọn được
+       chướng ngại là nó chạy tiếp.
+
+       Dựng lại một mảng ≤48 phần tử, không gọi A*, nên vẫn không tiêu gì của
+       ngân sách tìm đường. */
+    if (Math.abs(cx - dich.x) <= 1 && Math.abs(cy - dich.y) <= 1) {
+      removeEntity(d, e.id);
+      return true;
+    }
+    e.ai.path = duongThang(d.s, cx, cy, dich);
+    if (!e.ai.path.length) removeEntity(d, e.id);
     return true;
   }
 
@@ -576,6 +597,24 @@ export function maybeSendTraffic(d: Draft, content: Content, truoc: number, nay:
   return sendTransit(d, content, loai, { x: vao, y: lan.y }, { x: ra, y: lan.y }) !== null;
 }
 
+/**
+ * Đường đi THẲNG dọc một hàng, từ `(x,y)` tới `den` — không qua A*.
+ *
+ * Làn quốc lộ là một hàng ô nhựa liền mạch từ mép này sang mép kia, nên không
+ * có gì để tìm. Gọi A* ở đây vừa thừa vừa tiêu vào ngân sách tìm đường dùng
+ * chung của người làm và vật nuôi (kịch bản 151 và 179 canh chỗ đó).
+ */
+function duongThang(s: GameState, x: number, y: number, den: { x: number; y: number }): number[] {
+  const buoc: number[] = [];
+  if (x === den.x) return buoc;
+  const huong = den.x > x ? 1 : -1;
+  for (let i = x + huong; ; i += huong) {
+    buoc.push(y * s.w + i);
+    if (i === den.x) break;
+  }
+  return buoc;
+}
+
 /** Thả một chiếc xe vào `tu`, cho nó chạy tới `den` rồi biến mất. */
 function sendTransit(
   d: Draft,
@@ -611,16 +650,7 @@ function sendTransit(
     done: false,
   };
   e.ai.phase = "in";
-  /* ĐƯỜNG ĐI DỰNG THẲNG, không qua A*. Làn là một hàng ô nhựa liền mạch từ mép
-     này sang mép kia — không có gì để tìm. Gọi A* ở đây vừa thừa vừa tiêu vào
-     ngân sách dùng chung của người làm và vật nuôi. */
-  const buoc: number[] = [];
-  const huong = den.x > tu.x ? 1 : -1;
-  for (let x = tu.x + huong; ; x += huong) {
-    buoc.push(tu.y * d.s.w + x);
-    if (x === den.x) break;
-  }
-  e.ai.path = buoc;
+  e.ai.path = duongThang(d.s, tu.x, tu.y, den);
   return id;
 }
 

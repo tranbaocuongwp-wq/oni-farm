@@ -41,6 +41,7 @@ import {
   isSolid,
   donDuoc,
   cachDoi,
+  tileAt,
 } from "./world.ts";
 
 /* ---------------------------------------------------- đặt xuống có nhốt ai */
@@ -56,6 +57,25 @@ import {
  * `canPlaceBuilding` đã chặn đúng chuyện này cho CÔNG TRÌNH ngay từ đầu; đường
  * VÁC ĐỒ thì quên mất — đây là chỗ trả lại luật đó.
  */
+/**
+ * Ô này có phải MẶT ĐƯỜNG không — chỗ không được bỏ vật cản xuống.
+ *
+ * Người chơi dời được gần như mọi thứ, nên họ cũng bỏ được một hòn đá xuống
+ * giữa lòng quốc lộ. Xe chạy trên đó có đường đi dựng sẵn: gặp vật đặc là kẹt,
+ * `moveActors` xoá đường, và chiếc xe đứng lại giữa đường. Ba chiếc như thế là
+ * hết cả tuyến.
+ *
+ * Chặn ngay ở chỗ ĐẶT XUỐNG thay vì đi chữa hậu quả bên phía xe: một luật, ở
+ * đúng chỗ người chơi thấy được, và nói được thành câu — "không bỏ đồ giữa
+ * lòng đường".
+ *
+ * Chỉ chặn vật ĐẶC. Cái thảm trải ra mặt đường thì chẳng cản ai.
+ */
+export function laMatDuong(state: GameState, x: number, y: number): boolean {
+  const t = tileAt(state, x, y);
+  return t?.g === "asphalt" || t?.g === "concrete";
+}
+
 export function putdownWouldTrap(
   state: GameState,
   content: Content,
@@ -530,6 +550,8 @@ export function canUseAt(
     if (isSolid(state, content, x, y)) return null;
     // Đặt xuống chân mình = tự xây tường quanh chân — xem `putdownWouldTrap`.
     if (putdownWouldTrap(state, content, x, y)) return null;
+    // …và không bỏ vật cản giữa lòng đường — xem `laMatDuong`.
+    if (laMatDuong(state, x, y) && propDef(content, state.carry)?.solid !== false) return null;
     return "putdown";
   }
 
@@ -629,6 +651,10 @@ export function useAt(d: Draft, content: Content, x: number, y: number): void {
        mời bấm, nhưng bàn phím và tự-động vẫn gọi thẳng vào đây. */
     if (putdownWouldTrap(d.s, content, x, y)) {
       toastText(d, "Đang đứng chắn chỗ — lùi ra rồi đặt.", "bad");
+      return;
+    }
+    if (laMatDuong(d.s, x, y) && propDef(content, d.s.carry)?.solid !== false) {
+      toastText(d, "Không bỏ vật cản giữa lòng đường.", "bad");
       return;
     }
     const pd = propDef(content, d.s.carry);
