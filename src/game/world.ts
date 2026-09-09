@@ -13,6 +13,7 @@
 
 import type {
   Content,
+  Dir,
   GameState,
   GroundDef,
   GroundKind,
@@ -521,6 +522,24 @@ export function distToTile(state: GameState, x: number, y: number): number {
 }
 
 /** Ô có nằm trong tầm với để USE/INTERACT không. */
+/**
+ * Vector chuyển động → HƯỚNG quay mặt. Vector 0 thì giữ nguyên hướng cũ.
+ *
+ * Ở ĐÂY, một bản duy nhất, vì cùng một luật này quyết định hướng của NGƯỜI
+ * CHƠI, của CON VẬT, của NGƯỜI LÀM và của XE. Trước Đợt 32 nó tồn tại hai bản
+ * giống hệt nhau — `dirFromVector` trong player.ts và `dirOf` trong
+ * entities.ts — không bản nào import bản nào. Hai bản như thế thì ngày ai đó
+ * đổi luật hoà (ví dụ cho ưu tiên trục dọc) mà chỉ sửa một chỗ, người chơi và
+ * con vật sẽ quay khác nhau ở đúng những góc 45°, và không có gì báo.
+ *
+ * Hoà thì ưu tiên TRỤC NGANG (`>=`): sprite đi ngang có hai khung chân rõ hơn.
+ */
+export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
+  if (Math.abs(nx) < 1e-6 && Math.abs(ny) < 1e-6) return fallback;
+  if (Math.abs(nx) >= Math.abs(ny)) return nx > 0 ? "right" : "left";
+  return ny > 0 ? "down" : "up";
+}
+
 export function inReach(state: GameState, x: number, y: number): boolean {
   return distToTile(state, x, y) <= REACH_TILES;
 }

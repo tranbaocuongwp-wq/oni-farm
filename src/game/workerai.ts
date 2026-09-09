@@ -20,7 +20,7 @@
 import type { Content, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dEntity, dTile, randInt, toastKey, touch } from "./state.ts";
-import { idx, TILE, tileIndexAt } from "./world.ts";
+import { dirFromVector, idx, TILE, tileIndexAt } from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { ACTOR_STEP_MINUTES, LEASH_TILES, MAX_NODES_ACTOR, MAX_PATH, dangNghi } from "./entities.ts";
 import {
@@ -52,6 +52,30 @@ export const WORK_MINUTES = 1.5;
  *
  * Trả true nghĩa là "đã xử lý xong lượt này".
  */
+/**
+ * Quay mặt về Ô ĐANG LÀM.
+ *
+ * `atTile` cho phép đứng cách ô công việc tới 1,4 ô, nên người làm hầu như
+ * không bao giờ đứng ĐÚNG trên ô mình làm — họ đứng cạnh nó. Không có hàm này
+ * thì họ vung cuốc theo hướng mình vừa ĐI TỚI, và đo được 45% số khung là vung
+ * sai phía: bổ rìu lên trời trong khi cái cây ở bên phải.
+ *
+ * Mã của NGƯỜI CHƠI đã chữa đúng chuyện này từ lâu (`reduce.ts`, kèm chú thích
+ * "tư thế vung tay chỉ sai hướng là lộ ngay") — người làm thuê chưa bao giờ
+ * được áp cùng luật ấy.
+ *
+ * Đứng đúng trên ô thì `dirFromVector` trả về hướng cũ, y như người chơi cày ô
+ * dưới chân mình.
+ */
+function quayVeViec(e: Entity): void {
+  if (e.ai.tx < 0) return;
+  e.dir = dirFromVector(
+    e.ai.tx * TILE + TILE / 2 - e.x,
+    e.ai.ty * TILE + TILE / 2 - e.y,
+    e.dir,
+  );
+}
+
 export function workerStep(
   d: Draft,
   content: Content,
@@ -141,6 +165,7 @@ export function workerStep(
       e.ai.phase = "work";
       e.ai.until = WORK_MINUTES;
       e.ai.path = [];
+      quayVeViec(e);
       return true;
     }
     /* Hết đường mà CHƯA TỚI: ghi ô này vào sổ đen rồi chọn việc khác.
@@ -183,6 +208,7 @@ export function workerStep(
     e.ai.job = task.kind;
     e.ai.phase = "work";
     e.ai.until = WORK_MINUTES;
+    quayVeViec(e);
     return true;
   }
 

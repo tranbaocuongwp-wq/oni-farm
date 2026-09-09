@@ -25,10 +25,12 @@
    trôi qua save/load.
 ============================================================================ */
 
-import type { AnimalDef, Content, Dir, Entity, GameState } from "./types.ts";
+import type { AnimalDef, Content, Entity, GameState } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { activeView, dEntities, dEntity, nextRandom, setEntities, touch } from "./state.ts";
-import { blockedForActor, idx, TILE, tileAt } from "./world.ts";
+import { blockedForActor, idx, TILE, tileAt,
+  dirFromVector,
+} from "./world.ts";
 import { findPath } from "./pathfind.ts";
 import { workerStep } from "./workerai.ts";
 import { vehicleStep } from "./vehicles.ts";
@@ -310,11 +312,8 @@ function offFarmGoal(
 
 /* ------------------------------------------------------------- di chuyển */
 
-function dirOf(dx: number, dy: number, cur: Dir): Dir {
-  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return cur;
-  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? "right" : "left";
-  return dy > 0 ? "down" : "up";
-}
+/* `dirOf` cũ là bản sao thứ hai của cùng một luật — nay dùng chung
+   `dirFromVector` của world.ts. */
 
 /**
  * Nhích mọi thực thể của bản đồ ĐANG chơi theo đường đi của chúng.
@@ -379,7 +378,7 @@ export function moveActors(d: Draft, content: Content, dt: number): void {
     }
     e.x = mx;
     e.y = my;
-    e.dir = dirOf(mx - cur.x, my - cur.y, cur.dir);
+    e.dir = dirFromVector(mx - cur.x, my - cur.y, cur.dir);
     e.anim = cur.anim + dt;
   }
 }

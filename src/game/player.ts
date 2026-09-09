@@ -9,17 +9,16 @@
    cỡ thì đi nhanh — bàn phím luôn cho vector độ dài 1 nên không ảnh hưởng.
 ============================================================================ */
 
-import type { Content, Dir } from "./types.ts";
+import type { Content } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dPlayer } from "./state.ts";
-import { PLAYER_SPEED, blockedAt, cachDoi, nudgeOutOfSolid, propDef, speedMulAt } from "./world.ts";
+import { PLAYER_SPEED, blockedAt, cachDoi, dirFromVector, nudgeOutOfSolid, propDef, speedMulAt } from "./world.ts";
 import { weatherMood } from "./weather.ts";
 
-export function dirFromVector(nx: number, ny: number, fallback: Dir): Dir {
-  if (nx === 0 && ny === 0) return fallback;
-  if (Math.abs(nx) >= Math.abs(ny)) return nx > 0 ? "right" : "left";
-  return ny > 0 ? "down" : "up";
-}
+/* Hướng quay mặt suy từ vector chuyển động — bản CHÍNH THỨC nằm ở `world.ts`,
+   dùng chung cho người chơi, con vật, người làm và xe. Xuất lại ở đây để chỗ
+   gọi cũ (`reduce.ts`) không phải đổi đường import. */
+export { dirFromVector } from "./world.ts";
 
 /** Áp một bước MOVE lên draft. Trả true nếu có gì đó thay đổi. */
 export function movePlayer(

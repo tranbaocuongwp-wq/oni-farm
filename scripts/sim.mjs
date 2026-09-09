@@ -13067,6 +13067,80 @@ test("180. NÂNG hay KÉO hay CHỊU — phải khớp với vật lý, không p
   }
 });
 
+
+test("181. NGƯỜI LÀM quay mặt về ô mình đang làm — và chỉ có MỘT luật hướng cho cả bản đồ", () => {
+  /* Rà soát tổng thể theo yêu cầu của Cường ("quản lý hướng nhân vật và các
+     vật, hướng của các con động vật") lôi ra hai chỗ.
+
+     MỘT — người làm thuê vung đồ nghề SAI PHÍA. `atTile` cho phép đứng cách ô
+     công việc tới 1,4 ô, nên họ hầu như không bao giờ đứng đúng trên ô mình
+     làm. Mà không chỗ nào đặt `e.dir` khi bắt tay vào việc, nên họ giữ nguyên
+     hướng vừa ĐI TỚI. Đo trước khi sửa: 183 trên 411 khung có người đang làm
+     việc đứng yên là quay sai phía — 45%.
+
+     Trớ trêu: mã của NGƯỜI CHƠI đã chữa đúng chuyện này từ lâu, kèm chú thích
+     "tư thế vung tay chỉ sai hướng là lộ ngay". Người làm chưa bao giờ được áp
+     cùng luật.
+
+     HAI — luật quyết định hướng tồn tại HAI BẢN giống hệt nhau, không bản nào
+     import bản nào: `dirFromVector` (player.ts) cho người chơi, `dirOf`
+     (entities.ts) cho con vật, người làm và xe. Cùng lớp lỗi với ba bản `TILE`
+     mà Đợt 24 đã gỡ. Ngày ai đó đổi luật hoà mà chỉ sửa một bản thì người chơi
+     và con vật quay khác nhau ở đúng những góc 45°, và không có gì báo. */
+
+  /* --- (a) CHỈ MỘT BẢN của luật hướng ---------------------------------- */
+  const doc = (f) => readFileSync(new URL(`../src/game/${f}`, import.meta.url), "utf8");
+  const boChuThich = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const world = boChuThich(doc("world.ts"));
+  ok(
+    /export function dirFromVector\(/.test(world),
+    "luật hướng phải nằm ở world.ts — chỗ cả người chơi lẫn thực thể đều import được",
+  );
+  for (const f of ["player.ts", "entities.ts", "workerai.ts"]) {
+    const t = boChuThich(doc(f));
+    ok(
+      !/function dirOf\(/.test(t) && !/function dirFromVector\(nx/.test(t),
+      `${f} không được giữ bản sao riêng của luật hướng — import từ world.ts`,
+    );
+  }
+
+  /* --- (b) NGƯỜI LÀM quay ĐÚNG phía ô đang làm -------------------------- */
+  const store = mkStore(77);
+  store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
+  for (const op of ["tillMap", "plantMap"]) store.dispatch({ t: "DEBUG", op });
+  for (let i = 0; i < 3; i++) store.dispatch({ t: "DEBUG", op: "spawnWorker" });
+
+  const canQuay = (e) => {
+    const px = Math.floor(e.x / TILE);
+    const py = Math.floor(e.y / TILE);
+    const dx = e.ai.tx - px;
+    const dy = e.ai.ty - py;
+    if (dx === 0 && dy === 0) return null; // đứng đúng trên ô: hướng nào cũng được
+    return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
+  };
+
+  let dung = 0;
+  const sai = [];
+  for (let i = 0; i < 30000; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    if (i % 20) continue;
+    for (const e of store.getState().entities) {
+      if (e.kind !== "worker" || e.ai.phase !== "work" || e.ai.tx < 0) continue;
+      if (e.ai.path.length) continue; // đang đi thì hướng đi mới là đúng
+      const can = canQuay(e);
+      if (!can) continue;
+      if (e.dir === can) dung++;
+      else if (sai.length < 3) sai.push(`người ${e.id} quay ${e.dir} mà việc ở phía ${can}`);
+    }
+  }
+  ok(dung > 100, `phải bắt được nhiều khung có người đang làm việc, mới ${dung}`);
+  deepEq(
+    sai,
+    [],
+    `người làm phải quay mặt về ô mình đang làm — nếu không thì vung đồ nghề ra chỗ khác: ${sai.join(" · ")}`,
+  );
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);
