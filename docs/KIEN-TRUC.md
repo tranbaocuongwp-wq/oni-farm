@@ -204,6 +204,12 @@ setTransform(scale·dpr, 0, 0, scale·dpr, offX·dpr, offY·dpr)
 Nhờ vậy phần còn lại của renderer không cần biết màn hình to nhỏ ra sao.
 `src/render/camera.ts` là chỗ **duy nhất** biết kích thước màn hình.
 
+`dpr` ở đây là **dpr HIỆU DỤNG**, không phải `devicePixelRatio` của trình duyệt:
+`setSize` nắn nó sao cho `scale × dpr` luôn là bội nguyên của `ART`, vì đó mới là
+tỉ lệ phóng thật của một pixel ảnh (xem `GIAI-THUAT.md` mục 10d — chỗ này từng
+thiếu đúng thừa số `dpr` và đó là một nửa chữ "mờ"). Nó luôn **bằng hoặc lớn hơn**
+dpr thật của màn hình, không bao giờ nhỏ hơn.
+
 Bốn luật giữ nét pixel và giữ tốc độ:
 
 1. `imageSmoothingEnabled = false`, hệ số phóng **nguyên** khi có thể, camera snap
@@ -257,11 +263,30 @@ qua `window.__PF.step()` ở bản dev, hoặc **đếm lệnh vẽ** — thư�
 thuộc lịch trình của trình duyệt.
 
 Từ Đợt 24 bộ đếm ấy có thật, không còn là mong muốn: `renderer.stats()` trả
-`{ drawImage, fillRect, items, culled }` của khung vừa vẽ (chỉ bản DEV — nó bọc
-`g.drawImage`/`g.fillRect` nên không được phép tồn tại trong bản phát hành). Đo
-một khung: `__PF.step(0.016, 3)` rồi `__PF.renderer.stats()`. Cùng đợt, thời gian
-**dựng atlas** lúc mở game cũng in ra console ở bản dev — số pixel của atlas tăng
-bốn lần nên nó thành một con số phải theo dõi được, không phải đoán.
+`{ drawImage, fillRect, items, culled, nenVe, lat, ms }` của khung vừa vẽ (chỉ
+bản DEV — nó bọc `g.drawImage`/`g.fillRect` nên không được phép tồn tại trong bản
+phát hành). Cùng đợt, thời gian **dựng atlas** lúc mở game cũng in ra console ở
+bản dev.
+
+**Đọc kỹ chỗ này trước khi tin một con số về lớp vẽ.** Từ Đợt 24 tới Đợt 27 bộ
+đếm chỉ bọc ngữ cảnh của canvas **chính**. Renderer còn tạo ba canvas phụ nữa —
+cache lớp nền, lớp đêm, mảng nước/mưa — và không cái nào bị đếm, trong khi cache
+lớp nền là chỗ đắt nhất của cả lớp vẽ. Nó báo 149 lệnh vẽ mỗi khung; đo lại sau
+khi bọc đủ thì con số thật là **1.544**. Một bộ đếm mù đúng chỗ đắt nhất còn tệ
+hơn không có bộ đếm, vì nó làm người ta tin là đã đo rồi. Đợt 28 bọc **mọi** ngữ
+cảnh renderer tạo ra — hàm `boc()` dùng chung; thêm ngữ cảnh mới mà quên bọc là
+lặp lại đúng lỗi ấy.
+
+Đo một khung: `__PF.step(0.016, 3)` rồi `__PF.renderer.stats()`. Đo cả một phiên:
+**`__PF.do(n)`** chạy `n` khung rồi trả `{nenVe, drawImage, fillRect, items,
+culled, lat, draw ms, khung p50/p99, backing Mpx}` — đó là chỗ duy nhất trả lời
+được câu "một khung hình tốn bao nhiêu", vì `bench.mjs` cố ý không đo lớp vẽ.
+
+Hai trường trong bảng ấy có một tiền lệ đáng nhớ: `culled` được khai từ Đợt 24 và
+**không có lấy một dòng nào cộng vào** trong cả repo, nên nó báo 0 suốt bốn đợt —
+và 0 đọc ra như "không có gì để cắt", trong khi thật ra có 53 thứ để cắt mỗi
+khung. `lat` suýt lặp lại đúng thế trong chính Đợt 28. Khai một trường thống kê
+mà không cộng vào nó thì tệ hơn là không khai.
 
 ---
 

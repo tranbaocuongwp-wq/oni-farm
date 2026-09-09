@@ -21,10 +21,21 @@ thực thể**, khổ 430×932 @2x. Ngân sách một khung hình 60fps là **16
 | `autoJob` | 0,0033 | 0,0% |
 | **`findPath`** (một lần gọi) | **0,4680** | **2,8%** |
 | `checkInvariants` (chỉ ở dev) | 0,0245 | 0,1% |
+| nhãn nút: `pressPlan` (ô ngắm trống) | 0,0110 | 0,1% |
+| nhãn nút: `infoHint` (ô ngắm trống) | 0,0013 | 0,0% |
 
 Đọc ra ngay: **cả phần mô phỏng gộp lại tốn 0,2% một khung hình**, còn **một lần
 gọi A\* tốn gấp năm mươi lần tất cả những thứ đó cộng lại**. Mọi thứ khác là
 nhiễu. Đó là lý do tối ưu chỉ đụng vào đúng hai chỗ: A\* và bản đồ nhỏ.
+
+Hai dòng cuối là của Đợt 28, và chúng ở đây để **ngăn một tối ưu**: `main.ts`
+gọi `pressPlan` + `infoHint` 60 lần mỗi giây chỉ để in nhãn hai cái nút và đặt
+mũi tên đỏ, và đọc mã thì trông rất đắt. Đo ra 0,0123 ms cho cả hai ở ca đắt
+nhất — dưới ngưỡng "đáng sửa" tám lần. Đợt 28 đã định cache chúng sau một cái
+khoá mười mấy trường; bảng này huỷ mục ấy trước khi nó kịp thành mã.
+
+**Bảng này KHÔNG đo lớp vẽ** — xem mục 10 cho phần ấy, và đọc kỹ lý do ở đó
+trước khi tin bất kỳ con số nào về lớp vẽ đo bằng công cụ khác.
 
 ---
 
@@ -277,44 +288,130 @@ gian vẽ; chi phí nằm ở chính các lệnh `drawImage`. Đã gỡ bỏ.
 
 ---
 
-## 10. Lớp NỀN được cache, và mưa thành một mảng lặp
+## 10. Lớp NỀN được cache — và câu hỏi mà cái khoá đang hỏi
 
-Đợt 15 đã tìm ra chỗ tốn nhất *của HUD*. Đợt 23 hỏi tiếp câu ấy cho **thế giới**,
-và đo trước khi sửa: phần mô phỏng tốn **0,2%** ngân sách một khung hình, tức
-không còn gì để lấy ở đó. Chỗ tiền nằm ở lớp vẽ.
+Đợt 15 đã tìm ra chỗ tốn nhất *của HUD*. Đợt 23 hỏi tiếp câu ấy cho **thế giới**:
+phần mô phỏng tốn 0,2% ngân sách một khung hình, tức không còn gì để lấy ở đó.
+Chỗ tiền nằm ở lớp vẽ. Nó cache lớp nền vào canvas phụ, biến mưa thành một mảng
+lặp, và báo **149 lệnh vẽ · 0,30 ms** mỗi khung.
 
-Cảnh đo: 285 ô nhìn thấy · đêm · bão · 28 thực thể.
+**Con số ấy sai, và cả dự án tin nó suốt năm đợt.**
 
-| | Trước | Sau |
-|---|---|---|
-| `drawImage` mỗi khung | **600** | **149** |
-| thời gian vẽ mỗi khung | **0,90 ms** | **0,30 ms** (−67%) |
+### Vì sao nó sai: bộ đếm mù đúng chỗ đắt nhất
 
-Hai chỗ, và cả hai đều là *"thứ này có cần vẽ lại mỗi khung không?"*:
+`renderer.stats()` chỉ bọc ngữ cảnh 2D của canvas **chính**. Renderer còn tạo ba
+canvas phụ nữa — cache lớp nền, lớp đêm, mảng nước/mưa — và không cái nào bị
+đếm. Mà cache lớp nền chính là chỗ đắt nhất trong cả lớp vẽ. Nói gọn: bộ đếm mù
+đúng chỗ cần nhìn.
 
-**Nền.** Mỗi ô nhìn thấy tốn ít nhất một `drawImage`, ô đất cày tốn tới sáu (nền ·
-lớp đất · viền bốn cạnh) — quá nửa số lệnh của cả khung. Nhưng nền chỉ đổi khi
-một ô đổi, khi camera trôi sang ô mới, hoặc khi trời bắt đầu mưa. Nên nó được vẽ
-một lần vào canvas phụ (rộng hơn khung nhìn ba ô mỗi bên) rồi dán lại.
+Còn `scripts/bench.mjs` thì **cố ý** không đo lớp vẽ (canvas trong Node chỉ đo
+được phần CPU của mình, không đo được phần trình duyệt thật sự tốn). Nên trước
+Đợt 28, dự án **không có công cụ nào nhìn thấy được chỗ đang lag**. Một bộ đếm mù
+đúng chỗ đắt nhất còn tệ hơn không có bộ đếm, vì nó làm người ta tin là đã đo
+rồi.
 
-Khoá vô hiệu hoá là phép so **THAM CHIẾU** `s.tiles`: mảng ô là copy-on-write nên
-một ô đổi là cả mảng đổi. Rẻ nhất có thể, và không có cách nào nó bỏ sót — miễn
-là mọi đường sửa ô đều đi qua `dTile`. Kịch bản 159 là dây bẫy cho đúng điều kiện
-ấy: sửa một ô tại chỗ thì nó đỏ, vì lỗi đó sẽ làm cache đứng hình mà không ai
-thấy ngoài người chơi.
+Đợt 28 bọc **mọi** ngữ cảnh renderer tạo ra, và thêm `__PF.do(n)` chạy `n` khung
+rồi trả p50/p99 — đó là chỗ duy nhất trả lời được câu "một khung hình tốn bao
+nhiêu". Đo lại cùng cảnh, và nó tệ hơn dự đoán: **1.544 lệnh vẽ** và **22,05 ms**
+mỗi khung, trong khi ngân sách 60fps là 16,7 ms. Riêng lớp vẽ đã vượt ngân sách.
 
-Mặt nước và bọt sóng **không** vào cache (chúng động mỗi khung); danh sách ô nước
-được ghi lại lúc dựng cache nên khung sau không phải quét lại cả vùng để tìm.
+### Cái khoá hỏi sai câu
 
-**Mưa.** 110 lệnh vẽ mỗi khung khi bão — hơn một phần ba tổng số — cho một thứ
-trang trí. Và vì vị trí hạt băm lại theo từng nhịp 1/10 giây, cả màn mưa *nhảy
-cóc* mười lần mỗi giây. Nay mưa là một **mảng lặp** 64×64 tô kín màn bằng đúng
-một `fillRect`, gốc mảng trôi liên tục theo thời gian: rẻ hơn hai bậc **và** rơi
-mượt thật. Bão dùng hai lớp lệch pha — vẫn chỉ hai lệnh.
+Khoá vô hiệu hoá của cache nền là `nenTiles === s.tiles`, kèm một lý lẽ nghe rất
+xuôi: *"mảng ô là copy-on-write nên một ô đổi là cả mảng đổi — rẻ nhất có thể, và
+không có cách nào nó bỏ sót"*. Vế sau đúng. Vế trước mới là vấn đề: **nó cũng
+không bao giờ trúng.**
 
-> Chỗ trống ấy tiêu vào đâu: bốn hệ đồ hoạ mới của cùng đợt (cây theo mùa, khói
-> bếp, bướm, đom đóm). Đo lại với **51** thực thể — gần gấp đôi cảnh gốc — vẫn là
-> 252 lệnh và 0,51 ms, tức vẫn rẻ hơn hẳn mốc 600 lệnh / 0,90 ms ban đầu.
+`growCrops` chạy mỗi TICK và gọi `edit()` cho mọi ô ẩm có cây đang lớn — vì
+`grow` cộng thêm mỗi khung, không phải chỉ khi sang giai đoạn mới. Một lần `edit`
+là nhân bản cả mảng 3.504 ô. Nên trên nông trại đã gieo, `s.tiles` đổi tham chiếu
+**mỗi khung hình**, và cache dựng lại mỗi khung hình: đo được `nenVe = 600/600`.
+
+Mà cây lớn lên **không đổi lớp nền một pixel nào**: `veNenVao` đọc đúng năm
+trường `g · b · tilled · wet · decor`, không đọc `crop` lấy một lần. Cái khoá chỉ
+đang hỏi sai câu.
+
+Đây đúng là con lỗi Đợt 15 đã tìm ra và đã chữa cho **bản đồ nhỏ** (mục 11:
+`veODaDoi` so từng ô thay vì so tham chiếu mảng). Lớp vẽ chính không được sửa
+cùng, và sống thêm năm đợt.
+
+### Khoá mới: CHỮ KÝ ô
+
+`chuKyNen(t)` gói đúng năm trường ấy thành một số nguyên. Mỗi khung `quetO()`
+quét một lượt, **so tham chiếu trước** rồi mới tính chữ ký — mảng là mới mỗi
+khung nhưng phần lớn phần tử vẫn là object cũ, chỉ ~360 ô có cây là mới. Một
+lượt là ~3.500 phép so tham chiếu (vài micro-giây) thay cho ~900 lệnh vẽ (vài
+mili-giây): rẻ hơn hai tới ba bậc.
+
+Cache chỉ dựng lại khi **hộp bao** các ô đổi chữ ký **cắt vùng đã cache** — nên
+người làm cày ở góc bản đồ khác không đụng gì tới khung đang hiện.
+
+Cố ý **không** đi đường "chỉ vẽ lại ô đã đổi" như bản đồ nhỏ: ở đó một ô là một
+`fillRect` độc lập, ở đây một ô là chồng tới bảy lớp, và viền lô đất lẫn gờ nước
+còn đọc `tilled`/`g` của **bốn ô kề** — cày một ô là bốn ô quanh nó phải bỏ viền.
+Năm chỗ để sai âm thầm, đổi lấy khoản tiết kiệm chỉ có nghĩa trên những khung vốn
+đã hiếm. Dựng lại cả vùng khi có đổi là đủ.
+
+Cùng một lượt quét ấy phục vụ thêm hai khách hàng dùng chung cái khoá sai cũ:
+`bangLoaiNuoc` (mỗi khung cấp phát ~17,5 KB, chạy BFS qua ~560 ô nước rồi quét cả
+bản đồ ba lượt) và `isIndoor`. Cả hai nay chỉ dựng lại khi có ô đổi **loại nền**
+(`t.g`) — một điều hôm nay không bao giờ xảy ra, nhưng khoá bằng phép ĐO chứ
+không bằng lời hứa, nên ngày thêm tính năng đào ao thì nó tự đúng.
+
+### Ba chỗ vẽ thừa khác
+
+**Cắt ngoài khung nhìn.** `drawActors` mới chỉ lọc `e.map !== s.mapId`, nên 64
+thực thể trên bản đồ đều được sắp hình và đẩy vào lớp vật thể trong khi khung
+nhìn điện thoại chỉ chứa khoảng mười cái. Phép cắt phải đặt **sau** khối
+`if (e.worker)`: khối ấy cập nhật `phaLam`, và cắt trước nó thì người làm ngoài
+khung bị xoá khỏi `phaLam` rồi bắn một **cụm hạt ma** lúc bước vào khung.
+
+**Số lát uốn cây.** Cây lay theo gió bằng cách cắt sprite thành lát ngang. Số lát
+từng là hằng số (4 cho cây cao) và ngưỡng "coi như đứng yên" tính bằng **đơn vị
+thế giới** — một câu vô nghĩa, vì cùng con số ấy là 0,2 pixel thiết bị ở mức
+phóng này và 3 pixel ở mức phóng kia. Nay đếm bằng **pixel thiết bị**, theo biên
+độ đỉnh (hằng số cả ngày) chứ không theo độ dịch tức thời: đếm theo độ dịch thì
+số lát nhảy 60 lần mỗi giây và viền cây rung lăn tăn. Sương mù còn 5 lát mỗi
+khung, bão vẫn 82 — cây **không bao giờ** đứng lại.
+
+**Viền đen.** Mỗi khung tô kín canvas một màu viền rồi tô đè ngay lên đúng ngần
+ấy pixel. `pickScale` không bao giờ đẻ ra viền.
+
+### Mưa — một mảng lặp
+
+110 lệnh vẽ mỗi khung khi bão, cho một thứ trang trí. Và vì vị trí hạt băm lại
+theo từng nhịp 1/10 giây, cả màn mưa *nhảy cóc* mười lần mỗi giây. Nay mưa là một
+**mảng lặp** 64×64 tô kín màn bằng đúng một `fillRect`, gốc mảng trôi liên tục
+theo thời gian: rẻ hơn hai bậc **và** rơi mượt thật. Bão dùng hai lớp lệch pha —
+vẫn chỉ hai lệnh. Gốc mảng (và gốc mặt nước) neo về **lưới pixel thiết bị**: trôi
+ở toạ độ phân số thì mỗi khung cả màn bị lấy mẫu lệch một phần pixel, và đó là
+một kiểu nhoè không dòng `image-rendering` nào chữa được.
+
+### Bảng, đo cùng một cảnh
+
+Nông trại gieo kín 360 cây · 15 thực thể · 430×932 · 600 khung:
+
+| | Đợt 23 báo | Đo thật, trước Đợt 28 | Sau Đợt 28 |
+|---|---|---|---|
+| dựng lại cache nền | — | **600/600 khung** | **0/600** |
+| `drawImage` mỗi khung | 149 | **1.544** | **463–475** |
+| `fillRect` mỗi khung | — | 87 | 16–17 |
+| lớp vật thể | — | 287 | 261–266 |
+| thời gian `draw()` | 0,30 ms | **22,05 ms** | **4,00–5,03 ms** |
+| khung p50 | — | 17,9 ms | **2,7–3,0 ms** |
+| khung p99 | — | 221,7 ms | 59,8–81,6 ms |
+
+Cột giữa và cột phải mới so được với nhau — cột trái đo bằng cái bộ đếm mù, trên
+bản đồ **một nửa** bản đồ hiện tại, và trước Đợt 24/25/26. Để nguyên nó ở đây,
+không xoá, vì bài học nằm ở chỗ hai cột đầu chênh nhau **mười lần**.
+
+### Việc kế tiếp, nếu đo xong vẫn còn đắt
+
+Mỗi ô nước vẽ lại mỗi khung ngoài cache: một `fillRect` cộng tới tám lệnh cho gờ
+và bờ — cạnh sông có thể 60 ô, tức ~500 lệnh. Gờ nước là **tĩnh** nhưng phải nằm
+**trên** mặt nước động nên không nhét vào cache nền được. Cách chữa: một canvas
+cache **thứ hai** cho lớp "trên mặt nước", dán sau lượt tô nước — một lệnh thay
+cho ~250.
 
 ---
 
@@ -352,6 +449,8 @@ Hai ràng buộc giữ cho HD không phản tác dụng:
    hơn* bản 16px cũ. `pickScale` kẹp về bội của ART — làm tròn **trần xuống** và
    **sàn lên**, vì làm tròn cả hai xuống thì màn siêu rộng vỡ trần số ô trục dài.
    Kịch bản 162 quét 16 khổ máy.
+
+   **Và ràng buộc ấy, viết như trên, là THIẾU — xem mục 10d.**
 2. **Hai cây bút, một hệ toạ độ.** `px` vẫn tô khối `ART × ART` — đó là thứ giữ
    cho art chưa vẽ lại trông y như trước. Art đã vẽ lại dùng `dot` (đúng một
    pixel HD) với bước lưới `Q = 1/ART`, và `outline(…, 1)` cho viền mảnh. Chỗ nào
@@ -405,6 +504,86 @@ nhau tối thiểu 150 (Manhattan RGB của màu lá + màu quả). Cặp sát n
 158. Nó cũng là dây bẫy cho một cách hỏng rất dễ xảy ra: **thêm cây mới bằng cách
 chép object của cây cũ** rồi đổi tên và giá — build vẫn xanh, schema vẫn xanh, và
 nông trại lặng lẽ có thêm một cây trùng hình.
+
+---
+
+## 10d. Nét đúng bằng pixel THẬT của màn hình
+
+Mục 10b nói *"tỉ lệ phóng thật của một pixel ảnh là `scale / ART`"*, và cả
+`pickScale` lẫn kịch bản 162 đều xây trên câu ấy.
+
+**Câu ấy quên nhân `dpr`.** Tỉ lệ thật — con số lớp vẽ dùng ở mọi phép đặt vị
+trí — là `scale × dpr / ART`. Cái thiếu ấy sống được lâu vì danh sách khổ máy của
+kịch bản 162 chỉ có dpr **nguyên**, mà với dpr nguyên thì `scale` chẵn kéo theo
+tích cũng chẵn: ràng buộc thiếu vẫn cho kết quả đúng, nên không lần nào đỏ.
+
+Ngoài đời dpr lẻ là chuyện thường: Windows ở 125% cho 1,25 · Android tầm trung
+cho 1,5 · một số máy cho 2,625 · và **mọi mức zoom của trình duyệt**. Ở những máy
+ấy tỉ lệ ra 1,5 · 3,3 · 3,75 — đúng cái "ô pixel to nhỏ không đều" mà mục 10b
+tưởng đã chặn.
+
+Cộng thêm một lỗi thứ hai, đơn giản hơn nhiều: camera kẹp `maxDpr: 2`. Trên điện
+thoại dpr 3 nghĩa là game vẽ ở **44% số pixel vật lý** (2²/3²) rồi để trình duyệt
+phóng cả khung hình lên 1,5 lần. Không dòng `image-rendering` nào cứu được một
+phép phóng 1,5 lần.
+
+Đợt 28 sửa cả hai, và sửa ở **`setSize`**, không đụng `pickScale`:
+
+```ts
+const kDev = Math.max(ART, Math.ceil((scale * d0) / ART) * ART);
+vp.dpr = kDev / scale;                       // dpr HIỆU DỤNG
+```
+
+Cách hiển nhiên hơn — cho `pickScale` ăn kích thước pixel **thiết bị** — cũng cho
+pixel đều, nhưng nó làm điện thoại 430×932 chỉ còn thấy **10,08 ô** thay vì
+**13,44**: đổi luôn tầm nhìn của game để lấy độ nét, một cái giá không ai yêu cầu
+phải trả. Cách trên giữ `scale` y nguyên nên số ô nhìn thấy không đổi một ly.
+
+Làm tròn **lên**, không phải làm tròn gần nhất: bội của ART gần nhất có thể nằm
+*dưới* dpr thật, và khi ấy ta lại vẽ thiếu pixel — đúng lỗi đang chữa, chỉ nhỏ
+hơn. Đo trên 864 khổ máy: 46% khớp chính xác dpr màn hình, và **mọi dpr nguyên
+(1 · 2 · 3, tức gần như mọi điện thoại thật) luôn khớp chính xác** vì `scale` vốn
+là bội của ART. Chỉ dpr lẻ mới dôi, nhiều nhất 2,56 lần ở một cửa sổ tí hon.
+
+**Trần thật là 100% pixel vật lý, và nay đã chạm trần.** Muốn art *mịn* hơn nữa
+thì phải nâng `ART` lên 4, mà với dpr 3 thì `scale × 3 / 4` nguyên đòi `scale` là
+bội của 4, trong khi điện thoại đang dùng `scale = 2` — ép lên 4 thì khung nhìn
+còn một phần tư diện tích. Nên không còn gì để lấy thêm ở hướng này.
+
+Cái giá: backing store 430×932 đi từ 1,60 lên **3,61 Mpx** (×2,25). Trên máy tính
+gần như không tốn gì thêm — `draw()` 5,87·5,24·6,04 ms ở dpr 2 so với
+5,63·5,33 ms ở dpr 3 — vì dpr đánh vào **tốc độ tô**, thứ GPU lo rẻ, còn thứ đắt
+trên điện thoại là **số lệnh gọi**, mà số lệnh gọi không tăng theo dpr. Đó là lý
+do phải dọn ~1.000 lệnh vẽ mỗi khung **trước** rồi mới nâng dpr.
+
+Ba chỗ nhoè nhỏ hơn cùng đợt:
+
+- **Gốc mảng nước và mưa** trôi ở toạ độ phân số → mỗi khung cả mặt sông và cả
+  màn mưa bị lấy mẫu lệch một phần pixel. Neo về lưới pixel thiết bị bằng chính
+  `snapDev` mà mọi chỗ khác đã dùng từ Đợt 24; hai chỗ này bị bỏ quên vì chúng đi
+  qua `setTransform` của pattern chứ không qua `put`.
+- **`image-rendering` khai ngược thứ tự** ở tám khối: `pixelated` trước,
+  `crisp-edges` sau. Hai giá trị ấy không phải một cặp tiền tố — `crisp-edges`
+  không bắt buộc nearest-neighbour, và ở trình duyệt hiểu cả hai thì cái sau
+  thắng. Đúng thứ tự là `crisp-edges` trước, `pixelated` sau.
+- **Chín cỡ icon phi nguyên**: `1.4em` cho ảnh nguồn 24px ra tỉ lệ 1,70, `74%`
+  cho ảnh nguồn 32px ra 1,35. Bề rộng CSS phải bằng **đúng cỡ ảnh nguồn** — đó là
+  cỡ duy nhất cho tỉ lệ nguyên ở cả dpr 2 lẫn dpr 3, vì `cssW × dpr / nguồn`
+  nguyên với cả hai buộc `cssW` là bội nguyên của cỡ nguồn.
+
+Còn `canvas.style.filter` (lớp rút bão hoà theo mùa) thì **không cần đụng tới**:
+`image-rendering` chỉ có việc để làm khi trình duyệt *phóng to* canvas lúc hợp
+thành, mà dpr hiệu dụng nay luôn ≥ dpr thật nên phép hợp thành không bao giờ còn
+là phóng to (đo lại: tỉ lệ đúng 1,0000). Sửa dpr đã gỡ mất tiền đề của lỗi ấy.
+
+Kịch bản 171 quét 864 khổ máy và ghim bốn điều: tích nguyên và chia hết cho ART ·
+tầm nhìn không đổi · không viền đen và khung nhìn phủ đúng hết canvas · dpr hiệu
+dụng không bao giờ thấp hơn dpr thật. Vế cuối của nó canh một chỗ vỡ **âm thầm**:
+`setZoom` gọi lại `setSize`, nên không nhớ dpr **gốc** riêng thì mỗi lần đổi mức
+phóng dpr trôi thêm một nấc. Phép nắn là idempotent khi `scale` giữ nguyên, nên
+chỉ khổ máy có `scale` đổi theo mức phóng mới lộ ra — và ở 430×932 cả ba mức
+phóng cho cùng `scale`. Một kịch bản chọn tay đúng khổ máy ấy sẽ xanh trong khi
+lỗi vẫn còn nguyên; nên 171 quét.
 
 ---
 
