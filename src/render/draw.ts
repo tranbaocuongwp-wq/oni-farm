@@ -1188,7 +1188,13 @@ export function createRenderer(
        nước neo vào thế giới, không trừ thì cả dòng sông trượt theo bước chân
        người chơi. Dòng chảy đi chậm hơn sóng — sóng lừng thì cuộn, dòng chảy
        thì trượt đều. */
-    const troi = (v: number) => ((v % NUOC_O) + NUOC_O) % NUOC_O;
+    /* …và NEO VỀ LƯỚI PIXEL THIẾT BỊ. Không có `snapDev` thì gốc tấm là một
+       toạ độ phân số trôi liên tục theo `timeSec`, nên mỗi khung hình cả mặt
+       nước bị lấy mẫu lệch đi một phần pixel: đúng cái nhoè mà không một dòng
+       `image-rendering` nào chữa được, vì nó xảy ra TRƯỚC lúc phóng to. Mọi
+       chỗ khác trong lớp vẽ đã neo bằng `snapDev` từ Đợt 24; chỗ này bị bỏ
+       quên vì nó đi qua `setTransform` của pattern chứ không qua `put`. */
+    const troi = (v: number) => snapDev(((v % NUOC_O) + NUOC_O) % NUOC_O);
     const dat = (p: CanvasPattern | null, dx: number, dy: number) => {
       if (!p) return false;
       p.setTransform(new DOMMatrix().translateSelf(dx, dy).scaleSelf(Q_DOT, Q_DOT));
@@ -2011,8 +2017,11 @@ export function createRenderer(
     const lop = storm ? 2 : 1;
     for (let k = 0; k < lop; k++) {
       const toc = 140 + k * 90;
-      const dy = (timeSec * toc) % MUA_O;
-      const dx = (-timeSec * toc * wind * 0.4 + k * 23) % MUA_O;
+      /* Neo về lưới PIXEL THIẾT BỊ, cùng lý do như mặt nước: gốc tấm trôi ở
+         toạ độ phân số thì mỗi khung cả màn mưa bị lấy mẫu lệch một phần
+         pixel, và vệt mưa nhoè ra thay vì sắc nét. */
+      const dy = snapDev((timeSec * toc) % MUA_O);
+      const dx = snapDev((-timeSec * toc * wind * 0.4 + k * 23) % MUA_O);
       p.setTransform(new DOMMatrix().translateSelf(dx, dy).scaleSelf(1 / ART, 1 / ART));
       g.globalAlpha = k === 0 ? 1 : 0.7;
       g.fillStyle = p;
@@ -2371,8 +2380,15 @@ export function createRenderer(
     const ty = Math.round(vp.offY * vp.dpr - fy * scale);
 
     g.setTransform(1, 0, 0, 1, 0, 0);
-    g.fillStyle = LETTERBOX;
-    g.fillRect(0, 0, canvas.width, canvas.height);
+    /* Chỉ tô viền đen KHI THẬT SỰ CÓ viền. `pickScale` chọn hệ số sao cho khung
+       nhìn phủ kín canvas, nên trên mọi khổ máy `offX = offY = 0` (kịch bản 75
+       khẳng định điều đó) — và khi ấy `WORLD_BG` ngay bên dưới tô đè lên đúng
+       ngần ấy pixel. Một `fillRect` phủ kín canvas mỗi khung để rồi bị xoá
+       ngay, cho một dải viền không tồn tại. */
+    if (vp.offX > 0 || vp.offY > 0) {
+      g.fillStyle = LETTERBOX;
+      g.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     g.save();
     // Cắt trong không gian THIẾT BỊ, không phải không gian đã tịnh tiến: khung
