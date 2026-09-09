@@ -23,7 +23,7 @@ import { createStore } from "../src/core/store.ts";
 import { createNewGame, draft } from "../src/game/state.ts";
 import { catchUpEntities, moveActors, runActorSteps } from "../src/game/entities.ts";
 import { growCrops } from "../src/game/newday.ts";
-import { autoJob } from "../src/game/hint.ts";
+import { autoJob, pressPlan, infoHint, hintOf, facingTile } from "../src/game/hint.ts";
 import { findPath, PATH_STATS } from "../src/game/pathfind.ts";
 import { checkInvariants } from "../src/game/invariants.ts";
 import { idx } from "../src/game/world.ts";
@@ -85,6 +85,49 @@ hang.push(do_("autoJob (chọn việc gần nhất)", () => autoJob(s0, content)
 const dich = new Set([idx(s0.w, s0.w - 3, s0.h - 3)]);
 hang.push(do_("findPath (một đầu bản đồ sang đầu kia)", () => findPath(s0, content, 2, 2, dich, { maxNodes: 2000 }), 200));
 hang.push(do_("checkInvariants (chỉ chạy ở bản dev)", () => checkInvariants(s0, content), 400));
+
+/* ---- NHÃN HAI CÁI NÚT: chạy 60 lần mỗi giây, ngay trong vòng vẽ ----
+
+   `main.ts` gọi `pressPlan` + `infoHint` mỗi khung hình chỉ để in chữ lên hai
+   cái nút và đặt mũi tên đỏ. Cả hai duyệt `s.entities` nhiều lượt, và khi
+   quanh chân không có việc gì thì `nearestTarget` quét cả một vùng bán kính 6
+   ô. Đó là thứ đắt nhất trong phần logic mà KHÔNG nằm trong `TICK`, nên trước
+   Đợt 28 không dòng nào của bảng này nhìn thấy nó.
+
+   Ba ca, vì chi phí của chúng khác hẳn nhau:
+     · ô trước mặt CÓ việc — thoát sớm, rẻ;
+     · ô ngắm TRỐNG — đi hết bước 5, tức `nearestTarget` quét cả vùng bán kính
+       `CTX_RADIUS` quanh chân. Đây là ca ĐẮT NHẤT và là lý do có mấy dòng này;
+     · không có ô ngắm — thoát ngay từ đầu. */
+const OPTS_NUT = { context: true, canGo: true };
+const oTruocMat = facingTile(s0);
+/* Ô TRỐNG gần chân: không cây, không vật, không công trình — để `pressPlan`
+   buộc phải đi tới bước quét quanh chân thay vì trả lời ngay. */
+const oTrong = (() => {
+  const px = Math.floor(s0.player.x / 16);
+  const py = Math.floor(s0.player.y / 16);
+  for (let r = 1; r < 12; r++)
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        const x = px + dx;
+        const y = py + dy;
+        const t = s0.tiles[y * s0.w + x];
+        if (t && !t.prop && !t.crop && !t.b) return { x, y };
+      }
+  return oTruocMat;
+})();
+hang.push(
+  do_("nhãn nút: pressPlan (ô trước mặt)", () => hintOf(pressPlan(s0, content, oTruocMat, OPTS_NUT)), 2000),
+);
+hang.push(do_("nhãn nút: infoHint (ô trước mặt)", () => infoHint(s0, content, oTruocMat), 2000));
+hang.push(
+  do_("nhãn nút: pressPlan (ô ngắm TRỐNG)", () => hintOf(pressPlan(s0, content, oTrong, OPTS_NUT)), 2000),
+);
+hang.push(do_("nhãn nút: infoHint (ô ngắm TRỐNG)", () => infoHint(s0, content, oTrong), 2000));
+hang.push(
+  do_("nhãn nút: pressPlan (KHÔNG có ô ngắm)", () => hintOf(pressPlan(s0, content, null, OPTS_NUT)), 2000),
+);
+hang.push(do_("nhãn nút: infoHint (KHÔNG có ô ngắm)", () => infoHint(s0, content, null), 2000));
 
 /* ------------------------------------------------------------------ in ra */
 const NGAN_SACH = 1000 / 60;
