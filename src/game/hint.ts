@@ -18,7 +18,9 @@ import { selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
-import { TILE, REACH_TILES, inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef } from "./world.ts";
+import { TILE,  inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef,
+  distToTile,
+} from "./world.ts";
 import { runFor, type Run } from "./run.ts";
 import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
@@ -539,7 +541,7 @@ export function interactHint(
      trong chuồng, hoặc ngay ngoài rào, mới là "đang ở chỗ cái chuồng". Bốn ô
      thì một con bò xổng chuồng đứng ngay dưới chân vẫn thua cái chuồng ở đằng
      kia — mà lúc ấy người chơi rõ ràng đang hỏi về con bò. */
-  const trongKhu = penNear(state, content, x, y, PEN_INSIDE);
+  const trongKhu = penNear(state, content, x, y, PEN_INSIDE, state.player.dir);
   if (trongKhu) return { what: "pen", label: "BẢNG KHU", id: trongKhu.id };
 
   const an = animalNear(state, x, y);
@@ -551,7 +553,7 @@ export function interactHint(
   /* Xa hơn một chút mà không có con nào để chỉ vào: vẫn là BẢNG KHU. Đây là
      lề rộng `PEN_MARGIN`, cùng con số nút CHÍNH dùng — đi ngang qua chuồng là
      đọc được tình hình chuồng, không phải đi tới tận nơi. */
-  const khu = penNear(state, content, x, y, PEN_MARGIN);
+  const khu = penNear(state, content, x, y, PEN_MARGIN, state.player.dir);
   if (khu) return { what: "pen", label: "BẢNG KHU", id: khu.id };
 
   /* Cuối cùng: THẺ Ô. Luôn có gì đó để nói về một ô — cây gì còn mấy ngày,
@@ -890,7 +892,7 @@ export function penAction(
   x: number,
   y: number,
 ): { kind: Exclude<HintKind, null>; label: string; at: { x: number; y: number } } | null {
-  const khu = penNear(state, content, x, y, PEN_MARGIN);
+  const khu = penNear(state, content, x, y, PEN_MARGIN, state.player.dir);
   if (!khu) return null;
   const tt = penSummary(state, content, khu);
 
@@ -1255,7 +1257,7 @@ export interface AimTarget {
 export function reachTargets(state: GameState, content: Content, opts: PressOptions): AimTarget[] {
   const px = Math.floor(state.player.x / TILE);
   const py = Math.floor(state.player.y / TILE);
-  const R = Math.ceil(REACH_TILES); // 2 → hộp 5×5, `inReach` cắt phần thừa
+  const R = Math.ceil(AIM_RADIUS); // hộp bao của đĩa bán kính AIM_RADIUS
 
   const ra: AimTarget[] = [];
   const daCo = new Set<string>();
@@ -1264,8 +1266,19 @@ export function reachTargets(state: GameState, content: Content, opts: PressOpti
       const x = px + dx;
       const y = py + dy;
       if (x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
-      if (!inReach(state, x, y)) continue;
-      const h = hintOf(pressPlan(state, content, { x, y }, { context: opts.context, canGo: false }));
+      if (distToTile(state, x, y) > AIM_RADIUS) continue;
+      /* `canGo: true`, KHÔNG phải `false` như trước.
+
+         Bắt buộc, không phải cho gọn: với `canGo: false`, nấc 2 của `pressPlan`
+         thay ô ngắm xa bằng ô TRƯỚC MẶT, nên không ô xa nào thành mục tiêu
+         được — nới tầm mà giữ `false` thì danh sách y hệt, chỉ tốn thêm mấy
+         trăm lần gọi. Với `canGo: true` chúng ra `Press` kiểu `go`, vốn CÓ ô
+         tác động, nên vào danh sách được.
+
+         Việc này còn gỡ một lệch pha đã có từ trước: danh sách xoay vòng dựng
+         bằng `canGo:false` trong khi mũi tên và cú bấm dùng `pressOpts()` thật.
+         Hai bộ luật cho một câu hỏi là đúng thứ Đợt 27 sinh ra để dẹp. */
+      const h = hintOf(pressPlan(state, content, { x, y }, { context: opts.context, canGo: true }));
       if (!h.at) continue;
       /* KHỬ TRÙNG theo ô TÁC ĐỘNG: con vật trong bán kính 1,4 ô làm bốn năm ô
          ngắm cùng trả về một con, và `contextAction` gộp nhiều ô trống về cùng
@@ -1326,6 +1339,49 @@ export function nextTarget(
  * mục tiêu vừa chọn mà biến mất ngay bước chân đầu tiên thì nút chuyển mục
  * tiêu vô dụng.
  */
+/**
+ * Ghi một MỤC TIÊU mới, nhưng KHÔNG được đè lên lựa chọn của người chơi.
+ *
+ * `aimed` bị ghi từ bảy chỗ, và năm trong số đó là HỆ THỐNG tự đặt: lúc tự động
+ * đi múc nước, lúc nhận việc tự động, hai bước của chuyến, và lúc tới đích một
+ * chuyến đi. Chỗ cuối (`nav.takeArrival`) ghi đè VÔ ĐIỀU KIỆN — nên người chơi
+ * bấm MỤC TIÊU giữa chuyến, đi tới nơi, là lựa chọn ấy bị xoá mà không ai báo.
+ *
+ * Luật một câu: MÁY chỉ được ghi khi không có mục tiêu TAY nào đang sống.
+ *
+ * Đặt ở đây chứ không ở `main.ts` vì `main.ts` cần DOM nên sim không nạp được —
+ * cùng thuốc đã dùng cho `aimStillValid` ở Đợt 27, và vì đúng chỗ ấy là chỗ con
+ * lỗi này lọt qua: luật chỉ tồn tại ngầm trong một phép gán thì không quan sát
+ * được và không kiểm được.
+ */
+export function ghiNhoNgam(
+  cu: { x: number; y: number; thuCong: boolean } | null,
+  moi: { x: number; y: number },
+  thuCong: boolean,
+): { x: number; y: number; thuCong: boolean } {
+  if (!thuCong && cu?.thuCong) return cu;
+  return { x: moi.x, y: moi.y, thuCong };
+}
+
+/**
+ * TẦM NGẮM — mục tiêu được phép nằm xa tới đâu.
+ *
+ * Từ Đợt 33 nó là `CTX_RADIUS`, không còn là `REACH_TILES`. Lý do: đo trên 531
+ * chỗ đứng thì 50% số chỗ KHÔNG có mục tiêu nào để xoay và 16% chỉ có một —
+ * tức ở hai phần ba bản đồ, bấm nút MỤC TIÊU không thể thấy gì đổi. Với tầm
+ * 1,6 ô, mục tiêu chỉ là thứ tay đã với tới, mà đứng giữa ruộng thì chẳng có
+ * gì trong tay cả.
+ *
+ * Nới ra thì mũi tên đỏ chỉ được cả thứ ở xa, và nút chính thành "đi tới rồi
+ * làm" — nhánh ấy đã có sẵn trong `pressPlan`, không phải viết mới.
+ *
+ * ⚠️ Một hằng số cho CẢ HAI đầu: `reachTargets` liệt kê tới đâu thì
+ * `aimStillValid` phải giữ tới đó. Lệch nhau là mục tiêu vừa chọn rơi ngay
+ * khung hình sau — tệ hơn hẳn lúc chưa sửa. Đây cũng là điều kịch bản 168 canh
+ * ("không được có một bán kính thứ ba tự chế").
+ */
+export const AIM_RADIUS = CTX_RADIUS;
+
 export function aimStillValid(state: GameState, aim: { x: number; y: number } | null): boolean {
-  return aim !== null && inReach(state, aim.x, aim.y);
+  return aim !== null && distToTile(state, aim.x, aim.y) <= AIM_RADIUS;
 }

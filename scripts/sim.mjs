@@ -22,7 +22,7 @@ import { troughStock, troughMax, troughItem, penGoal, eatFromTrough, canPourInto
 import { penSummary, penNear, animalNear, diemMoiNgay } from "../src/game/animals.ts";
 import { pickTask, findStoreTile } from "../src/game/workers.ts";
 import { CROP_ORDER, jobRank } from "../src/game/joborder.ts";
-import { donDuoc, propsMocDuoc, REACH_TILES, inReach } from "../src/game/world.ts";
+import { donDuoc, propsMocDuoc, REACH_TILES, inReach, distToTile } from "../src/game/world.ts";
 import { storeHasRoom } from "../src/game/storage.ts";
 import { penWander } from "../src/game/pen.ts";
 import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE } from "../src/game/entities.ts";
@@ -34,7 +34,7 @@ import { animalMood } from "../src/game/animals.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src/game/items.ts";
 import { sellSlots, countItem} from "../src/game/inventory.ts";
-import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt, reachTargets, nextTarget, aimStillValid} from "../src/game/hint.ts";
+import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt, reachTargets, nextTarget, aimStillValid, AIM_RADIUS, ghiNhoNgam} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import { validateCrops } from "../src/core/content/schema.ts";
 import * as seasonApi from "../src/game/season.ts";
@@ -11860,8 +11860,15 @@ test("166. Danh sách CHUYỂN MỤC TIÊU: chỉ trong tầm với, không trù
 
   ok(a.length > 0, "đứng giữa lô ruộng cầm cuốc thì phải có ô cày được");
 
+  /* TẦM NGẮM, không phải tầm VỚI. Đợt 33 nới `AIM_RADIUS` từ `REACH_TILES`
+     (1,6) lên `CTX_RADIUS` (6): đo được 50% chỗ đứng không có mục tiêu nào để
+     xoay và 16% chỉ có một, tức hai phần ba bản đồ bấm nút không thấy gì đổi.
+     Mục tiêu ở xa thì nút chính thành "đi tới rồi làm" — nhánh đã có sẵn. */
   for (const t of a)
-    ok(inReach(store.getState(), t.x, t.y), `mục tiêu (${t.x},${t.y}) phải nằm trong tầm với`);
+    ok(
+      distToTile(store.getState(), t.x, t.y) <= AIM_RADIUS,
+      `mục tiêu (${t.x},${t.y}) phải nằm trong TẦM NGẮM (${AIM_RADIUS} ô)`,
+    );
 
   const khoa = new Set(a.map((t) => `${t.at.x},${t.at.y}`));
   eq(khoa.size, a.length, "không hai mục tiêu nào cùng trỏ vào MỘT ô tác động");
@@ -11988,23 +11995,29 @@ test("168. Mục tiêu TỰ RƠI khi ra khỏi tầm — và KHÔNG rơi chỉ v
     "bước một bước ngang thì mục tiêu vẫn còn — nếu không, nút chuyển mục tiêu vô dụng",
   );
 
-  // Đi hẳn ba ô: ra khỏi tầm → phải rơi.
-  setState(store, (s) => {
-    s.player.x = (px + 3.5) * TILE;
-  });
-  eq(aimStillValid(store.getState(), aim), false, "đi xa hẳn thì mục tiêu tự rơi");
+  /* Đi hẳn RA NGOÀI TẦM NGẮM → phải rơi.
 
-  /* Và luật ấy đúng là `inReach`, không phải một bán kính thứ ba tự chế: bán
-     kính thứ ba là đúng cái lỗi Đợt 21 đã dọn ("NGỦ" sáng ở hai ô mà bấm thì
-     giường im lặng). */
-  for (const d of [1, 2, 3, 4]) {
+     Trước Đợt 33 mốc này là ba ô, vì mục tiêu chỉ được nằm trong tầm VỚI (1,6
+     ô). Nay tầm ngắm là `AIM_RADIUS` = 6, nên ba ô KHÔNG còn đủ xa — và đó là
+     đổi thiết kế có chủ ý, không phải nới khẳng định cho vừa. */
+  setState(store, (s) => {
+    s.player.x = (px + AIM_RADIUS + 2.5) * TILE;
+  });
+  eq(aimStillValid(store.getState(), aim), false, "đi xa hẳn khỏi tầm ngắm thì mục tiêu tự rơi");
+
+  /* Và luật ấy đúng là `AIM_RADIUS` — CÙNG bán kính mà `reachTargets` dùng để
+     liệt kê, không phải một bán kính thứ ba tự chế. Đây mới là vế quan trọng:
+     liệt kê tới 6 ô mà chỉ giữ tới 1,6 ô thì mục tiêu vừa chọn rơi ngay khung
+     hình sau, tệ hơn hẳn lúc chưa sửa. Bán kính thứ ba cũng đúng cái lỗi Đợt
+     21 đã dọn ("NGỦ" sáng ở hai ô mà bấm thì giường im lặng). */
+  for (const d of [1, 2, 4, 6, 7, 9]) {
     setState(store, (s) => {
       s.player.x = (px + 0.5 + d) * TILE;
     });
     eq(
       aimStillValid(store.getState(), aim),
-      inReach(store.getState(), aim.x, aim.y),
-      `cách ${d} ô: luật giữ mục tiêu phải trùng khít với inReach`,
+      distToTile(store.getState(), aim.x, aim.y) <= AIM_RADIUS,
+      `cách ${d} ô: luật giữ mục tiêu phải trùng khít với AIM_RADIUS`,
     );
   }
 });
@@ -13139,6 +13152,178 @@ test("181. NGƯỜI LÀM quay mặt về ô mình đang làm — và chỉ có M
     [],
     `người làm phải quay mặt về ô mình đang làm — nếu không thì vung đồ nghề ra chỗ khác: ${sai.join(" · ")}`,
   );
+});
+
+
+test("182. MŨI TÊN ĐỎ không được là ô ĐÍCH của chuyến đi", () => {
+  /* Cường: "bấm vào nút chọn mục tiêu thì nó phải thay đổi... hiện tại tôi đâu
+     thấy nó thay đổi đâu, và đi từ trường này qua trường khác nó cũng không
+     thay đổi cái máng".
+
+     Cả ba triệu chứng ra từ một dòng: `pressCursor` trả `nav.target()` TRƯỚC
+     TIÊN, mà `goal` sống suốt chuyến đi. Trong game bấm-để-đi thì "đang đi" là
+     phần lớn thời gian, nên mũi tên đỏ bị ghim vào ô đích và không gì lay
+     chuyển được: bấm MỤC TIÊU đổi `aimed` thật nhưng con trỏ bỏ qua; đi ngang
+     cái máng khác cũng không đổi; và luật rơi `aimStillValid` chỉ áp lên
+     `aimed` chứ không áp lên ô của chuyến đi, nên mũi tên cắm ở ô cách cả chục
+     ô — đúng câu "phải thay đổi khi tôi ra khỏi phạm vi".
+
+     Nó đi ngược chính thiết kế Đợt 27, thứ đã tách BA DẤU BA NGHĨA: khung
+     trắng = sẽ đi đây · vòng vàng = đang trên đường tới · mũi tên đỏ = nút
+     chính sẽ tác động vào đây.
+
+     `main.ts` cần DOM nên sim không nạp được — quét nguồn, cùng lối kịch bản
+     164 và 169. */
+  const src = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  const i0 = src.indexOf("function pressCursor(");
+  ok(i0 >= 0, "main.ts phải có pressCursor");
+  const than = src.slice(i0, src.indexOf("\n  }", i0));
+  ok(
+    !than.includes("nav.target()"),
+    "pressCursor KHÔNG được hỏi nav.target() — ô đích chuyến đi đã có khung trắng và vòng vàng nói hộ",
+  );
+  ok(than.includes("targetTile("), "pressCursor phải hỏi targetTile");
+
+  /* Và mũi tên vẫn phải lấy từ `hint.at` sống, không lấy từ mục tiêu đã nhớ —
+     nếu không ta lại có hai bộ luật cho một câu hỏi. */
+  ok(/aimArrow = hint\?\.at \?\? oNham/.test(src), "mũi tên đỏ vẫn là hint.at ?? ô ngắm");
+});
+
+test("183. MỤC TIÊU người chơi tự chọn thì HỆ THỐNG không được xoá", () => {
+  /* `aimed` bị ghi từ bảy chỗ, năm trong số đó là máy tự đặt — và chỗ ghi lúc
+     tới đích một chuyến (`nav.takeArrival`) ghi đè VÔ ĐIỀU KIỆN. Nên bấm MỤC
+     TIÊU giữa chuyến, đi tới nơi, là lựa chọn ấy bị xoá mà không ai báo.
+
+     Luật một câu: máy chỉ được ghi khi không có mục tiêu TAY nào đang sống. */
+  const tay = { x: 5, y: 5, thuCong: true };
+  const may = { x: 9, y: 9, thuCong: false };
+
+  deepEq(
+    ghiNhoNgam(tay, { x: 9, y: 9 }, false),
+    tay,
+    "máy KHÔNG được đè lên mục tiêu người chơi tự chọn",
+  );
+  deepEq(
+    ghiNhoNgam(may, { x: 9, y: 9 }, false),
+    { x: 9, y: 9, thuCong: false },
+    "…nhưng đè lên mục tiêu do chính máy đặt thì được",
+  );
+  deepEq(
+    ghiNhoNgam(tay, { x: 9, y: 9 }, true),
+    { x: 9, y: 9, thuCong: true },
+    "người chơi chọn cái khác thì luôn được",
+  );
+  deepEq(
+    ghiNhoNgam(null, { x: 9, y: 9 }, false),
+    { x: 9, y: 9, thuCong: false },
+    "chưa có gì thì máy đặt được",
+  );
+
+  /* Dây bẫy: mọi chỗ ghi `aimed` trong main.ts phải đi qua hàm này. Thêm chỗ
+     ghi thứ tám rồi quên là mục tiêu người chơi lại bị xoá. */
+  const src = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  const ghiThang = [...src.matchAll(/aimed = (?!null|ghiNhoNgam)/g)];
+  eq(ghiThang.length, 0, "mọi chỗ ghi aimed phải đi qua ghiNhoNgam (hoặc gán null)");
+});
+
+test("184. ĐI từ khu chuồng này sang khu khác thì MÁNG phải đổi theo", () => {
+  /* Đây là lỗ hổng đã để lọt con lỗi: không kịch bản nào cho nhân vật ĐI từ khu
+     A sang khu B trong CÙNG một store rồi khẳng định máng đổi theo.
+
+     `penNear` đo Chebyshev tới HÌNH CHỮ NHẬT của khu và phá hoà bằng thứ tự
+     khai trong content. Hình học bản đồ làm nó hoà đúng ở chỗ tệ nhất: ba dãy
+     chuồng cách nhau 6 hàng, cao 3, khe hở 3 — mà `PEN_MARGIN` là 4, rộng hơn
+     cả khe. Đo trên bản đồ thật: hàng 14 và 20 là HAI LỐI ĐI DUY NHẤT giữa các
+     chuồng, và ở cả hai thì hai khu cách đúng bằng nhau. Hoà mà phá bằng thứ tự
+     khai thì khu PHÍA TRÊN luôn thắng — nên đi xuống là suốt hành lang nút vẫn
+     nhắm về máng của khu VỪA RỜI, còn đi lên thì đúng. "Lúc bị lúc không". */
+  const store = mkStore(1840);
+  const s0 = store.getState();
+  const khu = content.tiles.pens.filter((p) => !p.swim && p.map === s0.mapId);
+  ok(khu.length >= 3, `cần ít nhất ba khu chuồng trên cạn, đang có ${khu.length}`);
+
+  // hai khu xếp thẳng cột, gần nhau nhất
+  const doc = khu.filter((p) => p.x === khu[0].x).sort((a, b) => a.y - b.y);
+  ok(doc.length >= 2, "cần hai khu xếp thẳng cột để có hành lang giữa chúng");
+  const [tren, duoi] = doc;
+  const X = tren.x + tren.w - 1;
+
+  /* Tìm HÀNH LANG: hàng đi được nằm giữa hai khu. Đây là ô mà người chơi bắt
+     buộc phải bước qua khi sang khu kia. */
+  let hanhLang = -1;
+  for (let y = tren.y + tren.h; y < duoi.y; y++)
+    if (!isSolid(s0, content, X, y)) hanhLang = y;
+  ok(hanhLang > 0, `phải có hành lang đi được giữa ${tren.id} và ${duoi.id}`);
+
+  const nhinThay = (y, dir) => {
+    setState(store, (s) => {
+      s.player.x = X * TILE + 8;
+      s.player.y = y * TILE + 8;
+      s.player.dir = dir;
+    });
+    return penNear(store.getState(), content, X, y, PEN_MARGIN, dir)?.id ?? null;
+  };
+
+  // Vế một: hành lang PHẢI là chỗ hoà — nếu không thì kịch bản chưa kiểm gì.
+  const dTren = Math.max(0, tren.y - hanhLang, hanhLang - (tren.y + tren.h - 1));
+  const dDuoi = Math.max(0, duoi.y - hanhLang, hanhLang - (duoi.y + duoi.h - 1));
+  eq(dTren, dDuoi, `hành lang y=${hanhLang} phải cách đều hai khu thì mới kiểm được phép phá hoà`);
+
+  // Vế hai: đứng đúng hành lang, hướng đi quyết định khu nào.
+  eq(nhinThay(hanhLang, "down"), duoi.id, "đang đi XUỐNG thì nhắm khu phía dưới, không phải khu vừa rời");
+  eq(nhinThay(hanhLang, "up"), tren.id, "đang đi LÊN thì nhắm khu phía trên");
+
+  // Vế ba: đứng hẳn trong khu nào thì vẫn là khu đó, bất kể quay hướng nào.
+  for (const dir of ["up", "down", "left", "right"]) {
+    eq(nhinThay(tren.y + 1, dir), tren.id, `đứng trong ${tren.id} quay ${dir} thì vẫn là ${tren.id}`);
+    eq(nhinThay(duoi.y + 1, dir), duoi.id, `đứng trong ${duoi.id} quay ${dir} thì vẫn là ${duoi.id}`);
+  }
+});
+
+test("185. TẦM NGẮM đủ rộng để nút MỤC TIÊU có việc, và LIỆT KÊ với GIỮ cùng một bán kính", () => {
+  /* Đo trước khi sửa, 531 chỗ đứng đi được trên bản đồ: 50% không có mục tiêu
+     nào để xoay, 16% chỉ có một — tức hai phần ba bản đồ, bấm nút MỤC TIÊU
+     không thể thấy gì đổi. `reachTargets` khi ấy chỉ nhận ô trong TẦM VỚI
+     (1,6 ô), mà đứng giữa ruộng thì chẳng có gì trong tầm tay.
+
+     Cường chọn nới ra 6 ô. Đo lại sau khi sửa: còn 24%. */
+  const store = mkStore(1850);
+  store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
+  for (const op of ["tillMap", "plantMap", "waterMap"]) store.dispatch({ t: "DEBUG", op });
+
+  const OPTS = { context: true, canGo: true };
+  const s0 = store.getState();
+  let n = 0;
+  let ngheo = 0;
+  for (let y = 1; y < s0.h - 1; y += 3)
+    for (let x = 1; x < s0.w - 1; x += 3) {
+      if (blockedAt(s0, content, x * TILE + 8, y * TILE + 8)) continue;
+      setState(store, (s) => {
+        s.player.x = x * TILE + 8;
+        s.player.y = y * TILE + 8;
+      });
+      n++;
+      if (reachTargets(store.getState(), content, OPTS).length <= 1) ngheo++;
+    }
+  ok(n > 100, `phải thử đủ nhiều chỗ đứng, mới ${n}`);
+  const ti = ngheo / n;
+  ok(
+    ti < 0.45,
+    `quá nhiều chỗ đứng bấm nút MỤC TIÊU không thấy gì đổi: ${(ti * 100).toFixed(0)}% (trước khi sửa 66%)`,
+  );
+
+  /* Vế QUAN TRỌNG NHẤT: liệt kê tới đâu thì GIỮ tới đó. Liệt kê 6 ô mà chỉ giữ
+     1,6 ô thì mục tiêu vừa chọn rơi ngay khung hình sau — tệ hơn hẳn lúc chưa
+     sửa, và là kiểu hỏng không ai nghĩ tới khi nới một trong hai đầu. */
+  setState(store, (s) => {
+    s.player.x = 10 * TILE + 8;
+    s.player.y = 10 * TILE + 8;
+  });
+  for (const t of reachTargets(store.getState(), content, OPTS))
+    ok(
+      aimStillValid(store.getState(), { x: t.x, y: t.y }),
+      `mục tiêu (${t.x},${t.y}) vừa liệt kê ra mà luật giữ đã loại — hai bán kính lệch nhau`,
+    );
 });
 
 await Promise.all(choDoi);

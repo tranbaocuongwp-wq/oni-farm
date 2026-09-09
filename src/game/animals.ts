@@ -15,7 +15,7 @@
    đó (hiện rõ trên con vật), và phải đói liên tiếp `starveDays` ngày mới chết.
 ============================================================================ */
 
-import type { Content, Entity, GameState, PenDef } from "./types.ts";
+import type { Content, Entity, GameState, PenDef, Dir} from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { hash2 } from "../core/rng.ts";
@@ -632,24 +632,59 @@ export function patrolNight(d: Draft, content: Content): number {
  * rào nhìn vào vẫn là "đang ở chỗ cái chuồng". Nên một ô đệm quanh khu chính là
  * ranh giới đúng, không phải một hằng số tuỳ tiện.
  */
+/** Khu này nằm về phía `huong` so với ô (x,y) không? */
+function vePhia(p: PenDef, x: number, y: number, huong: Dir): boolean {
+  if (huong === "up") return p.y + p.h - 1 < y;
+  if (huong === "down") return p.y > y;
+  if (huong === "left") return p.x + p.w - 1 < x;
+  return p.x > x;
+}
+
+/**
+ * Khu chuồng gần ô (x,y) nhất, trong lề `dem` ô.
+ *
+ * `huong` — hướng người chơi đang quay mặt, dùng để PHÁ HOÀ. Không truyền thì
+ * giữ nguyên hành vi cũ (khai trước thắng), nên chỗ gọi nào không có hướng thì
+ * không đổi nghĩa.
+ *
+ * Vì sao cần phá hoà, và vì sao phá theo hướng đi:
+ *
+ * Khoảng cách đo bằng Chebyshev tới HÌNH CHỮ NHẬT của khu, nên hoà là chuyện
+ * thường. Tệ hơn, hình học bản đồ làm nó hoà đúng ở chỗ tệ nhất: ba dãy chuồng
+ * cách nhau 6 hàng, cao 3, tức khe hở 3 hàng — mà `PEN_MARGIN` là 4, rộng hơn
+ * cả khe. Đo trên bản đồ thật: hàng 14 và 20 là HAI LỐI ĐI DUY NHẤT giữa các
+ * chuồng, và ở cả hai, hai khu cách đúng bằng nhau.
+ *
+ * Hoà mà phá bằng thứ tự khai trong `tiles.json` thì khu PHÍA TRÊN luôn thắng.
+ * Nên đi xuống là suốt hành lang nút vẫn nhắm về cái máng của khu VỪA RỜI, bấm
+ * vào là nhân vật quay ngược lại; đi lên thì lại đúng. Cường gặp đúng chuyện
+ * này: "đi từ trường này qua trường khác nó cũng không thay đổi cái máng".
+ *
+ * Phá theo hướng đang quay mặt trả lời đúng câu người chơi đang hỏi: tôi đang
+ * ĐI TỚI khu nào.
+ */
 export function penNear(
   state: GameState,
   content: Content,
   x: number,
   y: number,
   dem = 1,
+  huong?: Dir,
 ): PenDef | null {
   let best: PenDef | null = null;
   let bestD = Infinity;
+  let bestPhia = false;
   for (const p of content.tiles.pens ?? []) {
     if (p.map !== state.mapId) continue;
     const dx = Math.max(p.x - x, 0, x - (p.x + p.w - 1));
     const dy = Math.max(p.y - y, 0, y - (p.y + p.h - 1));
     const d = Math.max(dx, dy);
     if (d > dem) continue;
-    if (d < bestD) {
+    const phia = huong !== undefined && vePhia(p, x, y, huong);
+    if (d < bestD || (d === bestD && phia && !bestPhia)) {
       bestD = d;
       best = p;
+      bestPhia = phia;
     }
   }
   return best;

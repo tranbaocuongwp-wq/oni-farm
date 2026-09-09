@@ -42,7 +42,7 @@ import { feedPond, pourBest, pourSpotIn } from "./pen.ts";
 function penInReach(state: GameState, content: Content, penId: string): boolean {
   const px = Math.floor(state.player.x / TILE);
   const py = Math.floor(state.player.y / TILE);
-  return penNear(state, content, px, py, 2)?.id === penId;
+  return penNear(state, content, px, py, 2, state.player.dir)?.id === penId;
 }
 
 /**

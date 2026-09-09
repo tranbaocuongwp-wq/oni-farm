@@ -57,7 +57,9 @@ import { createTutorial, DESKTOP_STEPS, PAD_STEPS, TOUCH_STEPS } from "./ui/tuto
 import type { Content, GameState, InteractKind, SaveData, Stats } from "./game/types.ts";
 import { createNewGame } from "./game/state.ts";
 import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/actions.ts";
-import { autoJob, autoStopReason, aimStillValid, facingTile, hintOf, infoHint, nextTarget, pressPlan, reachTargets, tileInfo, type Hint, type Press } from "./game/hint.ts";
+import { autoJob, autoStopReason, aimStillValid, facingTile, hintOf, infoHint, nextTarget, pressPlan, reachTargets, tileInfo, type Hint, type Press,
+  ghiNhoNgam,
+} from "./game/hint.ts";
 import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { seasonIndex, currentSeason } from "./game/season.ts";
@@ -772,7 +774,9 @@ async function boot() {
     if (p && chuotLucChon && p.x === chuotLucChon.x && p.y === chuotLucChon.y) p = null;
     else if (p) chuotLucChon = null;
 
-    if (!p && !forceFacing && aimed && inReachOf(s, aimed.x, aimed.y))
+    // Cổng theo TẦM NGẮM (`AIM_RADIUS`), không theo tầm với — cùng bán kính mà
+    // `reachTargets` liệt kê và `aimStillValid` giữ. Xem chú thích ở AIM_RADIUS.
+    if (!p && !forceFacing && aimed && aimStillValid(s, aimed))
       return { x: aimed.x, y: aimed.y, ok: tileActionable(s, aimed.x, aimed.y) };
 
     let tx: number;
@@ -824,8 +828,17 @@ async function boot() {
    *
    * Nó tự rơi khi ra khỏi TẦM VỚI, và chỉ khi ấy: xem `aimStillValid`, luật
    * dùng chung với kịch bản sim 168.
+   *
+   * `thuCong` — mục tiêu này do CHÍNH TAY người chơi chọn (nút MỤC TIÊU / phím
+   * Q / cần phải tay cầm), chứ không phải do hệ thống tự đặt lúc tới đích hay
+   * lúc chạy chuyến tự động. Cần phân biệt vì `pressCursor` phải cho lựa chọn
+   * của người chơi THẮNG ô đích chuyến đi — xem chú thích ở đó.
+   *
+   * Cờ nằm TRONG cùng một biến chứ không tách ra thành `let aimThuCong` riêng:
+   * hai biến phải tắt/bật cùng nhau ở bảy chỗ khác nhau, và quên một chỗ là mục
+   * tiêu dính vĩnh viễn. Gộp lại thì không thể lệch.
    */
-  let aimed: { x: number; y: number } | null = null;
+  let aimed: { x: number; y: number; thuCong: boolean } | null = null;
 
   /**
    * Vị trí chuột lúc người chơi chọn mục tiêu bằng NÚT/PHÍM.
@@ -1152,7 +1165,7 @@ async function boot() {
       const w = nearestRefill(s);
       if (w) {
         workGoal = { x: w.x, y: w.y, refill: true };
-        aimed = { x: w.x, y: w.y };
+        aimed = ghiNhoNgam(aimed, { x: w.x, y: w.y }, false);
         return nav.goTo(s, content, w.x, w.y, {});
       }
     }
@@ -1166,7 +1179,7 @@ async function boot() {
       store.dispatch({ t: "SELECT", slot: job.slot });
       return true;
     }
-    aimed = { x: job.x, y: job.y };
+    aimed = ghiNhoNgam(aimed, { x: job.x, y: job.y }, false);
     // Neo bám theo ô vừa chọn: nó trôi dần theo luống đang làm, và sau mỗi
     // chuyến đi múc nước thì đây là chỗ phải quay về.
     autoAnchor = { x: job.x, y: job.y };
@@ -1279,7 +1292,7 @@ async function boot() {
         return;
       }
       runTried = { key, mark };
-      aimed = { x, y };
+      aimed = ghiNhoNgam(aimed, { x, y }, false);
       if (inReachOf(s, x, y)) {
         if (!tryInteract(s, x, y)) stopRun("done");
         return;
@@ -1295,7 +1308,7 @@ async function boot() {
       return;
     }
     runTried = { key, mark };
-    aimed = { x: t.x, y: t.y };
+    aimed = ghiNhoNgam(aimed, { x: t.x, y: t.y }, false);
     if (inReachOf(s, t.x, t.y)) {
       const ok = t.job === "gather" ? tryAnimal(s, t.x, t.y) : tryUse(s, t.x, t.y);
       if (!ok) stopRun("done");
@@ -1311,10 +1324,29 @@ async function boot() {
     return { context: settings.contextButton, canGo: settings.contextButton && aimed !== null, only };
   }
 
-  /** Ô mà nút chính đang nói về — cùng một ô cho HUD lẫn cú bấm. */
+  /**
+   * Ô mà nút chính đang nói về — cùng một ô cho HUD lẫn cú bấm.
+   *
+   * KHÔNG hỏi `nav.target()`, và đó là cả chỗ sửa của Đợt 33.
+   *
+   * Trước đây ô ĐÍCH của chuyến đi được trả về TRƯỚC TIÊN, mà `goal` sống suốt
+   * chuyến. Trong game bấm-để-đi thì "đang đi" là phần lớn thời gian, nên mũi
+   * tên đỏ bị ghim vào ô đích và: bấm MỤC TIÊU đổi `aimed` thật nhưng con trỏ
+   * bỏ qua (nút trông như chết) · đi ngang cái máng khác cũng không đổi · luật
+   * rơi `aimStillValid` chỉ áp lên `aimed` chứ không áp lên ô của chuyến đi,
+   * nên mũi tên cắm ở ô cách cả chục ô. Cường báo đúng cả ba.
+   *
+   * Nó đi ngược chính thiết kế Đợt 27, thứ đã tách BA DẤU BA NGHĨA: khung
+   * trắng = sẽ đi đây · vòng vàng = đang trên đường tới · MŨI TÊN ĐỎ = nút
+   * chính sẽ tác động vào đây. Trộn dấu thứ nhất vào dấu thứ ba là bỏ mất hai
+   * câu trả lời để lấy một.
+   *
+   * Gỡ đi KHÔNG mất tính năng "chạm ô xa → đi tới rồi làm": tính năng ấy không
+   * đi qua đây mà đi qua nấc 6 của `pressPlan` (`contextAction` → `goTo`), và
+   * ba nhánh `goTo` trong đó cố ý KHÔNG hỏi `canGo`. Đích chuyến đi cũng đã có
+   * dấu riêng rồi (khung trắng + vòng vàng), không cần mượn mũi tên đỏ.
+   */
   function pressCursor(s: GameState): { x: number; y: number } | null {
-    const navT = nav.target();
-    if (navT) return { x: navT.tx, y: navT.ty };
     const c = targetTile(s);
     return c ? { x: c.x, y: c.y } : null;
   }
@@ -1807,7 +1839,7 @@ async function boot() {
 
       const arrived = nav.takeArrival();
       if (arrived) {
-        aimed = { x: arrived.tx, y: arrived.ty };
+        aimed = ghiNhoNgam(aimed, { x: arrived.tx, y: arrived.ty }, false);
         const goal =
           workGoal !== null && workGoal.x === arrived.tx && workGoal.y === arrived.ty
             ? workGoal
@@ -2095,7 +2127,7 @@ async function boot() {
             toasts.say("Không có gì trong tầm với", "info");
             break;
           }
-          aimed = { x: t.x, y: t.y };
+          aimed = ghiNhoNgam(aimed, { x: t.x, y: t.y }, true);
           /* Ghim mốc chuột: xem `chuotLucChon`. Không ghim thì trên máy tính
              mục tiêu vừa chọn chết ngay ở khung hình sau. */
           chuotLucChon = input.pointer();
@@ -2187,7 +2219,7 @@ async function boot() {
             const nx = Math.max(0, Math.min(s.w - 1, a0.x + it.dx));
             const ny = Math.max(0, Math.min(s.h - 1, a0.y + it.dy));
             if (inReachOf(s, nx, ny)) {
-              aimed = { x: nx, y: ny };
+              aimed = ghiNhoNgam(aimed, { x: nx, y: ny }, true);
               chuotLucChon = input.pointer();
             }
           }
