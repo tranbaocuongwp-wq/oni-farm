@@ -12792,9 +12792,21 @@ test("178. Mở ĐƯỜNG qua chỗ có vật cản: save cũ không được đ
      đó tình cờ mang cờ nào. */
   eq(oMoi(C).prop, null, "cây cỏ cũng không mọc trên nhựa được");
 
-  /* Chiều ngược lại, và đây là vế giữ cho luật không quá tay: hòn đá người chơi
-     cố ý đặt trên mặt đường CÓ SẴN thì phải còn nguyên. Nền không đổi, nên
-     không có "quy hoạch lại" nào để lấy cớ dọn đồ của người ta. */
+  /* CHIỀU NGƯỢC LẠI — và chỗ này Đợt 29 phải đổi ý giữa chừng.
+
+     Bản đầu của luật giữ lại "hòn đá người chơi cố ý đặt trên mặt đường CÓ
+     SẴN", với lý lẽ: đừng dọn đồ của người ta. Nghe hợp lý, và nó xanh — cho
+     tới lúc cho cây vác được.
+
+     Vì lúc ấy kịch bản 72 đỏ: nó đòi cái CÂY của bản đồ đời trước nằm trên
+     nhựa phải BIẾN MẤT. Mà hai ca đó giống hệt nhau trong dữ liệu — vật có
+     `hits`, nằm trên nhựa, nền không đổi. Không có trường nào phân biệt "cây
+     của bản đồ" với "đá của người chơi": `portable` từng làm proxy cho điều
+     đó, nhưng khi 43 trên 70 vật thể vác được thì proxy ấy chết.
+
+     Phải chọn một phía. Chọn phía an toàn hơn: thà mất hòn đá bỏ quên trên
+     mặt đường còn hơn để cả rừng cây của bản đồ cũ mọc lại giữa lòng quốc lộ.
+     Nên nay MỌI thứ thiên nhiên đều chỉ ở lại trên cỏ, không có ngoại lệ. */
   const store2 = mkStore(2929);
   setState(store2, (s) => {
     setTile(s, A.x, A.y, { g: "asphalt", prop: "rock", hp: 3 });
@@ -12803,8 +12815,8 @@ test("178. Mở ĐƯỜNG qua chỗ có vật cản: save cũ không được đ
   const moi2 = res2.state ?? res2;
   eq(
     moi2.tiles[A.y * moi2.w + A.x].prop,
-    "rock",
-    "đá đặt trên mặt đường CÓ SẴN là đồ của người chơi — không được dọn",
+    null,
+    "thứ thiên nhiên KHÔNG ở lại trên nhựa, kể cả khi nền không đổi — xem kịch bản 72",
   );
 
   /* Và ghim chỗ đắt nhất: hai ô CỔNG nối nông trang ra quốc lộ phải luôn đi xe
@@ -12910,6 +12922,104 @@ test("179. XE CHẠY TRÊN QUỐC LỘ là trang trí — không được cướ
   const than = nguon.slice(i0, iHet);
   ok(!than.includes("takeBudget"), "nhánh xe chạy ngang KHÔNG được tiêu ngân sách A*");
   ok(!than.includes("drivePath"), "…và không được gọi tìm đường: làn là một đường thẳng");
+});
+
+
+test("180. VÁC ĐƯỢC gần như mọi thứ — trừ đúng hai nhóm, và cả hai đều có lý do cứng", () => {
+  /* Cường: *"tay không kéo nhấc… lôi được mọi thứ trừ vài cái to quá"*, và
+     *"đào lên bỏ ấy, kiểu mấy cây đã trồng rồi"*.
+
+     Đợt 29 cho 43 trên 70 vật thể vác được (trước đó đúng ba: đá · khúc gỗ ·
+     đống đá). Nhưng có hai nhóm KHÔNG được cho vác, và không phải vì thẩm mỹ —
+     cho vác là hỏng thật. */
+  const ds = Object.values(content.props);
+  const vac = ds.filter((p) => p.portable);
+  ok(vac.length > ds.length / 2, `phải vác được phần lớn vật thể, đang ${vac.length}/${ds.length}`);
+
+  /* --- (a) VẬT CÓ `interact` TUYỆT ĐỐI KHÔNG ĐƯỢC VÁC -------------------
+
+     `useAt` hỏi "tay không + ô này có vật vác được không" TRƯỚC khi hỏi tới
+     tương tác. Nên cho cái giường `portable` là tay không sẽ NHẤC GIƯỜNG LÊN
+     thay vì đi ngủ — và mất luôn ngày mới. Cái bàn chế tạo, cái giếng, cửa
+     hàng, quầy bán, cửa nhà đều hỏng y như thế.
+
+     Đây là ràng buộc CỨNG, không phải lựa chọn cân bằng. */
+  const hong = vac.filter((p) => p.interact).map((p) => `${p.id}(${p.interact})`);
+  deepEq(
+    hong,
+    [],
+    `vật có tương tác mà cho vác thì tay không sẽ NHẤC nó thay vì DÙNG nó: ${hong.join(" · ")}`,
+  );
+
+  /* --- (b) THỨ NHỔ ĐƯỢC BẰNG MỘT NHÁT TAY KHÔNG phải giữ nguyên ---------
+
+     Cỏ, bụi nhỏ, cành khô — tay không nhổ ra rơm, sợi, gỗ. Cho chúng vác được
+     thì "nhấc" thắng "nhổ", và người chơi phải cầm đồ nghề mới hái nổi một bụi
+     cỏ. Kịch bản 22 canh đúng chỗ ấy từ lâu; đây là vế nói RÕ vì sao ranh giới
+     nằm ở `hits <= 1`. */
+  const nhoTay = vac.filter((p) => (p.hits ?? 0) === 1).map((p) => p.id);
+  deepEq(
+    nhoTay,
+    [],
+    `thứ nhổ được bằng một nhát tay không thì phải nhổ được, không phải nhấc: ${nhoTay.join(" · ")}`,
+  );
+
+  /* --- (c) CÂY thì PHẢI vác được — đó là cả yêu cầu ---------------------- */
+  for (const id of ["tree", "sapling", "pine", "birch", "maple", "willow", "palm", "deadtree"])
+    ok(content.props[id]?.portable, `'${id}' phải đào lên vác đi được`);
+
+  /* --- (d) CẦU và BIỂN không được vác ------------------------------------
+     Vác cây cầu đi là thủng đường qua sông; biển cắm không chiếm ô nên vác nó
+     là vác một thứ không có ở đó. */
+  for (const p of vac) {
+    ok(!p.bridge, `'${p.id}' là cầu — vác đi là thủng lối qua sông`);
+    ok(p.place !== "edge", `'${p.id}' cắm ở mép ô, không chiếm ô — không vác được`);
+  }
+
+  /* --- (e) CHẠY THẬT: nhấc một cái cây lên rồi đặt xuống chỗ khác -------- */
+  const store = mkStore(1800);
+  const s0 = store.getState();
+  let cay = null;
+  for (let i = 0; i < s0.tiles.length && !cay; i++) {
+    const t = s0.tiles[i];
+    if (t?.prop !== "tree") continue;
+    const x = i % s0.w;
+    const y = (i / s0.w) | 0;
+    /* Cần HAI ô trống liền nhau: một ô để ĐỨNG, một ô để ĐẶT. Đứng ngay ô
+       mình định đặt thì `putdownWouldTrap` chặn — và chặn đúng, vì đặt xong là
+       tự nhốt mình dưới gốc cây. */
+    const dung = s0.tiles[y * s0.w + (x - 1)];
+    const dat = s0.tiles[y * s0.w + (x - 2)];
+    const trong = (t) => t && !t.prop && !t.b && !t.crop && t.g === "grass";
+    if (trong(dung) && trong(dat)) cay = { x, y, dx: x - 1, dy: y, ax: x - 2, ay: y };
+  }
+  ok(!!cay, "bản đồ phải có một cái cây cạnh HAI ô cỏ trống liền nhau");
+
+  setState(store, (s) => {
+    s.player.x = cay.dx * TILE + 8;
+    s.player.y = cay.dy * TILE + 8;
+    s.sel = 9; // ô rỗng = TAY KHÔNG
+  });
+  useRaw(store, cay.x, cay.y);
+  clearBusy(store);
+  eq(store.getState().carry, "tree", "tay không bấm vào cây thì ĐÀO nó lên, không chặt");
+  eq(store.getState().tiles[cay.y * s0.w + cay.x].prop, null, "…và ô ấy trống ra");
+
+  /* Không đặt được xuống ngay ô mình đang đứng — luật đã có, ghim luôn ở đây. */
+  useRaw(store, cay.dx, cay.dy);
+  clearBusy(store);
+  eq(store.getState().carry, "tree", "đang đứng chắn chỗ thì KHÔNG đặt xuống được");
+
+  useRaw(store, cay.ax, cay.ay);
+  clearBusy(store);
+  const sau = store.getState();
+  eq(sau.carry, null, "đặt sang ô bên cạnh thì thôi vác");
+  eq(sau.tiles[cay.ay * s0.w + cay.ax].prop, "tree", "cây đứng ở chỗ mới");
+  eq(
+    sau.tiles[cay.ay * s0.w + cay.ax].hp,
+    content.props.tree.hits,
+    "…và đủ máu, không phải cái cây sắp đổ",
+  );
 });
 
 await Promise.all(choDoi);

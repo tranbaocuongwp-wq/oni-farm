@@ -390,32 +390,26 @@ function mergeGrid(
           // Ô bản đồ là CÔNG TRÌNH → bản đồ thắng, không bàn.
           if (freshProp !== null && !freshIsHarvestable) return freshProp;
           if (oldProp === null) return null; // ván trước ô này trống (đã chặt)
-          /* Vật VÁC ĐƯỢC là do chính tay người chơi đặt xuống → theo người chơi.
-             Trừ khi NỀN VỪA ĐỔI ra thứ không chứa nổi nó: mặt nước, hoặc — từ
-             Đợt 29 — MẶT ĐƯỜNG vừa mở qua đúng chỗ ấy.
+          /* THỨ THIÊN NHIÊN (có `hits`: cây, đá, khúc gỗ, bụi) chỉ ở lại chỗ
+             nó MỌC ĐƯỢC. Nền mới là nhựa hay nước thì cái cây đó là địa hình
+             của bản đồ đời trước, không phải của ai.
 
-             Vì sao phải thêm vế đường: `portable` được hỏi TRƯỚC `hits`, mà
-             khúc gỗ và hòn đá mang cả hai cờ. Nên khi quốc lộ mở xuyên qua
-             rừng, mọi khúc gỗ nằm sẵn ở đó đi thẳng lên lòng đường — và chúng
-             `solid`, tức chặn cứng. Một khúc gỗ rơi trúng ô cổng là cả tuyến
-             giao hàng đứt, im lặng, chỉ trên save của người đang chơi dở.
+             Hỏi câu này TRƯỚC `portable`, và thứ tự ấy là cả vấn đề. Đợt 29
+             cho 43 trong 70 vật thể vác được — trước đó chỉ có ba. Chừng nào
+             còn ba thì `portable` là một proxy dùng được cho "người chơi tự
+             đặt xuống", nên hỏi nó trước là hợp lý. Nay proxy ấy CHẾT: cái cây
+             của bản đồ và hòn đá người chơi vác ra đều `portable`, trong dữ
+             liệu không còn gì phân biệt hai thứ.
 
-             Kẹp chặt hai đầu để không xoá nhầm đồ của người chơi: chỉ bỏ khi
-             vật ĐẶC, VÀ nền thật sự vừa ĐỔI (`t.g !== prev.g`). Hòn đá người
-             chơi cố ý đặt trên mặt đường có sẵn thì vẫn nằm nguyên đó.
-
-             Hôm nay cả ba vật vác được (đá · gỗ · đống đá) đều ĐẶC, nên vế
-             `solid` chưa bao giờ chặn ai — nó là chỗ chừa cho ngày có một món
-             vác được mà đi xuyên qua được, để món ấy không bị dọn oan. */
-          if (oldDef?.portable) {
-            if (t.g === "water") return null;
-            const nenMoiLaDuong = t.g === "asphalt" || t.g === "concrete";
-            if (oldDef.solid !== false && nenMoiLaDuong && t.g !== prev.g) return null;
-            return oldProp;
-          }
-          // Cây cỏ: giữ, nhưng chỉ ở chỗ nó MỌC ĐƯỢC. Nền mới là nhựa hay nước
-          // thì cái cây đó là địa hình của bản đồ đời trước, không phải của ai.
+             Nên phải chọn một phía, và chọn phía AN TOÀN HƠN: thà mất hòn đá
+             người chơi bỏ quên trên mặt đường (hiếm, nhỏ, chỉ xảy ra lúc đổi
+             content) còn hơn để cả rừng cây của bản đồ đời trước mọc lại giữa
+             lòng quốc lộ mới (thấy ngay, và chặn xe). */
           if (oldDef?.hits) return t.g === "grass" ? oldProp : null;
+          /* ĐỒ ĐẠC vác được mà KHÔNG chặt được (bàn, ghế, thảm, đèn…): không
+             phải thiên nhiên nên không đòi phải đứng trên cỏ — sàn gỗ trong
+             nhà cũng là chỗ của nó. Chỉ mặt nước là không. */
+          if (oldDef?.portable) return t.g === "water" ? null : oldProp;
           // Vật thể cũ là ĐỒ ĐẠC của bản đồ đời trước → bỏ, theo bản đồ mới.
           return freshProp;
         })();

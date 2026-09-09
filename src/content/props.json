@@ -22,7 +22,8 @@
         "accent": "#5a3d24"
       },
       "sway": 1,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "sapling",
@@ -51,7 +52,8 @@
         "chance": 0.25
       },
       "sway": 0.6,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "stump",
@@ -70,7 +72,8 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#8a6440"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rock",
@@ -362,7 +365,8 @@
         "dark": "#284f22",
         "accent": "#5fa04a"
       },
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "warehouse",
@@ -493,7 +497,8 @@
         "accent": "#5a4028"
       },
       "sway": 0.35,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "birch",
@@ -516,7 +521,8 @@
         "accent": "#e8e4d8"
       },
       "sway": 1,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "palm",
@@ -539,7 +545,8 @@
         "accent": "#8a6a44"
       },
       "sway": 1,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "willow",
@@ -562,7 +569,8 @@
         "accent": "#6b5232"
       },
       "sway": 1.4,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "maple",
@@ -585,7 +593,8 @@
         "accent": "#7a4a28"
       },
       "sway": 1,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "bamboo",
@@ -608,7 +617,8 @@
         "accent": "#b8c46a"
       },
       "sway": 1.4,
-      "seasonal": true
+      "seasonal": true,
+      "portable": true
     },
     {
       "id": "deadtree",
@@ -630,7 +640,8 @@
         "dark": "#5c4f40",
         "accent": "#3f362c"
       },
-      "sway": 1
+      "sway": 1,
+      "portable": true
     },
     {
       "id": "rock_ore",
@@ -679,7 +690,8 @@
         "body": "#8f959d",
         "dark": "#666c74",
         "accent": "#a8aeb6"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rock_tall",
@@ -717,7 +729,8 @@
         "body": "#7f8f9e",
         "dark": "#4f5b66",
         "accent": "#8fd8f0"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rock_split",
@@ -736,7 +749,8 @@
         "body": "#93999f",
         "dark": "#5f656b",
         "accent": "#b0b6bc"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rock_sand",
@@ -755,7 +769,8 @@
         "body": "#c9a878",
         "dark": "#967c52",
         "accent": "#e0c79a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rock_dark",
@@ -793,7 +808,8 @@
         "body": "#7f8a8f",
         "dark": "#525b60",
         "accent": "#9ab86a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "log_moss",
@@ -812,7 +828,8 @@
         "body": "#8a5c34",
         "dark": "#5a3b21",
         "accent": "#5f9e4a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "log_hollow",
@@ -831,7 +848,8 @@
         "body": "#96683c",
         "dark": "#5a3b21",
         "accent": "#2a1d12"
-      }
+      },
+      "portable": true
     },
     {
       "id": "log_split",
@@ -850,7 +868,8 @@
         "body": "#a8783f",
         "dark": "#6b4a26",
         "accent": "#d8b276"
-      }
+      },
+      "portable": true
     },
     {
       "id": "branch",
@@ -888,7 +907,8 @@
         "body": "#8a6a44",
         "dark": "#57402a",
         "accent": "#a88a5e"
-      }
+      },
+      "portable": true
     },
     {
       "id": "stump_moss",
@@ -907,7 +927,8 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#5f9e4a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "stump_burnt",
@@ -926,7 +947,8 @@
         "body": "#4a423c",
         "dark": "#251f1b",
         "accent": "#8a8078"
-      }
+      },
+      "portable": true
     },
     {
       "id": "deadfall",
@@ -945,7 +967,8 @@
         "body": "#8f7a5e",
         "dark": "#5c4c38",
         "accent": "#a89a80"
-      }
+      },
+      "portable": true
     },
     {
       "id": "driftwood",
@@ -964,7 +987,8 @@
         "body": "#b8ab96",
         "dark": "#8a7f6c",
         "accent": "#d8cfbc"
-      }
+      },
+      "portable": true
     },
     {
       "id": "roots",
@@ -983,7 +1007,8 @@
         "body": "#6b4a2c",
         "dark": "#402b19",
         "accent": "#8a6440"
-      }
+      },
+      "portable": true
     },
     {
       "id": "twigs",
@@ -1021,7 +1046,8 @@
         "body": "#a0733f",
         "dark": "#684a28",
         "accent": "#c9a06a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "table",
@@ -1031,7 +1057,8 @@
         "body": "#a8783f",
         "dark": "#6b4a26",
         "accent": "#e8dcc0"
-      }
+      },
+      "portable": true
     },
     {
       "id": "chair",
@@ -1041,7 +1068,8 @@
         "body": "#96683c",
         "dark": "#5a3b21",
         "accent": "#c9a06a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "rug",
@@ -1051,7 +1079,8 @@
         "body": "#a8425a",
         "dark": "#6f2637",
         "accent": "#e8c05a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "shelf",
@@ -1061,7 +1090,8 @@
         "body": "#8a5c34",
         "dark": "#553a20",
         "accent": "#4a7fa6"
-      }
+      },
+      "portable": true
     },
     {
       "id": "cabinet",
@@ -1071,7 +1101,8 @@
         "body": "#7a5230",
         "dark": "#4a3020",
         "accent": "#e0b45a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "stove",
@@ -1081,7 +1112,8 @@
         "body": "#6b6f76",
         "dark": "#3f4349",
         "accent": "#e07a2a"
-      }
+      },
+      "portable": true
     },
     {
       "id": "sink",
@@ -1091,7 +1123,8 @@
         "body": "#c9ccd2",
         "dark": "#8a8f98",
         "accent": "#7fb6ec"
-      }
+      },
+      "portable": true
     },
     {
       "id": "lamp",
@@ -1101,7 +1134,8 @@
         "body": "#5c5148",
         "dark": "#332c26",
         "accent": "#ffe6a8"
-      }
+      },
+      "portable": true
     },
     {
       "id": "potplant",
@@ -1111,7 +1145,8 @@
         "body": "#b8683f",
         "dark": "#7d4224",
         "accent": "#4f9e3f"
-      }
+      },
+      "portable": true
     },
     {
       "id": "clock",
@@ -1121,7 +1156,8 @@
         "body": "#8a5c34",
         "dark": "#4a3020",
         "accent": "#f2ede0"
-      }
+      },
+      "portable": true
     },
     {
       "id": "painting",
@@ -1131,7 +1167,8 @@
         "body": "#a8783f",
         "dark": "#5f4223",
         "accent": "#5e81ac"
-      }
+      },
+      "portable": true
     },
     {
       "id": "sofa",
@@ -1141,7 +1178,8 @@
         "body": "#4f7a8a",
         "dark": "#2f4a56",
         "accent": "#7fa8b8"
-      }
+      },
+      "portable": true
     },
     {
       "id": "barrel",
@@ -1151,7 +1189,8 @@
         "body": "#9c7440",
         "dark": "#5f4526",
         "accent": "#8a8f98"
-      }
+      },
+      "portable": true
     },
     {
       "id": "crate",
@@ -1161,7 +1200,8 @@
         "body": "#c9a06a",
         "dark": "#8a6238",
         "accent": "#6b4a2c"
-      }
+      },
+      "portable": true
     }
   ]
 }
