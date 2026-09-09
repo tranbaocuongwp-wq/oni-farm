@@ -12203,6 +12203,80 @@ test("170. Cây LỚN LÊN không được làm hỏng cache lớp nền", () =>
   );
 });
 
+
+test("172. LOẠI NỀN của một ô là BẤT BIẾN trong lúc chơi", () => {
+  /* Đây là dây bẫy cho một lời hứa mà hai cái cache đang dựa vào.
+
+     Bảng loại nước và `isIndoor` chỉ dựng lại khi có ô đổi `t.g`. Hôm nay
+     không một chỗ nào trong `src/game/` gán `t.g`, nên trên thực tế chúng
+     dựng đúng một lần mỗi bản đồ — rẻ nhất có thể. Nhưng "không chỗ nào gán"
+     là một lời hứa, và lời hứa không có dây bẫy thì ngày ai đó thêm tính năng
+     đào ao, mặt sông sẽ hiện ra SAI mà không phép kiểm nào đỏ.
+
+     Kịch bản này ghim lời hứa ấy. Nó KHÔNG cấm đào ao — nó bắt ai làm tính
+     năng đó phải đọc chú thích của `bangLoaiNuoc` và của `quetO` trước, vì đó
+     là chỗ duy nhất trả lời được câu "cache biết gì về việc này". */
+  const store = mkStore(1720);
+  store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
+  store.dispatch({ t: "DEBUG", op: "materials" });
+  store.dispatch({ t: "DEBUG", op: "unlockAll" });
+
+  const s0 = store.getState();
+  const nenTruoc = s0.tiles.map((t) => t?.g ?? null);
+  ok(nenTruoc.filter((g) => g === "water").length > 50, "bản đồ phải có sông để kiểm");
+
+  /* Năm ngày, mỗi ngày đủ món có thể đụng tới một ô: cày · gieo · tưới · xây ·
+     thu hoạch · bão (bão làm ướt cả bản đồ và quật đổ cây) — và mỗi đêm `SLEEP`
+     chạy `nightGround`, tức cỏ dại mọc và rừng mọc lại đi qua ĐÚNG đường mã
+     thật, không phải qua `DEBUG:addGrass` (op ấy rải prop ngẫu nhiên và có thể
+     rơi trúng ô một con vật đang đứng, vỡ bất biến vì lý do chẳng dính gì tới
+     loại nền). */
+  for (let ngay = 0; ngay < 5; ngay++) {
+    setWeather(store, ngay === 3 ? "storm" : "sunny");
+    store.dispatch({ t: "DEBUG", op: "tillMap" });
+    store.dispatch({ t: "DEBUG", op: "plantMap" });
+    store.dispatch({ t: "DEBUG", op: "waterMap" });
+    store.dispatch({ t: "DEBUG", op: "growAll" });
+    store.dispatch({ t: "DEBUG", op: "harvestAll" });
+    store.dispatch({ t: "DEBUG", op: "spawnAnimal" });
+    store.dispatch({ t: "DEBUG", op: "spawnWorker" });
+    for (let i = 0; i < 240; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+    sleep(store);
+  }
+
+  /* Và một công trình đặt tay: `BUILD_LINE` là đường duy nhất người chơi đổi
+     được lớp nền, nếu nó có đổi. */
+  const sx = store.getState();
+  let cho = -1;
+  for (let i = 0; i < sx.tiles.length; i++) {
+    const t = sx.tiles[i];
+    if (t && t.g === "grass" && !t.b && !t.prop && !t.crop) {
+      cho = i;
+      break;
+    }
+  }
+  ok(cho >= 0, "phải tìm được một ô cỏ trống để xây");
+  setState(store, (st) => {
+    st.inv[3] = { id: "build:greenhouse", n: 4 };
+    st.energy = 100;
+  });
+  selectItem(store, "build:greenhouse");
+  place(store, "greenhouse", cho % sx.w, (cho / sx.w) | 0);
+  ok(store.getState().tiles[cho]?.b === "greenhouse", "công trình phải dựng được thật");
+
+  const s1 = store.getState();
+  const doi = [];
+  for (let i = 0; i < s1.tiles.length; i++) {
+    const g = s1.tiles[i]?.g ?? null;
+    if (g !== nenTruoc[i]) doi.push(`(${i % s1.w},${(i / s1.w) | 0}) ${nenTruoc[i]}→${g}`);
+  }
+  deepEq(
+    doi.slice(0, 5),
+    [],
+    `${doi.length} ô đổi LOẠI NỀN — bảng loại nước và isIndoor đang khoá theo giả định là không ô nào đổi`,
+  );
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

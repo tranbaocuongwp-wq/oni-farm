@@ -545,11 +545,14 @@ export function createRenderer(
 
   /** Bản đồ này là TRONG NHÀ? (đa số ô biên là sàn gỗ) — quyết định viền ngoài
    *  biên là rừng hay tường tối. Cache theo tham chiếu mảng ô. */
-  let indoorFor: Tile[] | null = null;
+  let indoorXong = false;
   let indoorFlag = false;
   function isIndoor(s: GameState): boolean {
-    if (s.tiles === indoorFor) return indoorFlag;
-    indoorFor = s.tiles;
+    /* Câu trả lời chỉ phụ thuộc LOẠI NỀN của các ô biên, mà loại nền thì cây
+       lớn không đụng tới — nên khoá KHÔNG phải là tham chiếu mảng ô (thứ đổi
+       mỗi khung), mà là một cờ do `quetO` gỡ khi thật sự có ô đổi `t.g`. */
+    if (indoorXong) return indoorFlag;
+    indoorXong = true;
     let wood = 0;
     let n = 0;
     for (let x = 0; x < s.w; x++) {
@@ -629,8 +632,12 @@ export function createRenderer(
   /** Chỉ số ô NƯỚC trong vùng đã cache — vẽ trực tiếp mỗi khung. */
   let nenNuoc: number[] = [];
 
-  /* MỘT lượt quét ô mỗi khung. Hôm nay một khách hàng — cache lớp nền; commit
-     sau nối thêm bảng loại nước và `isIndoor`, vốn cùng khoá sai một kiểu.
+  /* MỘT lượt quét ô mỗi khung, BA khách hàng: cache lớp nền, bảng loại nước và
+     `isIndoor`. Cả ba trước đây khoá theo `s.tiles ===` và cả ba cùng hỏng.
+
+     Hai khách hàng sau không đọc một cờ theo-khung mà được `quetO` GỠ KHOÁ
+     thẳng: chúng chỉ được gọi ở vài nhánh của `draw()`, nên "cờ chỉ đúng trong
+     khung này" là một ràng buộc thứ tự chờ ngày ai đó đạp phải.
 
      So THAM CHIẾU trước rồi mới tính chữ ký: mảng là mới mỗi khung nhưng phần
      lớn phần tử vẫn là object cũ — chỉ ~360 ô có cây là mới. Nên một lượt quét
@@ -649,6 +656,8 @@ export function createRenderer(
     banDoMoi = s.mapId !== oMapId || oSig.length !== n;
     doiHop = null;
     if (banDoMoi) {
+      indoorXong = false;
+      loaiXong = false;
       oMapId = s.mapId;
       oSig = new Int32Array(n);
       oRef = new Array<Tile | undefined>(n);
@@ -670,6 +679,12 @@ export function createRenderer(
          Chỉ trỏ lại cả mảng sau vòng lặp là đủ. */
       const ky = t ? chuKyNen(t) : -1;
       if (ky === oSig[i]) continue; // object mới, hình vẽ y hệt — phần lớn là ca này
+      /* Ba bit thấp là LOẠI NỀN. Đổi loại nền thì bảng loại nước và `isIndoor`
+         phải dựng lại; đổi cày/tưới/bụi cỏ/công trình thì không. */
+      if ((ky & 7) !== (oSig[i]! & 7)) {
+        indoorXong = false;
+        loaiXong = false;
+      }
       oSig[i] = ky;
       const x = i % s.w;
       const y = (i / s.w) | 0;
@@ -719,7 +734,8 @@ export function createRenderer(
    *  dòng chảy thật, mà bảy ô thì chưa tới ngưỡng nào tính bằng ô cả. */
   const DONG_TI_LE = 3;
 
-  let loaiTiles: Tile[] | null = null;
+  let loaiXong = false;
+  let loaiContent: Content | null = null;
   let loaiNuoc: Uint8Array = new Uint8Array(0);
 
   /* ------------------------------------------------- MẶT NƯỚC LÀ MỘT MẢNG LẶP
@@ -858,7 +874,23 @@ export function createRenderer(
 
   /** Bảng loại nước cho CẢ bản đồ, dựng lại khi mảng ô đổi (copy-on-write). */
   function bangLoaiNuoc(s: GameState, content: Content): Uint8Array {
-    if (loaiTiles === s.tiles && loaiNuoc.length === s.w * s.h) return loaiNuoc;
+    /* Cùng một cái khoá sai như cache nền, cùng một cái giá: `loaiTiles ===
+       s.tiles` không bao giờ trúng trên nông trại đã gieo, nên MỖI KHUNG bảng
+       này cấp phát ~17,5 KB, chạy BFS qua ~560 ô nước rồi quét cả bản đồ ba
+       lượt — cho một bảng mà hôm nay không có gì đổi được nó.
+
+       Nó chỉ phụ thuộc hai thứ: ô nào là nước (`t.g`), và cổng biển khai trong
+       content (OTA đổi content lúc đang chạy, nên `content` phải nằm trong
+       khoá). Cả hai đều không đổi khi cây lớn.
+
+       Vì sao không khoá thẳng theo `mapId` cho gọn: hôm nay không chỗ nào
+       trong `src/game/` gán `t.g`, nhưng đó là một LỜI HỨA, và lời hứa thì
+       không có dây bẫy. Cờ do `quetO` gỡ là một PHÉP ĐO — mai thêm tính năng
+       đào ao thì bảng tự dựng lại, không ai phải nhớ sửa chỗ này. */
+    if (loaiXong && loaiContent === content && loaiNuoc.length === s.w * s.h)
+      return loaiNuoc;
+    loaiXong = true;
+    loaiContent = content;
     const n = s.w * s.h;
     const out = new Uint8Array(n);
     const laNuoc = (i: number) => s.tiles[i]?.g === "water";
@@ -924,7 +956,6 @@ export function createRenderer(
       else out[i] = NUOC_HO;
     }
 
-    loaiTiles = s.tiles;
     loaiNuoc = out;
     return out;
   }
@@ -2208,8 +2239,9 @@ export function createRenderer(
     const vp = camera.viewport;
     if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
 
-    /* MỘT lượt quét ô cho cả khung hình, chạy TRƯỚC mọi thứ đọc kết quả của
-       nó, đúng một lần — và đây là chỗ duy nhất gọi nó. */
+    /* MỘT lượt quét ô cho cả khung hình. Ba chỗ đọc kết quả của nó — cache lớp
+       nền, bảng loại nước, `isIndoor` — nên nó chạy TRƯỚC cả ba, đúng một lần,
+       và đây là chỗ duy nhất gọi nó. */
     quetO(s);
 
     const dt = lastTime > 0 ? Math.min(0.1, Math.max(0, timeSec - lastTime)) : 0;
