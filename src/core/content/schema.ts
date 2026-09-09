@@ -545,6 +545,14 @@ export function validateActors(raw: unknown): string[] {
         k.num(item, "capacity", 1, 100000);
         k.num(item, "speed", 1, 400);
         if (item["buyBonus"] !== undefined) k.num(item, "buyBonus", 0, 5);
+        /* DÁNG XE: danh sách ĐÓNG. Khai sai một chữ thì lớp vẽ lặng lẽ rơi về
+           dáng mặc định và cái xe buýt hiện ra là một chiếc xe tải — hỏng theo
+           kiểu không ai báo. Chặn ngay ở cổng content. */
+        if (item["style"] !== undefined) {
+          const DANG = ["box", "flatbed", "boat", "bus", "moto"];
+          if (!isStr(item["style"]) || !DANG.includes(item["style"] as string))
+            k.fail("style", `phải là một trong ${DANG.join(" · ")}`);
+        }
         const box = k.obj(item, "box");
         if (box) {
           k.num(box as Record<string, unknown>, "w", 1, 64);

@@ -794,5 +794,29 @@
     "map": "farm",
     "x": 30,
     "y": 68
+  },
+  "highway": {
+    "$comment": "QUỐC LỘ chạy ngang. `lanes` là từng làn một, `dir` là chiều xe chạy trên làn đó — 'e' đi sang đông, 'w' đi sang tây. Xếp theo luật đi bên PHẢI: nhìn theo chiều mình đi thì làn của mình nằm ở nửa bên phải mặt đường, nên hai làn trên chạy sang tây và hai làn dưới chạy sang đông. Xe chạy ngang KHÔNG ghé nông trang: nó vào một đầu, ra đầu kia, không mua không bán.",
+    "map": "farm",
+    "x0": 0,
+    "x1": 47,
+    "lanes": [
+      {
+        "y": 27,
+        "dir": "w"
+      },
+      {
+        "y": 28,
+        "dir": "w"
+      },
+      {
+        "y": 29,
+        "dir": "e"
+      },
+      {
+        "y": 30,
+        "dir": "e"
+      }
+    ]
   }
 }

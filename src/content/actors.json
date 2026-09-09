@@ -535,6 +535,42 @@
         "glass": "#e8f2f8",
         "accent": "#7a5230"
       }
+    },
+    {
+      "id": "bus",
+      "name": "Xe buýt",
+      "price": 0,
+      "capacity": 1,
+      "speed": 92,
+      "style": "bus",
+      "box": {
+        "w": 13,
+        "h": 11
+      },
+      "art": {
+        "body": "#d9873f",
+        "dark": "#8a4f21",
+        "glass": "#cfe6f2",
+        "accent": "#f2d16b"
+      }
+    },
+    {
+      "id": "moto",
+      "name": "Xe máy",
+      "price": 0,
+      "capacity": 1,
+      "speed": 128,
+      "style": "moto",
+      "box": {
+        "w": 9,
+        "h": 8
+      },
+      "art": {
+        "body": "#b5443c",
+        "dark": "#6e2723",
+        "glass": "#3f6f9e",
+        "accent": "#e8c05a"
+      }
     }
   ]
 }

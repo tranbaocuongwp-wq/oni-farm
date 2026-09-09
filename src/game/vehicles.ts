@@ -23,6 +23,7 @@ import type { Content, Entity, GameState, InvSlot, VehicleDef } from "./types.ts
 import { weatherDef } from "./weather.ts";
 import type { Draft } from "./state.ts";
 import { dEntity, randInt, toastText, touch } from "./state.ts";
+import { hash2 } from "../core/rng.ts";
 import { setStore } from "./storage.ts";
 import { removeEntity } from "./entities.ts";
 import { sellPriceOf, sellable } from "./items.ts";
@@ -46,8 +47,19 @@ export function vehicleDef(content: Content, id: string): VehicleDef | null {
   return content.vehicles[id] ?? null;
 }
 
+/**
+ * Số xe CỦA NÔNG TRANG đang trên bản đồ — xe giao hàng, xe thu mua, thuyền.
+ *
+ * KHÔNG kể xe chạy ngang trên quốc lộ. Chúng là trang trí: một hôm đường đông
+ * mà xe giao hàng của người chơi không vào được thì trang trí đang cướp chỗ của
+ * luật chơi, và đó là thứ không bao giờ được phép. Xe chạy ngang có trần riêng
+ * (`MAX_TRAFFIC`).
+ */
 export function vehicleCount(s: GameState): number {
-  return s.entities.reduce((n, e) => n + (e.kind === "vehicle" ? 1 : 0), 0);
+  return s.entities.reduce(
+    (n, e) => n + (e.kind === "vehicle" && e.veh?.errand?.kind !== "transit" ? 1 : 0),
+    0,
+  );
 }
 
 /**
@@ -274,6 +286,28 @@ export function vehicleStep(
   const cy = Math.floor(e.y / TILE);
   const box = def.box;
 
+  /* ---- ĐI NGANG QUA: xe trên quốc lộ ------------------------------------
+
+     Nó không có việc gì ở nông trang, nên nó không đi qua bất kỳ trạng thái
+     nào của máy trạng thái bên dưới: không đỗ bãi, không chờ, không "xong việc
+     rồi quay ra". Một chặng, tới nơi thì biến mất.
+
+     Xét TRƯỚC `v.wait` và trước mọi nhánh cổng: nếu để nó rơi vào nhánh "đang
+     vào" thì nó sẽ đi tìm bãi đậu trước cửa kho và đứng đó — một chiếc xe buýt
+     đỗ trong sân nông trại, và bãi thì hết chỗ cho xe giao hàng thật. */
+  if (v.errand?.kind === "transit") {
+    /* Đường đã dựng SẴN lúc sinh — một đường thẳng dọc làn — nên ở đây không
+       gọi A* lấy một lần. Đó không phải chuyện tiết kiệm vặt: `takeBudget()` là
+       NGÂN SÁCH A* DÙNG CHUNG của cả bản đồ, và xe chạy ngang mà tiêu vào đó
+       thì người làm thuê hết lượt xin đường. Đúng lỗi ấy đã xảy ra ở bản đầu —
+       kịch bản 151 đếm được 127 lần gọi A* trong 400 phút game, trần là 120.
+
+       Trang trí không bao giờ được tiêu ngân sách của luật chơi. */
+    if (e.ai.path.length) return true;
+    removeEntity(d, e.id); // hết đường = đã ra tới mép, biến mất
+    return true;
+  }
+
   // ---- đang chờ ở điểm giao ---------------------------------------------
   if (v.wait > 0) {
     v.wait = Math.max(0, v.wait - 0.5);
@@ -476,6 +510,120 @@ function doErrand(d: Draft, content: Content, index: number): void {
  * Nó cũng không cần điều kiện gì khác: thuyền đến để BÁN, nên kho trống hay
  * đầy đều không liên quan — khác hẳn xe thu mua.
  */
+/* ------------------------------------------------------- XE CHẠY TRÊN QUỐC LỘ
+
+   Cường: *"có xe buýt chạy ngang… xem như là đường quốc lộ"*.
+
+   Con đường chỉ là một dải nhựa cho tới khi có gì đó chạy trên nó. Nhưng thứ
+   chạy trên quốc lộ KHÔNG phải chuyện của nông trang: nó không mua, không bán,
+   không đỗ, và người chơi không tương tác được với nó. Nó có mặt để nông trang
+   nằm cạnh một thế giới đang chạy chứ không nằm giữa hư vô.
+
+   Vì thế nó có TRẦN RIÊNG (`MAX_TRAFFIC`), không ăn vào `MAX_VEHICLES`. Dùng
+   chung trần thì một hôm đông xe buýt là xe giao hàng của người chơi không vào
+   được — trang trí cướp chỗ của luật chơi, đúng thứ không bao giờ được phép. */
+
+/** Nhiều nhất ngần này xe chạy ngang cùng lúc. */
+export const MAX_TRAFFIC = 3;
+
+/** Bao nhiêu phút game giữa hai lượt thử cho xe ra đường. */
+const NHIP_XE_PHUT = 7;
+
+export function trafficCount(s: GameState): number {
+  let n = 0;
+  for (const e of s.entities) if (e.kind === "vehicle" && e.veh?.errand?.kind === "transit") n++;
+  return n;
+}
+
+/**
+ * Thử cho MỘT xe ra quốc lộ. Gọi mỗi khung hình; tự thưa ra theo đồng hồ game.
+ *
+ * `truoc`/`nay` là mốc phút game của khung trước và khung này — cùng cách
+ * `weatherTick` nhận nhịp, nên một khung dài (máy chậm, tab vừa hiện lại)
+ * không sinh ra một đoàn xe.
+ */
+export function maybeSendTraffic(d: Draft, content: Content, truoc: number, nay: number): boolean {
+  const hw = content.tiles.highway;
+  if (!hw || hw.map !== d.s.mapId || hw.lanes.length === 0) return false;
+  // Vắt qua mốc nhịp chưa? Không thì thôi.
+  if (Math.floor(truoc / NHIP_XE_PHUT) === Math.floor(nay / NHIP_XE_PHUT)) return false;
+  if (trafficCount(d.s) >= MAX_TRAFFIC) return false;
+  /* Bão thì đường vắng — cùng luật với xe thu mua và thuyền buôn. Người chơi
+     nhìn ra đường thấy vắng tanh là một cách nữa để bão có mặt. */
+  if (weatherDef(d.s, content).halt) return false;
+
+  /* Chọn LÀN và LOẠI XE bằng HÀM BĂM THUẦN, tuyệt đối KHÔNG đụng `state.seed`.
+
+     Đây là luật cứng của cả hệ thực thể, và kịch bản 55 là dây bẫy cho nó:
+     đường TICK không được rút một hạt nào từ dòng ngẫu nhiên dùng chung. Lý do:
+     TICK chạy mỗi KHUNG HÌNH, nên số lần rút phụ thuộc fps và cả việc người
+     chơi có mở modal hay không. Rút ở đây là bất biến "cùng seed + cùng chuỗi
+     action = state y hệt" vỡ ngay, và vỡ âm thầm — game vẫn chạy, chỉ replay
+     không còn khớp và save không tái lập được. (Tôi đã viết đúng cái lỗi ấy ở
+     bản đầu của hàm này; kịch bản 55 bắt được ngay.)
+
+     Băm theo (ngày, nhịp) thì cùng một lúc trong cùng một ngày luôn cho cùng
+     chiếc xe, dù máy chạy 30 hay 120 khung mỗi giây. */
+  const nhip = Math.floor(nay / NHIP_XE_PHUT);
+  const lan = hw.lanes[hash2(d.s.day, nhip, 0x51) % hw.lanes.length]!;
+  // xe máy đông hơn xe buýt, như ngoài đời
+  const loai = hash2(d.s.day, nhip, 0x77) % 3 === 0 ? "bus" : "moto";
+  if (!content.vehicles[loai]) return false;
+
+  /* Vào ở đầu NGƯỢC với chiều đi: làn 'e' chạy sang đông nên vào từ mép tây. */
+  const vao = lan.dir === "e" ? hw.x0 : hw.x1;
+  const ra = lan.dir === "e" ? hw.x1 : hw.x0;
+  return sendTransit(d, content, loai, { x: vao, y: lan.y }, { x: ra, y: lan.y }) !== null;
+}
+
+/** Thả một chiếc xe vào `tu`, cho nó chạy tới `den` rồi biến mất. */
+function sendTransit(
+  d: Draft,
+  content: Content,
+  defId: string,
+  tu: { x: number; y: number },
+  den: { x: number; y: number },
+): number | null {
+  const def = vehicleDef(content, defId);
+  if (!def) return null;
+  if (!driveableFor(d.s, content, def, tu.x, tu.y)) return null;
+  const id = spawnEntity(d, content, {
+    def: defId,
+    map: d.s.mapId,
+    x: tu.x * TILE + TILE / 2,
+    y: tu.y * TILE + TILE / 2,
+    kind: "vehicle",
+    // Sinh ra từ TICK → tự mang hạt, không đụng `state.seed`. Xem SpawnOptions.
+    seed: hash2(tu.x, tu.y, d.s.entSeq + 1),
+  });
+  if (id === null) return null;
+  const i = d.s.entities.findIndex((e) => e.id === id);
+  const e = dEntity(d, i);
+  if (!e) {
+    removeEntity(d, id);
+    return null;
+  }
+  e.veh = {
+    role: "delivery",
+    cargo: [],
+    errand: { kind: "transit", tx: den.x, ty: den.y },
+    wait: 0,
+    done: false,
+  };
+  e.ai.phase = "in";
+  /* ĐƯỜNG ĐI DỰNG THẲNG, không qua A*. Làn là một hàng ô nhựa liền mạch từ mép
+     này sang mép kia — không có gì để tìm. Gọi A* ở đây vừa thừa vừa tiêu vào
+     ngân sách dùng chung của người làm và vật nuôi. */
+  const buoc: number[] = [];
+  const huong = den.x > tu.x ? 1 : -1;
+  for (let x = tu.x + huong; ; x += huong) {
+    buoc.push(tu.y * d.s.w + x);
+    if (x === den.x) break;
+  }
+  e.ai.path = buoc;
+  return id;
+}
+
 export function maybeSendBoat(d: Draft, content: Content): boolean {
   const def = content.vehicles["boat"];
   if (!def || !content.tiles.seaGate || !content.tiles.dock) return false;

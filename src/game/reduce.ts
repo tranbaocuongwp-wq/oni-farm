@@ -22,7 +22,7 @@ import { putAllToStore, putToStore, sellStore, takeFromStore } from "./storage.t
 import { catchUpEntities, moveActors, runActorSteps, spawnEntity } from "./entities.ts";
 import { gatherFrom, gatherPen, penNear, slaughter } from "./animals.ts";
 import { assignJob, fireWorker, hireWorker } from "./workers.ts";
-import { sendVehicle } from "./vehicles.ts";
+import { sendVehicle, maybeSendTraffic } from "./vehicles.ts";
 import { buy, buyFromBoat, sell, sellAll } from "./economy.ts";
 import {
   TILE,
@@ -132,6 +132,10 @@ export function reduce(state: GameState, action: Action, content: Content): Game
       growCrops(d, content, Math.max(0, Math.min(s.minutes, dawn) - Math.min(was, dawn)));
       // Nắng gắt: qua trưa là ruộng khô (một lần mỗi ngày).
       weatherTick(d, content, was, s.minutes);
+      /* XE CHẠY TRÊN QUỐC LỘ. Nhận cùng cặp mốc phút như `weatherTick` để một
+         khung hình dài (máy chậm, tab vừa hiện lại) không đẻ ra cả một đoàn xe
+         cùng lúc — nhịp tính theo ĐỒNG HỒ GAME, không theo số khung. */
+      maybeSendTraffic(d, content, was, s.minutes);
 
       /* Leo lên giường xong thì sang ngày mới. Xét TRƯỚC mốc ngất: ai đã nằm
          lên giường rồi thì không đáng bị tính là ngất giữa đồng chỉ vì cái

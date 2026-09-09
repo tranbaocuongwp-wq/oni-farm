@@ -306,6 +306,15 @@ export interface VehicleDef {
   box: { w: number; h: number };
   /** xe thu mua trả cao hơn quầy bao nhiêu phần (0,15 = +15%) */
   buyBonus?: number;
+  /**
+   * DÁNG XE cho lớp vẽ: "box" · "flatbed" · "boat" · "bus" · "moto".
+   *
+   * Trước Đợt 29 dáng được SUY từ cờ khác — `sea` là thuyền, có `buyBonus` là
+   * sàn phẳng, còn lại là thùng kín. Suy như thế được chừng nào mỗi dáng còn
+   * có một cờ luật chơi đi kèm. Xe buýt và xe máy thì không: chúng chỉ chạy
+   * ngang qua, không mua không bán, nên không có cờ nào để suy. Khai thẳng.
+   */
+  style?: "box" | "flatbed" | "boat" | "bus" | "moto";
   art: { body: string; dark: string; glass: string; accent: string };
 }
 
@@ -764,6 +773,24 @@ export interface TilesDef {
   spawn: { map: string; x: number; y: number };
   /** CỔNG: ô ở mép bản đồ mà xe từ ngoài đi vào. Thiếu thì không có xe nào. */
   gate?: { map: string; x: number; y: number };
+  /**
+   * QUỐC LỘ chạy ngang bản đồ — con đường KHÔNG thuộc về nông trang.
+   *
+   * Khác `gate` ở chỗ nó không dẫn tới đâu trong này cả: xe trên quốc lộ vào
+   * một đầu, ra đầu kia, không mua không bán không đỗ. Nó có mặt để nông trang
+   * nằm cạnh MỘT THẾ GIỚI ĐANG CHẠY chứ không nằm giữa hư vô.
+   *
+   * `lanes` khai từng làn và CHIỀU xe chạy trên làn đó ('e' sang đông, 'w'
+   * sang tây), xếp theo luật đi bên phải. Khai thẳng ra content chứ không suy
+   * từ hình con đường: suy thì cũng chỉ là đoán, mà đoán sai thì hai luồng xe
+   * chạy ngược chiều trên cùng một làn.
+   */
+  highway?: {
+    map: string;
+    x0: number;
+    x1: number;
+    lanes: { y: number; dir: "e" | "w" }[];
+  };
   /** Cổng BIỂN: thuyền buôn ra vào bằng đây, không phải cổng đường. */
   seaGate?: { map: string; x: number; y: number };
   /** BẾN: ô nước ở cuối cầu tàu, chỗ thuyền cập vào mở sạp. */
@@ -1211,6 +1238,12 @@ export interface VehicleState {
     | { kind: "buy" }
     /** THUYỀN BUÔN: cập bến, mở sạp, rồi nhổ neo. Không chở gì cả. */
     | { kind: "shop" }
+    /**
+     * ĐI NGANG QUA — xe trên quốc lộ. Vào một đầu, ra đầu kia `(tx, ty)`, hết.
+     * Không có việc gì để làm nên nó không bao giờ đổi sang phase "out": nó chỉ
+     * có đúng một chặng, và tới nơi là biến mất.
+     */
+    | { kind: "transit"; tx: number; ty: number }
     | null;
   /** phút game còn phải đứng chờ */
   wait: number;

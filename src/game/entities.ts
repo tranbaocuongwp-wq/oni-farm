@@ -176,6 +176,19 @@ export interface SpawnOptions {
   x: number;
   y: number;
   kind?: Entity["kind"];
+  /**
+   * HẠT ban đầu, do chỗ gọi đưa vào — dùng khi việc sinh xảy ra TRONG `TICK`.
+   *
+   * Mặc định `spawnEntity` rút hạt từ `state.seed`, và điều đó đúng vì sinh
+   * thực thể xưa nay luôn là một ACTION (mua con vật, gọi xe thu mua). Xe chạy
+   * trên quốc lộ thì không: nó sinh ra từ đồng hồ, tức từ `TICK`. Mà `TICK`
+   * tuyệt đối không được đụng dòng ngẫu nhiên dùng chung — số lần rút sẽ phụ
+   * thuộc fps, và bất biến "cùng seed + cùng chuỗi action = state y hệt" vỡ
+   * âm thầm (kịch bản 55 canh đúng chỗ đó, và nó đã bắt được tôi một lần).
+   *
+   * Đưa hạt vào thì `state.seed` không bị đụng tới.
+   */
+  seed?: number;
 }
 
 /**
@@ -199,14 +212,16 @@ export function spawnEntity(d: Draft, content: Content, o: SpawnOptions): number
   const s = touch(d);
   const id = s.entSeq + 1;
   s.entSeq = id;
-  // Hạt ban đầu rút từ `state.seed` — đây là một ACTION nên rút ở đây là ngẫu
-  // nhiên theo SỰ KIỆN, đúng khuôn cũ. Từ giây này trở đi con vật chỉ dùng hạt
-  // riêng của nó và không đụng `state.seed` nữa.
-  //
-  // (Cố ý KHÔNG import `core/rng.ts`: chiều phụ thuộc là core → game, một
-  //  chiều. `game/` chỉ được phép biết đúng `core/version.ts`.)
-  const r = nextRandom(s.seed);
-  s.seed = r.seed;
+  /* Hạt ban đầu rút từ `state.seed` — sinh thực thể là một ACTION nên rút ở
+     đây là ngẫu nhiên theo SỰ KIỆN, đúng khuôn cũ. Từ giây này trở đi con vật
+     chỉ dùng hạt riêng của nó và không đụng `state.seed` nữa.
+     Chỗ gọi TỪ TRONG TICK phải tự đưa hạt vào (`o.seed`) — xem SpawnOptions.
+
+     (Cố ý KHÔNG import `core/rng.ts`: chiều phụ thuộc là core → game, một
+      chiều. `game/` chỉ được phép biết đúng `core/version.ts`.) */
+  const tuNgoai = Number.isFinite(o.seed);
+  const r = tuNgoai ? { seed: (o.seed as number) >>> 0 } : nextRandom(s.seed);
+  if (!tuNgoai) s.seed = r.seed;
 
   const e: Entity = {
     id,

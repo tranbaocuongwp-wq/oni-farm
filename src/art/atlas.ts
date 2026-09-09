@@ -6882,7 +6882,7 @@ function makeAnimal(
 }
 
 /** Ba dáng xe, suy từ content (xem `vehicleOf`). */
-export type VehicleStyle = "box" | "flatbed" | "boat";
+export type VehicleStyle = "box" | "flatbed" | "boat" | "bus" | "moto";
 
 /** Cỡ canvas xe: hai ô — xe phải to hơn người, mà người là 16px. */
 export const VEHICLE_SIZE = 32;
@@ -6907,8 +6907,12 @@ function makeVehicle(
   const s = surface(S, S);
   const doc = dir === "up" || dir === "down";
   const flip = dir === "left" || dir === "up";
-  const L = 24; // chiều dài thân
-  const Wd = style === "boat" ? 10 : 13; // bề ngang thân
+  /* Chiều dài và bề ngang thân, theo dáng. Xe buýt DÀI hơn xe tải (nó là thứ
+     dài nhất chạy trên đường); xe máy ngắn và hẹp — một chiếc xe máy to bằng
+     cái xe tải thì cả con đường mất tỉ lệ. Hộp va chạm nằm trong content và
+     KHÔNG đổi theo cái này. */
+  const L = style === "moto" ? 13 : style === "bus" ? 28 : 24;
+  const Wd = style === "boat" ? 10 : style === "moto" ? 7 : style === "bus" ? 12 : 13;
   const toi = art.dark;
   const sang = lighten(art.body);
   const rat = shade(art.dark, 0.6);
@@ -7009,6 +7013,64 @@ function makeVehicle(
       s.dot(x, gy + r, "#dff1ff");
     }
     for (let i = 0; i < 6; i++) s.dot(x0 - 2.5 - i * 0.75 - w, gy + (i % 2 ? 0.5 : -0.5), "#cfe8fa");
+  } else if (style === "moto") {
+    /* XE MÁY nhìn TỪ TRÊN XUỐNG — Cường: "thêm bộ đồ hoạ xe buýt xe máy vô".
+
+       Từ trên nhìn xuống, thứ chiếm phần lớn cái bóng KHÔNG phải chiếc xe mà
+       là NGƯỜI NGỒI TRÊN NÓ: hai vai rộng hơn thân xe, cái nón tròn ở giữa,
+       hai tay vươn ra ghi đông. Vẽ chiếc xe cho thật rồi để người lái thành
+       một vệt thì nhìn xuống chỉ thấy một cục sẫm, không ra cái gì.
+
+       Nên thứ tự vẽ ở đây đi từ DƯỚI LÊN: bánh → khung → ghi đông → người →
+       nón. Cái sau đè lên cái trước, đúng như nhìn từ trên xuống thật. */
+    const banh = "#171513";
+    // BÁNH: hẹp và sẫm, thò hẳn ra trước và sau — đó là thứ nói "hai bánh"
+    for (const bx of [x0, x0 + L - 2.5]) {
+      for (let x = 0; x < 2.5; x += Q)
+        for (let y = gy - 1; y <= gy + 1; y += Q) s.dot(bx + x, y, banh);
+      s.dot(bx + 1, gy, frame === 0 ? "#585149" : "#7d746a");
+    }
+    // KHUNG nối hai bánh — hẹp hơn bánh một chút cho ra cái eo
+    for (let x = 2; x < L - 2.5; x += Q) {
+      s.dot(x0 + x, gy - Q, art.body);
+      s.dot(x0 + x, gy, shade(art.body, 0.82));
+      s.dot(x0 + x, gy + Q, shade(art.body, 0.66));
+    }
+    // YẾM và ĐÈN ở mũi, ĐÈN HẬU ở đuôi
+    for (let y = gy - 1; y <= gy + 1; y += Q) s.dot(x0 + L - 3.5, y, art.accent);
+    s.dot(x0 + L - 3, gy, "#fff3c4");
+    s.dot(x0 + 0.5, gy, "#e05d5d");
+    // GHI ĐÔNG: một thanh ngang RỘNG HƠN thân, ngay trước người lái
+    for (let y = gy - 3; y <= gy + 3; y += Q) s.dot(x0 + L - 4.5, y, "#2e2b27");
+    s.dot(x0 + L - 4.5, gy - 3, "#4a453f");
+    s.dot(x0 + L - 4.5, gy + 3, "#4a453f");
+
+    // ---- NGƯỜI LÁI
+    const ao = art.glass;
+    // hai cánh tay vươn ra ghi đông, vẽ TRƯỚC thân để thân đè lên vai
+    for (let x = L - 7.5; x < L - 4; x += Q) {
+      s.dot(x0 + x, gy - 2.5, ao);
+      s.dot(x0 + x, gy + 2.5, ao);
+    }
+    // THÂN: rộng hơn xe, thon dần về phía trước
+    for (let x = 3.5; x < 8.5; x += Q) {
+      const r = x < 5 ? 2 : x < 7 ? 2.5 : 2;
+      for (let y = gy - r; y <= gy + r; y += Q) s.dot(x0 + x, y, ao);
+      s.dot(x0 + x, gy - r, lighten(ao));
+      s.dot(x0 + x, gy + r, shade(ao, 0.7));
+    }
+    // NÓN BẢO HIỂM: tròn, nằm giữa hai vai — chấm sáng nhất của cả con xe
+    const non = art.accent;
+    for (let x = 4.5; x < 7.5; x += Q)
+      for (let y = gy - 1.5; y <= gy + 1.5; y += Q) {
+        // bo bốn góc cho ra hình tròn
+        const dx = (x - 6) / 1.5;
+        const dy = (y - gy) / 1.5;
+        if (dx * dx + dy * dy > 1.15) continue;
+        s.dot(x0 + x, y, non);
+      }
+    for (let x = 5; x < 7; x += Q) s.dot(x0 + x, gy - 1.5, lighten(non));
+    s.dot(x0 + 6, gy + 1, shade(non, 0.72));
   } else {
     /* XE — ca-bin ở đầu PHẢI. Thêm ở Đợt 24: vòm bánh, lốp có gai, kính có
        khung và một vệt phản chiếu, lưới tản nhiệt, gương chiếu hậu, ống xả. */
@@ -7029,7 +7091,42 @@ function makeVehicle(
       }
     }
 
-    if (style === "box") {
+    if (style === "bus") {
+      /* XE BUÝT: một khối dài liền mạch, không tách thùng với ca-bin. Nhìn từ
+         trên thì thứ đọc ra "xe buýt" là DẢI CỬA SỔ chạy suốt hai bên sườn và
+         cái mái phẳng dài — không phải hình dáng đầu xe. */
+      for (let x = 0; x < L; x += Q)
+        for (let y = y0; y <= y1; y += Q) s.dot(x0 + x, y, art.body);
+      for (let x = 0; x < L; x += Q) {
+        s.dot(x0 + x, y0, sang);
+        s.dot(x0 + x, y0 + Q, sang);
+        s.dot(x0 + x, y1, toi);
+      }
+      // DẢI CỬA SỔ hai bên sườn — từng ô một, chừa khung giữa các ô
+      for (let x = 2; x < L - 5.5; x += 2.5)
+        for (let d = 0; d < 1.5; d += Q) {
+          s.dot(x0 + x + d, y0 + 0.5, art.glass);
+          s.dot(x0 + x + d, y1 - 0.5, art.glass);
+        }
+      // sọc accent chạy suốt thân — thứ làm cái xe buýt có "tuyến"
+      for (let x = 0; x < L; x += Q) {
+        s.dot(x0 + x, gy - Q, art.accent);
+        s.dot(x0 + x, gy, shade(art.accent, 0.82));
+      }
+      // KÍNH LÁI ở mũi, đèn pha hai bên
+      for (let y = y0 + 1; y <= y1 - 1; y += Q) s.dot(x0 + L - 2, y, toi);
+      for (let y = y0 + 1.5; y <= y1 - 1.5; y += Q) s.dot(x0 + L - 1.5, y, art.glass);
+      s.dot(x0 + L - Q, y0 + 1, "#ffe9a8");
+      s.dot(x0 + L - Q, y1 - 1, "#ffe9a8");
+      // CỬA LÊN XUỐNG ở sườn phải, ngay sau ca-bin
+      for (let y = y1 - 1.5; y <= y1; y += Q) {
+        s.dot(x0 + L - 6, y, rat);
+        s.dot(x0 + L - 5.5, y, rat);
+      }
+      // đèn hậu
+      s.dot(x0, y0 + 1, "#e05d5d");
+      s.dot(x0, y1 - 1, "#e05d5d");
+    } else if (style === "box") {
       // THÙNG KÍN: có gân dọc và cửa sau hai cánh
       for (let x = 0; x < L - cabW - 1; x += Q)
         for (let y = y0; y <= y1; y += Q) s.dot(x0 + x, y, art.body);
@@ -7074,7 +7171,10 @@ function makeVehicle(
       }
     }
 
-    // ---- CA-BIN
+    // ---- CA-BIN (xe buýt không có: thân nó liền một khối, đã vẽ ở trên)
+    if (style === "bus") {
+      // đã xong
+    } else {
     for (let x = 0; x < cabW; x += Q)
       for (let y = y0; y <= y1; y += Q) s.dot(cx0 + x, y, art.body);
     for (let x = 0; x < cabW; x += Q) {
@@ -7101,6 +7201,7 @@ function makeVehicle(
     s.dot(x0, y0 + 1, "#e05d5d");
     s.dot(x0, y1 - 1, "#e05d5d");
     s.dot(x0 - 0.5, gy + 1.5, rat);
+    }
   }
 
   const done = outline(s, P.outline, 1).c;
@@ -7170,9 +7271,12 @@ export function buildAtlas(content: Content): Atlas {
     const key = `${defId}|${dir}|${f}`;
     let c = vehCache.get(key);
     if (!c) {
-      /* Dáng xe suy từ content, không từ tên: thuyền = `sea`; xe có `buyBonus`
-         (đi mua) là sàn phẳng chở kiện; còn lại là thùng kín chở hàng. */
-      const dang: VehicleStyle = def.sea ? "boat" : def.buyBonus !== undefined ? "flatbed" : "box";
+      /* Dáng xe: content khai thẳng thì theo content. Không khai thì suy từ cờ
+         luật chơi như cũ — thuyền = `sea`; xe có `buyBonus` (đi mua) là sàn
+         phẳng chở kiện; còn lại là thùng kín chở hàng. Giữ đường suy ấy để mọi
+         content pack cũ vẫn vẽ đúng như trước. */
+      const dang: VehicleStyle =
+        def.style ?? (def.sea ? "boat" : def.buyBonus !== undefined ? "flatbed" : "box");
       c = makeVehicle(def.art, dir, f, dang);
       vehCache.set(key, c);
     }

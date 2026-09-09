@@ -55,6 +55,7 @@ import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
 import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT, soLat, vachKeDuong } from "../src/render/draw.ts";
+import { vehicleCount, MAX_TRAFFIC } from "../src/game/vehicles.ts";
 import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
 import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
@@ -3346,7 +3347,14 @@ test("55. TICK không bao giờ đụng state.seed — dây bẫy của tính t�
   const seedTruoc = store.getState().seed;
   for (let i = 0; i < 3000; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
   eq(store.getState().seed, seedTruoc, "3000 khung hình TICK không đổi state.seed một lần nào");
-  ok(store.getState().entities.length === 20, "không con nào biến mất");
+  /* Đếm CON VẬT, không đếm mọi thực thể: từ Đợt 29 trên quốc lộ có xe chạy
+     ngang, và chúng sinh ra rồi biến mất theo đồng hồ. Chúng là thực thể thật
+     nhưng không phải thứ kịch bản này nói về. */
+  eq(
+    store.getState().entities.filter((e) => e.kind === "animal").length,
+    20,
+    "không con nào biến mất",
+  );
   deepEq(checkInvariants(store.getState(), content), [], "bất biến sau 3000 khung hình có 20 con vật");
 });
 
@@ -3642,7 +3650,11 @@ test("58. mua vật nuôi: XE CHỞ TỚI điểm giao, không hiện ra ngay", 
   let xeVeChua = false;
   for (let i = 0; i < 60 * 60 * 6 && !xeVeChua; i++) {
     store.dispatch({ t: "TICK", dt: 1 / 60 });
-    xeVeChua = !store.getState().entities.some((e) => e.kind === "vehicle");
+    /* Chỉ hỏi xe CỦA NÔNG TRANG. Xe chạy ngang trên quốc lộ thì lúc nào cũng
+       có thể đang có một chiếc trên đường — đợi cho sạch bóng xe là đợi mãi. */
+    xeVeChua = !store
+      .getState()
+      .entities.some((e) => e.kind === "vehicle" && e.veh?.errand?.kind !== "transit");
   }
   ok(xeVeChua, "giao xong thì xe quay ra khỏi bản đồ, không đậu lại mãi");
 });
@@ -5432,10 +5444,12 @@ test("76. con vật CÒN NO thì loanh quanh trong chuồng, không lách cổng
   for (let i = 0; i < 4000; i++) {
     if (i % 200 === 0)
       setState(store, (s) => {
-        for (const e of s.entities) e.animal.fed = loai.fedMinutes;
+        for (const e of s.entities) if (e.kind === "animal") e.animal.fed = loai.fedMinutes;
       });
     store.dispatch({ t: "TICK", dt: 1 / 30 });
-    for (const e of store.getState().entities) if (!trongKhu(e)) raNgoai++;
+    // Chỉ xét CON VẬT: xe chạy ngang trên quốc lộ đương nhiên nằm ngoài chuồng.
+    for (const e of store.getState().entities)
+      if (e.kind === "animal" && !trongKhu(e)) raNgoai++;
   }
   eq(raNgoai, 0, "con vật còn no thì KHÔNG được bước ra khỏi chuồng lấy một khung hình");
 
@@ -9987,7 +10001,10 @@ test("143. CỔNG nằm ở MÉP bản đồ, biển hiệu gắn lên nhà, và
     eq(Math.floor(xe.x / TILE), g.x, "xe phải sinh ra ĐÚNG ở cổng (x)");
     eq(Math.floor(xe.y / TILE), g.y, "xe phải sinh ra ĐÚNG ở cổng (y)");
 
-    for (let k = 0; k < 40000 && store.getState().entities.length <= truoc + 1; k++)
+    /* Đợi ĐÚNG con vật hiện ra, chứ không đợi "số thực thể tăng thêm một":
+       xe chạy ngang trên quốc lộ cũng làm số ấy tăng, và vòng lặp sẽ thoát
+       sớm trước khi xe giao hàng kịp tới nơi. */
+    for (let k = 0; k < 40000 && !store.getState().entities.some((e) => e.def === loai); k++)
       store.dispatch({ t: "TICK", dt: 1 / 60 });
     ok(
       store.getState().entities.some((e) => e.def === loai),
@@ -12799,6 +12816,100 @@ test("178. Mở ĐƯỜNG qua chỗ có vật cản: save cũ không được đ
       if (t?.g === "asphalt" && t.prop) cong.push(`(${x},${y}) ${t.prop}`);
     }
   deepEq(cong.slice(0, 5), [], `${cong.length} ô mặt đường còn vật thể sau khi trộn save`);
+});
+
+
+test("179. XE CHẠY TRÊN QUỐC LỘ là trang trí — không được cướp gì của luật chơi", () => {
+  /* Cường: *"có xe buýt chạy ngang"*. Con đường chỉ là một dải nhựa cho tới khi
+     có gì đó chạy trên nó.
+
+     Nhưng thứ chạy ngang KHÔNG phải chuyện của nông trang: nó không mua, không
+     bán, không đỗ, người chơi không đụng vào được. Nó là TRANG TRÍ. Và trang
+     trí thì có đúng một luật phải giữ: **không được cướp gì của luật chơi**.
+
+     Bản đầu của tính năng này phạm cả ba điều dưới đây cùng lúc, và mỗi điều
+     đều do một kịch bản có sẵn bắt được — 55 (dòng ngẫu nhiên), 143/58 (trần
+     xe), 151 (ngân sách A*). Kịch bản này gom chúng lại thành một chỗ nói rõ
+     vì sao, để đợt sau ai thêm loại xe mới thì đọc một chỗ là đủ. */
+  const hw = content.tiles.highway;
+  ok(!!hw, "content phải khai quốc lộ");
+  ok(hw.lanes.length >= 2, `quốc lộ phải có nhiều làn, đang có ${hw.lanes.length}`);
+
+  /* --- (a) MỌI LÀN đều phải là mặt đường thật, suốt từ mép này sang mép kia.
+         Khai một làn trượt ra ngoài mặt nhựa thì xe sinh ra giữa ruộng. */
+  const s0 = mkStore(1790).getState();
+  for (const lan of hw.lanes)
+    for (let x = hw.x0; x <= hw.x1; x++) {
+      const t = tileAt(s0, x, lan.y);
+      eq(t?.g, "asphalt", `làn y=${lan.y} tại x=${x} phải là mặt đường`);
+      eq(t?.prop ?? null, null, `làn y=${lan.y} tại x=${x} không được có vật cản`);
+    }
+
+  /* --- (b) ĐI BÊN PHẢI: hai chiều phải cùng có mặt, và làn của mỗi chiều nằm
+         về một phía. Khai lệch thì hai luồng xe chạy ngược nhau trên cùng làn. */
+  const dong = hw.lanes.filter((l) => l.dir === "e").map((l) => l.y);
+  const tay = hw.lanes.filter((l) => l.dir === "w").map((l) => l.y);
+  ok(dong.length > 0 && tay.length > 0, "phải có xe chạy cả hai chiều");
+  ok(
+    Math.min(...dong) > Math.max(...tay),
+    "đi bên PHẢI: làn sang đông phải nằm hẳn dưới làn sang tây",
+  );
+
+  /* --- (c) CHẠY THẬT, và BIẾN MẤT khi ra tới mép --------------------- */
+  const store = mkStore(1791);
+  const seedTruoc = store.getState().seed;
+  const daThay = new Map();
+  let dinh = 0;
+  for (let i = 0; i < 9000; i++) {
+    store.dispatch({ t: "TICK", dt: 1 / 60 });
+    const st = store.getState();
+    const xe = st.entities.filter((e) => e.veh?.errand?.kind === "transit");
+    dinh = Math.max(dinh, xe.length);
+    for (const e of xe) if (!daThay.has(e.id)) daThay.set(e.id, e);
+  }
+  ok(daThay.size >= 5, `phải có xe chạy qua thật, mới thấy ${daThay.size} chiếc`);
+  ok(dinh <= MAX_TRAFFIC, `cùng lúc nhiều nhất ${MAX_TRAFFIC} chiếc, đo được ${dinh}`);
+  const conLai = store.getState().entities.filter((e) => e.veh?.errand?.kind === "transit").length;
+  ok(
+    conLai <= MAX_TRAFFIC,
+    `xe phải BIẾN MẤT khi ra tới mép — còn ${conLai} chiếc đọng lại trên đường`,
+  );
+  ok(daThay.size > conLai, "phải có chiếc đã đi hết đường và biến mất, không phải chỉ đứng đó");
+
+  /* --- (d) KHÔNG ĐỤNG DÒNG NGẪU NHIÊN DÙNG CHUNG --------------------
+         `TICK` chạy mỗi khung hình, nên rút một hạt ở đây là số lần rút phụ
+         thuộc fps. Kịch bản 55 canh chỗ này cho cả hệ thực thể; nhắc lại ở đây
+         vì xe chạy ngang là thứ ĐẦU TIÊN sinh ra từ TICK chứ không từ action. */
+  eq(store.getState().seed, seedTruoc, "9000 khung có xe chạy ngang mà state.seed không nhúc nhích");
+
+  /* --- (e) KHÔNG ĂN VÀO TRẦN XE CỦA NÔNG TRANG -----------------------
+         Một hôm đường đông mà xe giao hàng của người chơi không vào được thì
+         trang trí đang cướp chỗ của luật chơi. */
+  const st2 = store.getState();
+  const chayNgang = st2.entities.filter((e) => e.veh?.errand?.kind === "transit").length;
+  ok(
+    vehicleCount(st2) + chayNgang === st2.entities.filter((e) => e.kind === "vehicle").length,
+    "vehicleCount phải bỏ qua xe chạy ngang",
+  );
+  eq(vehicleCount(st2), 0, "xe chạy ngang KHÔNG được tính vào trần xe của nông trang");
+
+  /* --- (f) KHÔNG TIÊU NGÂN SÁCH A* ----------------------------------
+         Làn là một hàng ô nhựa liền mạch — không có gì để tìm đường. Gọi A* ở
+         đây là lấy mất lượt xin đường của người làm thuê (kịch bản 151 đo được
+         127 lần gọi trong 400 phút game, trần 120). */
+  /* Bỏ CHÚ THÍCH trước khi quét: đoạn mã ấy có hẳn một chú thích giải thích vì
+     sao KHÔNG được gọi `takeBudget`, nên quét cả chú thích thì phép kiểm này
+     đỏ vì chính câu văn nói rằng nó phải xanh. */
+  const nguon = readFileSync(new URL("../src/game/vehicles.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  const i0 = nguon.indexOf('if (v.errand?.kind === "transit")');
+  ok(i0 >= 0, "vehicles.ts phải có nhánh riêng cho xe chạy ngang");
+  const iHet = nguon.indexOf("if (v.wait > 0)", i0);
+  ok(iHet > i0, "không cắt được thân nhánh xe chạy ngang");
+  const than = nguon.slice(i0, iHet);
+  ok(!than.includes("takeBudget"), "nhánh xe chạy ngang KHÔNG được tiêu ngân sách A*");
+  ok(!than.includes("drivePath"), "…và không được gọi tìm đường: làn là một đường thẳng");
 });
 
 await Promise.all(choDoi);
