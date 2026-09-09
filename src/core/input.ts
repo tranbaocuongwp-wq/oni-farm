@@ -51,14 +51,14 @@ export type PadJob =
   | "interact"
   | "back"
   | "inventory"
+  | "aimPrev"
+  | "aimNext"
   | "hotbarPrev"
   | "hotbarNext"
   | "run"
   | "zoom"
   | "map"
-  | "menu"
-  | "build"
-  | "padHelp";
+  | "menu";
 
 export interface PadBind {
   nut: number;
@@ -85,17 +85,30 @@ export const PAD_MAP: readonly PadBind[] = [
      "một nút ngữ cảnh chính là hành động, một nút ngữ cảnh phụ là tra cứu
      thông tin gần đó."
 
-     A quyết định bằng MÓN ĐANG CẦM × hoàn cảnh trong một bán kính quanh nhân
-     vật, và có kèm di chuyển: việc trong bán kính mà ngoài tầm với thì tự đi
-     tới làm cho xong rồi DỪNG. Nó KHÔNG còn "nhận cả chuyến" quét cả bản đồ —
-     ở 1.27.0 nó làm thế, và chơi thật thì thành "bấm vô cái nó chạy đi tùm lum
-     nhổ cỏ lượm đá" trong khi người chơi đang đứng cạnh chuồng gà. */
-  { nut: PAD.A, viec: "use", mo: "Làm — theo món đang cầm và những gì quanh mình. Ngoài tầm thì tự đi tới làm rồi dừng." },
-  { nut: PAD.B, viec: "interact", mo: "Tra cứu — bảng con vật, bảng khu, thẻ ô gần mình. Không đổi gì cả." },
-  /* KHÔNG có nút "chuyển mục tiêu" cho tay cầm, dù cảm ứng có (Đợt 27).
-     Cần PHẢI đã rê thẳng mũi tên đỏ tới ô muốn nhắm — liên tục, chọn đúng chỗ,
-     không phải bấm năm lần để đi vòng. Thêm một nút nữa cho cùng việc ấy là
-     phá đúng hợp đồng "một nút một việc, một việc một nút" mà bảng này giữ. */
+     A làm ĐÚNG MỘT việc, lên đúng thứ mũi tên đỏ đang chỉ. Ngoài tầm thì đi
+     tới làm rồi DỪNG.
+
+     Chỗ này từng ghi rằng A "KHÔNG còn nhận cả chuyến", và câu ấy SAI kể từ lúc
+     `runAfter` ra đời: mỗi nhát tự nối sang nhát kế, nên bấm một lần để cày một
+     ô là cày hết lô rồi nhổ cỏ. Cường gặp lại đúng triệu chứng cũ — "nó nhảy
+     tùm lum mà nó cứ làm tự động thôi". Đợt 34 gỡ hẳn đường nối ấy, và kịch bản
+     186 nay đối chiếu lời khẳng định này với mã, để nó không sai lặng lẽ lần
+     nữa. Muốn làm hàng loạt thì bật "Tự động làm" trong menu. */
+  { nut: PAD.A, viec: "use", mo: "Làm — đúng một việc, lên thứ mũi tên đỏ đang chỉ. Ngoài tầm thì đi tới làm rồi dừng." },
+  { nut: PAD.B, viec: "interact", mo: "Tra cứu — đọc thông tin của MỤC TIÊU đang nhắm. Không đổi gì cả." },
+  /* CHUYỂN MỤC TIÊU nằm ở HAI VAI — Cường: "nếu mà có game pad thì dùng nút
+     RB LB để chuyển qua lại các mục tiêu trong phạm vi".
+
+     Trước Đợt 34 chỗ này ghi "KHÔNG có nút chuyển mục tiêu cho tay cầm", với lý
+     lẽ: cần phải đã rê thẳng mũi tên tới ô muốn nhắm, thêm nút nữa là phá hợp
+     đồng "một nút một việc". Lý lẽ ấy hỏng ở chỗ RÊ và CHỌN không phải một
+     việc: rê là chỉ vào một Ô, còn chuyển mục tiêu là đi vòng qua những THỨ
+     đáng nhắm quanh mình — cái máng, con bò tới lứa, gốc cây. Rê cần phải tới
+     đúng con bò trong lúc nó đang đi là việc khó; bấm vai một cái là xong.
+
+     Hai vai vì nó có CHIỀU: LB lùi, RB tiến, đi vòng tròn quanh mình. */
+  { nut: PAD.LB, viec: "aimPrev", mo: "Mục tiêu trước — đi ngược vòng quanh mình.", canStd: true },
+  { nut: PAD.RB, viec: "aimNext", mo: "Mục tiêu sau — đi xuôi vòng quanh mình.", canStd: true },
   /* X = QUAY LẠI. Cố ý KHÔNG rào sau `canStd`: từ khi B mang việc tra cứu thì
      đây là nút thoát duy nhất ngoài START, và cắm một tay cầm mà trình duyệt
      không nhận ra sơ đồ chuẩn thì mất hẳn đường lùi. Đoán sai thì cái giá chỉ
@@ -104,14 +117,16 @@ export const PAD_MAP: readonly PadBind[] = [
   /* Y là BALO chứ không phải cửa hàng: cửa hàng là một cái nhà, đi tới nó rồi
      bấm B là xong. Balo thì không có chỗ nào trên bản đồ để đi tới. */
   { nut: PAD.Y, viec: "inventory", mo: "Mở balo.", canStd: true },
-  { nut: PAD.LB, viec: "hotbarPrev", mo: "Ô hotbar trước.", canStd: true },
-  { nut: PAD.RB, viec: "hotbarNext", mo: "Ô hotbar sau.", canStd: true },
+  /* HOTBAR dời từ hai VAI xuống hai NÚT CẦN. Hai vai nay mang việc dùng nhiều
+     hơn hẳn (chuyển mục tiêu), còn đổi ô hotbar thì thưa hơn — và L3/R3 vừa
+     trống ra: "chế độ xây" đã có ô đầu trong lưới menu Tạm dừng từ Đợt 26, còn
+     "mở lại bảng nút" cũng nằm sẵn trong menu. */
+  { nut: PAD.L3, viec: "hotbarPrev", mo: "Ô hotbar trước.", canStd: true },
+  { nut: PAD.R3, viec: "hotbarNext", mo: "Ô hotbar sau.", canStd: true },
   { nut: PAD.LT, viec: "run", mo: "Giữ để chạy.", giu: true, canStd: true },
   { nut: PAD.RT, viec: "zoom", mo: "Đổi mức phóng: gần → vừa → xa.", canStd: true },
   { nut: PAD.BACK, viec: "map", mo: "Bản đồ nhỏ — cần phải rê con trỏ, A để đi tới đó.", canStd: true },
   { nut: PAD.START, viec: "menu", mo: "Menu tạm dừng." },
-  { nut: PAD.L3, viec: "build", mo: "Chế độ xây dựng.", canStd: true },
-  { nut: PAD.R3, viec: "padHelp", mo: "Mở lại bảng này.", canStd: true },
 ];
 
 /** Nút mang việc này, hoặc −1. Dùng để sơ đồ nút in ĐÚNG tên nút của máy. */
@@ -582,13 +597,13 @@ export function createInput(target: HTMLElement, opts: InputOptions): Input {
           case "interact": push({ t: "interact" }); break;
           case "back": push({ t: "back" }); break;
           case "inventory": push({ t: "inventory" }); break;
+          case "aimPrev": push({ t: "aimNext", d: -1 }); break;
+          case "aimNext": push({ t: "aimNext", d: 1 }); break;
           case "hotbarPrev": push({ t: "selectDelta", d: -1 }); break;
           case "hotbarNext": push({ t: "selectDelta", d: 1 }); break;
           case "zoom": push({ t: "zoom" }); break;
           case "map": push({ t: "map" }); break;
           case "menu": push({ t: "menu" }); break;
-          case "build": push({ t: "build" }); break;
-          case "padHelp": push({ t: "padHelp" }); break;
         }
       }
 

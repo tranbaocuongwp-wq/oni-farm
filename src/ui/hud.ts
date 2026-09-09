@@ -29,7 +29,6 @@ import { itemName } from "../game/items.ts";
 import { currentSeason, dayOfSeason, yearOf } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import type { Hint } from "../game/hint.ts";
-import { bestGoal } from "../game/progression.ts";
 import { wantSummary } from "../game/workers.ts";
 import type { AnimalStats } from "../game/animals.ts";
 import type { WorkerCard } from "../game/workers.ts";
@@ -147,9 +146,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
         <span class="stat weather" id="hud-wx-line" title="Thời tiết hôm nay · dự báo ngày mai"><i class="ic" id="hud-wx"></i><span id="hud-wx-name"></span><i class="ic next" id="hud-wx-next"></i></span>
       </div>
-      <div class="goal-chip" id="goal-box" aria-live="polite">
-        <i class="ic" data-ic="goal"></i><span id="goal">—</span>
-      </div>
       <div class="goal-chip want" id="want-box" hidden aria-live="polite">
         <i class="ic" data-ic="bag"></i><span id="want">—</span>
       </div>
@@ -200,8 +196,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   const elBarFill = elBar.querySelector("i") as HTMLElement;
   const elWater = $("hud-water");
   const elWaterLine = $("hud-water-line");
-  const elGoal = $("goal");
-  const elGoalBox = $("goal-box");
   const elWant = $("want");
   const elWantBox = $("want-box");
   const elWx = $("hud-wx");
@@ -226,7 +220,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
   elBagBtn.addEventListener("click", () => bagFn());
   const prev = {
     money: -1, day: -1, clock: "", night: false, energy: -1, water: -1, cap: -1,
-    goal: "", hotbar: "", hint: "", bag: -1, wx: "", sel: "",
+    hotbar: "", hint: "", bag: -1, wx: "", sel: "",
     want: null as string | null,
   };
 
@@ -256,12 +250,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       elSelName.hidden = true;
     }, 1600);
   };
-
-  /* ---- mục tiêu: chỉ HIỂN THỊ, không bấm được ----
-     Cường bỏ Nhật ký nông trại, mà Nhật ký là thứ duy nhất cái chip này mở ra.
-     Một cái nút bấm vào không xảy ra gì là thứ tệ hơn cả không có nút, nên nó
-     thôi làm nút: đổi hẳn sang thẻ hiển thị, và bỏ luôn khỏi vòng tiêu điểm bàn
-     phím để người dùng Tab không dừng lại ở một chỗ không làm gì. */
 
   /* ---- hotbar: chạm chọn, nhấn giữ xem mô tả ---- */
   let holdTimer = 0;
@@ -358,14 +346,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
       }
       elHotbar.appendChild(el);
     }
-  }
-
-  /* Mục tiêu GẦN XONG NHẤT, không phải cái đầu danh sách — xem `bestGoal`.
-     Cùng một nguồn với progression.ts thay vì tự đọc `stats` một cách khác. */
-  function currentGoal(s: GameState, content: Content): string {
-    const g = bestGoal(s, content);
-    if (!g) return "Xong hết mục tiêu — cứ thoải mái làm nông!";
-    return g.key && g.have < g.need && g.need > 1 ? `${g.text} <b>${g.have}/${g.need}</b>` : g.text;
   }
 
   let bannerTimer = 0;
@@ -628,16 +608,6 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         prev.want = want;
         elWant.textContent = want ?? "";
         elWantBox.hidden = !want;
-      }
-
-      const goal = currentGoal(s, content);
-      if (goal !== prev.goal) {
-        prev.goal = goal;
-        elGoal.innerHTML = goal;
-        elGoalBox.classList.remove("collapsed");
-        elGoalBox.classList.remove("flash");
-        void elGoalBox.offsetWidth;
-        elGoalBox.classList.add("flash");
       }
 
       // thời tiết hôm nay + dự báo — icon từ atlas, tên từ content

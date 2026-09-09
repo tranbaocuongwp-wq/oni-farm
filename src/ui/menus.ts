@@ -1807,8 +1807,6 @@ export function createMenus(
   }
 
   /* ------------------------------------------------------------ HƯỚNG DẪN */
-  /* ------------------------------------------------------------- NHẬT KÝ */
-
 
   function openHelp() {
     current = openHelp;
@@ -1825,9 +1823,9 @@ export function createMenus(
       <div class="help-grid">
         <span class="k">Chạm màn hình</span><span>Nhân vật <b>đi tới</b> ô đó. Chạm chỉ để <b>ĐI</b> — không bao giờ làm gì cả</span>
         <span class="k">Mũi tên <b>đỏ</b></span><span>Chỉ vào thứ nút lớn <b>sẽ tác động</b> — nhìn nó là biết bấm sẽ động vào đâu</span>
-        <span class="k">Nút MỤC TIÊU</span><span>Chuyển mũi tên đỏ sang thứ khác <b>trong tầm với</b>, đi vòng quanh mình</span>
-        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút, theo món đang cầm. Bấm <b>một lần</b> là làm <b>hết việc của món đó</b>, khu nào gọn khu đó — cuốc thì cày hết lô, cám thì đổ hết máng; hết việc / hết món / hết sức thì tự dừng. Đang làm thì nút ghi DỪNG. Cũng mở cửa hàng, lên giường, múc nước</span>
-        <span class="k">Nút XEM</span><span>Tra cứu thứ mũi tên đang chỉ: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
+        <span class="k">Nút MỤC TIÊU</span><span>Chuyển mũi tên đỏ sang thứ khác quanh mình, đi vòng tròn. Tay cầm: <b>LB / RB</b></span>
+        <span class="k">Nút lớn</span><span>Làm việc ghi trên nút, lên <b>đúng thứ mũi tên đỏ đang chỉ</b> — bấm một lần là làm <b>một việc</b>. Cũng mở cửa hàng, lên giường, múc nước. Muốn làm hàng loạt thì bật <b>Tự động làm</b> trong menu</span>
+        <span class="k">Nút XEM</span><span>Tra cứu <b>đúng mục tiêu đang nhắm</b>: bảng con vật, bảng khu, thẻ ô. Không làm gì cả</span>
         <span class="k">Nhấn giữ ô hotbar</span><span>Xem vật phẩm đó dùng để làm gì</span>
         <span class="k">Bản đồ nhỏ</span><span>Bấm vào để đi xa; ô vàng = cây chín</span>
       </div>`

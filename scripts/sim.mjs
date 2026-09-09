@@ -5931,8 +5931,17 @@ test("81. sơ đồ nút tay cầm: không nút nào hai việc, không việc n
   }
   deepEq(conTrong, [], "không được để nút mặt/vai/cò/cần nào trống việc");
 
-  // --- Và những việc quan trọng nhất phải CÓ MẶT ---
-  for (const v of ["use", "interact", "back", "inventory", "run", "zoom", "map", "menu", "build", "padHelp"])
+  /* --- Và những việc quan trọng nhất phải CÓ MẶT ---
+
+     `build` và `padHelp` RỜI khỏi danh sách này ở Đợt 34, và đó là đổi hợp
+     đồng có chủ ý chứ không phải nới cho vừa: hai vai được Cường yêu cầu dành
+     cho CHUYỂN MỤC TIÊU ("nếu mà có game pad thì dùng nút RB LB để chuyển qua
+     lại các mục tiêu"), nên hotbar dời xuống hai nút cần, và hai việc kia mất
+     chỗ. Chúng mất được vì cả hai đã có đường vào khác: chế độ xây là ô đầu
+     trong lưới menu Tạm dừng từ Đợt 26, còn bảng sơ đồ nút cũng nằm trong
+     menu. Một việc chỉ được rời khỏi tay cầm khi nó còn đường khác — vế "không
+     nút nào trống việc" ở trên vẫn giữ nguyên, và mười hai nút vẫn đủ việc. */
+  for (const v of ["use", "interact", "back", "inventory", "run", "zoom", "map", "menu", "aimPrev", "aimNext"])
     ok(theoViec.has(v), `phải có nút cho việc '${v}'`);
 
   /* HAI nút ngữ cảnh, hai câu hỏi khác nhau — đúng lời Cường: "một nút ngữ
@@ -13324,6 +13333,100 @@ test("185. TẦM NGẮM đủ rộng để nút MỤC TIÊU có việc, và LI�
       aimStillValid(store.getState(), { x: t.x, y: t.y }),
       `mục tiêu (${t.x},${t.y}) vừa liệt kê ra mà luật giữ đã loại — hai bán kính lệch nhau`,
     );
+});
+
+
+test("186. MỘT CÚ BẤM LÀ MỘT VIỆC — nút chính thôi nhận cả chuyến", () => {
+  /* Cường: *"hiện tại là nó nhảy tùm lum mà nó cứ làm tự động thôi, vậy là đâu
+     có đúng"*, và chốt lại hợp đồng ba nút: *"1 nút chính là 1 nút ngữ cảnh · nút
+     thứ 2 là nút tra cứu theo mục tiêu được chọn · nút thứ 3 là nút mục tiêu"*.
+
+     Trước Đợt 34, một cú bấm để cày MỘT ô kèm theo cả `run` với việc
+     `["till","pull"]` — tức cày hết lô rồi nhổ cỏ luôn. Hai nhánh `use` gắn
+     `runAfter`, và còn một nấc 7 nhận nguyên chuyến khi ô ngắm không có việc.
+
+     Trớ trêu: chú thích trong `core/input.ts` đã khẳng định từ lâu rằng nút A
+     "KHÔNG còn nhận cả chuyến ... chơi thật thì thành bấm vô cái nó chạy đi tùm
+     lum nhổ cỏ lượm đá". Lời khẳng định ấy sai kể từ lúc `runAfter` ra đời, và
+     không có phép kiểm nào đối chiếu lại — nên nó sai lặng lẽ suốt nhiều đợt.
+     Kịch bản này là phép đối chiếu ấy. */
+
+  /* --- (a) KHÔNG cú bấm nào được mang theo chuyến --------------------- */
+  const store = mkStore(1860);
+  store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
+  const s0 = store.getState();
+  const lo = content.tiles.zones.find((z) => z.kind === "farm");
+  ok(!!lo, "cần một lô ruộng để đứng");
+
+  setState(store, (s) => {
+    s.player.x = (lo.x + 1) * TILE + 8;
+    s.player.y = (lo.y + 1) * TILE + 8;
+    s.sel = 0; // cuốc
+  });
+  const p = pressPlan(store.getState(), content, facingTile(store.getState()), {
+    context: true,
+    canGo: true,
+  });
+  ok(p.t !== "run", `nút chính KHÔNG được trả về một CHUYẾN (đang trả '${p.t}')`);
+  eq(
+    "run" in p ? p.run : undefined,
+    undefined,
+    "…và cú bấm không được KÈM chuyến để tự nối sang nhát kế",
+  );
+
+  /* --- (b) Quét nguồn: khái niệm "chuyến" phải rời hẳn khỏi cú bấm ----
+     Vế (a) chỉ nhìn MỘT hoàn cảnh. Vế này chặn cả đường quay lại. */
+  const hint = readFileSync(new URL("../src/game/hint.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  ok(!/runAfter/.test(hint), "hint.ts không được còn `runAfter` — đó là chỗ nối chuyến");
+  ok(!/t: "run"/.test(hint), 'hint.ts không được còn kiểu Press `run`');
+
+  const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  ok(!/runStep\(/.test(main), "main.ts không được còn vòng đời chuyến của nút chính");
+
+  /* --- (c) Đường làm HÀNG LOẠT vẫn còn, chỉ là người chơi tự bật -----
+     Bỏ nối chuyến mà không còn cách nào làm nhanh thì là lấy đi một tính năng,
+     không phải sửa một lỗi. `autoJob` là đường ấy, và nút "Tự động làm" trong
+     menu bật nó. */
+  ok(typeof autoJob === "function", "vẫn phải còn `autoJob` — đường làm hàng loạt của nút TỰ ĐỘNG");
+  const menus = readFileSync(new URL("../src/ui/menus.ts", import.meta.url), "utf8");
+  ok(/Tự động/.test(menus), "menu phải còn mục Tự động làm");
+});
+
+test("187. BA NÚT, BA CÂU HỎI KHÁC NHAU — và tay cầm chuyển mục tiêu bằng hai VAI", () => {
+  /* Hợp đồng Cường chốt: nút chính LÀM, nút phụ TRA CỨU theo mục tiêu đang
+     chọn, nút thứ ba CHUYỂN mục tiêu. Và trên tay cầm thì LB/RB đi qua lại
+     giữa các mục tiêu trong tầm. */
+
+  /* --- (a) Ba nút có mặt trên màn cảm ứng ------------------------------ */
+  const html = readFileSync(new URL("../src/farm/index.html", import.meta.url), "utf8");
+  for (const [cls, ten] of [["a", "nút chính"], ["b", "nút tra cứu"], ["t", "nút mục tiêu"]])
+    ok(
+      new RegExp(`class="${cls}"`).test(html),
+      `thiếu ${ten} (class="${cls}") trong khung nút`,
+    );
+
+  /* --- (b) Nút TRA CỨU hỏi về ĐÚNG mục tiêu đang nhắm, không phải ô trước
+         mặt — nếu không thì nó trả lời về một thứ khác thứ mũi tên đang chỉ. */
+  const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  ok(
+    /infoHint\(s, content, pressCursor\(s\)\)/.test(main),
+    "nút tra cứu phải hỏi infoHint theo pressCursor — cùng con trỏ với nút chính",
+  );
+
+  /* --- (c) Tay cầm: hai VAI mang việc chuyển mục tiêu, có CHIỀU -------- */
+  const lb = PAD_MAP.find((m) => m.nut === PAD.LB);
+  const rb = PAD_MAP.find((m) => m.nut === PAD.RB);
+  eq(lb?.viec, "aimPrev", "LB phải là MỤC TIÊU TRƯỚC");
+  eq(rb?.viec, "aimNext", "RB phải là MỤC TIÊU SAU");
+
+  /* Và hotbar phải còn chỗ — dời việc đi mà không cấp chỗ mới là mất tính
+     năng, không phải đổi phím. */
+  const viec = new Set(PAD_MAP.map((m) => m.viec));
+  ok(viec.has("hotbarPrev") && viec.has("hotbarNext"), "hotbar phải còn nút, chỉ là nút khác");
 });
 
 await Promise.all(choDoi);

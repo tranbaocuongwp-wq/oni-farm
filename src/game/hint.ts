@@ -21,7 +21,6 @@ import { penNear, penSummary } from "./animals.ts";
 import { TILE,  inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef,
   distToTile,
 } from "./world.ts";
-import { runFor, type Run } from "./run.ts";
 import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
 import { CROP_ORDER } from "./joborder.ts";
@@ -228,8 +227,8 @@ export type Press =
   | { t: "deny"; why: string | null; kind?: Exclude<HintKind, null> }
   /** cầm công trình → mở chế độ xây */
   | { t: "build" }
-  /** dùng món đang cầm lên ô (x,y); `run` = chuyến sẽ bắt đầu sau nhát này (nếu có) */
-  | { t: "use"; kind: Exclude<UseKind, null>; x: number; y: number; run: Run | null }
+  /** dùng món đang cầm lên ô (x,y) — ĐÚNG MỘT nhát, không nối chuyến */
+  | { t: "use"; kind: Exclude<UseKind, null>; x: number; y: number }
   /** thu sản phẩm của đúng con vật `id` */
   | { t: "gather"; id: number; x: number; y: number }
   /** tương tác với vật thể ở (x,y): cửa hàng, quầy, giường, giếng, kho, cửa nhà */
@@ -237,12 +236,10 @@ export type Press =
   /** mở sạp thuyền buôn đang cập bến; `x,y` = ô con thuyền, để mũi tên chỉ vào nó */
   | { t: "boat"; id: number; x: number; y: number }
   /** đi tới (x,y) rồi làm `then` ở đó; `kind` để in nhãn; `dist` = số ô (Chebyshev) */
-  | { t: "go"; x: number; y: number; then: "use" | "gather" | "interact" | "boat"; kind: Exclude<HintKind, null>; dist: number }
-  /** bắt đầu CHUYẾN của món đang cầm (`runFor`); `why` = câu giải thích cho ô ngắm */
-  | { t: "run"; run: Run; why: string | null };
+  | { t: "go"; x: number; y: number; then: "use" | "gather" | "interact" | "boat"; kind: Exclude<HintKind, null>; dist: number };
 
 export interface PressOptions {
-  /** nút ngữ cảnh bật (settings.contextButton): được nhìn quanh chân và chạy chuyến */
+  /** nút ngữ cảnh bật (settings.contextButton): được nhìn quanh chân */
   context: boolean;
   /** được ĐI TỚI ô ở xa rồi làm (chỉ khi người chơi thật sự ngắm một ô) */
   canGo: boolean;
@@ -359,7 +356,7 @@ export function pressPlan(
     if (ca.kind === "pen") return null;
     const uk = ca.kind as Exclude<UseKind, null>;
     if (inReach(state, ca.at.x, ca.at.y))
-      return { t: "use", kind: uk, x: ca.at.x, y: ca.at.y, run: runAfter(state, content, uk, opts) };
+      return { t: "use", kind: uk, x: ca.at.x, y: ca.at.y };
     return goTo(ca.at.x, ca.at.y, "use", uk);
   };
 
@@ -385,7 +382,7 @@ export function pressPlan(
        nói vì sao. */
     const can = energyFor(content, use);
     if (can > 0 && state.energy < can) return { t: "deny", why: "Hết năng lượng — về ngủ", kind: use };
-    if (inReach(state, x, y)) return cho({ t: "use", kind: use, x, y, run: runAfter(state, content, use, opts) });
+    if (inReach(state, x, y)) return cho({ t: "use", kind: use, x, y });
     if (opts.canGo) return cho(goTo(x, y, "use", use));
   }
 
@@ -416,21 +413,30 @@ export function pressPlan(
 
   const why = explain(state, content, x, y) ?? whyXa;
 
-  // 7. chuyến của món đang cầm
-  if (opts.context && only === "any" && !state.carry) {
-    const r = runFor(state, content);
-    if (r) return { t: "run", run: r, why };
-  }
+  /* KHÔNG có nấc 7 nữa.
 
+     Ở đây từng có "chuyến của món đang cầm": không tìm được việc nào ở ô ngắm
+     thì nút chính nhận nguyên một chuyến quét cả khu. Và hai nhánh `use` bên
+     trên còn kèm `runAfter`, tức làm xong một nhát là TỰ NỐI sang nhát kế —
+     bấm một lần để cày một ô thì cày hết lô rồi nhổ cỏ luôn.
+
+     Cường: *"nó nhảy tùm lum mà nó cứ làm tự động thôi, vậy là đâu có đúng"*.
+     Và chú thích trong `core/input.ts` thì đã khẳng định từ lâu rằng nút A
+     "KHÔNG còn nhận cả chuyến" — lời khẳng định ấy sai suốt từ lúc `runAfter`
+     ra đời, không ai đối chiếu lại.
+
+     Nay hợp đồng của bộ điều khiển là ba câu rời nhau:
+       nút NGỮ CẢNH  — làm ĐÚNG MỘT việc, lên đúng mục tiêu đang nhắm;
+       nút TRA CỨU   — chỉ đọc thông tin của mục tiêu ấy, không đổi gì;
+       nút MỤC TIÊU  — dời con trỏ nhắm sang thứ khác quanh mình.
+     Một cú bấm làm một việc thì người chơi đoán được; nối chuyến thì không.
+
+     Muốn làm hàng loạt vẫn còn nguyên đường: bật "Tự động làm" trong menu — nó
+     chạy bằng `autoJob`, độc lập hẳn với đường này. */
   return { t: "deny", why };
 }
 
-/** Chuyến sẽ tiếp tục sau một nhát `kind` — chỉ khi nhát ấy cùng loại với chuyến. */
-function runAfter(state: GameState, content: Content, kind: Exclude<UseKind, null>, opts: PressOptions): Run | null {
-  if (!opts.context) return null;
-  const r = runFor(state, content);
-  return r && (r.jobs as string[]).includes(kind) ? r : null;
-}
+
 
 /** Nhãn của một cú bấm — thứ HUD in lên nút. */
 export function hintOf(p: Press): Hint {
@@ -459,10 +465,6 @@ export function hintOf(p: Press): Hint {
         why: `Cách ${p.dist} ô — bấm để đi tới`,
         at: { x: p.x, y: p.y },
       };
-    case "run":
-      /* Nhãn giữ "DÙNG": chuyến chỉ lúc chạy mới biết còn việc hay không, và
-         câu về Ô ĐANG NGẮM ("Cày trước đã") vẫn là câu người chơi đang hỏi. */
-      return { kind: null, label: "DÙNG", ready: false, why: p.why };
   }
 }
 

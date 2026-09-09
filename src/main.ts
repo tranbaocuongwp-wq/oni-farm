@@ -60,7 +60,6 @@ import { canCraft, canUseAt, interactAt, linePath, missingFor } from "./game/act
 import { autoJob, autoStopReason, aimStillValid, facingTile, hintOf, infoHint, nextTarget, pressPlan, reachTargets, tileInfo, type Hint, type Press,
   ghiNhoNgam,
 } from "./game/hint.ts";
-import { nextRunTarget, runFor, type Run } from "./game/run.ts";
 import { forecastDef, weatherDef, isOutdoor } from "./game/weather.ts";
 import { seasonIndex, currentSeason } from "./game/season.ts";
 import { animalStats } from "./game/animals.ts";
@@ -997,12 +996,6 @@ async function boot() {
     }
   }
 
-  /** Tương tác ở ô (x,y) nếu ở đó có vật thể trong tầm — dùng cho chuyến MÚC NƯỚC. */
-  function tryInteract(s: GameState, tx: number, ty: number): boolean {
-    const p = pressPlan(s, content, { x: tx, y: ty }, { context: false, canGo: false, only: "interact" });
-    if (p.t !== "interact") return false;
-    return doInteract(p.kind, p.x, p.y);
-  }
 
   /* ---- TỰ ĐỘNG LÀM ----------------------------------------------------
      Cố ý KHÔNG nằm trong `GameState`: đây là ý định nhất thời của người chơi,
@@ -1194,17 +1187,6 @@ async function boot() {
     return false;
   }
 
-  /**
-   * Con vật ở ô này: tới lứa thì THU. (Cho ăn đi đường máng, không đi đường này.)
-   *
-   * Đứng trước cả `tryInteract` và `tryUse` — người chơi nhìn thấy con bò chứ
-   * không nhìn thấy nền đất dưới chân nó, nên cú bấm phải nói về con bò.
-   */
-  function tryAnimal(s: GameState, tx: number, ty: number): boolean {
-    const p = pressPlan(s, content, { x: tx, y: ty }, { context: false, canGo: false, only: "gather" });
-    if (p.t !== "gather") return false;
-    return doGather(p.x, p.y);
-  }
 
   /** Thu sản phẩm ở ô con vật đang đứng — `pressPlan` đã chọn đúng con. */
   function doGather(x: number, y: number): boolean {
@@ -1224,100 +1206,18 @@ async function boot() {
      chỉ có vòng đời: bắt đầu, đi, dùng, dừng.
 
      Cố ý không lưu vào save, cùng lý do với `autoWork`. */
-  let run: Run | null = null;
-  /** Bản đồ lúc bắt đầu chuyến — sang bản đồ khác là chuyến dừng. */
-  let runMap = "";
-  /** Đồng hồ "không tiến triển" — lưới an toàn cuối, cùng ngưỡng với tự động. */
-  let runIdle = 0;
-  let runMark = "";
-  /** Ô vừa thử và dấu vân tay lúc thử: thử lại đúng ô đó mà không có gì đổi
-   *  nghĩa là nhát ấy bị từ chối (túi đầy, kẹt đường…) — dừng, không lặp. */
-  let runTried: { key: string; mark: string } | null = null;
 
   /** Mọi thứ một nhát thành công có thể đổi. Đủ rộng để bao cả đổ máng, cho
    *  cá ăn (không có bộ đếm riêng) — năng lượng tụt là bằng chứng. */
-  const runProgress = (s: GameState): string => `${JSON.stringify(s.stats)}|${s.water}|${s.energy}`;
 
-  function stopRun(reason?: "done" | "noItem" | "noEnergy"): void {
-    if (!run) return;
-    const ten = run.itemId ? itemName(run.itemId, content) : "tay không";
-    run = null;
-    runTried = null;
-    workGoal = null;
-    nav.cancel();
-    if (reason === "noItem") toasts.say(`Hết ${ten} — dừng.`, "info");
-    else if (reason === "noEnergy") toasts.say("Hết năng lượng — về ngủ.", "bad");
-    else if (reason === "done") toasts.say(`Hết việc cho ${ten} ở đây.`, "info");
-  }
 
   /**
    * Bắt đầu chuyến cho món đang cầm. Món không có chuyến (cầm đá, cầm công
    * trình) thì lắc đầu. Bước đầu chạy NGAY để bấm là có phản hồi — hết việc
    * thì toast liền, không đợi một khung hình.
    */
-  function batDauChuyen(s: GameState): void {
-    if (!settings.contextButton) {
-      deny();
-      return;
-    }
-    const r = runFor(s, content);
-    if (!r) {
-      deny();
-      return;
-    }
-    if (autoWork) setAuto(false);
-    run = r;
-    runMap = s.mapId;
-    runIdle = 0;
-    runMark = runProgress(s);
-    runTried = null;
-    runStep(s);
-  }
 
   /** Một bước của chuyến: hỏi ô kế, trong tầm thì làm, xa thì đi. */
-  function runStep(s: GameState): void {
-    if (!run) return;
-    const t = nextRunTarget(s, content, run);
-    if ("stop" in t) {
-      stopRun(t.stop);
-      if (t.stop === "done") deny();
-      return;
-    }
-    const mark = runProgress(s);
-    if ("refill" in t) {
-      const { x, y } = t.refill;
-      const key = `muc:${x},${y}`;
-      if (runTried && runTried.key === key && runTried.mark === mark) {
-        stopRun("done");
-        return;
-      }
-      runTried = { key, mark };
-      aimed = ghiNhoNgam(aimed, { x, y }, false);
-      if (inReachOf(s, x, y)) {
-        if (!tryInteract(s, x, y)) stopRun("done");
-        return;
-      }
-      workGoal = { x, y, refill: true };
-      if (!nav.goTo(s, content, x, y, {})) stopRun("done");
-      return;
-    }
-    run.area = t.area;
-    const key = `${t.job}:${t.x},${t.y}`;
-    if (runTried && runTried.key === key && runTried.mark === mark) {
-      stopRun("done");
-      return;
-    }
-    runTried = { key, mark };
-    aimed = ghiNhoNgam(aimed, { x: t.x, y: t.y }, false);
-    if (inReachOf(s, t.x, t.y)) {
-      const ok = t.job === "gather" ? tryAnimal(s, t.x, t.y) : tryUse(s, t.x, t.y);
-      if (!ok) stopRun("done");
-      return;
-    }
-    // Chuyến đi ĐỂ LÀM VIỆC: tới nơi chỉ dùng công cụ, không mở hộp thoại nào.
-    workGoal = { x: t.x, y: t.y };
-    if (!nav.goTo(s, content, t.x, t.y, { avoidStandingOn: holdingSolidBuilding(s) })) stopRun("done");
-  }
 
   /** Tuỳ chọn cho `pressPlan` — MỘT chỗ quyết định, HUD và cú bấm cùng dùng. */
   function pressOpts(only?: "use" | "gather" | "interact" | "boat" | "any") {
@@ -1364,19 +1264,13 @@ async function boot() {
       case "build":
         buildUI.open();
         return true;
-      case "use": {
-        if (!tryUse(s, p.x, p.y)) return false;
-        // Nhát này cùng loại với chuyến của món → làm xong là làm tiếp.
-        if (p.run) {
-          if (autoWork) setAuto(false);
-          run = p.run;
-          runMap = s.mapId;
-          runIdle = 0;
-          runMark = runProgress(s);
-          runTried = { key: `${p.kind}:${p.x},${p.y}`, mark: runMark };
-        }
-        return true;
-      }
+      /* MỘT cú bấm, MỘT nhát. Ở đây từng có: nhát nào cùng loại với "chuyến của
+         món đang cầm" thì làm xong là tự nối sang nhát kế, nên bấm một lần để
+         cày một ô là cày hết lô rồi nhổ cỏ luôn. Cường: "nó nhảy tùm lum mà nó
+         cứ làm tự động thôi". Muốn làm hàng loạt thì bật "Tự động làm" trong
+         menu — một đường riêng, người chơi tự chọn, tắt được. */
+      case "use":
+        return tryUse(s, p.x, p.y);
       case "gather":
         return doGather(p.x, p.y);
       case "interact":
@@ -1394,9 +1288,6 @@ async function boot() {
         deny();
         return false;
       }
-      case "run":
-        batDauChuyen(s);
-        return true;
     }
   }
 
@@ -1453,7 +1344,7 @@ async function boot() {
          hiện ở đâu khác. Đủ ngắn để liếc một cái là đọc xong. */
       if (std)
         hints.push([b(1), "Tra cứu"], [b(3), "Balo"], [b(6), "Chạy"], [b(7), "Phóng"], [b(10), "Xây dựng"]);
-      else hints.push([b(0), run ? "Dừng" : "Làm"], [b(1), "Tra cứu"], [b(2), "Quay lại"]);
+      else hints.push([b(0), "Làm"], [b(1), "Tra cứu"], [b(2), "Quay lại"]);
     }
 
     /* Khi thanh này nói về một LỚP PHỦ (menu, hướng dẫn, bản đồ nhỏ, chế độ
@@ -1789,12 +1680,10 @@ async function boot() {
 
     if (modal) {
       nav.cancel();
-      if (run) stopRun();
     }
     if (building) {
       nav.cancel();
       if (autoWork) setAuto(false);
-      if (run) stopRun();
     }
 
     /* Đang RÊ CON TRỎ Ô (chế độ xây, hoặc con trỏ bản đồ nhỏ) thì cần gạt lái
@@ -1822,8 +1711,7 @@ async function boot() {
         // Người chơi tự cầm lái thì nhường ngay — cùng luật với `nav.cancel()`:
         // nhập tay luôn thắng thứ đang chạy tự động.
         if (autoWork) setAuto(false);
-        if (run) stopRun();
-        nav.cancel();
+          nav.cancel();
         store.dispatch({ t: "MOVE", dx: ax.x, dy: ax.y, dt, run: input.running() });
       } else {
         const step = nav.update(store.getState(), content, dt);
@@ -1853,7 +1741,7 @@ async function boot() {
              giữa lúc tự động làm là thế giới đứng hình cho tới khi tắt nó đi. */
           const only = goal?.refill ? "interact" : (goal?.then ?? "any");
           const p = pressPlan(st, content, { x: arrived.tx, y: arrived.ty }, pressOpts(only));
-          if (p.t === "go" || p.t === "run") deny();
+          if (p.t === "go") deny();
           else execute(st, p);
         }
       }
@@ -1882,22 +1770,6 @@ async function boot() {
         }
       }
 
-      /* CHUYẾN của nút chính: chờ hết `busy` và hết đường đang đi rồi mới hỏi
-         ô kế — tuần tự từng việc một. Đổi bản đồ là dừng; đứng không quá
-         ngưỡng cũng dừng (lưới an toàn, không phải đường thường). */
-      if (run && !building) {
-        const s = store.getState();
-        if (s.mapId !== runMap) stopRun();
-        else {
-          const mark = runProgress(s);
-          if (mark !== runMark) {
-            runMark = mark;
-            runIdle = 0;
-          } else if (nav.target()) runIdle = 0;
-          else if ((runIdle += dt) > AUTO_IDLE_LIMIT) stopRun("done");
-          if (run && s.busy <= 0 && !nav.target()) runStep(s);
-        }
-      }
     }
 
     for (const it of input.drain()) {
@@ -1972,14 +1844,12 @@ async function boot() {
           break;
         case "auto":
           // Nút AUTO (cảm ứng) = chế độ ĐẦY ĐỦ, không giới hạn loại việc.
-          if (run) stopRun();
-          setAuto(!autoWork, null);
+              setAuto(!autoWork, null);
           toasts.say(autoWork ? "Tự động làm: BẬT" : "Tự động làm: TẮT", "info");
           break;
         case "select":
           // Đổi món là đổi ý — chuyến của món cũ dừng, KHÔNG tự cầm lại.
-          if (run) stopRun();
-          store.dispatch({ t: "SELECT", slot: it.slot });
+              store.dispatch({ t: "SELECT", slot: it.slot });
           break;
         case "selectDelta": {
           /* Đang mở BẢNG VẬT NUÔI thì vai là nút ĐỔI CON, không phải đổi ô
@@ -2001,8 +1871,7 @@ async function boot() {
             break;
           }
           const n = content.balance.hotbarSlots;
-          if (run) stopRun();
-          store.dispatch({ t: "SELECT", slot: (s.sel + it.d + n) % n });
+              store.dispatch({ t: "SELECT", slot: (s.sel + it.d + n) % n });
           break;
         }
         case "use": {
@@ -2051,12 +1920,6 @@ async function boot() {
             buildUI.open();
             break;
           }
-          // Đang trong chuyến thì nút chính là DỪNG — đúng như nhãn trên nút.
-          if (run) {
-            stopRun();
-            buzz("tap");
-            break;
-          }
           /* MỘT NGUỒN: `pressPlan` đã in nhãn lên nút; giờ nó nói làm gì.
              Không có phép quét nào ở đây nữa — mọi "con vật trước, công cụ
              trước tương tác, khu, chuyến" nằm trong src/game/hint.ts và được
@@ -2090,8 +1953,7 @@ async function boot() {
           // Người chơi tự chạm thì đây KHÔNG còn là chuyến đi làm việc nữa —
           // tới nơi được phép mở cửa hàng/giường như bình thường. Chuyến đang
           // chạy cũng dừng: nhập tay luôn thắng thứ đang chạy tự động.
-          if (run) stopRun();
-          workGoal = null;
+              workGoal = null;
           /* Chạm-để-đi là để ĐI. Từng mở bảng con vật khi chạm trong 1,4 ô
              quanh nó — mà 24 con đi khắp sân, nên gần như cú chạm nào cũng
              "mở bảng", và camera (hồi còn bám con vật đang mở bảng) bỏ nhân
@@ -2389,8 +2251,10 @@ async function boot() {
       },
     });
 
-    const dangLam = run ? `${run.label}${run.area ? " · " + run.area.name : ""}` : null;
-    hud.update(s, content, hint, iHint, dangLam);
+    /* `dangLam` = dải "đang làm gì" của chuyến. Nút chính thôi nhận chuyến từ
+       Đợt 34 nên không còn gì để nói ở đó; giữ tham số để HUD không phải đổi
+       chữ ký cho một lần bỏ. */
+    hud.update(s, content, hint, iHint, null);
 
     /* Bảng vật nuôi: CHỈ con người chơi đã chạm vào. Tự đóng khi con đó không
        còn (bán thịt, chết đói, sang bản đồ khác) — giữ lại một cái bảng nói về
