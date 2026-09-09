@@ -12408,6 +12408,134 @@ test("174. CÂY LAY không bao giờ TẮT, và không bao giờ quá 4 lát", (
   }
 });
 
+
+test("171. Một PIXEL ẢNH phải là một số NGUYÊN pixel thiết bị — kể cả trên dpr lẻ", () => {
+  /* Kịch bản 162 kiểm `scale % ART === 0` và tin rằng thế là đủ, vì chú thích
+     của `pickScale` nói tỉ lệ phóng thật là `scale / ART`.
+
+     Chú thích ấy QUÊN NHÂN `dpr`. Tỉ lệ thật — con số lớp vẽ dùng ở mọi phép
+     đặt vị trí — là `scale × dpr / ART`. Và danh sách khổ máy của 162 chỉ có
+     dpr NGUYÊN (1, 2, 3), nên nó không bao giờ chạm tới chỗ hỏng.
+
+     Ngoài đời dpr lẻ là chuyện thường: Windows ở 125% cho 1,25; Android tầm
+     trung cho 1,5; iPhone qua một số chế độ cho 2,625; và MỌI mức zoom của
+     trình duyệt đều đẻ ra dpr lẻ. Ở những máy ấy tỉ lệ ra 1,5 · 3,3 · 3,75 —
+     mỗi pixel ảnh trải ra một số lẻ pixel đích, ô pixel to nhỏ không đều.
+     Đúng cái "mờ" mà không dòng `image-rendering` nào chữa được. */
+  const beNgang = [320, 360, 375, 390, 412, 430, 768, 1000, 1280, 1440, 1920, 2560];
+  const beDoc = [568, 640, 700, 812, 844, 892, 915, 932, 1080];
+  const mucDpr = [1, 1.25, 1.5, 1.75, 2, 2.5, 2.625, 3];
+
+  let daThu = 0;
+  for (const w of beNgang)
+    for (const h of beDoc)
+      for (const dpr of mucDpr) {
+        const cam = createCamera();
+        cam.setWorld(FARM_W * TILE, FARM_H * TILE);
+        cam.setSize(w, h, dpr);
+        const vp = cam.viewport;
+        daThu++;
+
+        // (a) phép phóng CUỐI CÙNG, ra pixel thiết bị, phải là số nguyên bội của ART
+        const kDev = vp.scale * vp.dpr;
+        ok(
+          Number.isInteger(kDev) && kDev % ART === 0,
+          `${w}×${h}@${dpr}: scale ${vp.scale} × dpr ${vp.dpr} = ${kDev}, phải nguyên và chia hết cho ${ART}`,
+        );
+
+        /* (b) TẦM NHÌN không được đổi. Đây là ràng buộc quan trọng ngang vế
+           (a): cách sửa hiển nhiên hơn — cho `pickScale` ăn kích thước pixel
+           thiết bị — cũng cho pixel đều, nhưng nó làm điện thoại chỉ còn thấy
+           10 ô thay vì 13,4. Đổi lối chơi để lấy độ nét là một cái giá không
+           ai yêu cầu phải trả. */
+        eq(vp.scale % ART, 0, `${w}×${h}@${dpr}: hệ số phóng ${vp.scale} phải chia hết cho ART`);
+        const dai = Math.max(vp.viewW, vp.viewH) / TILE;
+        ok(dai <= MAX_TILES_LONG + 0.001, `${w}×${h}@${dpr}: trục dài ${dai.toFixed(1)} ô vượt trần`);
+
+        /* (c) KHÔNG VIỀN ĐEN, và khung nhìn phủ ĐÚNG HẾT canvas.
+           Lớp vẽ đã bỏ lệnh tô viền đen phủ kín canvas mỗi khung, vì viền
+           không bao giờ tồn tại. Canvas khai `alpha: false`, nên hụt một dải
+           một pixel là dải ấy giữ nguyên nội dung khung TRƯỚC và vệt bẩn kéo
+           dài mãi. Ghim ở đây vì chính chỗ tính `dpr` này là thứ có thể phá vỡ
+           nó. */
+        eq(vp.offX, 0, `${w}×${h}@${dpr}: không được có viền đen ngang`);
+        eq(vp.offY, 0, `${w}×${h}@${dpr}: không được có viền đen dọc`);
+        eq(
+          Math.round(vp.viewW * kDev),
+          Math.round(w * vp.dpr),
+          `${w}×${h}@${dpr}: khung nhìn không phủ hết bề ngang canvas`,
+        );
+        eq(
+          Math.round(vp.viewH * kDev),
+          Math.round(h * vp.dpr),
+          `${w}×${h}@${dpr}: khung nhìn không phủ hết bề dọc canvas`,
+        );
+
+        /* (d) không được vẽ THIẾU pixel so với màn hình. Làm tròn LÊN thì
+           backing store bằng hoặc lớn hơn số pixel vật lý; làm tròn xuống là
+           mất nét thật, và đó chính là lỗi Đợt 28 đang chữa. */
+        const dprThat = Math.min(dpr, 3);
+        ok(
+          vp.dpr >= dprThat - 1e-9,
+          `${w}×${h}@${dpr}: dpr hiệu dụng ${vp.dpr} THẤP hơn dpr thật ${dprThat} — vẽ thiếu pixel là mờ`,
+        );
+      }
+  ok(daThu > 800, `phải quét đủ rộng, mới thử ${daThu} khổ máy`);
+
+  /* Và vế cuối, tách riêng vì nó là chỗ VỠ ÂM THẦM: `setZoom` gọi lại
+     `setSize(vp.cssW, vp.cssH, …)`, mà `vp.dpr` khi ấy là dpr ĐÃ NẮN. Truyền
+     lại số đã nắn thay vì dpr GỐC thì mỗi lần người chơi đổi mức phóng, dpr
+     lại trôi thêm một nấc: backing store phình dần cho tới lúc kẹt trần, và
+     không có dấu hiệu nào ngoài việc máy nóng lên.
+
+     Phải QUÉT, không được chọn tay một khổ máy: phép nắn là idempotent khi
+     `scale` giữ nguyên, nên chỉ những khổ máy mà `scale` ĐỔI theo mức phóng
+     mới lộ ra lỗi — và ở 430×932 thì cả ba mức phóng cho cùng một `scale`.
+     Một kịch bản chọn đúng khổ máy ấy sẽ xanh trong khi lỗi vẫn còn nguyên. */
+  let daKiem = 0;
+  for (const w of beNgang)
+    for (const h of beDoc)
+      for (const dpr of mucDpr) {
+        const thu = createCamera();
+        thu.setWorld(FARM_W * TILE, FARM_H * TILE);
+        thu.setSize(w, h, dpr);
+        const cacScale = new Set([thu.viewport.scale]);
+        for (const z of ["near", "far", "normal"]) {
+          thu.setZoom(z);
+          cacScale.add(thu.viewport.scale);
+        }
+        // khổ máy mà mức phóng không đổi `scale` thì không kiểm được gì
+        if (cacScale.size < 2) continue;
+        daKiem++;
+
+        const moi = createCamera();
+        moi.setWorld(FARM_W * TILE, FARM_H * TILE);
+        moi.setSize(w, h, dpr);
+        const dprDung = moi.viewport.dpr;
+        const scaleDung = moi.viewport.scale;
+
+        const cam = createCamera();
+        cam.setWorld(FARM_W * TILE, FARM_H * TILE);
+        cam.setSize(w, h, dpr);
+        for (let i = 0; i < 6; i++) {
+          cam.setZoom("far");
+          cam.setZoom("near");
+          cam.setZoom("normal");
+        }
+        eq(
+          cam.viewport.scale,
+          scaleDung,
+          `${w}×${h}@${dpr}: đổi mức phóng 18 lần rồi về 'normal' — hệ số phóng phải về đúng chỗ cũ`,
+        );
+        eq(
+          cam.viewport.dpr,
+          dprDung,
+          `${w}×${h}@${dpr}: đổi mức phóng 18 lần rồi về 'normal' — dpr TRÔI mất (${cam.viewport.dpr} thay vì ${dprDung})`,
+        );
+      }
+  ok(daKiem > 100, `phải kiểm được nhiều khổ máy có scale đổi theo mức phóng, mới có ${daKiem}`);
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

@@ -88,7 +88,12 @@ export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   // 0 = bám tức thì. Vì camera vẫn snap về pixel nguyên nên thế giới trôi đều
   // từng pixel một, không giật.
   followLambda: 0,
-  maxDpr: 2,
+  /* Trần dpr. Đợt 28 nâng 2 → 3: điện thoại của Cường gần như chắc chắn là
+     dpr 3, và kẹp ở 2 nghĩa là game vẽ ở 2²/3² = 44% số pixel VẬT LÝ rồi để
+     trình duyệt phóng cả khung hình lên 1,5 lần. Không một dòng
+     `image-rendering` nào cứu được một phép phóng 1,5 lần — đó là toàn bộ chữ
+     "mờ". 3 là TRẦN THẬT: không thể nét hơn số pixel màn hình có. */
+  maxDpr: 3,
   edgeMode: "center",
 };
 
@@ -185,7 +190,10 @@ function pickScale(
   /* HỆ SỐ PHẢI CHIA HẾT CHO `ART`.
 
      Sprite nay rộng `ART` lần đơn vị thế giới (xem `ART` trong art/atlas.ts),
-     nên tỉ lệ phóng thật của một pixel ảnh là `scale / ART`. Số đó mà lẻ thì
+     nên tỉ lệ phóng của một pixel ảnh là `scale / ART` TÍNH BẰNG CSS PX. (Tỉ
+     lệ ra PIXEL THIẾT BỊ còn phải nhân `dpr` nữa — `setSize` lo phần ấy, xem
+     `kDev` ở đó. Chú thích này trước Đợt 28 quên mất `dpr` và vì thế cả một
+     nửa vấn đề "mờ" nằm khuất sau một câu nghe rất chắc chắn.) Số đó mà lẻ thì
      mỗi pixel nguồn trải ra 1,5 pixel đích: ô pixel to nhỏ không đều, và HD
      trông XẤU HƠN bản 16px. Nên làm tròn XUỐNG về bội của `ART`, và không bao
      giờ xuống dưới `ART` (dưới đó là thu nhỏ ảnh, mất nét theo cách khác).
@@ -224,6 +232,13 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
   let worldH = 0;
   /** setZoom đổi dải số ô nhưng kích thước không đổi — phải ép setSize tính lại. */
   let zoomDirty = false;
+  /* dpr GỐC của màn hình, trước khi bị nắn cho `scale × dpr` chia hết cho ART.
+     Phải nhớ riêng, và đây là chỗ dễ vỡ ÂM THẦM nhất của cả cơ chế: `setZoom`
+     gọi lại `setSize(vp.cssW, vp.cssH, …)`, mà `vp.dpr` khi ấy là dpr ĐÃ NẮN.
+     Truyền lại số đã nắn thì mỗi lần người chơi đổi mức phóng, dpr lại trôi
+     thêm một nấc — backing store phình dần cho tới lúc kẹt trần, và không có
+     dấu hiệu nào ngoài việc máy nóng lên. */
+  let dprGoc = 1;
   let x = 0;
   let y = 0;
   let rx = 0;
@@ -293,9 +308,12 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       // thông số cũ thay vì tính ra scale=1 rồi kẹt ở đó — nếu không, chuột sẽ
       // bấm lệch ô cho tới lần resize kế tiếp.
       if (!(cssW > 0) || !(cssH > 0)) return false;
-      const d = Math.max(1, Math.min(cfg.maxDpr, dpr || 1));
-      if (cssW === vp.cssW && cssH === vp.cssH && d === vp.dpr && !zoomDirty) return false;
+      const d0 = Math.max(1, Math.min(cfg.maxDpr, dpr || 1));
+      // So với dpr GỐC, không với `vp.dpr` — `vp.dpr` là số đã nắn, không bao
+      // giờ bằng `d0` nữa, nên so nhầm là dựng lại viewport mỗi lần gọi.
+      if (cssW === vp.cssW && cssH === vp.cssH && d0 === dprGoc && !zoomDirty) return false;
       zoomDirty = false;
+      dprGoc = d0;
 
       const short = Math.min(cssW, cssH);
       const long = Math.max(cssW, cssH);
@@ -308,9 +326,44 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       const viewW = cssW / scale;
       const viewH = cssH / scale;
 
+      /* MỘT PIXEL ẢNH PHẢI LÀ MỘT SỐ NGUYÊN PIXEL THIẾT BỊ.
+
+         `pickScale` ép `scale % ART === 0` và chú thích của nó tin rằng tỉ lệ
+         phóng thật là `scale / ART`. Nó QUÊN NHÂN `dpr`. Tỉ lệ thật là
+         `scale × dpr / ART` — đó là con số lớp vẽ dùng ở mọi phép đặt vị trí.
+         Với dpr lẻ (Windows 125% → 1,25; Android tầm trung → 1,5; và mọi mức
+         zoom của trình duyệt) tỉ lệ ra 1,5 · 3,3 · 3,75, tức mỗi pixel ảnh
+         trải ra một số LẺ pixel đích: ô pixel to nhỏ không đều. Đó là phần
+         "mờ" còn lại sau khi đã nâng `maxDpr`.
+
+         Sửa ở ĐÂY chứ không sửa `pickScale`, và đó là một lựa chọn có cân
+         nhắc. Cách kia — cho `pickScale` ăn kích thước pixel THIẾT BỊ — cũng
+         cho pixel đều, nhưng nó làm điện thoại 430×932 chỉ còn thấy 10,08 ô
+         thay vì 13,44: đổi luôn TẦM NHÌN của game, một thay đổi lối chơi không
+         ai yêu cầu, và bắt phải sửa khẳng định của kịch bản 75. Cách dưới đây
+         giữ Y NGUYÊN số ô nhìn thấy — `scale` không đổi một ly — mà vẫn đảm
+         bảo phép phóng cuối cùng là số nguyên.
+
+         Làm tròn LÊN, không phải làm tròn gần nhất. Bội của ART gần nhất có
+         thể nằm DƯỚI dpr thật — 320×568@1,25 với `scale` 2 cho 2,5, làm tròn
+         gần nhất ra 2, tức dpr hiệu dụng 1 và game vẽ ở 64% số pixel màn hình.
+         Đó đúng là cái lỗi commit này đang chữa, chỉ nhỏ hơn. Làm tròn lên thì
+         backing store bằng HOẶC lớn hơn số pixel vật lý: trình duyệt THU NHỎ
+         một ảnh sắc nét, việc nó làm tốt, thay vì PHÓNG TO một ảnh thiếu
+         pixel, việc không ai làm tốt được.
+
+         Cái giá, đo trên 864 khổ máy: 46% khớp chính xác dpr màn hình và
+         không tốn thêm gì. Mọi dpr NGUYÊN (1 · 2 · 3 — tức gần như mọi điện
+         thoại thật) luôn khớp chính xác, vì `scale` vốn đã là bội của ART.
+         Chỉ dpr lẻ mới dôi ra, nhiều nhất 2,56 lần số pixel ở 320×568@1,25 —
+         một cửa sổ tí hon trên màn hình thưa, tức chưa tới 0,73 Mpx. Chỗ dôi
+         nhiều pixel nhất tuyệt đối là +3,4 Mpx ở 1920×844@2,625, một tổ hợp
+         chỉ có trên giấy. */
+      const kDev = Math.max(ART, Math.ceil((scale * d0) / ART) * ART);
+
       vp.cssW = cssW;
       vp.cssH = cssH;
-      vp.dpr = d;
+      vp.dpr = kDev / scale;
       vp.scale = scale;
       vp.integerScale = integer;
       vp.viewW = viewW;
@@ -332,7 +385,8 @@ export function createCamera(config: Partial<CameraConfig> = {}): Camera {
       cfg.maxTilesShort = z.max;
       zoomDirty = true;
       if (!(vp.cssW > 0) || !(vp.cssH > 0)) return false;
-      const changed = this.setSize(vp.cssW, vp.cssH, vp.dpr);
+      // `dprGoc`, KHÔNG phải `vp.dpr`: xem chú thích ở chỗ khai `dprGoc`.
+      const changed = this.setSize(vp.cssW, vp.cssH, dprGoc);
       // Sau khi đổi scale, nhân vật phải về lại tâm ngay — không để camera
       // "trôi" từ vị trí cũ sang.
       return changed;
