@@ -5055,6 +5055,42 @@ function makeUiIcon(name: UiIcon): HTMLCanvasElement {
    THỜI TIẾT & TÌNH TRẠNG CÂY (core 1.3)
 --------------------------------------------------------------------------- */
 
+/** Id hình cho ô TAY KHÔNG trên hotbar.
+ *
+ *  Không phải một vật phẩm — `parseItem` không hiểu nó và không nên hiểu. Nó
+ *  chỉ là một khoá trong bảng hình, đặt tên không có dấu hai chấm để không bao
+ *  giờ đụng id thật (`tool:hoe`, `seed:corn`, …). */
+export const HAND_ICON = "hand";
+
+/** Bàn tay mở, 16×16 — ĐÚNG cỡ icon công cụ.
+ *
+ *  Cỡ ở đây không tuỳ ý: `.slot canvas` trong style.css ghim 32px, nên hình 16
+ *  phóng đúng gấp đôi, mỗi pixel nguồn ra một ô vuông 2×2. Lấy cỡ 12 của bộ
+ *  icon giao diện thì tỉ lệ thành 2,67 và bàn tay nhoè hẳn so với cái cuốc nằm
+ *  ngay bên cạnh — sai lệch thấy ngay vì hai ô kề nhau. */
+function makeHandIcon(): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  const da = P.skin;
+  const toi = P.skinDark;
+  // ba ngón dựng, cao thấp khác nhau cho ra hình bàn tay chứ không phải cái lược
+  s.rect(4, 4, 2, 5, da);
+  s.rect(7, 3, 2, 6, da);
+  s.rect(10, 4, 2, 5, da);
+  // lòng bàn tay + cổ tay
+  s.rect(4, 8, 8, 5, da);
+  s.rect(6, 13, 5, 2, da);
+  // ngón cái chìa sang trái
+  s.rect(2, 9, 2, 3, da);
+  // khối tối ở mép phải và dưới: đủ để bàn tay có bề dày, không thành hình phẳng
+  s.vline(11, 8, 5, toi);
+  s.hline(4, 12, 8, toi);
+  s.vline(5, 4, 5, toi);
+  s.vline(8, 3, 6, toi);
+  s.px(2, 11, toi);
+  s.px(3, 11, toi);
+  return outline(s, P.outline, 1).c;
+}
+
 /** Dấu "đã tới lứa" 7×7 cố định trên cây chín — không nhấp nháy, thấy ngay. */
 function makeRipeBadge(): HTMLCanvasElement {
   const s = surface(7, 7);
@@ -7423,6 +7459,7 @@ export function buildAtlas(content: Content): Atlas {
     icons.set(`crop:${id}`, makeCropIcon(def));
   }
   for (const id of content.buildingOrder) icons.set(`build:${id}`, buildings[id]!);
+  icons.set(HAND_ICON, makeHandIcon());
 
   const heldCache = new Map<string, HTMLCanvasElement>();
   const held = (kind: HeldKind, steel = false) => {

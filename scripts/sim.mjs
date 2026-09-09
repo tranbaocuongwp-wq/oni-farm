@@ -33,7 +33,21 @@ import { weatherMood } from "../src/game/weather.ts";
 import { animalMood } from "../src/game/animals.ts";
 import { canCraft, canUseAt, energyOf, missingFor, waterCapacity } from "../src/game/actions.ts";
 import { sellPriceOf, sellable, fromAnimals, buyPriceOf, itemName } from "../src/game/items.ts";
-import { sellSlots, countItem} from "../src/game/inventory.ts";
+import {
+  sellSlots,
+  countItem,
+  addItem,
+  addToInv,
+  canAdd,
+  canAddInv,
+  swapSlots,
+  selectedItemId,
+  FIXED_SLOTS,
+  HAND_SLOT,
+  TOOL_SLOTS,
+  toolIds,
+  toolSlot,
+} from "../src/game/inventory.ts";
 import { hintAt, hintOf, pressPlan, infoHint, interactHint, tileInfo, penAction, contextAction, facingTile, nearestTarget, autoJob, AUTO_ORDER, CTX_RADIUS, PEN_MARGIN, INTERACT_SCAN, boatAt, reachTargets, nextTarget, aimStillValid, AIM_RADIUS, ghiNhoNgam} from "../src/game/hint.ts";
 import { parseSettings, DEFAULT_SETTINGS, SETTINGS_VERSION } from "../src/core/settings.ts";
 import { validateCrops } from "../src/core/content/schema.ts";
@@ -227,7 +241,7 @@ function selectItem(store, id) {
   // có vật nuôi, danh sách nguyên liệu dài hơn hotbar nên món vừa chế tạo rất
   // hay rơi xuống balo; bắt test đỏ vì chuyện đó là bắt nhầm.
   if (slot >= BAL.hotbarSlots) {
-    const trong = s.inv.findIndex((v, i) => i >= 2 && i < BAL.hotbarSlots && v === null);
+    const trong = s.inv.findIndex((v, i) => i >= 3 && i < BAL.hotbarSlots && v === null);
     const dich = trong >= 0 ? trong : BAL.hotbarSlots - 1;
     store.dispatch({ t: "SWAP", a: slot, b: dich });
     s = store.getState();
@@ -347,7 +361,7 @@ function putProp(s, x, y, id) {
 /** Nhét một vật phẩm vào ô hotbar còn trống. */
 function giveItem(store, id, n = 1) {
   setState(store, (s) => {
-    const at = s.inv.findIndex((v, i) => i >= 2 && i < BAL.hotbarSlots && (v === null || v === undefined));
+    const at = s.inv.findIndex((v, i) => i >= 3 && i < BAL.hotbarSlots && (v === null || v === undefined));
     ok(at >= 0, "hết ô hotbar trống để đặt " + id);
     s.inv[at] = { id, n };
   });
@@ -753,7 +767,14 @@ test("8. save round-trip: JSON.parse(JSON.stringify(snapshot)) → replace() kh�
 /* ========================================================================== */
 
 const SCRIPT = [
-  { t: "SELECT", slot: 0 },
+  { t: "SELECT", slot: 1 },
+  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
+  { t: "TICK", dt: 0.4 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
+  { t: "TICK", dt: 0.4 },
+  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
+  { t: "TICK", dt: 0.4 },
+  { t: "SELECT", slot: 3 },
   { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
@@ -761,13 +782,6 @@ const SCRIPT = [
   { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
   { t: "SELECT", slot: 2 },
-  { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
-  { t: "TICK", dt: 0.4 },
-  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
-  { t: "TICK", dt: 0.4 },
-  { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
-  { t: "TICK", dt: 0.4 },
-  { t: "SELECT", slot: 1 },
   { t: "USE", x: PLOTS[0].x, y: PLOTS[0].y },
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
@@ -822,10 +836,10 @@ const SCRIPT = [
      0,02 và cú USE kế tiếp bị chính cái khoá ấy nuốt mất. Phần trên của kịch
      bản sống chung với chuyện đó (mỗi thao tác ăn hai nhịp), nhưng ở đây thì
      không: bốn bước này phải xảy ra ĐỦ và ĐÚNG THỨ TỰ thì mới có vụ thu hoạch. */
-  { t: "SELECT", slot: 0 },
+  { t: "SELECT", slot: 1 },
   { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.5 },
-  { t: "SELECT", slot: 2 },
+  { t: "SELECT", slot: 3 },
   { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
   { t: "TICK", dt: 0.5 },
   { t: "DEBUG", op: "growAll" },
@@ -1542,7 +1556,7 @@ test("24. chế tạo: đủ thì được, thiếu thì không, xa bàn thì b�
   // --- công cụ ở hai ô cố định thì không bao giờ mất ---
   store.dispatch({ t: "CRAFT", id: "can2" });
   eq(countInv(store, "tool:can2"), 1, "chế được bình tưới lớn");
-  eq(store.getState().inv[1].id, "tool:can", "ô công cụ cố định vẫn còn nguyên bình tưới");
+  eq(store.getState().inv[2].id, "tool:can", "ô công cụ cố định vẫn còn nguyên bình tưới");
   selectItem(store, "tool:can2");
   eq(waterCapacity(store.getState(), content), content.tools.can2.capacity, "cầm bình lớn thì chứa nhiều hơn");
 
@@ -2756,7 +2770,7 @@ test("45. cỏ/bụi/cây con lớn theo ngày × thời tiết; cắt cỏ ra c
 
   // cắt cỏ bằng tay không → cỏ khô
   walkTo(store, gx, gy - 1);
-  setState(store, (s) => { s.sel = 2; }); // ô hotbar trống = tay không
+  setState(store, (s) => { s.sel = 0; }); // ô TAY KHÔNG
   const before = countInv(store, "item:fodder");
   use(store, gx, gy);
   ok(countInv(store, "item:fodder") > before, "cắt cỏ dày ra cỏ khô");
@@ -2856,7 +2870,7 @@ test("47. mùa vụ: lịch đúng, hạt trái mùa không gieo/không mua đư
 
   setState(store, (s) => {
     s.day = 13; // mùa Hạ
-    s.inv[2] = { id: "seed:strawberry", n: 3 };
+    s.inv[3] = { id: "seed:strawberry", n: 3 };
   });
   eq(seasonApi.currentSeason(store.getState(), content).id, "ha", "đang ở mùa Hạ");
   eq(canUseAt(store.getState(), content, plot.x, plot.y), null, "con trỏ báo KHÔNG gieo được");
@@ -3779,10 +3793,10 @@ test("61. TỰ ĐỘNG LÀM tự đổi tay: thứ tự THU → CHỮA → GIEO 
      bao giờ thu một cây nào. */
   const cay = "lettuce";
   setState(store, (s) => {
-    s.inv[0] = { id: "tool:hoe", n: 1 };
-    s.inv[1] = { id: "tool:can", n: 1 };
-    s.inv[2] = { id: `seed:${cay}`, n: 9 };
-    s.sel = 0;
+    s.inv[1] = { id: "tool:hoe", n: 1 };
+    s.inv[2] = { id: "tool:can", n: 1 };
+    s.inv[3] = { id: `seed:${cay}`, n: 9 };
+    s.sel = 1; // cầm cuốc
     s.water = 20;
     s.day = 1; // xuân — xà lách gieo được
     const px = Math.floor(s.player.x / TILE);
@@ -3819,15 +3833,15 @@ test("61. TỰ ĐỘNG LÀM tự đổi tay: thứ tự THU → CHỮA → GIEO 
   });
   const j2 = autoJob(store.getState(), content, R);
   eq(j2 && j2.kind, "plant", "bậc 2: gieo trước tưới");
-  eq(j2.slot, 2, "và nó chỉ đúng ô hotbar có HẠT, dù tay đang cầm cuốc");
+  eq(j2.slot, 3, "và nó chỉ đúng ô hotbar có HẠT, dù tay đang cầm cuốc");
 
   // hết hạt → tưới
   setState(store, (s) => {
-    s.inv[2] = null;
+    s.inv[3] = null;
   });
   const j3 = autoJob(store.getState(), content, R);
   eq(j3 && j3.kind, "water", "bậc 3: hết hạt thì tưới");
-  eq(j3.slot, 1, "cầm bình tưới");
+  eq(j3.slot, 2, "cầm bình tưới");
 
   // ruộng ẩm hết → cày
   setState(store, (s) => {
@@ -3835,7 +3849,7 @@ test("61. TỰ ĐỘNG LÀM tự đổi tay: thứ tự THU → CHỮA → GIEO 
   });
   const j4 = autoJob(store.getState(), content, R);
   eq(j4 && j4.kind, "till", "bậc 4: hết việc trên luống thì mở thêm đất");
-  eq(j4.slot, 0, "cầm cuốc");
+  eq(j4.slot, 1, "cầm cuốc");
 
   ok(!AUTO_ORDER.includes("chop") && !AUTO_ORDER.includes("mine"),
     "tự động KHÔNG chặt cây đập đá — đó là thứ không hoàn tác được");
@@ -4021,7 +4035,7 @@ test("65. tay không: nhấc khúc gỗ / hòn đá, vác đi rồi đặt xuố
 
   /* Đang vác thì HAI TAY BẬN: không cày, không thu, chỉ đặt xuống được. Nếu
      không thì nút nói một đằng làm một nẻo — đúng lớp lỗi đã tốn nửa buổi. */
-  setState(store, (s) => { s.sel = 0; }); // cầm cuốc
+  setState(store, (s) => { s.sel = 1; }); // cầm cuốc
   eq(canUseAt(store.getState(), content, px, py + 1), "putdown", "đang vác thì cầm cuốc cũng chỉ đặt xuống được");
 
   eq(canUseAt(store.getState(), content, px - 1, py), "putdown", "ô trống → ĐẶT XUỐNG");
@@ -5993,8 +6007,9 @@ test("82. công cụ CHẾ RA sống sót qua một lần nạp save", () => {
   const co = (id) => lai.state.inv.some((v) => v && v.id === id);
   for (const id of che) ok(co(id), `sau khi nạp lại: VẪN còn ${id}`);
   for (const id of ["tool:hoe", "tool:can"]) ok(co(id), `hai ô công cụ cố định vẫn nguyên: ${id}`);
-  eq(lai.state.inv[0].id, "tool:hoe", "ô 0 vẫn là cái cuốc");
-  eq(lai.state.inv[1].id, "tool:can", "ô 1 vẫn là bình tưới");
+  eq(lai.state.inv[0], null, "ô 0 vẫn là ô TAY KHÔNG, rỗng");
+  eq(lai.state.inv[1].id, "tool:hoe", "ô 1 vẫn là cái cuốc");
+  eq(lai.state.inv[2].id, "tool:can", "ô 2 vẫn là bình tưới");
   deepEq(lai.notes, [], "không mất gì thì không có ghi chú nào");
   deepEq(checkInvariants(lai.state, content), [], "bất biến sau khi nạp lại");
 
@@ -7459,7 +7474,7 @@ test("110. nấc tiến trình PHÁT THƯỞNG đúng một lần, tràn balo th
   const st2 = mkStore(1702);
   khoaNac(st2, ["green"]); // harvested 15 → fiber ×6
   setState(st2, (s) => {
-    for (let i = 2; i < s.inv.length; i++) s.inv[i] = { id: "item:stone", n: 99 };
+    for (let i = 3; i < s.inv.length; i++) s.inv[i] = { id: "item:stone", n: 99 };
     s.stats.harvested = 15;
   });
   const kho0 = st2.getState().store.reduce((n, v) => n + (v && v.id === "item:fiber" ? v.n : 0), 0);
@@ -7753,7 +7768,7 @@ test("119. runFor: món đang cầm quyết định việc và khu; không bao g
   const selCua = () => store.getState().sel;
   const thu = (held, jobs, khuKind, khuMin) => {
     if (held) selectItem(store, held);
-    else store.dispatch({ t: "SELECT", slot: 5 }); // ô trống = tay không
+    else store.dispatch({ t: "SELECT", slot: 0 }); // ô TAY KHÔNG
     const s0 = store.getState();
     const sel0 = s0.sel;
     const r = runFor(s0, content);
@@ -7833,7 +7848,7 @@ test("120. chuyến làm GỌN TỪNG LÔ: đứng trong A2 thì cày hết A2 r
   eq(thuTu[0], "loa2", "bước đầu tiên ở A2 — khu đang đứng trong, dù A1 gần hơn");
   eq(thuTu.slice(0, soA2).every((id) => id === "loa2"), true, `${soA2} bước đầu đều ở A2`);
   eq(thuTu.slice(soA2).every((id) => id === "loa1"), true, "rồi mới toàn A1");
-  eq(store.getState().sel, 0, "sel không đổi suốt chuyến");
+  eq(store.getState().sel, 1, "sel không đổi suốt chuyến");
 
   /* KHU ĐANG DỞ thắng khu gần hơn — ca đi múc nước về: nhân vật đang đứng
      NGOÀI mọi lô, sát A1, chuyến đang dở ở A2 → ô kế vẫn phải ở A2. */
@@ -8915,8 +8930,8 @@ test("136. BẢNG KHU trả lời được ba câu: máng còn mấy ngày, con 
   unlockAll(store2);
   setState(store2, (s) => {
     setTile(s, m.x, m.y, { trough: 0, troughId: null });
-    // Dọn sạch TÚI (giữ hai ô công cụ — bất biến đòi chúng luôn có mặt).
-    s.inv = s.inv.map((o, i) => (i < 2 ? o : null));
+    // Dọn sạch TÚI (giữ ba ô cố định — bất biến đòi chúng đúng nguyên trạng).
+    s.inv = s.inv.map((o, i) => (i < 3 ? o : null));
     s.store = s.store.map(() => null);
     s.store[0] = { id: cam, n: 20 };
     s.player.x = (pen.x + 1) * TILE + 8;
@@ -9731,7 +9746,7 @@ test("141. HỒ CÁ: nút gọi đúng tên, và người làm tự lấy cám t
       // KHO đầy cám cá, TÚI rỗng — người làm buộc phải đi lấy từ kho
       s.store = s.store.map(() => null);
       s.store[0] = { id: canCa, n: 40 };
-      s.inv = s.inv.map((o, i) => (i < 2 ? o : null));
+      s.inv = s.inv.map((o, i) => (i < 3 ? o : null));
     });
     store.dispatch({ t: "DEBUG", op: "spawnWorker" });
     store.dispatch({ t: "DEBUG", op: "spawnWorker" });
@@ -13289,52 +13304,65 @@ test("184. ĐI từ khu chuồng này sang khu khác thì MÁNG phải đổi th
   }
 });
 
-test("185. TẦM NGẮM đủ rộng để nút MỤC TIÊU có việc, và LIỆT KÊ với GIỮ cùng một bán kính", () => {
-  /* Đo trước khi sửa, 531 chỗ đứng đi được trên bản đồ: 50% không có mục tiêu
-     nào để xoay, 16% chỉ có một — tức hai phần ba bản đồ, bấm nút MỤC TIÊU
-     không thể thấy gì đổi. `reachTargets` khi ấy chỉ nhận ô trong TẦM VỚI
-     (1,6 ô), mà đứng giữa ruộng thì chẳng có gì trong tầm tay.
+test("185. LIỆT KÊ mục tiêu và GIỮ mục tiêu phải dùng CÙNG một bán kính", () => {
+  /* Tầm ngắm đi một vòng rồi mới về chỗ đúng, và cái vòng ấy đáng ghi lại.
 
-     Cường chọn nới ra 6 ô. Đo lại sau khi sửa: còn 24%. */
+     Ban đầu là `REACH_TILES` (1,6) — chỉ ngắm được thứ tay đã với tới. Đo 531
+     chỗ đứng thì 50% không có mục tiêu nào để xoay, nên Đợt 33 nới lên
+     `CTX_RADIUS` (6): tỉ lệ "bấm không thấy gì" tụt 66% → 24%.
+
+     Rồi CHƠI THỬ, và đó mới là phép đo cuối. Cường: "quanh mình 2 ô đất thôi,
+     xa quá nhảy tùm lum". Sáu ô cho nhiều mục tiêu thật, nhưng mũi tên nhảy
+     qua những thứ cách nửa màn hình và người chơi mất cảm giác "nó đang chỉ
+     vào cái gần tôi". Đợt 34 chốt HAI Ô.
+
+     Kịch bản này từng khẳng định "tỉ lệ chỗ nghèo mục tiêu phải dưới 45%" —
+     con số ấy là HỆ QUẢ của một lựa chọn thiết kế, không phải một tính chất
+     phải giữ, nên nó đi theo lựa chọn. Thứ ở lại là bất biến thật: LIỆT KÊ tới
+     đâu thì GIỮ tới đó. */
   const store = mkStore(1850);
   store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
   for (const op of ["tillMap", "plantMap", "waterMap"]) store.dispatch({ t: "DEBUG", op });
-
   const OPTS = { context: true, canGo: true };
+
+  /* --- (a) Bán kính phải là con số Cường chốt, không trôi ------------- */
+  eq(AIM_RADIUS, 2, "tầm ngắm là HAI ô — quanh mình, nhìn một cái là thấy hết");
+
+  /* --- (b) VẾ QUAN TRỌNG NHẤT: liệt kê tới đâu thì giữ tới đó ---------
+     Liệt kê 6 ô mà chỉ giữ 1,6 ô thì mục tiêu vừa chọn rơi ngay khung hình
+     sau — tệ hơn hẳn lúc chưa sửa, và là kiểu hỏng không ai nghĩ tới khi chỉ
+     nới một trong hai đầu. Quét nhiều chỗ đứng để không ăn may một chỗ. */
   const s0 = store.getState();
-  let n = 0;
-  let ngheo = 0;
-  for (let y = 1; y < s0.h - 1; y += 3)
-    for (let x = 1; x < s0.w - 1; x += 3) {
+  let daThu = 0;
+  for (let y = 1; y < s0.h - 1; y += 4)
+    for (let x = 1; x < s0.w - 1; x += 4) {
       if (blockedAt(s0, content, x * TILE + 8, y * TILE + 8)) continue;
       setState(store, (s) => {
         s.player.x = x * TILE + 8;
         s.player.y = y * TILE + 8;
       });
-      n++;
-      if (reachTargets(store.getState(), content, OPTS).length <= 1) ngheo++;
+      const st = store.getState();
+      for (const t of reachTargets(st, content, OPTS)) {
+        daThu++;
+        ok(
+          aimStillValid(st, { x: t.x, y: t.y }),
+          `mục tiêu (${t.x},${t.y}) vừa liệt kê ra mà luật giữ đã loại — hai bán kính lệch nhau`,
+        );
+      }
     }
-  ok(n > 100, `phải thử đủ nhiều chỗ đứng, mới ${n}`);
-  const ti = ngheo / n;
-  ok(
-    ti < 0.45,
-    `quá nhiều chỗ đứng bấm nút MỤC TIÊU không thấy gì đổi: ${(ti * 100).toFixed(0)}% (trước khi sửa 66%)`,
-  );
+  ok(daThu > 50, `phải kiểm được nhiều mục tiêu thật, mới ${daThu}`);
 
-  /* Vế QUAN TRỌNG NHẤT: liệt kê tới đâu thì GIỮ tới đó. Liệt kê 6 ô mà chỉ giữ
-     1,6 ô thì mục tiêu vừa chọn rơi ngay khung hình sau — tệ hơn hẳn lúc chưa
-     sửa, và là kiểu hỏng không ai nghĩ tới khi nới một trong hai đầu. */
+  /* --- (c) …và không mục tiêu nào vượt quá bán kính ấy ---------------- */
   setState(store, (s) => {
     s.player.x = 10 * TILE + 8;
     s.player.y = 10 * TILE + 8;
   });
   for (const t of reachTargets(store.getState(), content, OPTS))
     ok(
-      aimStillValid(store.getState(), { x: t.x, y: t.y }),
-      `mục tiêu (${t.x},${t.y}) vừa liệt kê ra mà luật giữ đã loại — hai bán kính lệch nhau`,
+      distToTile(store.getState(), t.x, t.y) <= AIM_RADIUS,
+      `mục tiêu (${t.x},${t.y}) nằm ngoài tầm ngắm ${AIM_RADIUS} ô`,
     );
 });
-
 
 test("186. MỘT CÚ BẤM LÀ MỘT VIỆC — nút chính thôi nhận cả chuyến", () => {
   /* Cường: *"hiện tại là nó nhảy tùm lum mà nó cứ làm tự động thôi, vậy là đâu
@@ -13361,7 +13389,7 @@ test("186. MỘT CÚ BẤM LÀ MỘT VIỆC — nút chính thôi nhận cả ch
   setState(store, (s) => {
     s.player.x = (lo.x + 1) * TILE + 8;
     s.player.y = (lo.y + 1) * TILE + 8;
-    s.sel = 0; // cuốc
+    s.sel = 1; // cuốc
   });
   const p = pressPlan(store.getState(), content, facingTile(store.getState()), {
     context: true,
@@ -13427,6 +13455,74 @@ test("187. BA NÚT, BA CÂU HỎI KHÁC NHAU — và tay cầm chuyển mục ti
      năng, không phải đổi phím. */
   const viec = new Set(PAD_MAP.map((m) => m.viec));
   ok(viec.has("hotbarPrev") && viec.has("hotbarNext"), "hotbar phải còn nút, chỉ là nút khác");
+});
+
+test("188. Ô TAY KHÔNG là một ô THẬT — và ba ô cố định chỉ của TÚI, không của KHO", () => {
+  /* Cường: "hotbar sửa lại: tay không, cuốc, bình tưới…".
+
+     Tay không vốn đã làm được nhiều việc nhất trong game — bê, kéo, nhặt, mở
+     cửa, vuốt con vật, cắt cỏ — nhưng lại là món DUY NHẤT không có ô. Muốn về
+     tay không thì phải nhắm một ô còn trống mà chọn, và ô trống thì trôi chỗ
+     mỗi lần túi đầy vơi. Nay ô 0 là của nó, đứng yên, luôn là phím 1. */
+  const store = mkStore();
+  const s0 = store.getState();
+
+  /* --- (a) bố cục: tay không · cuốc · bình tưới ------------------------ */
+  eq(s0.inv[HAND_SLOT], null, "ô 0 là TAY KHÔNG — rỗng");
+  const tools = toolIds(content);
+  for (let i = 0; i < TOOL_SLOTS; i++)
+    eq(s0.inv[toolSlot(i)]?.id, tools[i], `ô ${toolSlot(i)} là ${tools[i]}`);
+
+  /* --- (b) không có đường nào nhét được đồ vào ô tay không -------------
+     Nhét tới khi túi đầy cứng rồi soi lại ô 0. Đây là chỗ dễ hỏng nhất: chỉ
+     cần MỘT lời gọi `addItem` thô trên `s.inv` là món ấy nằm đó vĩnh viễn —
+     không bán được, không đổi chỗ được, không xoá được. */
+  let inv = s0.inv;
+  for (const id of content.materialOrder) inv = addToInv(inv, `item:${id}`, 99).inv;
+  for (let i = 0; i < 60; i++) inv = addToInv(inv, `item:junk${i}`, 1).inv;
+  eq(inv[HAND_SLOT], null, "nhồi tới đầy túi mà ô tay không vẫn rỗng");
+  eq(inv.filter((v) => v === null).length, 1, "…và ô rỗng duy nhất còn lại CHÍNH LÀ nó");
+  eq(canAddInv(inv, "item:khac", 1), false, "túi đầy thì phải BÁO đầy — ô tay không không tính là chỗ trống");
+
+  /* --- (c) …và SWAP cũng không lách vào được -------------------------- */
+  const co = s0.inv.findIndex((v, i) => i >= FIXED_SLOTS && v);
+  ok(co > 0, "phải có một món để thử đổi chỗ");
+  /* Thử CẢ BA ô cố định, không riêng ô 0. Chỉ thử ô 0 thì khẳng định này mù
+     đúng chỗ đáng lo: ngưỡng khoá vừa dịch từ 2 lên 3, và ô rơi ra khỏi vùng
+     khoá nếu ai đó lỡ tay trả ngưỡng về cũ là ô BÌNH TƯỚI — số 2 — chứ không
+     phải ô 0. Ô 0 nằm dưới cả hai ngưỡng nên nó không phân biệt được gì. */
+  for (let i = 0; i < FIXED_SLOTS; i++) {
+    eq(swapSlots(s0.inv, co, i), null, `không đổi chỗ được VÀO ô cố định ${i}`);
+    eq(swapSlots(s0.inv, i, co), null, `…và không lấy được đồ RA khỏi ô cố định ${i}`);
+    const st = createStore(s0, content, { validate: true, strict: true });
+    st.dispatch({ t: "SWAP", a: co, b: i });
+    deepEq(st.getState().inv, s0.inv, `qua đường dispatch, SWAP với ô ${i} cũng không đổi gì`);
+  }
+
+  /* --- (d) DÂY BẪY: ba ô cố định là chuyện của TÚI, KHO không dính ------
+     `addItem`/`canAdd` phục vụ ba mảng: túi người chơi, kho tập trung, và tay
+     người làm thuê. Bản đầu của ô tay không nhét thẳng hằng FIXED_SLOTS vào
+     thân hàm, và thế là ba ô đầu của KHO bị bỏ hoang lặng lẽ — kho báo đầy
+     trong khi còn ba ô trống, người làm thuê đứng chờ mãi không đổ được hàng.
+     Kịch bản 95 bắt được, nhưng bằng một triệu chứng cách đó ba lớp; đây là
+     chỗ nói thẳng ra luật. */
+  const kho = new Array(8).fill(null).map((_, i) => (i < FIXED_SLOTS ? null : { id: "item:stone", n: 5 }));
+  eq(canAdd(kho, "item:wood", 1), true, "kho chỉ còn ba ô ĐẦU trống thì vẫn là còn chỗ");
+  eq(addItem(kho, "item:wood", 1).inv[0]?.id, "item:wood", "…và hàng vào được ô 0 của kho");
+  eq(canAddInv(kho, "item:wood", 1), false, "cùng mảng ấy, luật TÚI thì lại là hết chỗ");
+
+  /* --- (e) chọn ô 0 là tay không THẬT, không phải một ô hỏng ----------- */
+  const st2 = mkStore();
+  st2.dispatch({ t: "SELECT", slot: HAND_SLOT });
+  eq(st2.getState().sel, HAND_SLOT, "chọn được ô tay không");
+  eq(selectedItemId(st2.getState().inv, st2.getState().sel), null, "…và nó cho ra 'không cầm gì'");
+
+  /* --- (f) …nhưng VÁN MỚI không mở ra ở đó ----------------------------
+     Ô 0 đổi nghĩa thì `sel: 0` cũng đổi nghĩa theo, lặng lẽ: màn hình đầu
+     tiên của người chơi mới thành một nút DÙNG xám kèm dòng "Chọn vật phẩm ở
+     hotbar" — game mở ra bằng một lời từ chối. Cày là việc đầu của mọi ván. */
+  eq(s0.sel, toolSlot(0), "ván mới mở ra ở ô CÁI CUỐC");
+  eq(selectedItemId(s0.inv, s0.sel), tools[0], `…tức đang cầm ${tools[0]}`);
 });
 
 await Promise.all(choDoi);

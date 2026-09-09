@@ -26,7 +26,7 @@ import type {
 } from "./types.ts";
 import { CORE_VERSION, SAVE_VERSION } from "../core/version.ts";
 import { buildAllMaps, mapIdsOf, tileCenterX, tileCenterY } from "./world.ts";
-import { createInventory, addItem } from "./inventory.ts";
+import { createInventory, addItem, addToInv, toolSlot } from "./inventory.ts";
 import { evaluateProgression } from "./progression.ts";
 import { itemName } from "./items.ts";
 
@@ -343,7 +343,7 @@ export function applyProgression(d: Draft, content: Content): void {
     }
     for (const it of rw.items ?? []) {
       const n = Math.max(1, Math.floor(it.n));
-      const r = addItem(d.s.inv, it.id, n);
+      const r = addToInv(d.s.inv, it.id, n);
       setInv(d, r.inv);
       let con = n - r.added;
       // Balo đầy thì phần còn lại vào KHO — không để một phần thưởng bốc hơi.
@@ -395,7 +395,13 @@ export function createNewGame(content: Content, seed = 1): GameState {
     maps,
 
     inv: createInventory(content),
-    sel: 0,
+    /* Ván mới mở ra ở CÁI CUỐC, không ở ô tay không.
+
+       Ô 0 nay là tay không, nên để `sel: 0` thì màn hình đầu tiên của một
+       người chơi mới là một nút DÙNG xám kèm dòng "Chọn vật phẩm ở hotbar" —
+       game mở ra bằng một lời từ chối. Cày là việc đầu tiên của mọi ván, và
+       nhãn "CÀY" trên nút chính nói luôn phải làm gì. */
+    sel: toolSlot(0),
 
     stagesDone: [],
     goalsDone: [],

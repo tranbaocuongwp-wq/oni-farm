@@ -19,7 +19,7 @@ import type { Content, Entity, GameState, PenDef, Dir} from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { dEntity, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
 import { hash2 } from "../core/rng.ts";
-import { addItem, canAdd } from "./inventory.ts";
+import { addToInv, canAddInv } from "./inventory.ts";
 import { itemName } from "./items.ts";
 import { animalDef, removeEntity } from "./entities.ts";
 import { TILE, tileIndexAt } from "./world.ts";
@@ -366,11 +366,11 @@ function thuMotCon(d: Draft, content: Content, e: Entity, noi: boolean): boolean
   const r = randInt(d.s.seed, p.min, p.max);
   touch(d).seed = r.seed;
   const n = Math.max(1, r.v);
-  if (!canAdd(d.s.inv, p.id, n)) {
+  if (!canAddInv(d.s.inv, p.id, n)) {
     toastKey(d, content, "invFull", "bad");
     return false;
   }
-  const add = addItem(d.s.inv, p.id, n);
+  const add = addToInv(d.s.inv, p.id, n);
   setInv(d, add.inv);
 
   const i = d.s.entities.indexOf(e);
@@ -411,7 +411,7 @@ export function gatherPen(d: Draft, content: Content, penId: string): number {
     // Túi đầy thì DỪNG HẲN, không thử tiếp: con sau cũng đầy y như con trước,
     // và mỗi lần thử là một dòng "túi đầy" nữa.
     if (!thuMotCon(d, content, e, false)) {
-      if (!canAdd(d.s.inv, content.animals[e.def]?.products[readyProduct(e, content)]?.id ?? "", 1)) break;
+      if (!canAddInv(d.s.inv, content.animals[e.def]?.products[readyProduct(e, content)]?.id ?? "", 1)) break;
       continue;
     }
     lay++;
@@ -440,11 +440,11 @@ export function slaughter(d: Draft, content: Content, x: number, y: number): boo
   const r = randInt(d.s.seed, def.meat.min, def.meat.max);
   touch(d).seed = r.seed;
   const n = Math.max(1, r.v);
-  if (!canAdd(d.s.inv, def.meat.id, n)) {
+  if (!canAddInv(d.s.inv, def.meat.id, n)) {
     toastKey(d, content, "invFull", "bad");
     return false;
   }
-  const add = addItem(d.s.inv, def.meat.id, n);
+  const add = addToInv(d.s.inv, def.meat.id, n);
   setInv(d, add.inv);
   removeEntity(d, e.id);
   toastText(d, `${itemName(def.meat.id, content)} ×${add.added}`, "good");

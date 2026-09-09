@@ -1368,21 +1368,27 @@ export function ghiNhoNgam(
 /**
  * TẦM NGẮM — mục tiêu được phép nằm xa tới đâu.
  *
- * Từ Đợt 33 nó là `CTX_RADIUS`, không còn là `REACH_TILES`. Lý do: đo trên 531
- * chỗ đứng thì 50% số chỗ KHÔNG có mục tiêu nào để xoay và 16% chỉ có một —
- * tức ở hai phần ba bản đồ, bấm nút MỤC TIÊU không thể thấy gì đổi. Với tầm
- * 1,6 ô, mục tiêu chỉ là thứ tay đã với tới, mà đứng giữa ruộng thì chẳng có
- * gì trong tay cả.
+ * HAI Ô. Con số này đi một vòng rồi mới về đúng chỗ, và cái vòng ấy đáng ghi lại.
  *
- * Nới ra thì mũi tên đỏ chỉ được cả thứ ở xa, và nút chính thành "đi tới rồi
- * làm" — nhánh ấy đã có sẵn trong `pressPlan`, không phải viết mới.
+ * Ban đầu nó là `REACH_TILES` (1,6) — chỉ ngắm được thứ tay đã với tới. Đo trên
+ * 531 chỗ đứng thì 50% không có mục tiêu nào để xoay, nên Đợt 33 nới lên
+ * `CTX_RADIUS` (6): tỉ lệ "bấm không thấy gì" tụt từ 66% xuống 24%.
+ *
+ * Nhưng CHƠI THỬ mới là phép đo cuối. Cường: *"quanh mình 2 ô đất thôi, xa quá
+ * nhảy tùm lum"*. Sáu ô cho nhiều mục tiêu thật, nhưng mũi tên nhảy qua những
+ * thứ cách nửa màn hình, và người chơi mất luôn cảm giác "nó đang chỉ vào cái
+ * gần tôi". Số lượng mục tiêu không phải thứ cần tối đa hoá — ĐOÁN ĐƯỢC mới là.
+ *
+ * Hai ô, không phải 1,6: rộng hơn tầm với một chút nên ngắm được thứ ngay sát
+ * ngoài tầm, và nút chính thành "đi tới rồi làm" — nhánh đã có sẵn trong
+ * `pressPlan`. Nhưng vẫn là "quanh mình", vẫn nhìn một cái là thấy hết.
  *
  * ⚠️ Một hằng số cho CẢ HAI đầu: `reachTargets` liệt kê tới đâu thì
  * `aimStillValid` phải giữ tới đó. Lệch nhau là mục tiêu vừa chọn rơi ngay
  * khung hình sau — tệ hơn hẳn lúc chưa sửa. Đây cũng là điều kịch bản 168 canh
  * ("không được có một bán kính thứ ba tự chế").
  */
-export const AIM_RADIUS = CTX_RADIUS;
+export const AIM_RADIUS = 2;
 
 export function aimStillValid(state: GameState, aim: { x: number; y: number } | null): boolean {
   return aim !== null && distToTile(state, aim.x, aim.y) <= AIM_RADIUS;

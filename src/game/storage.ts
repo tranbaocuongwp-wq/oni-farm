@@ -14,7 +14,7 @@
 import type { Content, GameState, InvSlot } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { setInv, storeSize, toastKey, toastText, touch } from "./state.ts";
-import { addItem, canAdd, removeItem } from "./inventory.ts";
+import { addItem, addToInv, canAdd, canAddInv, removeItem } from "./inventory.ts";
 import { itemName, sellPriceOf, sellable } from "./items.ts";
 
 /** Bản sao sửa được của kho. */
@@ -71,13 +71,13 @@ export function takeFromStore(d: Draft, content: Content, slot: number, n: numbe
   if (!from) return;
   const want = Math.max(0, Math.min(Math.floor(n), from.n));
   if (want <= 0) return;
-  if (!canAdd(d.s.inv, from.id, want)) {
+  if (!canAddInv(d.s.inv, from.id, want)) {
     toastKey(d, content, "invFull", "bad");
     return;
   }
   const left = removeItem(d.s.store, from.id, want);
   if (!left) return;
-  const r = addItem(d.s.inv, from.id, want);
+  const r = addToInv(d.s.inv, from.id, want);
   setStore(d, left);
   setInv(d, r.inv);
   toastText(d, `Lấy từ kho: ${itemName(from.id, content)} ×${r.added}`, "good");

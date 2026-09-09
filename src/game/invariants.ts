@@ -29,7 +29,7 @@ import {
   tileCenterY,
   cachDoi,
 } from "./world.ts";
-import { TOOL_SLOTS, normalizeInventory, toolIds } from "./inventory.ts";
+import { HAND_SLOT, TOOL_SLOTS, normalizeInventory, toolIds, toolSlot } from "./inventory.ts";
 import { isKnownItem, parseItem } from "./items.ts";
 import { normalizeStore, storeErrors } from "./storage.ts";
 import { MAX_ENTITIES, MAX_PATH, MAX_PATH_VEHICLE, pruneEntities, capEntities } from "./entities.ts";
@@ -180,12 +180,19 @@ export function checkInvariants(state: GameState, content: Content): string[] {
       e.push(`inv[${i}] có id không hợp lệ: ${String(s.id)}`);
     if (!Number.isInteger(s.n) || s.n < 1) e.push(`inv[${i}] có n = ${s.n}, phải là số nguyên >= 1`);
   }
+  /* Ô tay không phải RỖNG. Đây là chốt chặn thật chứ không phải nghi thức:
+     `addItem` nay bỏ qua ô 0, nên bất cứ thứ gì lọt vào đó là dấu hiệu có một
+     đường ghi túi khác đang bỏ qua inventory.ts — và món ấy sẽ nằm đó vĩnh
+     viễn, không bán được, không đổi chỗ được, không xoá được. */
+  if (state.inv[HAND_SLOT])
+    e.push(`ô tay không (${HAND_SLOT}) phải rỗng, đang giữ '${state.inv[HAND_SLOT]?.id}'`);
   const tools = toolIds(content);
   for (let i = 0; i < TOOL_SLOTS; i++) {
     const want = tools[i];
-    const got = state.inv[i];
+    const got = state.inv[toolSlot(i)];
     if (!want) continue;
-    if (!got || got.id !== want) e.push(`ô công cụ ${i} phải là '${want}', đang là '${got?.id ?? "trống"}'`);
+    if (!got || got.id !== want)
+      e.push(`ô công cụ ${toolSlot(i)} phải là '${want}', đang là '${got?.id ?? "trống"}'`);
   }
 
   // kho tập trung

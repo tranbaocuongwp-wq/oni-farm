@@ -8,7 +8,7 @@
 import type { Content } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dStats, setInv, toastKey, toastText, touch } from "./state.ts";
-import { addItem, canAdd, countItem, sellSlots, removeItem } from "./inventory.ts";
+import { addToInv, canAddInv, countItem, sellSlots, removeItem } from "./inventory.ts";
 import { buyPriceOf, itemName, sellPriceOf, shopItemId } from "./items.ts";
 import { cropInSeason } from "./season.ts";
 import { boatAt } from "./hint.ts";
@@ -40,12 +40,12 @@ export function buy(d: Draft, content: Content, id: string, n: number): void {
     toastKey(d, content, "noMoney", "bad");
     return;
   }
-  if (!canAdd(d.s.inv, itemIdent, count)) {
+  if (!canAddInv(d.s.inv, itemIdent, count)) {
     toastKey(d, content, "invFull", "bad");
     return; // túi đầy thì KHÔNG trừ tiền
   }
 
-  const r = addItem(d.s.inv, itemIdent, count);
+  const r = addToInv(d.s.inv, itemIdent, count);
   setInv(d, r.inv);
   touch(d).money = d.s.money - cost;
   toastKey(d, content, "bought", "good", `${itemName(itemIdent, content)} ×${count}`);
@@ -80,11 +80,11 @@ export function buyFromBoat(d: Draft, content: Content, id: string, n: number): 
     toastKey(d, content, "noMoney", "bad");
     return;
   }
-  if (!canAdd(d.s.inv, id, count)) {
+  if (!canAddInv(d.s.inv, id, count)) {
     toastKey(d, content, "invFull", "bad");
     return;
   }
-  const r = addItem(d.s.inv, id, count);
+  const r = addToInv(d.s.inv, id, count);
   setInv(d, r.inv);
   touch(d).money = d.s.money - cost;
   toastKey(d, content, "bought", "good", `${itemName(id, content)} ×${count}`);

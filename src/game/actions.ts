@@ -13,7 +13,7 @@
 import type { Content, GameState, PropDef, RecipeDef, Tile, ToolAction, ToolDef } from "./types.ts";
 import type { Draft, MapView } from "./state.ts";
 import { activeView, dStats, dTile, randInt, setInv, toastKey, toastText, touch } from "./state.ts";
-import { addItem, canAdd, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
+import { addToInv, canAddInv, countItem, removeForCraft, removeItem, selectedItemId } from "./inventory.ts";
 import { itemName, parseItem } from "./items.ts";
 import { cureTile, pullTile } from "./disease.ts";
 import {
@@ -196,7 +196,7 @@ export function harvestTileIn(
   const s = touch(d);
   s.seed = roll.seed;
 
-  const added = addItem(s.inv, `crop:${def.id}`, amount);
+  const added = addToInv(s.inv, `crop:${def.id}`, amount);
   setInv(d, added.inv);
   const overflow = amount - added.added;
 
@@ -474,7 +474,7 @@ function breakProp(d: Draft, content: Content, i: number, cur: Tile, def: PropDe
     touch(d).seed = roll.seed;
     const n = Math.max(0, roll.v);
     if (n <= 0) continue;
-    const r = addItem(d.s.inv, drop.id, n);
+    const r = addToInv(d.s.inv, drop.id, n);
     setInv(d, r.inv);
     if (r.added < n) overflow = true;
     if (r.added > 0) toastText(d, `Nhận ${itemName(drop.id, content)} ×${r.added}`, "good");
@@ -835,7 +835,7 @@ export function craft(d: Draft, content: Content, recipeId: string): boolean {
     return false;
   }
   const outN = Math.max(1, Math.floor(r.out.n));
-  if (!canAdd(d.s.inv, r.out.id, outN)) {
+  if (!canAddInv(d.s.inv, r.out.id, outN)) {
     toastKey(d, content, "invFull", "bad");
     return false;
   }
@@ -847,7 +847,7 @@ export function craft(d: Draft, content: Content, recipeId: string): boolean {
     if (!left) return false; // đã kiểm ở trên, nhưng thà không làm gì còn hơn làm nửa vời
     inv = left;
   }
-  const added = addItem(inv, r.out.id, outN);
+  const added = addToInv(inv, r.out.id, outN);
   setInv(d, added.inv);
   const st = dStats(d);
   st.crafted = (st.crafted ?? 0) + 1;

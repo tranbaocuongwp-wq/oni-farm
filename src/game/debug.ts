@@ -11,7 +11,7 @@
 import type { Content, DebugOp } from "./types.ts";
 import type { Draft } from "./state.ts";
 import { dTile, mapViews, nextRandom, setInv, toastText, touch } from "./state.ts";
-import { addItem, removeItem, selectedItemId } from "./inventory.ts";
+import { addToInv, removeItem, selectedItemId } from "./inventory.ts";
 import { parseItem } from "./items.ts";
 import { harvestTileIn, waterCapacity } from "./actions.ts";
 import { newDay } from "./newday.ts";
@@ -263,7 +263,7 @@ export function applyDebug(d: Draft, content: Content, op: DebugOp, n?: number):
       let inv = d.s.inv;
       for (const id of content.materialOrder) {
         if (cheRa.has(`item:${id}`)) continue;
-        inv = addItem(inv, `item:${id}`, add).inv;
+        inv = addToInv(inv, `item:${id}`, add).inv;
       }
       setInv(d, inv);
       toastText(d, `[debug] +${add} mỗi loại vật liệu thô`, "good");

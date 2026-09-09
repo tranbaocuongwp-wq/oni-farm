@@ -28,8 +28,13 @@ import type { Content, GameState } from "../game/types.ts";
 import { itemName } from "../game/items.ts";
 import { currentSeason, dayOfSeason, yearOf } from "../game/season.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
+import { HAND_ICON } from "../art/atlas.ts";
+import { HAND_SLOT } from "../game/inventory.ts";
 import type { Hint } from "../game/hint.ts";
 import { wantSummary } from "../game/workers.ts";
+
+/** Tên ô tay không — dùng cả ở hotbar lẫn dòng "vừa cầm lên". */
+const TAY_KHONG = "Tay không";
 import type { AnimalStats } from "../game/animals.ts";
 import type { WorkerCard } from "../game/workers.ts";
 
@@ -235,7 +240,7 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
 
   const flashSel = (s: GameState, content: Content, hint: Hint | null) => {
     const slot = s.inv[s.sel];
-    const ten = slot ? `${itemLabel(slot.id, content)}${slot.n > 1 ? ` ×${slot.n}` : ""}` : "Tay không";
+    const ten = slot ? `${itemLabel(slot.id, content)}${slot.n > 1 ? ` ×${slot.n}` : ""}` : TAY_KHONG;
     /* Kèm luôn VIỆC nút ngữ cảnh sẽ làm với thứ vừa cầm.
        Biết mình đang cầm "Hạt cà chua" chưa đủ — câu người chơi thật sự hỏi là
        "bấm nút kia bây giờ thì chuyện gì xảy ra". Ghép hai câu trả lời vào một
@@ -318,12 +323,30 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
     elHotbar.innerHTML = "";
     for (let i = 0; i < n; i++) {
       const it = s.inv[i] ?? null;
+      /* Ô 0 là TAY KHÔNG: rỗng nhưng KHÔNG phải ô trống. Nó có hình, có tên, có
+         mô tả — vì với tay không người chơi bê được, kéo được, vuốt con vật,
+         mở cửa. Gắn thêm class "empty" cho nó thì nó mờ đi y hệt sáu ô chưa
+         dùng phía sau, và món dùng nhiều nhất trong game trông như chỗ trống. */
+      const tay = i === HAND_SLOT;
       const el = document.createElement("div");
-      el.className = `slot${i === s.sel ? " sel" : ""}${it ? "" : " empty"}`;
+      el.className = `slot${i === s.sel ? " sel" : ""}${it || tay ? "" : " empty"}${tay ? " hand" : ""}`;
       el.dataset["slot"] = String(i);
       el.setAttribute("role", "button");
       el.innerHTML = `<span class="k">${(i + 1) % 10}</span>`;
-      if (it) {
+      if (tay) {
+        const icon = atlas.icon(HAND_ICON);
+        if (icon) {
+          const c = document.createElement("canvas");
+          c.width = icon.width;
+          c.height = icon.height;
+          c.getContext("2d")!.drawImage(icon, 0, 0);
+          el.appendChild(c);
+        }
+        el.title = TAY_KHONG;
+        el.dataset["name"] = TAY_KHONG;
+        el.dataset["desc"] = "Bê, kéo, nhặt, mở cửa, vuốt con vật — không cần cầm gì";
+        el.setAttribute("aria-label", TAY_KHONG);
+      } else if (it) {
         const icon = atlas.icon(it.id);
         if (icon) {
           const c = document.createElement("canvas");

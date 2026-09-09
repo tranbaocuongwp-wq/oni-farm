@@ -19,7 +19,7 @@
 ============================================================================ */
 
 import type { Content, DebugOp, GameState } from "../game/types.ts";
-import { ART } from "../art/atlas.ts";
+import { ART, HAND_ICON } from "../art/atlas.ts";
 import type { Atlas, UiIcon } from "../art/atlas.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { cropInSeason, currentSeason, dayOfSeason } from "../game/season.ts";
@@ -27,7 +27,7 @@ import type { Settings } from "../core/settings.ts";
 import { padButtonName, type PadInfo } from "../core/gamepad.ts";
 import { PAD_MAP, type PadBind } from "../core/input.ts";
 import { fromAnimals, sellPriceOf } from "../game/items.ts";
-import { sellSlots } from "../game/inventory.ts";
+import { FIXED_SLOTS, HAND_SLOT, sellSlots } from "../game/inventory.ts";
 import { penSummary } from "../game/animals.ts";
 import { diemThucAn } from "../game/pen.ts";
 import { khoaNgoai } from "./inert.ts";
@@ -1193,7 +1193,7 @@ export function createMenus(
     const total = s.inv.length;
     const { body, foot } = shell(
       "Balo",
-      "Hotbar cố định 10 ô. Chạm một món rồi chạm ô đích để đổi chỗ — hoặc kéo thả.",
+      "Hotbar cố định 10 ô; ba ô đầu (tay không · cuốc · bình tưới) không đổi chỗ được. Chạm một món rồi chạm ô đích để đổi chỗ — hoặc kéo thả.",
       "sheet",
     );
 
@@ -1210,10 +1210,18 @@ export function createMenus(
     const mkSlot = (i: number) => {
       const it = s.inv[i] ?? null;
       const el = document.createElement("div");
-      el.className = `bslot${it ? "" : " empty"}${i === picked ? " picked" : ""}${i < 2 ? " locked" : ""}${i === s.sel ? " sel" : ""}`;
+      /* Ô tay không: khoá, rỗng, NHƯNG không "trống". Không vẽ gì vào đó thì
+         trong balo nó là một cái lỗ bị khoá không lời giải thích — người chơi
+         chỉ thấy một ô không dùng được và không hiểu vì sao. */
+      const tay = i === HAND_SLOT;
+      el.className = `bslot${it || tay ? "" : " empty"}${i === picked ? " picked" : ""}${i < FIXED_SLOTS ? " locked" : ""}${i === s.sel ? " sel" : ""}`;
       el.dataset["slot"] = String(i);
       el.setAttribute("role", "button");
-      if (it) {
+      if (tay) {
+        el.appendChild(icon(HAND_ICON, 11));
+        el.title = "Tay không";
+        el.setAttribute("aria-label", "Tay không");
+      } else if (it) {
         el.appendChild(icon(it.id, 11));
         if (it.n > 1) {
           const n = document.createElement("span");
