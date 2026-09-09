@@ -36,7 +36,7 @@
       state không phải lưu thêm gì.
 ============================================================================ */
 
-import type { Content, Entity, GameState, Tile } from "../game/types.ts";
+import type { Content, Entity, GameState, GroundKind, Tile } from "../game/types.ts";
 import {
   ART,
   TILE_PX,
@@ -308,6 +308,48 @@ export function heldForJob(job: string | undefined, propTool: string | null): He
   }
 }
 
+/* ------------------------------------------------ CHỮ KÝ LỚP NỀN CỦA MỘT Ô
+
+   ⚠️ ĐẶT NGAY CẠNH `veNenVao` VÀ PHẢI ĐI CÙNG NÓ. Thêm một trường vào `Tile`
+   mà `veNenVao` có đọc, rồi quên thêm vào đây, thì cache nền ĐỨNG HÌNH — ô ấy
+   đổi mà màn hình không đổi — và **không kịch bản nào đỏ**, chỉ người chơi
+   thấy. Kịch bản 170 quét chính mã nguồn `veNenVao` để bắt trường hợp ấy.
+
+   Năm trường, gói vào một số nguyên nhỏ để so bằng một phép so. `crop` cố ý
+   KHÔNG có mặt: cây lớn lên không đổi lớp nền một pixel nào, và chính việc
+   `crop.grow` nhích lên mỗi khung là thứ đã giết cache suốt năm đợt. */
+/* `Record<GroundKind, …>` chứ không phải `Record<string, …>`: thêm một loại nền
+   vào `GroundKind` mà quên cho nó một mã ở đây thì `tsc` ĐỎ NGAY. Bảng tra lỏng
+   sẽ lặng lẽ trả `undefined` cho loại mới, hai loại mới cùng ra một mã, và cache
+   đứng hình — đúng cái hỏng mà cả đợt này đang chữa. */
+const MA_NEN: Record<GroundKind, number> = {
+  grass: 1,
+  path: 2,
+  wood: 3,
+  asphalt: 4,
+  concrete: 5,
+  water: 6,
+};
+/** id công trình → số nhỏ, điền lười theo thứ tự gặp. */
+const maB = new Map<string, number>();
+export function chuKyNen(t: Tile): number {
+  let b = 0;
+  if (t.b) {
+    b = maB.get(t.b) ?? 0;
+    if (b === 0) {
+      b = maB.size + 1;
+      maB.set(t.b, b);
+    }
+  }
+  return (
+    MA_NEN[t.g] |
+    (t.tilled ? 1 << 3 : 0) |
+    (t.wet ? 1 << 4 : 0) |
+    (t.decor === "tuft" ? 1 << 5 : 0) |
+    (b << 6)
+  );
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   atlas: Atlas,
@@ -551,9 +593,27 @@ export function createRenderer(
      camera trôi sang ô mới, hoặc khi trời bắt đầu/tạnh mưa. Nên vẽ nó một lần
      vào canvas phụ rồi dán lại mỗi khung.
 
-     Khoá vô hiệu hoá RẺ và CHÍNH XÁC: `s.tiles` là mảng copy-on-write, nên chỉ
-     cần so THAM CHIẾU — một ô đổi là cả mảng đổi. Không phải nghĩ ra một bộ
-     đếm phiên bản nào, và không có cách nào nó bỏ sót một thay đổi.
+     KHOÁ VÔ HIỆU HOÁ — và đây là chỗ Đợt 23 sai suốt năm đợt.
+
+     Khoá cũ là `nenTiles === s.tiles`: "mảng copy-on-write, một ô đổi là cả
+     mảng đổi, rẻ nhất có thể và không có cách nào nó bỏ sót". Vế thứ hai đúng.
+     Vế thứ nhất mới là vấn đề: nó cũng KHÔNG BAO GIỜ TRÚNG.
+
+     `growCrops` chạy mỗi TICK (reduce.ts) và gọi `edit()` cho MỌI ô ẩm có cây
+     đang lớn — vì `grow` cộng thêm mỗi khung, không phải chỉ khi đổi giai đoạn.
+     Một lần `edit` là `dTiles` nhân bản cả mảng 3.504 ô. Nên trên nông trại đã
+     gieo, `s.tiles` đổi tham chiếu MỖI KHUNG HÌNH, và cache nền dựng lại mỗi
+     khung: đo được `nenVe = 600/600`, 1.544 lệnh vẽ và 22 ms mỗi khung — vượt
+     hẳn ngân sách 16,7 ms của 60fps.
+
+     Mà cây lớn lên KHÔNG đổi lớp nền một pixel nào: `veNenVao` đọc đúng năm
+     trường `g · b · tilled · wet · decor`, không đọc `crop` lấy một lần. Cái
+     khoá chỉ đang hỏi sai câu.
+
+     Khoá mới hỏi đúng câu: CHỮ KÝ của năm trường ấy. So tham chiếu trước (rẻ),
+     chỉ ô nào đổi object mới tính chữ ký — đúng lối `veODaDoi` mà bản đồ nhỏ
+     đã dùng từ Đợt 15 để chữa CHÍNH lỗi này (ui/minimap.ts). Lớp vẽ chính khi
+     ấy không được sửa cùng.
 
      Hai thứ KHÔNG vào cache vì chúng động mỗi khung: mặt nước và bọt sóng. Danh
      sách ô nước được ghi lại lúc dựng cache nên khung sau không phải quét lại
@@ -568,6 +628,63 @@ export function createRenderer(
   let nenMua = false;
   /** Chỉ số ô NƯỚC trong vùng đã cache — vẽ trực tiếp mỗi khung. */
   let nenNuoc: number[] = [];
+
+  /* MỘT lượt quét ô mỗi khung. Hôm nay một khách hàng — cache lớp nền; commit
+     sau nối thêm bảng loại nước và `isIndoor`, vốn cùng khoá sai một kiểu.
+
+     So THAM CHIẾU trước rồi mới tính chữ ký: mảng là mới mỗi khung nhưng phần
+     lớn phần tử vẫn là object cũ — chỉ ~360 ô có cây là mới. Nên một lượt quét
+     là ~3.500 phép so tham chiếu (vài micro-giây) thay cho ~900 lệnh vẽ (vài
+     mili-giây). Rẻ hơn hai tới ba bậc. */
+  let oRef: (Tile | undefined)[] = [];
+  let oSig = new Int32Array(0);
+  let oMapId = "";
+  /** Hộp bao các ô vừa đổi CHỮ KÝ NỀN trong khung này, hoặc null nếu không ô nào. */
+  let doiHop: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  /** Bản đồ vừa đổi (hoặc lần quét đầu) — mọi thứ phải dựng lại. */
+  let banDoMoi = true;
+
+  function quetO(s: GameState): void {
+    const n = s.w * s.h;
+    banDoMoi = s.mapId !== oMapId || oSig.length !== n;
+    doiHop = null;
+    if (banDoMoi) {
+      oMapId = s.mapId;
+      oSig = new Int32Array(n);
+      oRef = new Array<Tile | undefined>(n);
+      for (let i = 0; i < n; i++) {
+        const t = s.tiles[i];
+        oRef[i] = t;
+        oSig[i] = t ? chuKyNen(t) : -1;
+      }
+      return;
+    }
+    /* Đường tắt: mảng y nguyên nghĩa là KHÔNG một ô nào đổi. Hiếm khi trúng
+       trên nông trại đang lớn, nhưng ban đêm và trong nhà thì trúng luôn. */
+    if (s.tiles === oRef) return;
+    for (let i = 0; i < n; i++) {
+      const t = s.tiles[i];
+      if (t === oRef[i]) continue;
+      /* KHÔNG ghi `oRef[i] = t` ở đây: từ khung thứ hai trở đi `oRef` CHÍNH LÀ
+         mảng ô của khung trước, và ghi vào đó là sửa một state đã đóng băng.
+         Chỉ trỏ lại cả mảng sau vòng lặp là đủ. */
+      const ky = t ? chuKyNen(t) : -1;
+      if (ky === oSig[i]) continue; // object mới, hình vẽ y hệt — phần lớn là ca này
+      oSig[i] = ky;
+      const x = i % s.w;
+      const y = (i / s.w) | 0;
+      if (!doiHop) doiHop = { x0: x, y0: y, x1: x, y1: y };
+      else {
+        if (x < doiHop.x0) doiHop.x0 = x;
+        if (x > doiHop.x1) doiHop.x1 = x;
+        if (y < doiHop.y0) doiHop.y0 = y;
+        if (y > doiHop.y1) doiHop.y1 = y;
+      }
+    }
+    /* `oRef` phải trỏ vào mảng MỚI, nếu không đường tắt ở trên không bao giờ
+       trúng lại. Gán sau vòng lặp vì trong vòng ta còn cần phần tử cũ. */
+    oRef = s.tiles as (Tile | undefined)[];
+  }
 
   /* ------------------------------------------------------- LOẠI CỦA MỘT Ô NƯỚC
 
@@ -931,9 +1048,22 @@ export function createRenderer(
     const { rx, ry } = camera;
     const shoreFrame = Math.floor(waterFrame / 2) % 2;
 
-    // Cache còn dùng được không: cùng lưới ô, cùng trời, và phủ hết khung nhìn.
+    /* Cache còn dùng được không. Bốn điều kiện, và điều kiện đầu là chỗ Đợt 28
+       sửa: KHÔNG hỏi "mảng ô có còn y nguyên không" (không bao giờ) mà hỏi "có
+       ô nào trong VÙNG ĐÃ CACHE đổi hình vẽ không".
+
+       Nhờ hộp bao, cày một ô ở góc bản đồ khác không bắt dựng lại vùng đang
+       hiện — mà đó chính là thứ người làm thuê làm suốt ngày. */
+    const cheoVung =
+      doiHop !== null &&
+      doiHop.x0 <= nenX0 + nenCols - 1 &&
+      doiHop.x1 >= nenX0 &&
+      doiHop.y0 <= nenY0 + nenRows - 1 &&
+      doiHop.y1 >= nenY0;
     const hopLe =
-      nenTiles === s.tiles &&
+      nenTiles !== null &&
+      !banDoMoi &&
+      !cheoVung &&
       nenMua === mua &&
       x0 >= nenX0 &&
       y0 >= nenY0 &&
@@ -2077,6 +2207,10 @@ export function createRenderer(
     const gio0 = import.meta.env?.DEV ? performance.now() : 0;
     const vp = camera.viewport;
     if (!(vp.cssW > 0) || !(vp.cssH > 0)) return;
+
+    /* MỘT lượt quét ô cho cả khung hình, chạy TRƯỚC mọi thứ đọc kết quả của
+       nó, đúng một lần — và đây là chỗ duy nhất gọi nó. */
+    quetO(s);
 
     const dt = lastTime > 0 ? Math.min(0.1, Math.max(0, timeSec - lastTime)) : 0;
     dtVe = dt;

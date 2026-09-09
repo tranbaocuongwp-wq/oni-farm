@@ -54,7 +54,7 @@ import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
-import { workFrame, heldForJob } from "../src/render/draw.ts";
+import { workFrame, heldForJob, chuKyNen } from "../src/render/draw.ts";
 import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
 import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
@@ -12096,6 +12096,111 @@ test("169. MŨI TÊN ĐỎ luôn chỉ đúng ô mà nút chính sẽ tác độ
   ok(!/DOUBLE_MS|DOUBLE_DIST|isDouble|lastTap/.test(inputSrc), "input.ts không được còn dấu vết chạm kép");
   ok(!/it\.double/.test(mainSrc), "main.ts không được còn nhánh chạm kép");
   ok(/case "aimNext"/.test(mainSrc), "main.ts phải xử lý nút chuyển mục tiêu");
+});
+
+
+test("170. Cây LỚN LÊN không được làm hỏng cache lớp nền", () => {
+  /* Đây là con lỗi đắt nhất mà bộ sim từng bỏ sót — nó sống suốt năm đợt và
+     ngốn quá nửa mỗi khung hình, trong khi mọi phép đo đều báo xanh.
+
+     Lớp nền được cache vào một canvas phụ từ Đợt 23. Khoá vô hiệu hoá là
+     `nenTiles === s.tiles`: "mảng copy-on-write, một ô đổi là cả mảng đổi, rẻ
+     nhất có thể". Đúng, và cũng KHÔNG BAO GIỜ TRÚNG: `growCrops` chạy mỗi TICK
+     và gọi `edit()` cho mọi ô ẩm có cây đang lớn (vì `grow` cộng thêm mỗi
+     khung, không phải chỉ khi đổi giai đoạn), nên `s.tiles` đổi tham chiếu mỗi
+     khung hình. Đo trong trình duyệt: 600/600 khung dựng lại cache, 1.544 lệnh
+     vẽ và 22 ms mỗi khung — vượt hẳn ngân sách 16,7 ms của 60fps.
+
+     Mà cây lớn KHÔNG đổi lớp nền một pixel nào. `chuKyNen` là câu hỏi đúng, và
+     kịch bản này khoá đúng tính chất ấy. */
+  const store = mkStore(2828);
+  setWeather(store, "sunny");
+  store.dispatch({ t: "DEBUG", op: "money", n: 999999 });
+  for (const op of ["tillMap", "plantMap", "waterMap"]) store.dispatch({ t: "DEBUG", op });
+
+  const s0 = store.getState();
+  let coCay = 0;
+  for (const t of s0.tiles) if (t?.crop) coCay++;
+  ok(coCay > 100, `cần một ruộng gieo kín để kiểm, đang có ${coCay} ô cây`);
+
+  const kyTruoc = s0.tiles.map((t) => (t ? chuKyNen(t) : -1));
+  const mangTruoc = s0.tiles;
+
+  for (let i = 0; i < 600; i++) store.dispatch({ t: "TICK", dt: 1 / 60 });
+  const s1 = store.getState();
+
+  /* Vế một: cây PHẢI lớn thật, và mảng ô PHẢI đổi tham chiếu. Không có vế này
+     thì vế hai xanh một cách vô nghĩa — nó chỉ chứng minh là không có gì xảy ra. */
+  ok(s1.tiles !== mangTruoc, "mảng ô phải đổi tham chiếu — nếu không thì chưa kiểm được gì");
+  let lonHon = 0;
+  for (let i = 0; i < s1.tiles.length; i++) {
+    const a = mangTruoc[i]?.crop;
+    const b = s1.tiles[i]?.crop;
+    if (a && b && (b.grow !== a.grow || b.stage !== a.stage)) lonHon++;
+  }
+  ok(lonHon > 100, `cây phải lớn thật, đang có ${lonHon} ô nhích lên`);
+
+  // Vế hai: KHÔNG một chữ ký nền nào đổi.
+  const doi = [];
+  for (let i = 0; i < s1.tiles.length; i++) {
+    const t = s1.tiles[i];
+    const ky = t ? chuKyNen(t) : -1;
+    if (ky !== kyTruoc[i]) doi.push(`(${i % s1.w},${(i / s1.w) | 0})`);
+  }
+  deepEq(doi.slice(0, 5), [], `${doi.length} ô đổi chữ ký nền chỉ vì cây lớn — cache nền sẽ chết mỗi khung`);
+
+  /* Vế ba: chữ ký PHẢI đổi khi lớp nền thật sự đổi. Một chữ ký hằng số cũng
+     làm vế hai xanh, và nó là cách hỏng tệ nhất: màn hình đứng hình. */
+  const o = s1.tiles.find((t) => t && !t.tilled && t.g === "grass");
+  ok(!!o, "bản đồ có ô cỏ chưa cày");
+  ok(chuKyNen({ ...o, tilled: true }) !== chuKyNen(o), "cày một ô PHẢI đổi chữ ký");
+  ok(chuKyNen({ ...o, wet: true }) !== chuKyNen(o), "tưới một ô PHẢI đổi chữ ký");
+  ok(chuKyNen({ ...o, g: "path" }) !== chuKyNen(o), "đổi loại nền PHẢI đổi chữ ký");
+  ok(chuKyNen({ ...o, decor: "tuft" }) !== chuKyNen(o), "mọc bụi cỏ PHẢI đổi chữ ký");
+  ok(chuKyNen({ ...o, b: "greenhouse" }) !== chuKyNen(o), "đặt sàn nhà kính PHẢI đổi chữ ký");
+
+  /* Và ghim thẳng chiều ngược lại: CÂY trên ô không được ảnh hưởng chữ ký nền,
+     dù ở giai đoạn nào, lớn tới đâu, bệnh hay không. Vế "600 khung không đổi
+     chữ ký" ở trên không bắt được `crop.stage`, vì trong mười giây game chưa
+     cây nào kịp sang giai đoạn mới — mà `stage` thì lại là thứ dễ bị tiện tay
+     nhét vào chữ ký nhất. */
+  const cay = (p) => chuKyNen({ ...o, crop: p });
+  const khongCay = chuKyNen({ ...o, crop: null });
+  for (const p of [
+    { id: "carrot", stage: 0, grow: 0, regrown: false },
+    { id: "carrot", stage: 3, grow: 480, regrown: true },
+    { id: "tomato", stage: 1, grow: 12, regrown: false, sick: true },
+  ])
+    eq(cay(p), khongCay, `cây (giai đoạn ${p.stage}) không được đổi chữ ký LỚP NỀN`);
+
+  /* Vế bốn — DÂY BẪY CHO ĐỢT SAU. Quét chính mã nguồn `veNenVao`: mọi trường
+     của `t` mà nó ĐỌC đều phải có mặt trong `chuKyNen`. Thêm một trường vào
+     `Tile` rồi vẽ nó vào lớp nền mà quên thêm vào chữ ký thì cache ĐỨNG HÌNH —
+     ô ấy đổi mà màn hình không đổi — và không phép kiểm nào khác bắt được. */
+  const nguon = readFileSync(new URL("../src/render/draw.ts", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
+  const lay = (ten) => {
+    const i = nguon.indexOf(`function ${ten}(`);
+    ok(i >= 0, `không tìm thấy ${ten} trong draw.ts`);
+    let d = 0;
+    let j = nguon.indexOf("{", i);
+    const b = j;
+    for (; j < nguon.length; j++) {
+      if (nguon[j] === "{") d++;
+      else if (nguon[j] === "}" && --d === 0) break;
+    }
+    return nguon.slice(b, j);
+  };
+  const thanNen = lay("veNenVao");
+  const thanKy = lay("chuKyNen");
+  const truong = [...new Set([...thanNen.matchAll(/\bt\.(\w+)/g)].map((m) => m[1]))];
+  const thieu = truong.filter((f) => !thanKy.includes(`t.${f}`));
+  deepEq(
+    thieu,
+    [],
+    `veNenVao đọc t.${thieu.join(", t.")} mà chuKyNen không kể tới — cache nền sẽ đứng hình`,
+  );
 });
 
 await Promise.all(choDoi);
