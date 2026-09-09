@@ -66,7 +66,7 @@ import { selectedItemId } from "../game/inventory.ts";
 import { parseItem } from "../game/items.ts";
 import { animalMood } from "../game/animals.ts";
 import type { Camera } from "./camera.ts";
-import type { EmoteKind } from "../art/atlas.ts";
+import type { EmoteKind, RoadMark } from "../art/atlas.ts";
 import { hash2 } from "../core/rng.ts";
 import { WORK_MINUTES } from "../game/workerai.ts";
 import { TILE } from "../game/world.ts";
@@ -424,6 +424,67 @@ export function soLat(tall: boolean, bienDoDev: number): number {
     if (bienDoDev * lech <= LAT_SAI_DEV) return n;
   }
   return toiDa;
+}
+
+/* ----------------------------------------------------------- VẠCH KẺ MẶT ĐƯỜNG
+
+   Một ô nhựa không tự biết nó phải kẻ vạch gì: điều đó phụ thuộc HÌNH con
+   đường quanh nó. Trước Đợt 29 vạch được nướng cứng vào chính ô nhựa — một nét
+   DỌC ở cột giữa, rải theo hàm băm toạ độ. Cách ấy chỉ đúng chừng nào mọi con
+   đường đều chạy dọc, mà bản đồ cũ đúng là chỉ có một con đường như thế. Mở con
+   đường NGANG đầu tiên là lộ ra ngay: vạch nằm vuông góc với chiều xe chạy.
+
+   Nay suy từ hàng xóm. Đo hai đoạn đường liền mạch qua ô này — ngang và dọc:
+
+     · đoạn NGẮN hơn là BỀ RỘNG con đường, đoạn DÀI hơn là chiều xe chạy;
+     · hai đoạn BẰNG nhau thì đây là NGÃ TƯ, và ngã tư không kẻ vạch nào cả —
+       đúng như ngoài đời;
+     · rộng đúng một ô thì không có ranh giới nào để kẻ, nên kẻ một nét đứt vào
+       giữa lòng đường.
+
+   Nhận `laDuong` làm tham số chứ không đọc thẳng `GameState`: bên trong lớp vẽ
+   nó nằm sau một cái atlas và một cái canvas, mà một phép suy sai thì chỉ nhìn
+   thấy được bằng mắt. Tách ra thế này thì kịch bản 177 dựng lưới bằng chữ và
+   kiểm từng ô. */
+
+/** Đo tới đâu thì thôi. Đường dài suốt bản đồ, mà ta chỉ cần biết "dài hơn bề
+ *  rộng" chứ không cần biết dài bao nhiêu. */
+const RA_TOI_DA = 8;
+
+function doDoan(
+  laDuong: (x: number, y: number) => boolean,
+  x: number,
+  y: number,
+  doc: boolean,
+): [number, number] {
+  let truoc = 0;
+  while (truoc < RA_TOI_DA && laDuong(doc ? x : x - truoc - 1, doc ? y - truoc - 1 : y)) truoc++;
+  let sau = 0;
+  while (sau < RA_TOI_DA && laDuong(doc ? x : x + sau + 1, doc ? y + sau + 1 : y)) sau++;
+  return [truoc + 1 + sau, truoc];
+}
+
+const KHONG_KE: readonly RoadMark[] = [];
+
+/** Vạch kẻ cho ô đường (x,y) — có thể hai nét, rỗng nếu ô này không kẻ gì. */
+export function vachKeDuong(
+  laDuong: (x: number, y: number) => boolean,
+  x: number,
+  y: number,
+): { marks: readonly RoadMark[]; doc: boolean } {
+  const [dNgang] = doDoan(laDuong, x, y, false);
+  const [dDoc, viDoc] = doDoan(laDuong, x, y, true);
+  if (dNgang === dDoc) return { marks: KHONG_KE, doc: false }; // ngã tư
+  const doc = dDoc > dNgang; // đường chạy DỌC khi đoạn dọc dài hơn
+  const [rong, viTri] = doc ? doDoan(laDuong, x, y, false) : [dDoc, viDoc];
+  if (rong <= 1) return { marks: ["single"], doc };
+  /* Mỗi ô sở hữu cái ranh Ở PHÍA GẦN của nó (mép trên với đường ngang). Ô đầu
+     tiên không có ranh nào phía gần nên nó kẻ MÉP NGOÀI; ô cuối cùng kẻ thêm
+     mép ngoài phía XA, vì không còn ô nào bên kia để kẻ hộ nó.
+     Tim đường nằm chính giữa bề rộng — với đường bốn làn là ranh phía gần của
+     ô thứ ba, đúng chỗ ngăn hai chiều xe chạy. */
+  const gan: RoadMark = viTri === 0 ? "edge" : viTri * 2 === rong ? "center" : "dash";
+  return { marks: viTri === rong - 1 ? [gan, "edgeFar"] : [gan], doc };
 }
 
 export function createRenderer(
@@ -1105,6 +1166,10 @@ export function createRenderer(
                   ? atlas.concrete
                   : atlas.grass;
         gg.drawImage(base[variantFor(x, y, base.length)]!, px, py);
+        if (t.g === "asphalt") {
+          const v = vachKeDuong((qx, qy) => at(s, qx, qy)?.g === "asphalt", x, y);
+          for (const m of v.marks) gg.drawImage(atlas.roadMark[m][v.doc ? 1 : 0], px, py);
+        }
         /* VŨNG NƯỚC trên lối đi khi trời mưa: một phần năm số ô, chọn theo băm
            toạ độ nên vũng nào ở đâu là ở đó suốt cơn mưa — không nhảy múa. */
         if (mua && t.g === "path" && hash2(x, y, 7) % 5 === 0)

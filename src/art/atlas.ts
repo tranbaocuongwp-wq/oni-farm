@@ -407,9 +407,18 @@ function makeTuft(): HTMLCanvasElement {
 }
 
 /**
- * Đường nhựa. Bốn biến thể để mặt đường không lặp lại trông như giấy dán tường;
- * vạch kẻ vàng đứt quãng nằm ở biến thể 1 và 3 nên rải ra thành nét đứt tự
- * nhiên theo hàm băm toạ độ, không cần autotile.
+ * Đường nhựa TRƠN. Bốn biến thể để mặt đường không lặp lại trông như giấy dán
+ * tường. Không có vạch kẻ — xem `makeRoadMark`.
+ *
+ * Trước Đợt 29 biến thể 1 và 3 nướng sẵn một nét vàng DỌC ở cột giữa, rải ra
+ * theo hàm băm toạ độ. Cách ấy chỉ đúng khi mọi con đường trên bản đồ đều chạy
+ * dọc — mà đúng là bản đồ cũ chỉ có một con đường như thế. Mở con đường NGANG
+ * đầu tiên là lộ ra ngay: vạch kẻ nằm vuông góc với chiều xe chạy, và vì nó
+ * rải theo hàm băm nên nó cũng chẳng thành một nét liền nào.
+ *
+ * Vạch kẻ không phải chuyện của một ô đơn lẻ: nó phụ thuộc HÌNH con đường —
+ * đường chạy hướng nào, rộng mấy làn, ô này là làn thứ mấy. Nên nó tách ra
+ * thành lớp phủ, và `veNenVao` suy ra từ hàng xóm.
  */
 function makeAsphalt(variant: number): HTMLCanvasElement {
   const s = surface(TILE, TILE);
@@ -420,10 +429,62 @@ function makeAsphalt(variant: number): HTMLCanvasElement {
   // vài hạt sạn tối cho có mặt nhám
   for (let i = 0; i < 5; i++)
     s.px(1 + Math.floor(rnd() * 14), 1 + Math.floor(rnd() * 14), P.asphaltDark);
-  if (variant % 2 === 1) {
-    // vạch kẻ giữa, đứt quãng
-    for (let y = 3; y < 13; y++) if (y % 5 !== 0) s.px(8, y, P.asphaltLine);
+  return s.c;
+}
+
+/** Kiểu vạch kẻ đường. */
+export type RoadMark =
+  /** nét ĐỨT trắng — ranh giữa hai làn CÙNG chiều */
+  | "dash"
+  /** hai vạch VÀNG liền — tim đường, ngăn hai chiều xe chạy */
+  | "center"
+  /** vạch trắng liền — mép ngoài mặt đường, phía GẦN (mép trên/trái của ô) */
+  | "edge"
+  /** vạch trắng liền — mép ngoài phía XA (mép dưới/phải của ô) */
+  | "edgeFar"
+  /** nét đứt CHẠY DỌC GIỮA ô — đường một làn, không có ranh nào để kẻ */
+  | "single";
+
+/**
+ * Một lớp phủ VẠCH KẺ, vẽ đè lên ô nhựa.
+ *
+ * `doc = true` nghĩa là con đường chạy DỌC (bắc–nam), nên vạch nằm ở mép TRÁI
+ * của ô và kéo dài theo chiều dọc. `doc = false` là đường chạy NGANG, vạch nằm
+ * ở mép TRÊN. Riêng `single` kẻ vào GIỮA ô chứ không vào mép, vì đường một làn
+ * không có ranh giới nào — nét ấy là tim đường của chính nó.
+ *
+ * Vạch vẽ ở MÉP chứ không ở giữa là điều làm cho hai ô kề nhau nối thành một
+ * nét liền: mép dưới của ô trên và mép trên của ô dưới là cùng một đường.
+ */
+function makeRoadMark(kieu: RoadMark, doc: boolean): HTMLCanvasElement {
+  const s = surface(TILE, TILE);
+  /** Đặt một pixel theo trục con đường: `t` chạy dọc đường, `n` là khoảng lệch ngang. */
+  const cham = (t: number, n: number, mau: string) => {
+    if (doc) s.px(n, t, mau);
+    else s.px(t, n, mau);
+  };
+  const trang = "#e8e6dc";
+  const vang = P.asphaltLine;
+
+  if (kieu === "center") {
+    /* TIM ĐƯỜNG: hai vạch vàng liền, cách nhau một pixel, nằm sát cái ranh mà ô
+       này sở hữu. Cả hai nằm TRONG ô — ranh giới là đường chỉ giữa hai ô, nên
+       vẽ một vạch ở đây và một vạch ở ô bên kia thì hai nửa ấy do hai lần chọn
+       vạch khác nhau quyết định, và chỉ cần một bên đổi là tim đường hở ra. */
+    for (let t = 0; t < TILE; t++) {
+      cham(t, 0, vang);
+      cham(t, 2, vang);
+    }
+    return s.c;
   }
+  if (kieu === "edge" || kieu === "edgeFar") {
+    const n = kieu === "edge" ? 0 : TILE - 1;
+    for (let t = 0; t < TILE; t++) cham(t, n, trang);
+    return s.c;
+  }
+  // nét ĐỨT: 8 pixel kẻ, 8 pixel bỏ — chu kỳ 16 nên nối ô nào cũng đều
+  const n = kieu === "single" ? 8 : 0;
+  for (let t = 2; t < 10; t++) cham(t, n, kieu === "single" ? vang : trang);
   return s.c;
 }
 
@@ -5156,6 +5217,8 @@ export interface Atlas {
   grass: HTMLCanvasElement[];
   path: HTMLCanvasElement[];
   asphalt: HTMLCanvasElement[];
+  /** Vạch kẻ đường, vẽ đè lên ô nhựa. `[kiểu][dọc?1:0]` — xem `makeRoadMark`. */
+  roadMark: Record<RoadMark, [HTMLCanvasElement, HTMLCanvasElement]>;
   concrete: HTMLCanvasElement[];
   soil: HTMLCanvasElement[];
   soilWet: HTMLCanvasElement[];
@@ -7051,6 +7114,12 @@ export function buildAtlas(content: Content): Atlas {
   const grass = [0, 1, 2, 3, 4, 5].map(makeGrass);
   const path = [0, 1, 2, 3].map(makePath);
   const asphalt = [0, 1, 2, 3].map(makeAsphalt);
+  const roadMark = Object.fromEntries(
+    (["dash", "center", "edge", "edgeFar", "single"] as RoadMark[]).map((k) => [
+      k,
+      [makeRoadMark(k, false), makeRoadMark(k, true)],
+    ]),
+  ) as Atlas["roadMark"];
   const concrete = [0, 1, 2, 3].map(makeConcrete);
   const wood = [0, 1, 2, 3].map(makePlank);
   const soil = [0, 1].map((v) => makeSoil(false, v));
@@ -7282,7 +7351,7 @@ export function buildAtlas(content: Content): Atlas {
   };
 
   return {
-    grass, path, asphalt, concrete, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
+    grass, path, asphalt, roadMark, concrete, soil, soilWet, soilEdge, water, shore, bank, bankRim, wood,
     autotiles,
     propMask,
     propOver,

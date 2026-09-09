@@ -54,7 +54,7 @@ import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
-import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT, soLat } from "../src/render/draw.ts";
+import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT, soLat, vachKeDuong } from "../src/render/draw.ts";
 import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
 import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
@@ -803,6 +803,33 @@ const SCRIPT = [
   { t: "TICK", dt: 0.4 },
   { t: "USE", x: PLOTS[3].x, y: PLOTS[3].y },
   { t: "TICK", dt: 0.4 },
+  /* MỘT vụ thu hoạch DỰNG SẴN, ngay cạnh chỗ đứng.
+
+     Trước đây kịch bản này tin vào việc "chạy ba ngày rồi thế nào cũng thu
+     được một cây" — mà điều đó phụ thuộc THỜI TIẾT, và thời tiết rút từ
+     `state.seed`, một dòng ngẫu nhiên DÙNG CHUNG mà `nightGround` đẩy đi một
+     nấc cho MỖI Ô cỏ nó xét. Nên chỉ cần đổi số ô cỏ trên bản đồ là cả dòng
+     ấy trượt đi, mưa nắng xếp lại, và vụ thu hoạch "thế nào cũng có" biến mất.
+     Đợt 29 mở một con đường xuyên qua rừng và làm đúng như thế.
+
+     Cây chết vì đổi thời tiết KHÔNG phải lỗi — đó là trò chơi. Lỗi là ở chỗ
+     phép kiểm "kịch bản có thu hoạch thật không" lại đi nhờ vào may rủi. Nay
+     nó tự dựng lấy: cày, gieo, ép chín, thu — ngay ô kề chỗ đứng, không nhờ
+     một hạt ngẫu nhiên nào. */
+  /* `dt` 0,5 chứ không phải 0,4 như các bước trên: `actionSeconds` là 0,42,
+     nên một nhịp 0,4 KHÔNG đủ để thao tác chạm đất — nó chỉ hạ `busy` xuống
+     0,02 và cú USE kế tiếp bị chính cái khoá ấy nuốt mất. Phần trên của kịch
+     bản sống chung với chuyện đó (mỗi thao tác ăn hai nhịp), nhưng ở đây thì
+     không: bốn bước này phải xảy ra ĐỦ và ĐÚNG THỨ TỰ thì mới có vụ thu hoạch. */
+  { t: "SELECT", slot: 0 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
+  { t: "TICK", dt: 0.5 },
+  { t: "SELECT", slot: 2 },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
+  { t: "TICK", dt: 0.5 },
+  { t: "DEBUG", op: "growAll" },
+  { t: "USE", x: PLOTS[1].x, y: PLOTS[1].y },
+  { t: "TICK", dt: 0.5 },
   { t: "SELL_ALL" },
 ];
 
@@ -12599,6 +12626,179 @@ test("176. CSS không được làm nhoè ảnh pixel", () => {
     [],
     `ảnh pixel phải khai bề rộng bằng px nguyên: ${doSai.join(" · ")}`,
   );
+});
+
+
+test("177. VẠCH KẺ chạy THEO chiều đường, không cắt ngang nó", () => {
+  /* Cường nhìn con quốc lộ vừa mở rồi nói ngay: "sao kẻ làn đường dọc vậy, phải
+     chia vạch dọc theo đường chứ".
+
+     Câu ấy đúng, và nó lộ ra một giả định đã nằm im nhiều đợt: vạch kẻ được
+     NƯỚNG CỨNG vào ô nhựa — một nét dọc ở cột giữa, có mặt ở hai trong bốn biến
+     thể, rải ra theo hàm băm toạ độ. Cách ấy đúng chừng nào mọi con đường trên
+     bản đồ đều chạy DỌC, mà bản đồ cũ đúng là chỉ có một con đường như thế. Con
+     đường ngang đầu tiên là nó sai ngay, và sai theo kiểu không phép kiểm nào
+     bắt được: hình vẫn vẽ ra, chỉ là vẽ sai chiều.
+
+     Nay vạch suy từ HÌNH con đường. Kịch bản dựng lưới bằng chữ — '#' là mặt
+     đường — và kiểm từng ô. */
+  const luoi = (ve) => {
+    const hang = ve.trim().split("\n").map((l) => l.trim());
+    return (x, y) => (hang[y] ?? "")[x] === "#";
+  };
+  const ke = (la, x, y) => {
+    const v = vachKeDuong(la, x, y);
+    return `${v.marks.join("+") || "-"}|${v.doc ? "dọc" : "ngang"}`;
+  };
+
+  /* --- Quốc lộ 4 làn CHẠY NGANG ---------------------------------------- */
+  const ngang = luoi(`
+    .........
+    #########
+    #########
+    #########
+    #########
+    .........
+  `);
+  for (const x of [1, 4, 7]) {
+    eq(ke(ngang, x, 1), "edge|ngang", `(${x},1) làn ngoài cùng phải kẻ MÉP, chạy ngang`);
+    eq(ke(ngang, x, 2), "dash|ngang", `(${x},2) ranh hai làn cùng chiều — nét đứt`);
+    eq(ke(ngang, x, 3), "center|ngang", `(${x},3) TIM ĐƯỜNG phải nằm chính giữa bốn làn`);
+    eq(ke(ngang, x, 4), "dash+edgeFar|ngang", `(${x},4) làn cuối kẻ cả ranh lẫn mép ngoài phía xa`);
+  }
+
+  /* --- Cùng con đường ấy XOAY DỌC: mọi vạch phải xoay theo -------------- */
+  const doc = luoi(`
+    .####.
+    .####.
+    .####.
+    .####.
+    .####.
+    .####.
+    .####.
+    .####.
+  `);
+  for (const y of [1, 4, 6]) {
+    eq(ke(doc, 1, y), "edge|dọc", `(1,${y}) xoay dọc thì mép cũng phải xoay`);
+    eq(ke(doc, 2, y), "dash|dọc", `(2,${y}) ranh làn, chạy dọc`);
+    eq(ke(doc, 3, y), "center|dọc", `(3,${y}) tim đường, chạy dọc`);
+    eq(ke(doc, 4, y), "dash+edgeFar|dọc", `(4,${y}) làn cuối, chạy dọc`);
+  }
+
+  /* --- ĐƯỜNG MỘT LÀN: không có ranh nào, kẻ một nét đứt giữa lòng ------- */
+  const motLan = luoi(`
+    ..#..
+    ..#..
+    ..#..
+    ..#..
+    ..#..
+    ..#..
+  `);
+  eq(ke(motLan, 2, 3), "single|dọc", "đường một làn chạy dọc: một nét đứt giữa lòng đường");
+
+  /* --- NGÃ TƯ: không kẻ vạch nào -----------------------------------------
+     Đây là vế dễ quên nhất, và là chỗ hai đoạn đo BẰNG nhau. Kẻ vạch xuyên qua
+     ngã tư thì nét của hai con đường chồng lên nhau thành một mớ. */
+  const nga = luoi(`
+    ..##..
+    ..##..
+    ######
+    ######
+    ..##..
+    ..##..
+  `);
+  eq(ke(nga, 2, 2), "-|ngang", "giữa ngã tư: không kẻ vạch nào");
+  eq(ke(nga, 3, 3), "-|ngang", "…cả bốn ô của ngã tư");
+
+  /* --- Và vế CHỐNG QUAY LẠI: ô nhựa không được tự mang sẵn vạch nào ------
+     Nếu ai đó nướng lại vạch vào `makeAsphalt` thì mọi ô đường lại có nét dọc,
+     và hàm trên có suy đúng tới đâu cũng vô nghĩa. */
+  const nguon = readFileSync(new URL("../src/art/atlas.ts", import.meta.url), "utf8");
+  const i0 = nguon.indexOf("function makeAsphalt(");
+  ok(i0 >= 0, "không tìm thấy makeAsphalt");
+  const than = nguon.slice(i0, nguon.indexOf("\nfunction ", i0 + 10));
+  ok(
+    !than.includes("asphaltLine"),
+    "makeAsphalt KHÔNG được tự vẽ vạch kẻ — vạch phụ thuộc hình con đường, không phụ thuộc một ô đơn lẻ",
+  );
+});
+
+
+test("178. Mở ĐƯỜNG qua chỗ có vật cản: save cũ không được để lại vật ĐẶC giữa lòng đường", () => {
+  /* Đợt 29 mở một con quốc lộ bốn làn xuyên qua vạt rừng bắc. Với ván mới thì
+     mặt đường sạch trơn. Với NGƯỜI ĐANG CHƠI DỞ thì không, và đó là chỗ suýt
+     lọt.
+
+     `mergeGrid` hỏi hai câu khi trộn save cũ với bản đồ mới: vật thể này thuộc
+     về ai, và nền mới có chỗ cho nó không. Nhưng nó hỏi `portable` TRƯỚC
+     `hits` — mà khúc gỗ và hòn đá mang CẢ HAI cờ. Nên nhánh `portable` nuốt
+     chúng trước, và nhánh `hits` (thứ biết từ chối nền không phải cỏ) không bao
+     giờ được hỏi tới. Kết quả: mọi khúc gỗ nằm sẵn trong rừng đi thẳng lên lòng
+     quốc lộ — và chúng `solid`.
+
+     Nếu một khúc rơi trúng ô CỔNG thì cả tuyến giao hàng đứt, im lặng, chỉ trên
+     save của người đang chơi dở. Không kịch bản nào của ván mới thấy được.
+
+     Luật mới kẹp chặt hai đầu để không xoá nhầm đồ người chơi: chỉ bỏ khi vật
+     ĐẶC, VÀ nền thật sự vừa ĐỔI thành mặt đường. */
+  const daDuong = [];
+  const s0 = mkStore(2929).getState();
+  for (let y = 0; y < s0.h; y++)
+    for (let x = 0; x < s0.w; x++)
+      if (s0.tiles[y * s0.w + x]?.g === "asphalt") daDuong.push({ x, y });
+  ok(daDuong.length > 100, `bản đồ phải có mặt đường để kiểm, đang có ${daDuong.length} ô`);
+
+  /* Ba ô đường, giả làm save ĐỜI TRƯỚC: hồi đó chúng là cỏ, và trên đó có
+     khúc gỗ (đặc, vác được), hòn đá (đặc, vác được) và một bụi cỏ (không đặc). */
+  const A = daDuong[10];
+  const B = daDuong[40];
+  const C = daDuong[70];
+  const store = mkStore(2929);
+  setState(store, (s) => {
+    setTile(s, A.x, A.y, { g: "grass", prop: "log", hp: 2 });
+    setTile(s, B.x, B.y, { g: "grass", prop: "rock", hp: 3 });
+    setTile(s, C.x, C.y, { g: "grass", prop: "grass_tall", hp: 1 });
+  });
+  const cu = clone(store.getState());
+
+  const res = migrateForContent(cu, content);
+  const moi = res.state ?? res;
+  const oMoi = (o) => moi.tiles[o.y * moi.w + o.x];
+
+  eq(oMoi(A).g, "asphalt", "ô A phải thành mặt đường theo bản đồ mới");
+  eq(oMoi(A).prop, null, `khúc gỗ ĐẶC không được ở lại giữa lòng đường vừa mở (${A.x},${A.y})`);
+  eq(oMoi(B).prop, null, `hòn đá ĐẶC không được ở lại giữa lòng đường vừa mở (${B.x},${B.y})`);
+
+  /* Cỏ dày KHÔNG vác được, nên nó rơi vào luật đã có từ trước ("cây cỏ chỉ giữ
+     ở chỗ nó MỌC ĐƯỢC") và cũng bị dọn. Ghim luôn ở đây: hai luật phải cho cùng
+     một kết quả trên mặt đường, nếu không thì mặt đường sạch hay bẩn tuỳ vào ô
+     đó tình cờ mang cờ nào. */
+  eq(oMoi(C).prop, null, "cây cỏ cũng không mọc trên nhựa được");
+
+  /* Chiều ngược lại, và đây là vế giữ cho luật không quá tay: hòn đá người chơi
+     cố ý đặt trên mặt đường CÓ SẴN thì phải còn nguyên. Nền không đổi, nên
+     không có "quy hoạch lại" nào để lấy cớ dọn đồ của người ta. */
+  const store2 = mkStore(2929);
+  setState(store2, (s) => {
+    setTile(s, A.x, A.y, { g: "asphalt", prop: "rock", hp: 3 });
+  });
+  const res2 = migrateForContent(clone(store2.getState()), content);
+  const moi2 = res2.state ?? res2;
+  eq(
+    moi2.tiles[A.y * moi2.w + A.x].prop,
+    "rock",
+    "đá đặt trên mặt đường CÓ SẴN là đồ của người chơi — không được dọn",
+  );
+
+  /* Và ghim chỗ đắt nhất: hai ô CỔNG nối nông trang ra quốc lộ phải luôn đi xe
+     được sau khi trộn. Đây mới là thứ làm đứt tuyến giao hàng. */
+  const cong = [];
+  for (let y = 0; y < moi.h; y++)
+    for (let x = 0; x < moi.w; x++) {
+      const t = moi.tiles[y * moi.w + x];
+      if (t?.g === "asphalt" && t.prop) cong.push(`(${x},${y}) ${t.prop}`);
+    }
+  deepEq(cong.slice(0, 5), [], `${cong.length} ô mặt đường còn vật thể sau khi trộn save`);
 });
 
 await Promise.all(choDoi);
