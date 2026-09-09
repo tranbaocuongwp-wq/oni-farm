@@ -377,6 +377,37 @@ khung, bão vẫn 82 — cây **không bao giờ** đứng lại.
 **Viền đen.** Mỗi khung tô kín canvas một màu viền rồi tô đè ngay lên đúng ngần
 ấy pixel. `pickScale` không bao giờ đẻ ra viền.
 
+### Vạch kẻ mặt đường suy từ HÌNH con đường
+
+Vạch kẻ từng được nướng cứng vào chính ô nhựa: một nét dọc ở cột giữa, có mặt
+ở hai trong bốn biến thể, rải ra theo hàm băm toạ độ. Cách ấy đúng chừng nào
+mọi con đường trên bản đồ đều chạy DỌC — mà tới Đợt 28 thì bản đồ đúng là chỉ
+có một con đường như thế. Đợt 29 mở con đường NGANG đầu tiên và nó sai ngay,
+theo kiểu không phép kiểm nào bắt được: hình vẫn vẽ ra, chỉ là vẽ sai chiều.
+
+`vachKeDuong` đo hai đoạn đường liền mạch qua ô (trần 8 ô, vì chỉ cần biết
+"dài hơn bề rộng"):
+
+| Đo được | Suy ra |
+|---|---|
+| đoạn ngắn hơn | BỀ RỘNG con đường |
+| đoạn dài hơn | chiều xe chạy |
+| hai đoạn BẰNG nhau | NGÃ TƯ — không kẻ vạch nào |
+| bề rộng = 1 | không có ranh nào để kẻ → một nét đứt giữa lòng đường |
+
+Mỗi ô sở hữu cái ranh Ở PHÍA GẦN của nó; ô đầu tiên kẻ mép ngoài, ô cuối kẻ
+thêm mép ngoài phía xa vì không còn ô nào bên kia kẻ hộ. Tim đường nằm chính
+giữa bề rộng. Đường bốn làn vì thế ra đúng: mép trắng · vạch đứt · vàng đôi ·
+vạch đứt · mép trắng.
+
+Nhận `laDuong` làm THAM SỐ chứ không đọc thẳng state — bên trong lớp vẽ nó nằm
+sau một cái atlas và một cái canvas, mà suy sai thì chỉ thấy được bằng mắt.
+Kịch bản 177 dựng lưới bằng chữ và kiểm từng ô.
+
+Vạch phụ thuộc HÀNG XÓM, nên nó chỉ an toàn nhờ đúng quyết định của mục trên:
+cache nền dựng lại CẢ VÙNG khi có ô đổi chữ ký, không dựng lại từng ô. Đi
+đường "chỉ vẽ lại ô đã đổi" thì cày một ô cạnh đường sẽ để lại vạch cũ.
+
 ### Mưa — một mảng lặp
 
 110 lệnh vẽ mỗi khung khi bão, cho một thứ trang trí. Và vì vị trí hạt băm lại
