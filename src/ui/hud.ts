@@ -8,7 +8,7 @@
    Bố cục thiết kế lại cho điện thoại:
 
      ┌ tiền · ngày/giờ · năng lượng · nước ───────────────── [☰] ┐   ← thanh trên, 1 hàng
-     │ 🎯 mục tiêu (chip, bấm để ẩn/hiện)                        │
+     │ (chip lời kêu của người làm — CHỈ hiện khi có người kêu)   │
      │                                                            │
      │                    (thế giới)                              │
      │                                                            │
@@ -17,7 +17,9 @@
 
    · Thanh trên gom MỌI con số vào một hàng có icon, thay vì một hộp 5 dòng chữ
      che mất góc ruộng.
-   · Mục tiêu là một "chip" bấm được: mặc định hiện, bấm là thu gọn.
+   · Không có bảng nhiệm vụ và không có chip mục tiêu. Chỗ đó chỉ dành cho một
+     tin duy nhất: người làm thuê đang kẹt vì thiếu món gì — và khi không ai
+     kêu thì hàng đó TRỐNG HẲN, không có ô rỗng nào nằm lại.
    · Nút hành động chính đổi NHÃN theo ô đang ngắm (CÀY/GIEO/TƯỚI/THU/MUA…).
      Nhãn do src/game/hint.ts tính — HUD chỉ in.
    · Năng lượng thấp / nước cạn: vòng đỏ nhấp nháy quanh con số, không cần
@@ -69,7 +71,6 @@ export interface Hud {
   onAnimalCycle(fn: (d: number) => void): void;
   /** Người chơi bấm MỔ THỊT trên bảng con vật — main biết con nào đang mở. */
   onAnimalSlaughter(fn: () => void): void;
-  /** Người chơi bấm vào chip mục tiêu — mở Nhật ký. */
 }
 
 /** 360 → "6:00", 1290 → "21:30", 1500 → "1:00" (qua nửa đêm) */
@@ -151,8 +152,12 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         <span class="stat water" id="hud-water-line"><i class="ic" data-ic="water"></i><span id="hud-water">0</span></span>
         <span class="stat weather" id="hud-wx-line" title="Thời tiết hôm nay · dự báo ngày mai"><i class="ic" id="hud-wx"></i><span id="hud-wx-name"></span><i class="ic next" id="hud-wx-next"></i></span>
       </div>
-      <div class="goal-chip want" id="want-box" hidden aria-live="polite">
-        <i class="ic" data-ic="bag"></i><span id="want">—</span>
+      <!-- Chip LỜI KÊU của người làm. Không có chữ giữ chỗ: nếu một ngày nào
+           đó thuộc tính hidden lại bị CSS lấn mất, thứ lọt ra màn hình phải là
+           một ô rỗng vô hại chứ không phải một dấu gạch mà người chơi đọc
+           thành "nhiệm vụ gì đó tôi chưa làm". -->
+      <div class="want-chip" id="want-box" hidden aria-live="polite">
+        <i class="ic" data-ic="bag"></i><span id="want"></span>
       </div>
       <div id="toasts" aria-live="polite"></div>
     </div>
@@ -622,10 +627,8 @@ export function createHud(root: HTMLElement, atlas: Atlas): Hud {
         elWaterLine.hidden = cap <= 0;
       }
 
-      /* LỜI KÊU THIẾU HÀNG của người làm — một chip riêng, không nhét chung
-         với chip mục tiêu: mục tiêu là "đi tới đâu", còn đây là "đang kẹt vì
-         cái gì". Chồng hai loại tin vào một chỗ thì cái nào cũng bị bỏ qua.
-         Suy tại chỗ mỗi khung (`wantSummary` là hàm thuần), không lưu gì. */
+      /* LỜI KÊU THIẾU HÀNG của người làm — thứ DUY NHẤT còn được phép chiếm
+         hàng này. Suy tại chỗ mỗi khung (`wantSummary` là hàm thuần). */
       const want = wantSummary(s, content);
       if (want !== prev.want) {
         prev.want = want;

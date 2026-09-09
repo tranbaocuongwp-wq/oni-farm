@@ -4883,7 +4883,7 @@ function makeDrop(): HTMLCanvasElement {
  * thứ lộ ra ngay.
  */
 export type UiIcon =
-  | "coin" | "sun" | "moon" | "energy" | "water" | "power" | "goal" | "day" | "bag"
+  | "coin" | "sun" | "moon" | "energy" | "water" | "power" | "day" | "bag"
   | "gear" | "help" | "build" | "install" | "bug" | "save" | "load" | "file" | "reload";
 
 function makeUiIcon(name: UiIcon): HTMLCanvasElement {
@@ -4933,12 +4933,6 @@ function makeUiIcon(name: UiIcon): HTMLCanvasElement {
       s.rect(7, 2, 1, 2, "#cfd8ea");
       s.px(5, 6, P.gold);
       s.px(6, 7, P.gold);
-      break;
-    case "goal":
-      s.rect(3, 1, 1, 10, "#cfd8ea");
-      s.rect(4, 1, 6, 4, "#6cc94f");
-      s.px(9, 2, "#a7e88f");
-      s.px(10, 2, "#6cc94f");
       break;
     case "bag":
       // balo: thân nâu, nắp, khoá vàng

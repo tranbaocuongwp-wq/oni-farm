@@ -13525,6 +13525,73 @@ test("188. Ô TAY KHÔNG là một ô THẬT — và ba ô cố định chỉ c�
   eq(selectedItemId(s0.inv, s0.sel), tools[0], `…tức đang cầm ${tools[0]}`);
 });
 
+test("189. Thứ khai `hidden` phải THỰC SỰ ẩn — và bảng nhiệm vụ không được để lại mẩu nào", () => {
+  /* Cường, sau khi Đợt 34 đã bỏ bảng nhiệm vụ: "vẫn còn cái cờ kìa nhiệm vụ gì
+     kìa? Sao không xóa đi... Đã nói xóa đi thì xóa đi đi khỏi hoài".
+
+     Cái còn sót KHÔNG phải chip mục tiêu — chip ấy đã gỡ thật. Là chip LỜI KÊU
+     của người làm, khai `hidden` trong markup và không bao giờ được bật, nhưng
+     vẫn nằm chình ình góc trên với đúng một dấu gạch bên trong.
+
+     Vì sao: trình duyệt cài `hidden` bằng `[hidden] { display: none }` trong
+     bảng kiểu MẶC ĐỊNH, ưu tiên thấp nhất. Chip ấy mang lớp `.goal-chip` — thừa
+     kế từ chip mục tiêu đã bỏ — và lớp đó khai `display: inline-flex`, thắng
+     tuyệt đối. Phía JS đặt `el.hidden = true` rồi tin là xong, nên đọc mã bao
+     nhiêu lần cũng không thấy: lỗi chỉ tồn tại trong sự CHỒNG LẤN giữa hai file.
+
+     Kịch bản này canh cả hai vế: chốt chặn còn đó, và không mẩu nào của bảng
+     nhiệm vụ còn sót lại để lần sau lại mọc ra một chip ma nữa. */
+  /* Bỏ CHÚ THÍCH trước khi soi. Vế (c) đi tìm xác của thứ đã chết, mà chỗ ghi
+     lý do nó chết thì buộc phải gọi đúng tên nó — cấm cả chú thích là bắt mã
+     phải quên mất mình từng sai ở đâu. Cái phải biến mất là LUẬT và MARKUP. */
+  const boChuThich = (t) => t.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/<!--[\s\S]*?-->/g, " ");
+  const css = boChuThich(readFileSync(new URL("../src/style.css", import.meta.url), "utf8"));
+  const hud = boChuThich(readFileSync(new URL("../src/ui/hud.ts", import.meta.url), "utf8"));
+
+  /* --- (a) CHỐT CHẶN: [hidden] phải thắng mọi luật lớp ----------------- */
+  const chan = /\[hidden\]\s*\{[^}]*display:\s*none\s*!important/.test(css);
+  ok(chan, "style.css phải có luật `[hidden] { display: none !important }` — không có thì mọi lớp khai `display` đều lấn được");
+
+  /* --- (b) …và luật ấy PHẢI CÓ VIỆC ĐỂ LÀM ----------------------------
+     Nếu không còn phần tử `hidden` nào mang lớp có khai `display` thì vế (a)
+     chỉ là nghi thức. Đi tìm đúng những chỗ ấy trong markup HUD. */
+  const coDisplay = new Set();
+  const reLuat = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = reLuat.exec(css))) {
+    if (!/(?:^|;|\n)\s*display:/.test(m[2])) continue;
+    for (const sel of m[1].split(","))
+      for (const t of sel.match(/[.#][A-Za-z0-9_-]+/g) ?? []) coDisplay.add(t);
+  }
+  const anBiLan = [];
+  for (const the of hud.match(/<[a-z]+[^>]*\bhidden\b[^>]*>/g) ?? []) {
+    const id = /id="([^"]+)"/.exec(the)?.[1];
+    const cls = (/class="([^"]+)"/.exec(the)?.[1] ?? "").split(/\s+/).filter(Boolean);
+    const dau = [...(id ? [`#${id}`] : []), ...cls.map((c) => `.${c}`)];
+    if (dau.some((d) => coDisplay.has(d))) anBiLan.push(id ?? cls.join("."));
+  }
+  ok(
+    anBiLan.length > 0,
+    "phải còn ít nhất một phần tử `hidden` mang lớp/id có khai `display` — nếu không, chốt chặn ở (a) không canh gì cả",
+  );
+
+  /* --- (c) KHÔNG CÒN MẨU NÀO của bảng nhiệm vụ ------------------------
+     Ba thứ này chết cùng nhau ở Đợt 34–35. Thứ chết mà xác còn nằm đó là thứ
+     lần sau có người nối dây lại vì tưởng nó đang được dùng. */
+  const atlas = boChuThich(readFileSync(new URL("../src/art/atlas.ts", import.meta.url), "utf8"));
+  eq(/\bgoal-chip\b/.test(css) || /\bgoal-chip\b/.test(hud), false, "lớp `goal-chip` phải biến mất hẳn");
+  eq(/id="goal"|#goal\b/.test(hud), false, "phần tử `#goal` phải biến mất hẳn");
+  eq(/"goal"/.test(atlas), false, "hình lá cờ MỤC TIÊU trong atlas phải gỡ — không còn ai vẽ nó");
+
+  /* --- (d) chip lời kêu không mang chữ giữ chỗ ------------------------
+     Nó rỗng cho tới khi có người làm thật sự kêu thiếu hàng. Một dấu gạch nằm
+     sẵn trong markup là thứ lọt ra màn hình khi chốt chặn hỏng, và người chơi
+     đọc nó thành "nhiệm vụ gì đó tôi chưa làm" — đúng câu Cường đã hỏi. */
+  const oWant = /<span id="want">([^<]*)<\/span>/.exec(hud);
+  ok(oWant, "phải tìm được ô chữ của chip lời kêu");
+  eq(oWant[1], "", `ô chữ chip lời kêu phải RỖNG trong markup, đang là "${oWant[1]}"`);
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

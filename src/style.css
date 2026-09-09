@@ -18,6 +18,25 @@
    CSS là nơi DUY NHẤT diễn giải chúng — JS không đo đạc bố cục.
 ============================================================================ */
 
+/* ============================================================================
+   `hidden` PHẢI thắng — chốt chặn, không phải thẩm mỹ.
+
+   Trình duyệt cài thuộc tính này bằng luật `[hidden] { display: none }` trong
+   bảng kiểu MẶC ĐỊNH, mà bảng ấy có độ ưu tiên thấp nhất: bất cứ luật lớp nào
+   của ta khai `display` cũng đè lên nó. Đúng chuyện đã xảy ra — `.goal-chip`
+   khai `display: inline-flex`, nên chip lời kêu của người làm hiện thường trực
+   suốt với đúng một dấu gạch bên trong, và Cường đọc nó thành một mẩu bảng
+   nhiệm vụ còn sót: "vẫn còn cái cờ kìa, nhiệm vụ gì kìa?".
+
+   Phía JS chỉ bật/tắt `el.hidden` rồi tin là xong, nên lỗi kiểu này không bao
+   giờ lộ ra ở phía JS — nó chỉ hiện trên màn hình. Chặn một lần ở đây, cho MỌI
+   phần tử, thay vì vá từng chỗ khi có người trông thấy.
+============================================================================ */
+[hidden] {
+  display: none !important;
+}
+
+
 :root {
   /* ---- màu ---- */
   --bg: #14100c;
@@ -304,8 +323,11 @@ body[data-hand="left"] .hud-top {
   background: linear-gradient(#f07070, #b02828);
 }
 
-/* ---- chip mục tiêu: bấm để thu gọn ---- */
-.goal-chip {
+/* ---- chip LỜI KÊU của người làm ----
+   Thứ DUY NHẤT còn được nằm ở hàng dưới thanh trên. Chip mục tiêu và bảng
+   nhiệm vụ đã bỏ ở Đợt 34; các luật `#goal`, `.collapsed`, `.flash` đi theo
+   chúng — giữ lại thì lần sau lại tưởng còn một chip nữa phải nuôi. */
+.want-chip {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
@@ -314,41 +336,19 @@ body[data-hand="left"] .hud-top {
   min-height: 30px;
   padding: 4px 10px 4px 8px;
   background: var(--glass);
-  border: 2px solid var(--edge);
+  border: 2px solid color-mix(in srgb, var(--gold) 45%, var(--edge));
   border-radius: 999px;
   box-shadow: var(--shadow);
-  color: var(--ink-dim);
+  color: var(--gold);
   font: inherit;
   font-size: var(--fs-sm);
   text-align: left;
-  cursor: pointer;
-}
-.goal-chip #goal {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.goal-chip #goal b {
-  color: var(--green);
-}
-.goal-chip.collapsed #goal {
-  display: none;
-}
-.goal-chip.collapsed {
-  padding-right: 8px;
-}
-.goal-chip.want {
   cursor: default;
-  color: var(--gold);
-  border-color: color-mix(in srgb, var(--gold) 45%, var(--edge));
 }
-.goal-chip.want #want {
+.want-chip #want {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.goal-chip.flash {
-  animation: goal-flash 0.9s ease-out;
 }
 
 /* ---- bản đồ nhỏ ---- */
@@ -1916,7 +1916,7 @@ body:not([data-input="kbm"])[data-orientation="landscape"] .hud-mid {
   #minimap {
     width: clamp(72px, 15vw, 110px);
   }
-  .goal-chip {
+  .want-chip {
     max-width: 50vw;
   }
   /* Đường kính vòng nền = 2 × bán kính JS trong `input.ts` (STICK_RADIUS).
@@ -2108,16 +2108,6 @@ body:not([data-input="kbm"])[data-orientation="landscape"] .hud-mid {
   }
   50% {
     opacity: 0.45;
-  }
-}
-@keyframes goal-flash {
-  0% {
-    border-color: var(--gold);
-    box-shadow: 0 0 0 3px rgba(255, 216, 74, 0.5);
-  }
-  100% {
-    border-color: var(--edge);
-    box-shadow: var(--shadow);
   }
 }
 @keyframes banner {
