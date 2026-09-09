@@ -13592,6 +13592,75 @@ test("189. Thứ khai `hidden` phải THỰC SỰ ẩn — và bảng nhiệm v�
   eq(oWant[1], "", `ô chữ chip lời kêu phải RỖNG trong markup, đang là "${oWant[1]}"`);
 });
 
+test("190. CỔNG KHỞI ĐỘNG: hỏi bản mới TRƯỚC khi dựng ván, có ngân sách, và không tự tải lại vô hạn", () => {
+  /* Cường: "cái phần cập nhật bây giờ sao tôi thấy nó lâu quá. Sao lúc vào
+     game không có cập nhật ở trang khởi tạo nông trại luôn — kiểu như là đang
+     kiểm tra phiên bản, đang tải dữ liệu, đang đối chiếu với cơ sở dữ liệu,
+     xong hết thì vô chơi thôi".
+
+     Đúng, và lý do "lâu" đo được ngay trong mã: `checkForUpdate` từng đứng ở
+     CUỐI đường khởi động, sau khi store đã dựng bằng content cũ. Pack tải về
+     chỉ có hiệu lực ở lần mở SAU — tức mọi thay đổi nội dung đều tốn HAI lần
+     mở game, và lần thứ nhất không nói một chữ nào về việc nó đang làm gì.
+
+     Thứ tự ấy không phải chi tiết cài đặt, nó LÀ tính năng. Kịch bản này canh
+     đúng thứ tự đó, vì nó là loại quyết định rất dễ bị vô hiệu hoá bởi một
+     thiện chí: ai đó thấy màn khởi động chậm hơn 200ms rồi dời lời gọi xuống
+     cuối cho "mượt", và tính năng chết mà không kịch bản nào kêu. */
+  const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  const ota = readFileSync(new URL("../src/core/content/ota.ts", import.meta.url), "utf8");
+
+  /* --- (a) HỎI TRƯỚC, DỰNG SAU ---------------------------------------- */
+  const iHoi = main.indexOf("await checkForUpdate(");
+  const iStore = main.indexOf("createStore(");
+  ok(iHoi > 0, "đường khởi động phải AWAIT `checkForUpdate` — không await thì pack về sau khi ván đã dựng");
+  ok(iStore > 0, "phải tìm được chỗ dựng store");
+  ok(
+    iHoi < iStore,
+    "`checkForUpdate` phải đứng TRƯỚC `createStore`; đứng sau thì nội dung mới chỉ có hiệu lực ở lần mở game kế tiếp",
+  );
+
+  /* --- (b) …và đọc lại content SAU KHI tải xong -----------------------
+     Hỏi trước mà không đọc lại thì vẫn chơi bằng pack cũ vừa bị thay — công
+     tải về đổ sông đổ biển, và triệu chứng y hệt lúc chưa sửa. */
+  const doan = main.slice(iHoi, iStore);
+  ok(
+    /status === "ready"/.test(doan) && /napNoiDung\(\)/.test(doan),
+    'tải xong (`status === "ready"`) thì phải NẠP LẠI content ngay trong cùng phiên',
+  );
+
+  /* --- (c) NGÂN SÁCH: không bao giờ chờ mạng vô hạn -------------------
+     Nguyên tắc 1 của ota.ts là KHÔNG BAO GIỜ CHẶN. Nay có một chỗ await nó
+     trên đường khởi động, nên lời hứa ấy phải là một CON SỐ. */
+  ok(/timeoutMs:\s*OTA_BOOT_MS/.test(doan), "cổng khởi động phải truyền `timeoutMs` — không truyền là chờ mạng không trần");
+  const ns = /const OTA_BOOT_MS = (\d+);/.exec(main);
+  ok(ns, "phải khai hằng `OTA_BOOT_MS`");
+  ok(+ns[1] > 0 && +ns[1] <= 4000, `ngân sách mỗi lần gọi phải ngắn, đang là ${ns[1]}ms`);
+
+  /* --- (d) màn khởi động phải NÓI nó đang làm gì ----------------------- */
+  ok(/onProgress:\s*bootSay/.test(doan), "phải nối `onProgress` vào màn khởi động — im lặng thì người chơi không biết đang chờ gì");
+  ok(/onProgress/.test(ota), "ota.ts phải nhận `onProgress`");
+  for (const cau of ["Đang kiểm tra phiên bản", "Đang đối chiếu dữ liệu"])
+    ok(ota.includes(cau), `ota.ts phải báo bước "${cau}"`);
+
+  /* --- (e) KHÔNG hỏi mạng hai lần một phiên ---------------------------- */
+  const soHoi = (main.match(/checkForUpdate\(/g) ?? []).length;
+  eq(soHoi, 2, `chỉ được gọi \`checkForUpdate\` ở HAI chỗ — cổng khởi động và nút Kiểm tra cập nhật — đang có ${soHoi}`);
+
+  /* --- (f) DÂY BẪY: nhận bản mã mới không được tải lại vô hạn ----------
+     Một service worker cài hỏng vẫn báo `waiting` sau khi đã nhận quyền. Không
+     có khoá chống lặp thì trang tự tải lại mãi và KHÔNG có cách nào vào game —
+     hỏng nặng hơn hẳn thứ nó đang sửa, nên khoá phải đặt TRƯỚC lệnh tải lại. */
+  const iKhoa = main.indexOf("sessionStorage.setItem(KHOA_NHAN_SW");
+  const iTai = main.indexOf("location.reload()");
+  ok(iKhoa > 0, "phải có khoá chống lặp khi nhận bản mã mới ở màn khởi động");
+  ok(iTai > 0 && iKhoa < iTai, "khoá chống lặp phải đặt TRƯỚC `location.reload()`");
+  ok(
+    /if \(sessionStorage.getItem\(KHOA_NHAN_SW\)\) return false;/.test(main),
+    "và phải ĐỌC khoá đó để bỏ qua ở lần thứ hai trong cùng một phiên",
+  );
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

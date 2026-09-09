@@ -78,6 +78,14 @@ import type { UseKind } from "./game/actions.ts";
 /** Gốc URL phục vụ content OTA. Để trống ("") = tắt hẳn, game chạy thuần offline. */
 const CONTENT_URL = "https://oni-farm.pages.dev";
 
+/* Ngân sách MỖI LẦN GỌI MẠNG của cổng khởi động.
+
+   Không phải ngân sách tổng: một pack có mười mấy file thì tệ nhất là mười mấy
+   lần chờ. Chấp nhận, vì lúc ấy màn hình đang ĐẾM "3/14" — người chơi thấy nó
+   đang tiến, và đó là một sự chờ khác hẳn với một màn hình đứng im. Còn nhánh
+   thường ngày (đã là bản mới nhất) chỉ tốn ĐÚNG MỘT lần gọi: latest.json. */
+const OTA_BOOT_MS = 2500;
+
 /* Tầm với: chỉ có MỘT luật, `inReach()`/`inInteractRange()` trong game/world.ts,
    và từ Đợt 21 mọi cú bấm đi qua `pressPlan` nên UI không còn con số riêng
    nào nữa. (Từng có một hằng 1,8 ô ở đây — lệch 0,2 ô với luật thật đã đẻ ra
@@ -207,19 +215,83 @@ async function boot() {
   /** Đã xem sơ đồ nút tay cầm trên máy này chưa. */
   const PAD_SEEN = "oni-farm:pad-help-seen";
 
+  /* Câu đang in trên màn khởi động. Màn này xưa nay chỉ nói một câu duy nhất
+     ("Đang dựng nông trại…") rồi biến mất, nên mọi việc xảy ra sau nó — hỏi
+     phiên bản, tải nội dung, đối chiếu — đều vô hình. Cường: "sao lúc vào game
+     không có cập nhật ở trang khởi tạo nông trại luôn: đang kiểm tra phiên
+     bản, đang tải dữ liệu, đang đối chiếu... xong hết thì vô chơi thôi". */
+  const bootSay = (cau: string) => {
+    const p = bootEl.querySelector("p");
+    if (p) p.textContent = cau;
+  };
+
   /* ---- 1. content: pack OTA đã cache, nếu không thì pack đóng kèm ---- */
-  let content: Content;
+  /* `!` vì trình biên dịch không nhìn thấy được rằng `napNoiDung()` LUÔN gán
+     `content` trước khi ai đó đọc tới — nó gán từ trong một closure. */
+  let content!: Content;
   let contentSource: "bundled" | "ota" = "bundled";
   const contentWarnings: string[] = [];
-  try {
+  const napNoiDung = async () => {
     const r = await resolveContent();
     content = r.content;
     contentSource = r.source;
     contentWarnings.push(...r.warnings);
+  };
+  try {
+    await napNoiDung();
   } catch (e) {
     showError(e instanceof Error ? e.message : String(e));
     return;
   }
+
+  /* ---- 1a. MÃ GAME: bản mới đã tải xong từ phiên trước thì NHẬN NGAY ----
+
+     `registerType: "prompt"` cố ý không cho service worker mới tự chiếm quyền
+     GIỮA VÁN — đúng, vì tải lại trang lúc đang chơi là mất phần chưa lưu.
+     Nhưng ở ĐÂY thì chưa có ván nào: chưa store, chưa autosave, không có gì để
+     mất. Vậy mà bản trước vẫn bắt chờ một cú bấm vào thanh nhỏ ở đáy màn hình
+     — thanh ấy hiện lúc người chơi đang nhìn chỗ khác, nên người mở PWA suốt
+     ngày ở lại bản cũ vô thời hạn. Đó là nửa còn lại của "sao cập nhật lâu".
+
+     Chỉ nhận bản ĐÃ TẢI XONG và đang xếp hàng (`reg.waiting`) — không đứng đợi
+     một bản đang tải, vì cái đó thì đúng là chờ mạng thật. Bản đang tải vẫn về
+     đích ngầm và sẽ được nhận ở lần mở sau. */
+  if (await nhanBanMaMoi(bootSay)) return;
+
+  /* ---- 1b. CỔNG KHỞI ĐỘNG: hỏi bản mới NGAY BÂY GIỜ, không để lần sau ----
+
+     Đây là chỗ AN TOÀN duy nhất để đổi luật chơi: chưa có store, chưa có
+     autosave, chưa có ván nào để làm hỏng. Bản trước hỏi thăm ở CUỐI đường
+     khởi động, sau khi mọi thứ đã dựng xong bằng content cũ — nên pack tải về
+     phải chờ tới lần mở game sau mới có hiệu lực. Muốn thấy một thay đổi nội
+     dung, người chơi phải mở game hai lần, và lần thứ nhất không nói gì cả.
+
+     Nguyên tắc 1 của ota.ts vẫn giữ nguyên: KHÔNG BAO GIỜ CHẶN. Mạng chậm,
+     máy chủ chết, đang offline — mọi nhánh đều rơi vào cùng một chỗ: chơi tiếp
+     với content đang có. Ngân sách ngắn (`OTA_BOOT_MS`) là thứ biến "không
+     chặn" từ một lời hứa thành một con số. */
+  if (CONTENT_URL) {
+    try {
+      const r = await checkForUpdate(content.contentVersion, {
+        contentUrl: CONTENT_URL,
+        timeoutMs: OTA_BOOT_MS,
+        onProgress: bootSay,
+      });
+      if (r.status === "ready") {
+        /* Đọc lại: `resolveContent` nay nhặt được đúng pack vừa cất, nên bản
+           mới có hiệu lực NGAY phiên này chứ không phải phiên sau. */
+        bootSay(`Đang áp dụng nội dung ${r.contentVersion}…`);
+        await napNoiDung();
+      } else if (r.status === "incompatible") {
+        console.warn(`[ota] cần core ${r.requiresCore}, đang chạy ${CORE_VERSION}`);
+      } else if (r.status === "invalid") {
+        console.warn("[ota] pack bị từ chối:", r.problems);
+      }
+    } catch {
+      /* Hỏng ở bất cứ đâu cũng chỉ có một hệ quả: chơi bằng content đang có. */
+    }
+  }
+  bootSay("Đang dựng nông trại…");
 
   const root = document.documentElement;
   root.dataset["content"] = content.contentVersion;
@@ -2451,20 +2523,17 @@ async function boot() {
 
   for (const w of contentWarnings) toasts.say(w, "bad");
 
-  /* ---- 11. OTA: hỏi thăm bản mới, chạy NGẦM, không chặn gì ---- */
+  /* ---- 11. OTA đã hỏi xong ở CỔNG KHỞI ĐỘNG (mục 1b) ----
+
+     Chỗ này từng gọi `checkForUpdate` lần nữa, chạy ngầm. Bỏ đi: hỏi hai lần
+     mỗi phiên là tải `latest.json` hai lần cho cùng một câu trả lời, và cái
+     toast "có bản cập nhật" mà nó bắn ra nay luôn sai — bản mới đã được áp
+     dụng trước khi ván bắt đầu rồi.
+
+     `pendingContentVersion` thì vẫn hỏi: nó đọc cache CHỨ KHÔNG gọi mạng, và
+     nó là thứ duy nhất còn nói đúng — pack đã tải nhưng chưa hợp core hiện
+     tại thì vẫn nằm chờ, và menu phải nói được điều đó. */
   pendingVersion = await pendingContentVersion(content.contentVersion);
-  if (CONTENT_URL) {
-    void checkForUpdate(content.contentVersion, { contentUrl: CONTENT_URL }).then((r) => {
-      if (r.status === "ready") {
-        pendingVersion = r.contentVersion;
-        toasts.say(content.strings.msg["otaFound"] ?? "Có bản cập nhật nội dung mới.", "good");
-      } else if (r.status === "invalid") {
-        console.warn("[ota] pack bị từ chối:", r.problems);
-      } else if (r.status === "incompatible") {
-        console.warn(`[ota] cần core ${r.requiresCore}, đang chạy ${CORE_VERSION}`);
-      }
-    });
-  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -2519,6 +2588,55 @@ if (import.meta.env.PROD) {
       },
     });
   })();
+}
+
+/** Khoá CHỐNG LẶP cho việc nhận bản mã mới ở màn khởi động.
+ *
+ *  Nằm ở `sessionStorage` chứ không `localStorage`: nó chỉ cần sống đúng một
+ *  phiên tab. Không có khoá này thì một service worker cài hỏng — nhận quyền
+ *  xong vẫn báo `waiting` — sẽ làm trang tự tải lại vô hạn, và người chơi
+ *  không vào được game bằng bất cứ cách nào. */
+const KHOA_NHAN_SW = "oni-farm:da-nhan-ban-ma";
+
+/**
+ * Nhận service worker đang XẾP HÀNG, ngay tại màn khởi động.
+ *
+ * Trả `true` nghĩa là trang sắp tải lại — người gọi phải dừng khởi động ngay,
+ * đừng dựng tiếp một thứ sắp bị vứt đi.
+ */
+async function nhanBanMaMoi(bootSay: (s: string) => void): Promise<boolean> {
+  if (!import.meta.env.PROD) return false;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) return false;
+    if (!reg.waiting) {
+      // Không có gì xếp hàng — hỏi ngầm cho lần mở sau, KHÔNG chờ.
+      void reg.update().catch(() => {});
+      return false;
+    }
+    if (sessionStorage.getItem(KHOA_NHAN_SW)) return false;
+    sessionStorage.setItem(KHOA_NHAN_SW, "1");
+    bootSay("Có bản game mới — đang nhận…");
+    reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    /* Chờ ĐỔI QUYỀN, nhưng có trần. `controllerchange` là tín hiệu đúng; cái
+       hẹn giờ là để một service worker ương ngạnh không giam người chơi ở màn
+       khởi động — quá hạn thì cứ tải lại, cùng lắm là vẫn bản cũ. */
+    await new Promise<void>((xong) => {
+      const t = setTimeout(xong, 3000);
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        () => {
+          clearTimeout(t);
+          xong();
+        },
+        { once: true },
+      );
+    });
+    location.reload();
+    return true;
+  } catch {
+    return false; // không có service worker, hoặc trình duyệt chặn — chơi tiếp
+  }
 }
 
 void boot().catch((e) => {

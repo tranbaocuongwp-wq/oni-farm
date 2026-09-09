@@ -9,7 +9,12 @@
       <script>. Pack chỉ là JSON, và phải qua schema mới được dùng.
    3. CỔNG SEMVER là chốt chặn chính: pack khai `requiresCore`, core chỉ nhận
       khi phiên bản của mình thoả dải đó.
-   4. ÁP DỤNG Ở LẦN KHỞI ĐỘNG SAU. Không đổi luật chơi giữa lúc đang chơi dở.
+   4. KHÔNG ĐỔI LUẬT GIỮA VÁN. Nguyên tắc là vậy; chỗ AN TOÀN để áp dụng là
+      TRƯỚC khi ván bắt đầu — tức ngay ở màn khởi động, lúc chưa có store, chưa
+      có autosave, chưa có gì để mất. Bản đầu diễn giải nguyên tắc này thành
+      "áp dụng ở lần khởi động SAU", và đó là chỗ khiến cập nhật thấy chậm:
+      phải mở game HAI LẦN thì luật mới đổi, mà lần thứ nhất không hề nói gì
+      nên người chơi không biết là mình đang chờ cái gì.
    5. LUÔN CÓ ĐƯỜNG LUI. `revertToBundled()` xoá cache, quay về bản đóng kèm.
 
    Không cấu hình `contentUrl` thì toàn bộ file này nằm im — game chạy thuần offline.
@@ -65,6 +70,8 @@ export interface OtaOptions {
   contentUrl?: string | undefined;
   /** Bỏ cuộc sau bao nhiêu ms — không để người chơi chờ mạng. */
   timeoutMs?: number;
+  /** Báo tiến trình cho màn khởi động. Không có thì hàm chạy câm như cũ. */
+  onProgress?: (buoc: string) => void;
 }
 
 export type OtaResult =
@@ -90,8 +97,14 @@ async function fetchJson(url: string, timeoutMs: number): Promise<unknown> {
 }
 
 /**
- * Hỏi thăm bản nội dung mới. Chạy ngầm, KHÔNG await ở đường khởi động.
- * Thành công thì pack được cache lại và áp dụng ở lần mở game sau.
+ * Hỏi thăm bản nội dung mới, tải về và cất vào cache.
+ *
+ * Gọi được ở HAI chỗ, và khác nhau ở đúng một điểm — ai await nó:
+ *   · màn khởi động await, có `onProgress` để in ra đang làm gì, và có ngân
+ *     sách thời gian ngắn; xong thì `resolveContent()` chạy lại và pack mới
+ *     có hiệu lực NGAY phiên này;
+ *   · nút "Kiểm tra cập nhật" trong menu thì gọi lúc đang chơi, nên pack chỉ
+ *     nằm chờ tới lần mở sau — đúng nguyên tắc 4.
  */
 export async function checkForUpdate(
   currentVersion: string,
@@ -100,8 +113,10 @@ export async function checkForUpdate(
   const base = opts.contentUrl?.replace(/\/$/, "");
   if (!base) return { status: "disabled" };
   const timeoutMs = opts.timeoutMs ?? 8000;
+  const bao = opts.onProgress ?? (() => {});
 
   try {
+    bao("Đang kiểm tra phiên bản…");
     const latest = (await fetchJson(`${base}/content/latest.json`, timeoutMs)) as {
       contentVersion?: string;
       manifest?: string;
@@ -128,7 +143,10 @@ export async function checkForUpdate(
     // Bắt đầu từ pack đóng kèm rồi ghi đè từng file — pack mới thiếu file nào
     // thì file đó vẫn dùng bản đóng kèm, thay vì thủng lỗ.
     const raw: RawPack = { ...bundledRawPack(), manifest };
-    for (const rel of Object.keys(manifest.files)) {
+    const ten = Object.keys(manifest.files);
+    let xong = 0;
+    for (const rel of ten) {
+      bao(`Đang tải nội dung ${manifest.contentVersion} — ${++xong}/${ten.length}`);
       const m = MAP_FILE.exec(rel);
       if (m) {
         raw.maps = { ...raw.maps, [m[1]!]: await fetchJson(`${base}${manifest.base}${rel}`, timeoutMs) };
@@ -140,6 +158,7 @@ export async function checkForUpdate(
     }
 
     // ---- validate trước khi cho chạm vào bất cứ thứ gì ----
+    bao("Đang đối chiếu dữ liệu…");
     const problems = validatePack(raw);
     if (problems.length) return { status: "invalid", problems };
 
