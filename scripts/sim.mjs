@@ -54,7 +54,7 @@ import { PAD_MAP, padUseHeld } from "../src/core/input.ts";
 import { timChoNgoi, PHAT_KHAC_LOAI } from "../src/ui/focus.ts";
 import { createCamera, MAX_TILES_LONG, MIN_TILES_SHORT, MAX_TILES_SHORT } from "../src/render/camera.ts";
 import { createMinimap } from "../src/ui/minimap.ts";
-import { workFrame, heldForJob, chuKyNen } from "../src/render/draw.ts";
+import { workFrame, heldForJob, chuKyNen, ngoaiKhung, LE_CAT } from "../src/render/draw.ts";
 import { artTheoMua, ART, TILE_PX, TILE as ART_TILE } from "../src/art/atlas.ts";
 import { DEFAULT_CAMERA_CONFIG } from "../src/render/camera.ts";
 import { WORK_MINUTES } from "../src/game/workerai.ts";
@@ -12275,6 +12275,71 @@ test("172. LOẠI NỀN của một ô là BẤT BIẾN trong lúc chơi", () =>
     [],
     `${doi.length} ô đổi LOẠI NỀN — bảng loại nước và isIndoor đang khoá theo giả định là không ô nào đổi`,
   );
+});
+
+
+test("173. CẮT NGOÀI KHUNG NHÌN không cắt nhầm thứ còn thấy được", () => {
+  /* Bỏ qua thực thể ngoài khung nhìn là món rẻ nhất trong cả đợt, và cũng là
+     món dễ làm hỏng nhất theo hai kiểu khác hẳn nhau:
+       · cắt SÁT MÉP quá — nửa cái xe đang đi vào biến mất trước mắt người chơi;
+       · cắt ở SAI CHỖ trong vòng lặp — người làm bắn một cụm hạt ma. */
+
+  /* --- Vế một: HÌNH HỌC, kiểm bằng số thật ---------------------------- */
+  const rx = 100;
+  const ry = 200;
+  const W = 240; // khung nhìn điện thoại: ~13,4 ô × 16 ≈ 215, làm tròn rộng ra
+  const H = 480;
+  const trong = (x, y) => !ngoaiKhung(x, y, rx, ry, W, H);
+
+  ok(trong(rx + W / 2, ry + H / 2), "giữa khung thì phải vẽ");
+  ok(trong(rx, ry), "đúng góc trên-trái thì phải vẽ");
+  ok(trong(rx + W, ry + H), "đúng góc dưới-phải thì phải vẽ");
+
+  /* Ngay NGOÀI mép nhưng còn trong lề: hình của nó vẫn thò vào khung, nên vẫn
+     phải vẽ. Đây là ca mà `LE_CAT = 0` làm hỏng. */
+  for (const [x, y, ten] of [
+    [rx - 30, ry + H / 2, "sát mép trái"],
+    [rx + W + 30, ry + H / 2, "sát mép phải"],
+    [rx + W / 2, ry - 30, "sát mép trên"],
+    [rx + W / 2, ry + H + 30, "sát mép dưới"],
+  ])
+    ok(trong(x, y), `${ten}, cách 30 đơn vị — hình còn thò vào khung nên PHẢI vẽ`);
+
+  // Thật sự xa thì mới được cắt — nếu không thì phép cắt chẳng tiết kiệm gì.
+  for (const [x, y, ten] of [
+    [rx - 200, ry + H / 2, "xa bên trái"],
+    [rx + W + 200, ry + H / 2, "xa bên phải"],
+    [rx + W / 2, ry - 200, "xa phía trên"],
+    [rx + W / 2, ry + H + 200, "xa phía dưới"],
+  ])
+    ok(!trong(x, y), `${ten} — phải được cắt`);
+
+  /* Lề phải phủ hết phần hình thò ra khỏi tâm: bong bóng vẽ ở `py − 20`, thân
+     xe rộng 32 nên nửa hình là 16 ⇒ mép xa tâm nhất là 36. */
+  ok(LE_CAT >= 36, `lề cắt ${LE_CAT} là quá hẹp: bong bóng vẽ tới 20 và nửa thân xe là 16`);
+
+  /* --- Vế hai: CẮT ĐÚNG CHỖ trong vòng lặp ---------------------------- */
+  /* Vế này chỉ đọc được bằng cách quét mã nguồn, và nó là vế đắt hơn.
+
+     Khối `if (e.worker)` cập nhật `conSong` (để dọn `phaLam`) và `phaLam` (để
+     biết nhát cuốc nào vừa chạm đất). Đặt phép cắt TRƯỚC khối ấy thì người làm
+     ở ngoài khung bị xoá khỏi `phaLam`; lúc họ bước vào khung, khung động tác
+     đầu tiên đọc ra như một nhát vừa chạm đất và họ bắn một cụm hạt Ở CHỖ
+     CHẲNG AI LÀM GÌ. Lỗi ấy chỉ hiện khi có người làm đi ngang mép màn hình,
+     tức gần như không tái hiện được bằng tay. */
+  const nguon = readFileSync(new URL("../src/render/draw.ts", import.meta.url), "utf8");
+  const tt = nguon.indexOf("function drawActors(");
+  ok(tt >= 0, "không tìm thấy drawActors");
+  const than = nguon.slice(tt, nguon.indexOf("\n  function ", tt + 10));
+  const viTriWorker = than.indexOf("if (e.worker) {");
+  const viTriCat = than.indexOf("dem.culled++");
+  ok(viTriWorker >= 0, "drawActors phải còn khối `if (e.worker)`");
+  ok(viTriCat >= 0, "drawActors phải cắt thực thể ngoài khung và đếm vào `culled`");
+  ok(
+    viTriCat > viTriWorker,
+    "phép cắt nằm TRƯỚC khối `if (e.worker)` — người làm ngoài khung sẽ bắn cụm hạt ma khi đi vào",
+  );
+  ok(than.includes("ngoaiKhung("), "drawActors phải dùng chính `ngoaiKhung` mà kịch bản này kiểm");
 });
 
 await Promise.all(choDoi);

@@ -350,6 +350,34 @@ export function chuKyNen(t: Tile): number {
   );
 }
 
+/**
+ * LỀ CẮT quanh khung nhìn, ĐƠN VỊ THẾ GIỚI.
+ *
+ * Thực thể vẽ ra cao hơn tâm nó nhiều: thân xe 32px, đồ đội trên đầu ở
+ * `py − 11`, bong bóng ở `py − 20` — tức mép hình xa tâm nhất là 20 + 16 = 36.
+ * Cắt sát mép khung nhìn là cắt cụt nửa cái xe đang đi vào, ngay trước mắt
+ * người chơi. 40 cho dôi ra một chút.
+ */
+export const LE_CAT = 40;
+
+/**
+ * Thực thể ở `(x, y)` có nằm HẲN ngoài khung nhìn (cộng lề) không?
+ *
+ * Tách ra khỏi `drawActors` để kiểm được bằng số thật: bên trong ấy nó bị khoá
+ * sau một cái atlas và một canvas, và một phép cắt sai một dấu lớn-hơn thì
+ * không có cách nào thấy ngoài việc nhìn thấy thứ biến mất.
+ */
+export function ngoaiKhung(
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  viewW: number,
+  viewH: number,
+): boolean {
+  return x < rx - LE_CAT || y < ry - LE_CAT || x > rx + viewW + LE_CAT || y > ry + viewH + LE_CAT;
+}
+
 export function createRenderer(
   canvas: HTMLCanvasElement,
   atlas: Atlas,
@@ -1644,6 +1672,7 @@ export function createRenderer(
 
   function drawActors(s: GameState, content: Content, items: Item[], timeSec: number) {
     const conSong = new Set<number>();
+    const vpNow = camera.viewport;
     for (const e of s.entities) {
       if (e.map !== s.mapId) continue;
       if (!e.worker && e.kind !== "vehicle" && !content.animals[e.def]) continue;
@@ -1683,6 +1712,15 @@ export function createRenderer(
           if (loai) burst(loai, e.ai.tx, e.ai.ty);
         }
         phaLam.set(e.id, khung);
+      }
+      /* CẮT theo khung nhìn — và phải cắt Ở ĐÂY, sau khối `if (e.worker)` chứ
+         không phải ngay đầu vòng lặp. Khối ấy cập nhật `conSong` và `phaLam`:
+         cắt trước nó thì người làm ngoài khung bị xoá khỏi `phaLam`, và lúc
+         bước vào khung, khung động tác đầu tiên trông như một nhát vừa chạm
+         đất — họ bắn một cụm hạt MA ở chỗ chẳng ai làm gì. */
+      if (ngoaiKhung(e.x, e.y, camera.rx, camera.ry, vpNow.viewW, vpNow.viewH)) {
+        dem.culled++;
+        continue;
       }
       const img = e.worker
         ? atlas.worker(e.worker.skin, e.dir, khungNguoiLam(e, content, lamViec, moving, timeSec))
