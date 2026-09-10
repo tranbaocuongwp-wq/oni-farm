@@ -6,7 +6,7 @@
   "description": "OniFarm — game nông trại hiện đại pixel art, static site chạy hoàn toàn client-side + offline. Core/content tách bạch để cập nhật OTA.",
   "scripts": {
     "dev": "npm run site:build && vite",
-    "build": "npm run content:build && npm run site:build && vite build",
+    "build": "npm run content:build && npm run site:build && vite build && node scripts/check-precache.mjs",
     "preview": "vite preview --port 1421 --strictPort",
     "content:build": "node scripts/build-content.mjs",
     "content:publish": "node scripts/publish-content.mjs dist",

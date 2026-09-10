@@ -2582,9 +2582,29 @@ if (import.meta.env.PROD) {
             Promise.all(ks.filter((k) => k.startsWith("oni-farm-")).map((k) => caches.delete(k))),
           )
           .catch(() => {});
-        // Hỏi lại mỗi 30 phút. PWA mở suốt ngày thì không có lần "mở lại trang"
-        // nào để phát hiện bản mới, nên phải chủ động hỏi.
-        if (reg) setInterval(() => void reg.update().catch(() => {}), 30 * 60 * 1000);
+        if (!reg) return;
+        /* Hỏi lại mỗi 30 phút. PWA mở suốt ngày thì không có lần "mở lại trang"
+           nào để phát hiện bản mới, nên phải chủ động hỏi. */
+        setInterval(() => void reg.update().catch(() => {}), 30 * 60 * 1000);
+
+        /* …và hỏi NGAY khi người chơi quay lại tab.
+           Nhịp 30 phút là nhịp cho một tab đang chạy liên tục, không phải cho
+           cách người ta thật sự dùng: mở game, chuyển sang việc khác, một lúc
+           sau quay lại. Lúc quay lại là đúng lúc đáng hỏi nhất — vừa có khả
+           năng cao là đã có bản mới, vừa là khoảnh khắc người chơi sẵn sàng
+           nhận nó. Không có nhánh này thì tệ nhất phải chờ trọn 30 phút cho
+           một việc đáng lẽ tốn vài trăm mili giây.
+
+           Van tiết: một lần mỗi phút. Chuyển tab qua lại là chuyện xảy ra hàng
+           chục lần một buổi, và mỗi lần hỏi là một lượt gọi mạng thật. */
+        let hoiLanCuoi = 0;
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible") return;
+          const gio = Date.now();
+          if (gio - hoiLanCuoi < 60_000) return;
+          hoiLanCuoi = gio;
+          void reg.update().catch(() => {});
+        });
       },
     });
   })();

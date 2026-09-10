@@ -62,32 +62,33 @@ export default defineConfig({
       manifest: false,
       injectRegister: null,
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}"],
-        globIgnores: [
-          // Content pack OTA KHÔNG precache: nó có vòng đời riêng (xem docs/OTA),
-          // và bản đóng kèm trong bundle đã bảo chứng offline rồi.
-          "content/**",
-          /* TRANG GIỚI THIỆU cũng không precache — chỉ GAME mới cần chạy offline.
-             Vì sao: precache phục vụ bản đã lưu TRƯỚC, và `registerType:
-             "prompt"` (cố ý, xem trên) nghĩa là bản mới chỉ được nhận khi người
-             chơi bấm "có bản mới" — mà dòng đó chỉ hiện TRONG GAME. Service
-             worker thì có phạm vi cả `/`. Hệ quả: ai từng mở game một lần rồi
-             quay lại trang chủ sẽ thấy bản CŨ, và không có nút nào để thoát ra.
-             Sửa một câu chữ trên web rồi đẩy lên, người đã ghé qua vẫn đọc câu
-             cũ — vô thời hạn.
+        /* DANH SÁCH CHO PHÉP, không phải danh sách cấm.
 
-             Giờ chúng đi đường `runtimeCaching` NetworkFirst bên dưới: có mạng
-             thì luôn là bản mới nhất, mất mạng thì vẫn còn bản đã ghé. Game ở
-             `/farm/` vẫn precache nguyên vẹn, nên lời hứa "chơi offline hoàn
-             toàn" không suy suyển. */
-          "index.html",
-          "tinh-nang/**",
-          "luat-choi/**",
-          "thu-vien/**",
-          "huong-dan/**",
-          "cach-hoat-dong/**",
-          "tai-ve/**",
-          "privacy/**",
+           Chỉ GAME mới cần chạy offline; trang wiki đi đường `runtimeCaching`
+           NetworkFirst bên dưới — có mạng thì luôn là bản mới nhất, mất mạng
+           thì vẫn còn trang đã ghé. Lý do gốc: precache phục vụ bản đã lưu
+           TRƯỚC, mà service worker có phạm vi cả `/`, nên ai từng mở game rồi
+           quay lại trang chủ sẽ đọc bản CŨ vô thời hạn, không có nút nào thoát.
+
+           VÌ SAO LÀ CHO PHÉP CHỨ KHÔNG PHẢI CẤM: bản trước viết đúng ý này
+           nhưng viết bằng `globIgnores` liệt kê tên thư mục wiki — `tinh-nang`,
+           `thu-vien`, `huong-dan`, `cach-hoat-dong`, `tai-ve`, `luat-choi`.
+           Wiki sau đó dựng lại với bộ tên khác (`cay-trong`, `dia-hinh`,
+           `vat-nuoi`, `vat-pham`…), và danh sách cấm lặng lẽ thôi khớp: sáu
+           trên bảy mục trỏ vào thư mục KHÔNG CÒN TỒN TẠI. Đo lúc phát hiện:
+           **192 trang wiki, 1.415 KiB — 70% precache** — và vì `build-site.mjs`
+           đóng dấu số phiên bản lõi vào từng trang, MỖI LẦN phát hành cả 192
+           trang đều đổi. Người chơi phải tải lại 1,4 MB trang tra cứu họ không
+           đọc, TRƯỚC khi bản game mới được nhận. Đó chính là chỗ "cập nhật lâu".
+
+           Danh sách cho phép thì không mục ruỗng được: nó nêu tên thứ game
+           THẬT SỰ cần, và thứ đó không đổi tên theo mùa. Thêm một mục wiki mới
+           cũng không lọt vào đây được nữa. `scripts/check-precache.mjs` canh
+           lại kết quả sau mỗi lần build. */
+        globPatterns: [
+          "farm/index.html",
+          "assets/*.{js,css}",
+          "*.{png,svg,webmanifest}",
         ],
         navigateFallback: null,
         cleanupOutdatedCaches: true,

@@ -13661,6 +13661,68 @@ test("190. CỔNG KHỞI ĐỘNG: hỏi bản mới TRƯỚC khi dựng ván, c�
   );
 });
 
+test("191. PHÂN PHỐI bản mới: không tải kèm thứ người chơi không đọc, và hỏi lúc họ quay lại", () => {
+  /* Cường: "có cách nào khi tôi cập nhật bản mới được phân phối nhanh hơn
+     không". Đo ra ba chặng, và chặng đắt nhất KHÔNG nằm trong mã game.
+
+     `globIgnores` của workbox từng liệt kê tên thư mục wiki để loại chúng khỏi
+     bản offline — ý đúng, chép tay sai chỗ: wiki sau đó dựng lại với bộ tên
+     khác, và SÁU TRÊN BẢY mục trỏ vào thư mục không còn tồn tại. Danh sách cấm
+     thôi khớp trong im lặng, không typecheck nào đỏ, không kịch bản nào kêu.
+     Đo lúc phát hiện: 192 trang wiki, 1.415 KiB — 70% precache. Và vì
+     `build-site.mjs` đóng dấu số phiên bản lõi vào TỪNG trang, mỗi lần phát
+     hành cả 192 trang đều đổi: người chơi tải lại 1,4 MB trang tra cứu họ
+     không đọc, TRƯỚC khi bản game mới được nhận.
+
+     Cổng thật canh việc này là `scripts/check-precache.mjs` — nó đọc
+     `dist/sw.js`, tức đọc KẾT QUẢ chứ không đọc ý định, nên phải chạy sau build
+     và không thuộc về đây. Kịch bản này canh hai thứ mà nguồn nói được: cổng ấy
+     còn được nối vào `npm run build`, và luật viết theo HÌNH DẠNG đường dẫn chứ
+     không theo tên thư mục — thứ vừa mục ruỗng một lần. */
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const vite = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+
+  /* --- (a) cổng precache phải nằm TRONG lệnh build ---------------------
+     Để rời ra thì nó chỉ chạy khi có người nhớ gọi, mà đúng loại lỗi này là
+     loại không ai nghĩ tới để đi gọi. */
+  ok(
+    /check-precache\.mjs/.test(pkg.scripts.build ?? ""),
+    "`npm run build` phải chạy scripts/check-precache.mjs — cổng rời ra là cổng không ai mở",
+  );
+
+  /* --- (b) DANH SÁCH CHO PHÉP, không phải danh sách cấm ---------------- */
+  /* Bỏ chú thích trước khi soi: chỗ ghi lý do luật này ra đời buộc phải gọi
+     đúng tên những thư mục đã làm nó mục ruỗng. Thứ phải sạch là MẪU GLOB. */
+  const wb = vite
+    .slice(vite.indexOf("workbox: {"), vite.indexOf("navigateFallback"))
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  ok(/globPatterns:/.test(wb), "workbox phải khai globPatterns");
+  ok(
+    !/globIgnores:/.test(wb),
+    "không được quay lại `globIgnores`: nó loại theo TÊN THƯ MỤC, và tên thư mục đổi thì luật thôi khớp trong im lặng",
+  );
+  ok(
+    /"farm\/index\.html"/.test(wb),
+    "danh sách cho phép phải nêu đích danh trang chơi",
+  );
+  for (const xau of ["cay-trong", "dia-hinh", "vat-nuoi", "vat-pham"])
+    ok(!wb.includes(xau), `mẫu precache không được nhắc tên thư mục wiki "${xau}" — đó là cách nó mục ruỗng lần trước`);
+
+  /* --- (c) hỏi bản mới lúc người chơi QUAY LẠI, không chỉ mỗi 30 phút -- */
+  /* Có HAI chỗ nghe `visibilitychange` trong main.ts — chỗ kia là tạm dừng
+     vòng lặp game. Tìm đúng chỗ hỏi bản mới bằng thứ chỉ nó mới có. */
+  const iSw = main.indexOf("onRegisteredSW");
+  ok(iSw > 0, "phải tìm được chỗ đăng ký service worker");
+  const vung = main.slice(iSw);
+  ok(
+    /visibilitychange/.test(vung),
+    "phải hỏi bản mới khi tab hiện lại — chờ trọn nhịp 30 phút cho việc tốn vài trăm mili giây là lãng phí",
+  );
+  ok(/60_000|60000/.test(vung), "…nhưng phải có VAN TIẾT: chuyển tab hàng chục lần một buổi, mỗi lần là một lượt gọi mạng thật");
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);
