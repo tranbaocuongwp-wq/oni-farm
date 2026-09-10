@@ -13325,8 +13325,19 @@ test("185. LIỆT KÊ mục tiêu và GIỮ mục tiêu phải dùng CÙNG một
   for (const op of ["tillMap", "plantMap", "waterMap"]) store.dispatch({ t: "DEBUG", op });
   const OPTS = { context: true, canGo: true };
 
-  /* --- (a) Bán kính phải là con số Cường chốt, không trôi ------------- */
-  eq(AIM_RADIUS, 2, "tầm ngắm là HAI ô — quanh mình, nhìn một cái là thấy hết");
+  /* --- (a) NGẮM ĐƯỢC TỨC LÀM ĐƯỢC NGAY -------------------------------
+     Cường: "k được chọn lại mục tiêu ngoài tầm".
+
+     Đợt 35 cố ý để tầm ngắm (2 ô) RỘNG HƠN tầm với (1,6) — ngắm được thứ ngay
+     sát ngoài tầm, và nút chính thành "đi tới rồi làm". Nghe hợp lý trên giấy;
+     đo ra thì khe 0,4 ô ấy chiếm 377/1.021 mục tiêu, tức 37%, và 43% chỗ đứng
+     có ít nhất một mục tiêu không làm được ngay. Nút MỤC TIÊU vì thế mang hai
+     nghĩa lẫn nhau mà nhìn con trỏ không phân biệt được.
+
+     Khẳng định bằng ĐẲNG THỨC chứ không bằng con số: viết `eq(AIM_RADIUS, 1.6)`
+     thì mai kia ai đó chỉnh tầm với mà quên tầm ngắm, khe hở mở lại và kịch bản
+     vẫn xanh. Buộc hai hằng vào nhau thì khe hở không mở ra được nữa. */
+  eq(AIM_RADIUS, REACH_TILES, "tầm ngắm phải ĐÚNG BẰNG tầm với — ngắm được tức làm được ngay");
 
   /* --- (b) VẾ QUAN TRỌNG NHẤT: liệt kê tới đâu thì giữ tới đó ---------
      Liệt kê 6 ô mà chỉ giữ 1,6 ô thì mục tiêu vừa chọn rơi ngay khung hình
@@ -13351,6 +13362,24 @@ test("185. LIỆT KÊ mục tiêu và GIỮ mục tiêu phải dùng CÙNG một
       }
     }
   ok(daThu > 50, `phải kiểm được nhiều mục tiêu thật, mới ${daThu}`);
+
+  /* --- (b2) …và KHÔNG mục tiêu nào nằm ngoài tầm với, ở MỌI chỗ đứng --
+     Vế (a) canh hai hằng bằng nhau; vế này canh cái mà hai hằng ấy hứa hẹn,
+     đo trên hàng trăm chỗ đứng thật. Hai vế bắt hai loại hỏng khác nhau: đổi
+     hằng, và đổi luật lọc trong `reachTargets`. */
+  let ngoaiTam = 0;
+  for (let y = 1; y < s0.h - 1; y += 4)
+    for (let x = 1; x < s0.w - 1; x += 4) {
+      if (blockedAt(s0, content, x * TILE + 8, y * TILE + 8)) continue;
+      setState(store, (s) => {
+        s.player.x = x * TILE + 8;
+        s.player.y = y * TILE + 8;
+      });
+      const st = store.getState();
+      for (const t of reachTargets(st, content, OPTS))
+        if (!inReach(st, t.x, t.y)) ngoaiTam++;
+    }
+  eq(ngoaiTam, 0, `${ngoaiTam} mục tiêu liệt kê ra mà tay không với tới — nút MỤC TIÊU thành "chọn thứ để đi tới", lẫn nghĩa với "chọn thứ để bấm"`);
 
   /* --- (c) …và không mục tiêu nào vượt quá bán kính ấy ---------------- */
   setState(store, (s) => {

@@ -19,7 +19,7 @@ import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
 import { TILE,  inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef,
-  distToTile,
+  distToTile, REACH_TILES,
 } from "./world.ts";
 import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
@@ -1368,27 +1368,41 @@ export function ghiNhoNgam(
 /**
  * TẦM NGẮM — mục tiêu được phép nằm xa tới đâu.
  *
- * HAI Ô. Con số này đi một vòng rồi mới về đúng chỗ, và cái vòng ấy đáng ghi lại.
+ * ĐÚNG BẰNG TẦM VỚI. Con số này đi trọn một vòng rồi mới về chỗ xuất phát, và
+ * cái vòng ấy đáng ghi lại vì nó là một bài học về việc đo cái gì.
  *
- * Ban đầu nó là `REACH_TILES` (1,6) — chỉ ngắm được thứ tay đã với tới. Đo trên
- * 531 chỗ đứng thì 50% không có mục tiêu nào để xoay, nên Đợt 33 nới lên
- * `CTX_RADIUS` (6): tỉ lệ "bấm không thấy gì" tụt từ 66% xuống 24%.
+ *   1,6 (= tầm với)  → chỉ ngắm được thứ tay đã chạm tới.
+ *   6   (Đợt 33)     → đo 531 chỗ đứng thấy 66% chỗ bấm nút MỤC TIÊU không
+ *                      thấy gì đổi, nên nới rộng; tỉ lệ ấy tụt còn 24%.
+ *   2   (Đợt 35)     → Cường chơi thử: "quanh mình 2 ô đất thôi, xa quá nhảy
+ *                      tùm lum". Sáu ô cho nhiều mục tiêu thật, nhưng mũi tên
+ *                      nhảy qua những thứ cách nửa màn hình.
+ *   1,6 (Đợt 39)     → Cường: "k được chọn lại mục tiêu ngoài tầm".
  *
- * Nhưng CHƠI THỬ mới là phép đo cuối. Cường: *"quanh mình 2 ô đất thôi, xa quá
- * nhảy tùm lum"*. Sáu ô cho nhiều mục tiêu thật, nhưng mũi tên nhảy qua những
- * thứ cách nửa màn hình, và người chơi mất luôn cảm giác "nó đang chỉ vào cái
- * gần tôi". Số lượng mục tiêu không phải thứ cần tối đa hoá — ĐOÁN ĐƯỢC mới là.
+ * Bước cuối sửa một chỗ mà bước trước tưởng là tính năng. Hai ô "rộng hơn tầm
+ * với một chút" là CỐ Ý: ngắm được thứ ngay sát ngoài tầm, và nút chính thành
+ * "đi tới rồi làm". Nghe hợp lý trên giấy. Đo ra thì cái khe 0,4 ô ấy không hề
+ * nhỏ: **377 trên 1.021 mục tiêu — 37% — nằm ngoài tầm với**, và ở **43% chỗ
+ * đứng** con trỏ sẽ dừng lại ít nhất một lần ở thứ không làm được ngay. Nút
+ * MỤC TIÊU vì thế mang hai nghĩa lẫn nhau: phần lớn thời gian là "chọn thứ để
+ * bấm", thỉnh thoảng lại là "chọn thứ để ĐI TỚI" — mà nhìn con trỏ thì không
+ * phân biệt được đang ở nghĩa nào.
  *
- * Hai ô, không phải 1,6: rộng hơn tầm với một chút nên ngắm được thứ ngay sát
- * ngoài tầm, và nút chính thành "đi tới rồi làm" — nhánh đã có sẵn trong
- * `pressPlan`. Nhưng vẫn là "quanh mình", vẫn nhìn một cái là thấy hết.
+ * Nay một nghĩa: NGẮM ĐƯỢC TỨC LÀM ĐƯỢC NGAY.
+ *
+ * CÁI GIÁ, nói thẳng: chỉ giữ mục tiêu trong tầm với thì 51% chỗ đứng không
+ * còn mục tiêu nào và 67% chỉ còn một — tức nút MỤC TIÊU thường xuyên không có
+ * gì để xoay. Đó chính là con số đã khiến Đợt 33 nới rộng ra. Lần này chọn
+ * ngược lại, có chủ ý: một cái nút thỉnh thoảng không có việc thì dễ chịu hơn
+ * hẳn một con trỏ không đoán được. Muốn với tới xa hơn thì đi tới — chạm vào ô
+ * xa vẫn là "đi tới đó", đường ấy không đụng gì tới tầm ngắm.
  *
  * ⚠️ Một hằng số cho CẢ HAI đầu: `reachTargets` liệt kê tới đâu thì
  * `aimStillValid` phải giữ tới đó. Lệch nhau là mục tiêu vừa chọn rơi ngay
  * khung hình sau — tệ hơn hẳn lúc chưa sửa. Đây cũng là điều kịch bản 168 canh
  * ("không được có một bán kính thứ ba tự chế").
  */
-export const AIM_RADIUS = 2;
+export const AIM_RADIUS = REACH_TILES;
 
 export function aimStillValid(state: GameState, aim: { x: number; y: number } | null): boolean {
   return aim !== null && distToTile(state, aim.x, aim.y) <= AIM_RADIUS;
