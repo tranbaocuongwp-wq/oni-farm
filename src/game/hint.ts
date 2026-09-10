@@ -19,7 +19,7 @@ import { itemName, parseItem } from "./items.ts";
 import { pondAt, troughFeedsAt, troughMax, troughStock } from "./pen.ts";
 import { penNear, penSummary } from "./animals.ts";
 import { TILE,  inReach, inInteractRange, interactAt, inZone, isRipe, tileAt, propDef,
-  distToTile, REACH_TILES,
+  distToTile, REACH_TILES, zoneAt,
 } from "./world.ts";
 import { cropInSeason } from "./season.ts";
 import { workerNear } from "./workers.ts";
@@ -562,6 +562,21 @@ export function interactHint(
      máng còn mấy phần, luống đã tưới chưa — nên nút phụ gần như không bao giờ
      tắt ngóm, và đó là điểm khác lớn nhất so với bản cũ. */
   if (tileInfo(state, content, x, y)) return { what: "tile", label: "XEM Ô", x, y };
+
+  /* Ô ngắm câm thì hỏi CHỖ MÌNH ĐANG ĐỨNG.
+
+     Đứng ở mép Lô A3 quay mặt ra đường thì ô trước mặt là mặt nhựa — không có
+     gì để kể — trong khi ngay dưới chân là ruộng của mình. Câu người chơi hỏi
+     lúc ấy là "chỗ này thế nào", và ô dưới chân trả lời được: nó luôn trong
+     tầm với (cách 0), nên vẫn đúng luật "ngắm được tức làm được ngay".
+
+     Đo trước khi thêm: 27% số (chỗ đứng × hướng) có cả ba nút rỗng nghĩa. Riêng
+     bước này hạ nó xuống, và phần lớn phần hạ được là những chỗ người chơi
+     đứng GIỮA một khu có tên mà nút tra cứu vẫn câm. */
+  const px = Math.floor(state.player.x / TILE);
+  const py = Math.floor(state.player.y / TILE);
+  if ((px !== x || py !== y) && tileInfo(state, content, px, py))
+    return { what: "tile", label: "XEM CHỖ NÀY", x: px, y: py };
   return null;
 }
 
@@ -616,6 +631,40 @@ export function tileInfo(
     if (def) return def.hits ? `${def.name} — còn ${t.hp} nhát` : def.name;
   }
   if (t.tilled) return t.wet ? "Luống đã cày · đã tưới" : "Luống đã cày · chưa tưới";
+
+  /* CUỐI CÙNG: KHU VỰC. Ô này tự nó không có gì để kể — cỏ trống, mặt đường,
+     nền đất — nhưng NƠI NÀY thì có.
+
+     Cường: "ba cái nút kiểm soát... nó phải luôn luôn xuất hiện và hiển thị
+     theo ngữ cảnh của khu vực người chơi chứ". Đo được: 27% số (chỗ đứng ×
+     hướng) có cả ba nút rỗng nghĩa, và 38% trong số đó là lúc người chơi đang
+     ĐỨNG GIỮA một khu CÓ TÊN — Lô A3, Rừng Nam. Đứng giữa ruộng của mình mà
+     nút tra cứu câm là vô lý: câu người chơi hỏi lúc ấy không phải "ô này là
+     gì" mà "lô này tới đâu rồi".
+
+     Trả lời bằng con số phải nhẩm, đúng nếp của cả hàm này: mấy ô đã cày, mấy
+     cây đang lớn, mấy cây chín. Không nói tên loại đất. */
+  const khu = zoneAt(state, content, x, y);
+  if (khu?.name) {
+    if (khu.kind !== "farm") return khu.name;
+    let cay = 0;
+    let luong = 0;
+    let chin = 0;
+    for (let j = khu.y; j < khu.y + khu.h; j++)
+      for (let i = khu.x; i < khu.x + khu.w; i++) {
+        const o = tileAt(state, i, j);
+        if (!o) continue;
+        if (o.tilled) luong++;
+        if (o.crop) {
+          cay++;
+          if (isRipe(o, content)) chin++;
+        }
+      }
+    const phan = [`${luong}/${khu.w * khu.h} ô đã cày`];
+    if (cay) phan.push(`${cay} cây đang lớn`);
+    if (chin) phan.push(`${chin} chín`);
+    return `${khu.name} — ${phan.join(" · ")}`;
+  }
   return null;
 }
 

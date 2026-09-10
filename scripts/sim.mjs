@@ -13752,6 +13752,100 @@ test("191. PHÂN PHỐI bản mới: không tải kèm thứ người chơi khô
   ok(/60_000|60000/.test(vung), "…nhưng phải có VAN TIẾT: chuyển tab hàng chục lần một buổi, mỗi lần là một lượt gọi mạng thật");
 });
 
+test("192. BA NÚT NGỮ CẢNH luôn có mặt và luôn có gì để nói", () => {
+  /* Cường: "ba cái nút kiểm soát tại sao lại mất tiêu vậy, nó phải luôn luôn
+     xuất hiện và hiển thị theo ngữ cảnh của khu vực người chơi chứ".
+
+     Đo trong trình duyệt thì đúng nghĩa đen, và tệ hơn tưởng — chiều cao thật
+     của ba nút theo chế độ điều khiển:
+
+       chạm      MỤC TIÊU 64  ·  XEM 64  ·  DÙNG 80
+       chuột/phím         0   ·      0   ·      0     ← mất sạch
+       tay cầm            0   ·      0   ·     80     ← mất hai
+
+     Mà chế độ đổi theo THIẾT BỊ VỪA DÙNG: đang chơi cảm ứng, chạm vào con chuột
+     một cái là cả cụm biến mất giữa chừng. Hai luật riêng biệt gây ra, mỗi luật
+     có lý do viết ra tử tế và cả hai đều đã hết đúng. */
+  const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+
+  /** Các luật đặt `display` cho một bộ chọn khớp mẫu. */
+  const luat = (re) => {
+    const out = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const d = /(?:^|;|\n)\s*display:\s*([^;\n]+)/.exec(m[2]);
+      if (!d) continue;
+      for (const sel of m[1].split(","))
+        if (re.test(sel.trim())) out.push({ sel: sel.trim(), display: d[1].trim() });
+    }
+    return out;
+  };
+
+  /* --- (a) KHÔNG chế độ nào được giấu cả cụm ------------------------- */
+  const anCum = luat(/#abtn\s*$/).filter((r) => r.display === "none");
+  deepEq(
+    anCum.map((r) => r.sel),
+    [],
+    "không luật nào được đặt `#abtn { display: none }` — ba nút là chỗ DUY NHẤT nói ra ngữ cảnh, giấu đi là người chơi phải bấm thử mới biết Space làm gì",
+  );
+
+  /* --- (b) nút XEM phải còn ở chế độ TAY CẦM -------------------------
+     Nó từng bị bỏ với lý do "ba nút kia mang việc CỐ ĐỊNH, không bao giờ đổi".
+     Câu ấy đúng lúc viết và hết đúng từ khi nút phụ thành nút tra cứu theo mục
+     tiêu đang nhắm: nay nhãn nó đổi y như nút chính (BẢNG KHU · XEM BÒ · XEM Ô). */
+  const anXem = luat(/#abtn .*\.b\s*$/).filter((r) => r.display === "none");
+  deepEq(
+    anXem.map((r) => r.sel),
+    [],
+    "nút XEM không được giấu ở chế độ nào — nhãn của nó đổi theo ngữ cảnh, sơ đồ nút không nói thay được",
+  );
+
+  /* --- (c) …và cụm nút phải NẰM TRÊN hotbar, kể cả khi có dải tay cầm --
+     Đo được lúc chưa sửa: nút chính đè lên hotbar 37px ở kbm và 49px ở tay
+     cầm. Vế tay cầm là lỗi có sẵn — chế độ ấy đẩy hotbar lên 26px để chừa chỗ
+     cho dải gợi ý, mà phép nâng cụm nút không hề biết. Buộc hai chỗ dùng CHUNG
+     một biến thì chúng không lệch nhau được nữa. */
+  const nang = /--abtn-bottom:\s*calc\([^;]*--padctx-gap[^;]*\)/.test(css);
+  ok(nang, "`--abtn-bottom` phải cộng cả `--padctx-gap`, nếu không nút chính tụt xuống nằm sau hotbar ở chế độ tay cầm");
+  ok(
+    /padding-bottom:\s*var\(--padctx-gap\)/.test(css),
+    "…và phần đệm của `.hud-bottom` phải đọc CÙNG biến ấy, không chép tay lại con số",
+  );
+
+  /* --- (d) NGỮ CẢNH KHU VỰC: đứng trong lô thì nút XEM không được câm --
+     Đo trước khi sửa: 27% số (chỗ đứng × hướng) có cả ba nút rỗng nghĩa, và
+     38% trong số đó là lúc đang đứng GIỮA một khu CÓ TÊN. Đứng giữa ruộng của
+     mình mà nút tra cứu không nói được gì là vô lý. */
+  const store = mkStore();
+  const lo = (content.tiles.zones ?? []).find((z) => z.kind === "farm");
+  ok(lo, "content phải có ít nhất một lô ruộng");
+  const gx = lo.x + Math.floor(lo.w / 2);
+  const gy = lo.y + Math.floor(lo.h / 2);
+  setState(store, (s) => {
+    s.player.x = gx * TILE + 8;
+    s.player.y = gy * TILE + 8;
+    /* Dọn sạch quanh chân: cỏ trống, không cây, không luống — đúng cái cảnh
+       trước đây làm cả ba nút tắt ngóm. */
+    for (let j = gy - 2; j <= gy + 2; j++)
+      for (let i = gx - 2; i <= gx + 2; i++) {
+        const t = s.tiles[idx(s.w, i, j)];
+        if (!t) continue;
+        t.prop = null; t.b = null; t.crop = null; t.tilled = false; t.wet = false;
+      }
+  });
+  const st = store.getState();
+  for (const dir of ["up", "down", "left", "right"]) {
+    setState(store, (s) => { s.player.dir = dir; });
+    const s2 = store.getState();
+    const f = facingTile(s2, TILE);
+    const ih = interactHint(s2, content, f.x, f.y);
+    ok(ih, `quay mặt ${dir} giữa ${lo.name}: nút XEM phải có gì để nói, đang câm`);
+  }
+  /* …và câu nó nói phải là về CHÍNH CÁI LÔ ẤY, không phải một câu chung chung. */
+  const tin = tileInfo(st, content, gx, gy);
+  ok(tin && tin.includes(lo.name), `thẻ ô phải gọi tên khu vực "${lo.name}", đang là "${tin}"`);
+});
+
 await Promise.all(choDoi);
 console.log("\n  ONIFARM — sim\n");
 for (const line of results) console.log("  " + line);

@@ -98,6 +98,11 @@
   /* Đáy cụm nút hành động, tính từ mép an toàn. Bố cục dọc nâng nó lên trên
      hotbar; các bố cục khác giữ mặc định. */
   --abtn-bottom: 14px;
+  /* Khe mà dải gợi ý TAY CẦM chiếm dưới hotbar. 0 ở mọi chế độ khác.
+     Là BIẾN chứ không phải số chép hai chỗ: nó vào cả phần đệm của
+     `.hud-bottom` lẫn phép tính nâng cụm nút, và hai chỗ ấy lệch nhau đúng
+     26px là nút chính tụt xuống nằm sau hotbar. */
+  --padctx-gap: 0px;
   --anim: 0.18s;
 }
 
@@ -1542,20 +1547,37 @@ kbd {
   pointer-events: none;
   z-index: 20;
 }
-/* LỚP CHẠM hiện theo CHẾ ĐỘ. Chơi tay cầm thì vẫn giữ lớp này (nút A đeo tên
-   nút thật, xem `[data-input^="pad"]` bên dưới); chơi phím+chuột thì chỉ giữ
-   nút ☰ — nó là đường vào menu bằng CHUỘT, mà bỏ đi thì người dùng chuột không
-   còn cách nào mở Tạm dừng ngoài phím Escape. */
+/* LỚP CHẠM hiện ở MỌI CHẾ ĐỘ — kể cả phím+chuột. */
 body[data-input="touch"] #touch,
 body[data-input="pad"] #touch,
 body[data-input="pad-std"] #touch,
 body[data-input="kbm"] #touch {
   display: block;
 }
-body[data-input="kbm"] #stick,
-body[data-input="kbm"] #abtn {
+
+/* CẦN GẠT ẢO thì đúng là chỉ của ngón tay: có bàn phím thì WASD làm việc đó,
+   và một cái vòng tròn nằm giữa màn hình chỉ để trang trí. */
+body[data-input="kbm"] #stick {
   display: none;
 }
+
+/* NHƯNG BA NÚT NGỮ CẢNH THÌ KHÔNG.
+
+   Bản trước ẩn luôn cả `#abtn` ở chế độ phím+chuột, với lý do "có phím rồi".
+   Đó là nhầm giữa CÁCH BẤM và CÁCH BIẾT. Ba nút ấy không chỉ để chạm — chúng
+   là chỗ DUY NHẤT nói ra ngữ cảnh: nút chính in việc sắp làm (CÀY · GIEO ·
+   ĐỔ MÁNG), nút phụ in thứ sắp tra cứu (BẢNG KHU · XEM BÒ), và cái vòng đỏ
+   quanh nút MỤC TIÊU cho biết còn thứ khác quanh đây để nhắm. Giấu chúng đi
+   là người chơi chuột mất sạch câu trả lời cho "bấm Space bây giờ thì gì xảy
+   ra" — phải bấm thử mới biết.
+
+   Và chế độ đổi theo THIẾT BỊ VỪA DÙNG: đang chơi cảm ứng mà chạm vào chuột
+   một cái là cả cụm biến mất giữa chừng. Cường: "ba cái nút kiểm soát tại sao
+   lại mất tiêu vậy, nó phải luôn luôn xuất hiện và hiển thị theo ngữ cảnh của
+   khu vực người chơi chứ". Đúng.
+
+   Ở kbm chúng vẫn bấm được bằng chuột, và nhãn phím tương ứng nằm trong bảng
+   Sơ đồ nút. */
 
 /* Joystick — MẶC ĐỊNH TẮT (xem core/settings.ts). */
 #stick {
@@ -1684,10 +1706,17 @@ body[data-input^="pad"] #abtn .btns .t {
 }
 
 /* ---- CHỈ KHI CÓ TAY CẦM: xếp hình thoi y như mặt tay cầm ---- */
+/* HAI hàng, không phải ba.
+
+   Lưới hình thoi ba hàng là để xếp bốn nút mặt tay cầm (Y trên · X trái ·
+   B phải · A dưới). Nay chỉ còn HAI nút hiện — B và A — nên hàng đầu rỗng
+   không, và một hàng rỗng vẫn chiếm chiều cao: cả cụm bị đẩy xuống đúng một
+   hàng và nút A tụt xuống đè lên hotbar. Hai hàng thì B nằm chếch trên-phải
+   A, vẫn đúng quan hệ trên mặt tay cầm thật. */
 body[data-input^="pad"] #abtn .btns {
   display: grid;
   grid-template-columns: repeat(3, auto);
-  grid-template-rows: repeat(3, auto);
+  grid-template-rows: repeat(2, auto);
   align-items: center;
   justify-items: center;
   gap: 5px;
@@ -1701,15 +1730,15 @@ body[data-input^="pad"] #abtn .btns .b {
   margin-bottom: 0;
 }
 body[data-input^="pad"] #abtn .btns .b {
-  grid-area: 2 / 3;
+  grid-area: 1 / 3;
 }
 body[data-input^="pad"] #abtn .btns .a {
-  grid-area: 3 / 2;
+  grid-area: 2 / 2;
 }
 /* Tay trái: lật NGANG cụm, giữ nguyên trên–dưới. Nút chính vẫn ở dưới vì đó
    là chỗ ngón cái nghỉ, dù cầm máy tay nào. */
 body[data-hand="left"][data-input^="pad"] #abtn .btns .b {
-  grid-area: 2 / 1;
+  grid-area: 1 / 1;
 }
 #abtn button {
   border-radius: 50%;
@@ -1886,9 +1915,24 @@ body:not([data-input="kbm"])[data-orientation="portrait"] {
      chuyện — hotbar về đúng chỗ của nó, và không còn phải đoán cụm nút cao
      bao nhiêu. */
   --pad-bottom: 0px;
-  /* Đáy cụm nút = đáy hotbar + chiều cao hotbar + khe. Ô hotbar cộng 6px viền
-     và đệm của dải. */
-  --abtn-bottom: calc(var(--hud-gap) + var(--slot) + 16px);
+}
+
+/* NÂNG CỤM NÚT LÊN TRÊN HOTBAR — cho MỌI chế độ điều khiển.
+
+   Đáy cụm nút = đáy hotbar + chiều cao hotbar + khe, cộng thêm dải gợi ý của
+   tay cầm nếu có. Ô hotbar cộng 6px viền và đệm của dải.
+
+   Trước đây phép tính này nằm trong khối `:not([data-input="kbm"])` ở trên, vì
+   chế độ phím+chuột giấu hẳn cụm nút nên chẳng có gì để nâng. Nay cụm nút hiện
+   ở mọi chế độ, và phép nâng phải đi theo — không thì ở kbm nút chính nằm đè
+   lên hotbar 37px.
+
+   `--padctx-gap` là vế thứ hai, và là một lỗi CÓ SẴN từ trước: chế độ tay cầm
+   đẩy hotbar lên 26px để chừa chỗ cho dải gợi ý, nhưng phép tính này không hề
+   biết — nên nút chính tụt xuống sau hotbar 49px, ở đúng chế độ mà nó là nút
+   DUY NHẤT còn hiện. */
+body[data-orientation="portrait"] {
+  --abtn-bottom: calc(var(--hud-gap) + var(--slot) + 16px + var(--padctx-gap));
 }
 body:not([data-input="kbm"])[data-orientation="landscape"] {
   --pad-bottom: 6px;
@@ -2494,21 +2538,30 @@ body[data-input^="pad"] #abtn .btns button[data-pad]::after {
   line-height: 1;
   letter-spacing: 0;
 }
-/* CHẾ ĐỘ TAY CẦM: MỘT NÚT, MỘT THANH. Không hơn.
+/* CHẾ ĐỘ TAY CẦM: giữ đúng những nút CÓ ĐỔI THEO NGỮ CẢNH.
 
-   Tay cầm có nút thật rồi, nên bốn nút chạm trên màn hình là bốn cái bóng
-   không bấm được (`pointer-events: none` ở trên). Giữ chúng lại chỉ để dán tên
-   nút thì đổi lại là một cụm bốn vòng tròn đè lên mặt ruộng — và cụm ấy còn
-   nằm chồng lên dải ngữ cảnh, nên hai chữ "DÙNG" in đè lên nhau. Cường chụp
-   ảnh chỉ đúng chỗ đó.
+   Tay cầm có nút thật rồi, nên nút chạm trên màn hình là những cái bóng không
+   bấm được (`pointer-events: none` ở trên). Giữ cả bốn chỉ để dán tên nút thì
+   đổi lại là một cụm bốn vòng tròn đè lên mặt ruộng, chồng lên cả dải ngữ
+   cảnh — hai chữ "DÙNG" in đè lên nhau, đúng chỗ Cường từng chụp ảnh chỉ ra.
 
-   Giữ lại đúng nút A: nó là thứ duy nhất đổi nhãn theo ngữ cảnh, và người chơi
-   cần biết bấm A bây giờ thì làm gì. Ba nút kia mang việc CỐ ĐỊNH — sơ đồ nút
-   (nút cần phải) đã nói hết và không bao giờ đổi.
+   Nên luật là: một cái bóng chỉ đáng chỗ nếu nó NÓI RA thứ sơ đồ nút không nói
+   được — tức là nhãn của nó đổi theo ngữ cảnh.
 
-   Dòng `.why` cũng tắt: nó nói lại đúng câu mà thanh gợi ý dưới hotbar đã nói. */
+   · A (DÙNG)     — GIỮ. Nhãn đổi: CÀY · GIEO · TƯỚI · ĐỔ MÁNG…
+   · B (XEM)      — GIỮ. Nhãn cũng đổi: BẢNG KHU · XEM BÒ · XEM Ô.
+   · Y (BALO)     — bỏ. Một việc cố định, sơ đồ nút nói hết.
+   · MỤC TIÊU     — bỏ, và bỏ ở chỗ khác (xem `.btns .t` bên trên): tay cầm
+                    chuyển mục tiêu bằng LB/RB, theo đúng hợp đồng Cường đặt.
+
+   NÚT B TỪNG BỊ BỎ Ở ĐÂY, và chú thích cũ giải thích rằng "ba nút kia mang
+   việc CỐ ĐỊNH, không bao giờ đổi". Câu đó ĐÚNG lúc viết và đã HẾT ĐÚNG từ khi
+   nút phụ thành nút tra cứu theo mục tiêu đang nhắm: nay nó đổi nhãn y như nút
+   chính. Lý do biến mất mà cái luật thì ở lại — nên người chơi tay cầm không
+   còn chỗ nào biết bấm B bây giờ sẽ mở ra cái gì.
+
+   Dòng `.why` vẫn tắt: nó nói lại đúng câu mà thanh gợi ý dưới hotbar đã nói. */
 body[data-input^="pad"] #abtn .why,
-body[data-input^="pad"] #abtn .btns .b,
 body[data-input^="pad"] #abtn .btns .y {
   display: none;
 }
@@ -2680,8 +2733,11 @@ body[data-input^="pad"][data-padbar="1"] .padctx {
   color: var(--ink-dim);
 }
 /* Thanh này ngồi ngay dưới hotbar, nên hotbar phải nhích lên khi nó hiện. */
+body[data-input^="pad"] {
+  --padctx-gap: 26px;
+}
 body[data-input^="pad"] .hud-bottom {
-  padding-bottom: 26px;
+  padding-bottom: var(--padctx-gap);
 }
 
 /* Nút ✕ của popup đeo TÊN NÚT HUỶ của tay cầm đang cắm. Không có nó thì người
